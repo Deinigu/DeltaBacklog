@@ -1,5 +1,6 @@
 // Data layer: one in-memory store loaded at startup; views read from it.
 import { norm } from './util.js';
+import { slotOrder } from './order.js';
 
 export const store = {
   games: [],
@@ -31,6 +32,42 @@ export async function load() {
 
 export function coverURL(g) {
   return g.cover ? `/covers/${g.cover}?v=${encodeURIComponent(g.updated_at)}` : null;
+}
+
+// ---- game edits ----
+const gamesChanged = () => window.dispatchEvent(new Event('games-changed'));
+
+/** Quick edit (status, favorite, vr, completed). Updates the local game in place, then tells the views. */
+export async function patchGame(id, patch) {
+  const g = store.byId.get(id);
+  const prev = { ...g };
+  Object.assign(g, patch); // optimistic
+  gamesChanged();
+  try {
+    const fresh = await send('PATCH', `/api/games/${id}`, patch);
+    Object.assign(g, fresh);
+  } catch (e) {
+    Object.assign(g, prev);
+    throw e;
+  } finally {
+    gamesChanged();
+  }
+}
+
+/** Persist a manual order for the given ids (the games a view shows, in the new order). */
+export async function reorderGames(ids) {
+  const before = new Map(ids.map((id) => [id, store.byId.get(id).queue_pos]));
+  for (const [id, pos] of slotOrder(ids, before)) store.byId.get(id).queue_pos = pos; // optimistic
+  gamesChanged();
+  try {
+    const next = await send('POST', '/api/games/reorder', ids);
+    for (const [id, pos] of Object.entries(next)) store.byId.get(Number(id)).queue_pos = pos;
+  } catch (e) {
+    for (const [id, pos] of before) store.byId.get(id).queue_pos = pos;
+    throw e;
+  } finally {
+    gamesChanged();
+  }
 }
 
 // ---- saved views ----

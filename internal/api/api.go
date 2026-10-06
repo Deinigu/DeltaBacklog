@@ -26,6 +26,8 @@ func (s *Server) Handler() http.Handler {
 		w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /api/games", s.listGames)
+	mux.HandleFunc("PATCH /api/games/{id}", s.patchGame)
+	mux.HandleFunc("POST /api/games/reorder", s.reorderGames)
 	mux.HandleFunc("GET /api/facets", s.facets)
 	mux.HandleFunc("GET /api/views", s.listViews)
 	mux.HandleFunc("POST /api/views", s.createView)

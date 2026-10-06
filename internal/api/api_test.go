@@ -150,3 +150,79 @@ func TestViewsCRUD(t *testing.T) {
 		t.Errorf("second delete = %d", res.StatusCode)
 	}
 }
+
+func TestSlotOrder(t *testing.T) {
+	// ids 10, 20, 30 occupy slots 5, 9, 12 in the global order; moving 30 to the front reuses those slots.
+	got := SlotOrder([]int64{30, 10, 20}, map[int64]int{10: 5, 20: 9, 30: 12})
+	if got[30] != 5 || got[10] != 9 || got[20] != 12 {
+		t.Errorf("slots = %v", got)
+	}
+}
+
+func TestPatchAndReorderGames(t *testing.T) {
+	srv := newServer(t)
+	get := func() []Game {
+		_, body := do(t, "GET", srv.URL+"/api/games", "")
+		var g []Game
+		if err := json.Unmarshal(body, &g); err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+	games := get()
+	hades, old := games[0], games[1] // Playing, Backlog
+	hURL := srv.URL + "/api/games/" + strconv.FormatInt(hades.ID, 10)
+
+	res, body := do(t, "PATCH", hURL, `{"status":"up_next","favorite":false,"vr":true}`)
+	var g Game
+	json.Unmarshal(body, &g)
+	if res.StatusCode != 200 || g.Status != "up_next" || g.Favorite || !g.VR {
+		t.Fatalf("patch: %d %s", res.StatusCode, body)
+	}
+	if g.QueuePos == nil || *g.QueuePos <= *old.QueuePos {
+		t.Errorf("a game that changes shelf should go to the end of the order: %v vs %v", g.QueuePos, old.QueuePos)
+	}
+	// same status again must not move it
+	pos := *g.QueuePos
+	_, body = do(t, "PATCH", hURL, `{"status":"up_next"}`)
+	json.Unmarshal(body, &g)
+	if *g.QueuePos != pos {
+		t.Errorf("unchanged status moved the game: %d -> %d", pos, *g.QueuePos)
+	}
+	for _, bad := range []string{`{"status":"nope"}`, `not json`} {
+		if res, _ := do(t, "PATCH", hURL, bad); res.StatusCode != 400 {
+			t.Errorf("PATCH %s = %d", bad, res.StatusCode)
+		}
+	}
+	if res, _ := do(t, "PATCH", srv.URL+"/api/games/9999", `{"favorite":true}`); res.StatusCode != 404 {
+		t.Errorf("missing game = %d", res.StatusCode)
+	}
+
+	// reorder the two games: positions swap, nothing else changes
+	before := map[int64]int{}
+	for _, x := range get() {
+		before[x.ID] = *x.QueuePos
+	}
+	b, _ := json.Marshal([]int64{hades.ID, old.ID})
+	if before[hades.ID] < before[old.ID] {
+		b, _ = json.Marshal([]int64{old.ID, hades.ID})
+	}
+	if res, body := do(t, "POST", srv.URL+"/api/games/reorder", string(b)); res.StatusCode != 200 {
+		t.Fatalf("reorder: %d %s", res.StatusCode, body)
+	}
+	after := map[int64]int{}
+	for _, x := range get() {
+		after[x.ID] = *x.QueuePos
+	}
+	if after[hades.ID] != before[old.ID] && after[hades.ID] != before[hades.ID] {
+		t.Errorf("slots not reused: %v -> %v", before, after)
+	}
+	if after[hades.ID] == before[hades.ID] {
+		t.Error("order did not change")
+	}
+	for _, bad := range []string{`[]`, `[1,1]`, `[9999]`, `nope`} {
+		if res, _ := do(t, "POST", srv.URL+"/api/games/reorder", bad); res.StatusCode != 400 {
+			t.Errorf("reorder %s = %d", bad, res.StatusCode)
+		}
+	}
+}

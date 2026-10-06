@@ -9,7 +9,8 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Library view: instant search, faceted filters (URL-backed), mobile-first UI, PWA shell
 - [x] Multi-level sort (any fields, asc/desc, saved in the URL) and group-by
 - [x] Saved views: save, edit, pin, reorder, duplicate, delete (with undo); include/exclude chips and Any/All matching
-- [ ] Shelves (manual drag order), table view, quick add, years and tierlists, packaging
+- [x] Change a game's status or favorite from its detail view; drag-to-reorder manual order (touch friendly)
+- [ ] Table view, quick add, years and tierlists, packaging
 
 ## Develop
 ```sh

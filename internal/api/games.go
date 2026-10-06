@@ -132,3 +132,18 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 	}
 	return games, yrows.Err()
 }
+
+// LoadGame returns one game with its links. At ~600 games, filtering the full load is simpler than
+// parallel single-game queries and costs a few milliseconds.
+func LoadGame(d *sql.DB, id int64) (Game, error) {
+	games, err := LoadGames(d)
+	if err != nil {
+		return Game{}, err
+	}
+	for _, g := range games {
+		if g.ID == id {
+			return g, nil
+		}
+	}
+	return Game{}, sql.ErrNoRows
+}

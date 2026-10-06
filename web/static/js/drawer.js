@@ -1,8 +1,25 @@
 // Game detail drawer (read-only for now; editing arrives with the table view).
-import { h, gradientFor, initials } from './util.js';
-import { store, coverURL } from './api.js';
+import { h, gradientFor, initials, toast } from './util.js';
+import { store, coverURL, patchGame } from './api.js';
 
 let open = null;
+
+/** Status picker and favorite toggle; changes apply immediately and refresh every open view. */
+function quickActions(game) {
+  const sel = h('select.btn', { 'aria-label': 'Status', onchange: () => change({ status: sel.value }) },
+    store.statuses.map((s) => h('option', { value: s.key, selected: s.key === game.status }, s.label)));
+  const fav = h('button.btn', { type: 'button', 'aria-pressed': String(game.favorite), onclick: () => change({ favorite: !game.favorite }) }, game.favorite ? '★ Favorite' : '☆ Favorite');
+  async function change(patch) {
+    try { await patchGame(game.id, patch); } catch { toast('Could not save the change'); }
+    sel.value = game.status;
+    fav.textContent = game.favorite ? '★ Favorite' : '☆ Favorite';
+    fav.setAttribute('aria-pressed', String(game.favorite));
+    const st = store.statusByCode.get(game.status);
+    const badge = open?.drawer.querySelector('.cover .st');
+    if (badge && st) { badge.textContent = st.label; badge.style.background = st.color; }
+  }
+  return h('div.quick', {}, sel, fav);
+}
 
 export function closeDrawer() {
   if (!open) return;
@@ -31,7 +48,8 @@ export function openDrawer(game) {
       url ? h('img', { src: url, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)),
       st && h('span.st', { style: `background:${st.color}` }, st.label)),
     h('div.drawer-body', {},
-      h('h2', {}, game.title, game.favorite ? ' ★' : ''),
+      h('h2', {}, game.title),
+      quickActions(game),
       h('dl.facts', {},
         fact('Platforms', game.platforms),
         fact('Genres', game.genres),

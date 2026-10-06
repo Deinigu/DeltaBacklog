@@ -1,8 +1,9 @@
 // Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog } from './util.js';
-import { store, coverURL, createView, updateView } from './api.js';
+import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
+import { createReorderList } from './reorder.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
@@ -39,12 +40,14 @@ export function renderLibrary(root, opts = {}) {
   const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort and group', onclick: () => sortSheet.open() }, icon('sort'), h('span.sort-label'));
   const meta = h('div.meta-row');
 
+  let reordering = false;
+  const reorderBtn = h('button.btn', { type: 'button', 'aria-pressed': 'false', onclick: () => { reordering = !reordering; update(); } }, '⇅ Reorder');
   const saveBtn = h('button.btn.primary', { type: 'button', onclick: saveChanges }, 'Save');
   const saveAsBtn = h('button.btn', { type: 'button', onclick: saveAs }, view ? 'Save as…' : 'Save as view');
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const head = h('div.view-head', {}, title, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
+  const head = h('div.view-head', {}, title, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
 
   const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
@@ -161,8 +164,16 @@ export function renderLibrary(root, opts = {}) {
     list.sort(buildComparator(state.sorts));
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');
 
+    reorderBtn.setAttribute('aria-pressed', String(reordering));
+    reorderBtn.textContent = reordering ? '✓ Done' : '⇅ Reorder';
     if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
-    else results.replaceChildren(...groupGames(list, state.group).map((grp) => h('div.group-block', {},
+    else if (reordering) {
+      // Reordering always works on the manual order of exactly the games shown, whatever the sort is.
+      const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);
+      results.replaceChildren(
+        h('p.hint', {}, 'Drag ⠿ (or use ▲▼) to reorder these ' + list.length + ' games. The order is shared by every view that sorts by Manual order.'),
+        createReorderList(byPos, async (ids) => { try { await reorderGames(ids); } catch { toast('Could not save the order'); } }, openDrawer));
+    } else results.replaceChildren(...groupGames(list, state.group).map((grp) => h('div.group-block', {},
       state.group && h('h3.group-title', {}, grp.label, h('span.count', {}, grp.games.length)),
       h('div.grid', {}, grp.games.map(card)))));
 
@@ -222,6 +233,11 @@ export function renderLibrary(root, opts = {}) {
     if (e.key === '/' && document.activeElement !== input && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); input.focus(); }
     if (e.key === 'Escape') setSheet(false);
   };
+  // A game changed elsewhere (drawer, reorder): rebuild the cards and refresh counts.
+  // While dragging we must not rebuild the list under the user's finger.
+  const onGames = () => { if (!reordering) { cards.clear(); update(); } };
+  window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
-  return () => { document.removeEventListener('keydown', onKey); ro.disconnect(); };
+  return () => {
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); ro.disconnect(); };
 }
