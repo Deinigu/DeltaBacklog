@@ -6,7 +6,8 @@ A lightweight, mobile-first videogame tracker for a Raspberry Pi 3B+ (armv7): Go
 Work in progress, built feature branch by feature branch (see `features/*`, merged into `main`).
 
 - [x] Normalized SQLite schema, NocoDB importer, read API (`/api/games`, `/api/facets`, `/covers/*`)
-- [ ] Library view, shelves, table view, quick add, years and tierlists, packaging
+- [x] Library view: instant search, faceted filters (URL-backed), mobile-first UI, PWA shell
+- [ ] Shelves, table view, quick add, years and tierlists, packaging
 
 ## Develop
 ```sh
