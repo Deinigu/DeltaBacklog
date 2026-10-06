@@ -40,7 +40,6 @@ export function openDrawer(game) {
         fact('Played in', years),
         fact('Played with', game.players),
         fact('Ownership', game.ownership),
-        fact('Rating', game.rating && `${game.rating}/10`),
         fact('VR', game.vr ? 'Yes' : null),
         fact('100% completed', game.completed ? 'Yes' : null)),
       game.notes && h('div.notes', {}, game.notes)));

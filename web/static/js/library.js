@@ -21,7 +21,6 @@ const SORTS = {
   default: { label: 'Default order', cmp: null },
   title: { label: 'Title A–Z', cmp: (a, b) => a._sort.localeCompare(b._sort) },
   recent: { label: 'Recently played', cmp: (a, b) => lastYear(b) - lastYear(a) || a._sort.localeCompare(b._sort) },
-  rating: { label: 'Rating', cmp: (a, b) => (b.rating || 0) - (a.rating || 0) || a._sort.localeCompare(b._sort) },
 };
 const lastYear = (g) => (g.years.length ? g.years[g.years.length - 1] : 0);
 
