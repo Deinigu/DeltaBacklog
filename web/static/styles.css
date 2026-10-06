@@ -182,3 +182,38 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 
 .placeholder { text-align: center; color: var(--muted); padding: 80px 16px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- sort & group ---- */
+.sort-btn { max-width: 44vw; padding: 0 12px; }
+.sort-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; max-width: 30vw; }
+@media (min-width: 900px) { .sort-btn { max-width: 340px; } .sort-label { max-width: 270px; } }
+.group-block + .group-block { margin-top: 18px; }
+.group-title { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 2px; font-size: 16px; }
+.group-title .count { margin: 0; }
+
+.sheet {
+  position: fixed; z-index: 50; left: 0; right: 0; bottom: 0; max-height: 86vh; display: flex; flex-direction: column;
+  background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: var(--shadow);
+  transform: translateY(105%); transition: transform .25s ease; padding-bottom: var(--safe-b);
+}
+.sheet.open { transform: none; }
+.sheet .filters-head::before { content: ""; position: absolute; top: 8px; left: 50%; width: 38px; height: 4px; margin-left: -19px; border-radius: 2px; background: var(--border); }
+@media (min-width: 900px) {
+  .sheet { left: 50%; right: auto; bottom: auto; top: 12vh; width: 520px; margin-left: -260px; border-radius: var(--radius); transform: translateY(-12px); opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
+  .sheet.open { transform: none; opacity: 1; pointer-events: auto; }
+  .sheet .filters-head::before { display: none; }
+  .sheet ~ .scrim, .scrim { display: block; }
+}
+.hint { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+.sort-levels { display: flex; flex-direction: column; gap: 8px; }
+.sort-levels[data-implicit="1"] .sort-level { opacity: .75; }
+.sort-level { display: flex; align-items: center; gap: 6px; }
+.sort-level .n { width: 22px; text-align: center; color: var(--muted); font-weight: 700; }
+.sort-level select { flex: 1; min-width: 0; max-width: none; }
+.sort-level .btn { min-width: 44px; padding: 0 8px; }
+.sort-level .btn[disabled] { opacity: .3; }
+.sort-level .dir { font-size: 18px; font-weight: 700; }
+.add-level { margin-top: 12px; width: 100%; }
+.group-by { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.group-by label { font-weight: 600; }
+.group-by select { flex: 1; max-width: none; }

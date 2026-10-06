@@ -2,6 +2,7 @@
 import { h, norm, debounce, icon, gradientFor, initials } from './util.js';
 import { store, coverURL } from './api.js';
 import { openDrawer } from './drawer.js';
+import { buildComparator, parseSort, formatSort, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 
 const GROUPS = [
   { key: 'status', label: 'Status', get: (g) => [g.status] },
@@ -17,19 +18,13 @@ const FLAGS = [
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
 ];
-const SORTS = {
-  default: { label: 'Default order', cmp: null },
-  title: { label: 'Title A–Z', cmp: (a, b) => a._sort.localeCompare(b._sort) },
-  recent: { label: 'Recently played', cmp: (a, b) => lastYear(b) - lastYear(a) || a._sort.localeCompare(b._sort) },
-};
-const lastYear = (g) => (g.years.length ? g.years[g.years.length - 1] : 0);
 
 function readState() {
   const qs = new URLSearchParams(location.hash.split('?')[1] || '');
   const sel = Object.fromEntries(GROUPS.map((g) => [g.key, new Set(qs.getAll(g.key))]));
   const flags = new Set(FLAGS.map((f) => f.key).filter((k) => qs.get(k) === '1'));
-  const sort = SORTS[qs.get('sort')] ? qs.get('sort') : 'default';
-  return { q: qs.get('q') || '', sel, flags, sort };
+  const group = GROUP_FIELDS[qs.get('group')] ? qs.get('group') : '';
+  return { q: qs.get('q') || '', sel, flags, sorts: parseSort(qs.get('sort')), group };
 }
 
 function writeState(s) {
@@ -37,14 +32,14 @@ function writeState(s) {
   if (s.q) qs.set('q', s.q);
   for (const g of GROUPS) for (const v of s.sel[g.key]) qs.append(g.key, v);
   for (const f of s.flags) qs.set(f, '1');
-  if (s.sort !== 'default') qs.set('sort', s.sort);
+  if (s.sorts.length) qs.set('sort', formatSort(s.sorts));
+  if (s.group) qs.set('group', s.group);
   const str = qs.toString();
   history.replaceState(null, '', '#/library' + (str ? '?' + str : ''));
 }
 
 export function renderLibrary(root) {
   const state = readState();
-  for (const g of store.games) g._sort ??= norm(g.title);
 
   const matches = (g, skip) => {
     if (state.q && !state.q.split(/\s+/).every((t) => g._search.includes(t))) return false;
@@ -64,7 +59,7 @@ export function renderLibrary(root) {
     const tally = new Map();
     for (const g of store.games) for (const v of grp.get(g)) tally.set(v, (tally.get(v) || 0) + 1);
     order[grp.key] = [...tally.keys()].sort((a, b) => {
-      if (grp.key === 'year') return b.localeCompare(a); // newest first, "childhood" last
+      if (grp.key === 'year') return yearOrder(a, b);
       return tally.get(b) - tally.get(a) || a.localeCompare(b);
     });
   }
@@ -75,11 +70,11 @@ export function renderLibrary(root) {
   const clearBtn = h('button.clear', { type: 'button', 'aria-label': 'Clear search', onclick: () => { input.value = ''; state.q = ''; input.focus(); update(); } }, '✕');
   const filterBadge = h('span.badge', { hidden: true });
   const filterBtn = h('button.btn.open-filters', { type: 'button', 'aria-label': 'Filters', onclick: () => setSheet(true) }, icon('filter'), filterBadge);
-  const sortSel = h('select.btn', { 'aria-label': 'Sort', onchange: () => { state.sort = sortSel.value; update(); } },
-    Object.entries(SORTS).map(([k, v]) => h('option', { value: k, selected: k === state.sort }, v.label)));
+  const sortSheet = createSortSheet(state, () => update());
+  const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort and group', onclick: () => sortSheet.open() }, icon('sort'), h('span.sort-label'));
   const meta = h('div.meta-row');
   const toolbar = h('div.toolbar', {},
-    h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortSel), meta);
+    h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
 
   input.addEventListener('input', debounce(() => { state.q = norm(input.value.trim()); update(); }, 90));
   if (state.q) input.value = state.q;
@@ -114,10 +109,9 @@ export function renderLibrary(root) {
   function setSheet(on) { panel.classList.toggle('open', on); scrim.classList.toggle('show', on); }
 
   // ---------- results ----------
-  const grid = h('div.grid');
-  const results = h('section', { 'aria-label': 'Games' }, grid);
+  const results = h('section', { 'aria-label': 'Games' });
 
-  root.replaceChildren(toolbar, h('div.library', {}, panel, scrim, results));
+  root.replaceChildren(toolbar, h('div.library', {}, panel, scrim, results), ...sortSheet.el);
 
   const cards = new Map();
   function card(g) {
@@ -151,11 +145,13 @@ export function renderLibrary(root) {
   function update() {
     writeState(state);
     const list = store.games.filter((g) => matches(g));
-    const cmp = SORTS[state.sort].cmp;
-    if (cmp) list.sort(cmp);
+    list.sort(buildComparator(state.sorts));
+    sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');
 
-    grid.replaceChildren(...list.map(card));
-    if (!list.length) grid.replaceChildren(h('div.empty', { style: 'grid-column:1/-1' }, 'No games match these filters.'));
+    if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
+    else results.replaceChildren(...groupGames(list, state.group).map((grp) => h('div.group-block', {},
+      state.group && h('h3.group-title', {}, grp.label, h('span.count', {}, grp.games.length)),
+      h('div.grid', {}, grp.games.map(card)))));
 
     // facet counts: each group is counted against all *other* active filters
     const counts = {};

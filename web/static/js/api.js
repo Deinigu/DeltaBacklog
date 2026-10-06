@@ -6,6 +6,7 @@ export const store = {
   byId: new Map(),
   statuses: [], // [{key, label, color, count}] in display order
   statusByCode: new Map(),
+  statusOrder: new Map(),
   loaded: false,
 };
 
@@ -22,6 +23,7 @@ export async function load() {
   store.byId = new Map(games.map((g) => [g.id, g]));
   store.statuses = facets.status;
   store.statusByCode = new Map(facets.status.map((s) => [s.key, s]));
+  store.statusOrder = new Map(facets.status.map((s, i) => [s.key, i]));
   store.loaded = true;
 }
 
