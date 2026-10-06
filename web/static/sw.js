@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const API = 'api';
@@ -28,7 +28,8 @@ self.addEventListener('fetch', (e) => {
   } else if (url.pathname.startsWith('/api/')) {
     e.respondWith(networkFirst(req, API));
   } else {
-    e.respondWith(staleWhileRevalidate(req, SHELL));
+    // Network first: new deploys show up immediately; the cache only matters when offline.
+    e.respondWith(networkFirst(req, SHELL));
   }
 });
 
@@ -54,12 +55,3 @@ async function networkFirst(req, name) {
   }
 }
 
-async function staleWhileRevalidate(req, name) {
-  const cache = await caches.open(name);
-  const hit = await cache.match(req);
-  const fresh = fetch(req).then((res) => {
-    if (res.ok) cache.put(req, res.clone());
-    return res;
-  }).catch(() => hit);
-  return hit || fresh;
-}
