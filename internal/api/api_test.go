@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/importer"
@@ -182,6 +183,36 @@ func TestPatchAndReorderGames(t *testing.T) {
 	if g.QueuePos == nil || *g.QueuePos <= *old.QueuePos {
 		t.Errorf("a game that changes shelf should go to the end of the order: %v vs %v", g.QueuePos, old.QueuePos)
 	}
+	// becoming Playing or Finished records the current year; other shelves do not
+	oURL := srv.URL + "/api/games/" + strconv.FormatInt(old.ID, 10)
+	year := time.Now().Year()
+	has := func(g Game) bool {
+		for _, y := range g.Years {
+			if y == year {
+				return true
+			}
+		}
+		return false
+	}
+	_, body = do(t, "PATCH", oURL, `{"status":"hold"}`)
+	var og Game
+	json.Unmarshal(body, &og)
+	if has(og) {
+		t.Errorf("Hold must not add a year: %v", og.Years)
+	}
+	_, body = do(t, "PATCH", oURL, `{"status":"finished"}`)
+	json.Unmarshal(body, &og)
+	if !has(og) || len(og.Periods) != 1 {
+		t.Errorf("Finished should add %d and keep childhood: years=%v periods=%v", year, og.Years, og.Periods)
+	}
+	n := len(og.Years)
+	do(t, "PATCH", oURL, `{"status":"dropped"}`)
+	_, body = do(t, "PATCH", oURL, `{"status":"playing"}`)
+	json.Unmarshal(body, &og)
+	if len(og.Years) != n {
+		t.Errorf("the same year must not be added twice: %v", og.Years)
+	}
+
 	// same status again must not move it
 	pos := *g.QueuePos
 	_, body = do(t, "PATCH", hURL, `{"status":"up_next"}`)

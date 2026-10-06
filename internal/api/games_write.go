@@ -16,6 +16,9 @@ type gamePatch struct {
 	Completed *bool   `json:"completed"`
 }
 
+// playingStatuses are the shelves that record the current year in the game's years played.
+var playingStatuses = map[string]bool{"playing": true, "playing_evergreen": true, "finished": true}
+
 func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -50,6 +53,13 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if sid != curStatus {
+			if playingStatuses[*in.Status] {
+				// Starting or finishing a game counts as playing it this year.
+				if _, err := tx.Exec(`INSERT OR IGNORE INTO play(game_id, year) VALUES (?, CAST(strftime('%Y', 'now') AS INTEGER))`, id); err != nil {
+					fail(w, err)
+					return
+				}
+			}
 			// A game that changes shelf goes to the end of the manual order.
 			if _, err := tx.Exec(`UPDATE game SET status_id = ?, queue_pos = (SELECT coalesce(max(queue_pos), 0) + 1 FROM game) WHERE id = ?`, sid, id); err != nil {
 				fail(w, err)
