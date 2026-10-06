@@ -10,6 +10,7 @@ import (
 
 	"github.com/Deinigu/DeltaBacklog/internal/api"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
+	"github.com/Deinigu/DeltaBacklog/web"
 )
 
 func env(key, def string) string {
@@ -32,9 +33,15 @@ func main() {
 	defer d.Close()
 
 	srv := &api.Server{DB: d, CoverDir: filepath.Join(dataDir, "covers")}
+	apiHandler := srv.Handler()
+	root := http.NewServeMux()
+	root.Handle("/api/", apiHandler)
+	root.Handle("/covers/", apiHandler)
+	root.Handle("/healthz", apiHandler)
+	root.Handle("/", web.Handler())
 	hs := &http.Server{
 		Addr:              addr,
-		Handler:           srv.Handler(),
+		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("DeltaBacklog listening on %s (data: %s)", addr, dataDir)

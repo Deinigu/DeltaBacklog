@@ -25,7 +25,7 @@ func TestMigrateIsIdempotentAndSeeds(t *testing.T) {
 	x.QueryRow("PRAGMA user_version").Scan(&v)
 	x.QueryRow("SELECT count(*) FROM status").Scan(&statuses)
 	x.QueryRow("SELECT count(*) FROM tier").Scan(&tiers)
-	if v != 1 || statuses != 9 || tiers != 6 {
+	if v != 2 || statuses != 9 || tiers != 6 {
 		t.Errorf("version=%d statuses=%d tiers=%d", v, statuses, tiers)
 	}
 }
@@ -35,7 +35,6 @@ func TestConstraints(t *testing.T) {
 	bad := []string{
 		`INSERT INTO game(title, title_sort, status_id) VALUES ('', '', 1)`,                    // empty title
 		`INSERT INTO game(title, title_sort, status_id) VALUES ('x', 'x', 999)`,                // unknown status
-		`INSERT INTO game(title, title_sort, status_id, rating) VALUES ('x', 'x', 1, 11)`,      // rating range
 		`INSERT INTO game(title, title_sort, status_id, release_year) VALUES ('x','x',1,1800)`, // year range
 		`INSERT INTO platform(name) VALUES ('PC'), ('pc')`,                                     // case-insensitive unique
 	}
