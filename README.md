@@ -8,7 +8,8 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Normalized SQLite schema, NocoDB importer, read API (`/api/games`, `/api/facets`, `/covers/*`)
 - [x] Library view: instant search, faceted filters (URL-backed), mobile-first UI, PWA shell
 - [x] Multi-level sort (any fields, asc/desc, saved in the URL) and group-by
-- [ ] Saved views, shelves, table view, quick add, years and tierlists, packaging
+- [x] Saved views: save, edit, pin, reorder, duplicate, delete (with undo); include/exclude chips and Any/All matching
+- [ ] Shelves (manual drag order), table view, quick add, years and tierlists, packaging
 
 ## Develop
 ```sh

@@ -25,7 +25,7 @@ func TestMigrateIsIdempotentAndSeeds(t *testing.T) {
 	x.QueryRow("PRAGMA user_version").Scan(&v)
 	x.QueryRow("SELECT count(*) FROM status").Scan(&statuses)
 	x.QueryRow("SELECT count(*) FROM tier").Scan(&tiers)
-	if v != 2 || statuses != 9 || tiers != 6 {
+	if v != 3 || statuses != 9 || tiers != 6 {
 		t.Errorf("version=%d statuses=%d tiers=%d", v, statuses, tiers)
 	}
 }
@@ -79,5 +79,23 @@ func TestGetOrCreate(t *testing.T) {
 	}
 	if _, err := GetOrCreate(x, "game; DROP TABLE game", "x"); err == nil {
 		t.Error("non-lookup table must be rejected")
+	}
+}
+
+func TestSavedViewConstraintsAndStarters(t *testing.T) {
+	x := open(t)
+	var n int
+	x.QueryRow(`SELECT count(*) FROM saved_view WHERE pinned = 1`).Scan(&n)
+	if n != 3 {
+		t.Errorf("pinned starter views = %d, want 3", n)
+	}
+	for _, q := range []string{
+		`INSERT INTO saved_view(name) VALUES ('  ')`,
+		`INSERT INTO saved_view(name, layout) VALUES ('x', 'list')`,
+		`INSERT INTO saved_view(name, filter_json) VALUES ('x', '{nope')`,
+	} {
+		if _, err := x.Exec(q); err == nil {
+			t.Errorf("expected failure: %s", q)
+		}
 	}
 }

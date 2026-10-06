@@ -27,6 +27,11 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/games", s.listGames)
 	mux.HandleFunc("GET /api/facets", s.facets)
+	mux.HandleFunc("GET /api/views", s.listViews)
+	mux.HandleFunc("POST /api/views", s.createView)
+	mux.HandleFunc("PUT /api/views/order", s.reorderViews)
+	mux.HandleFunc("PATCH /api/views/{id}", s.patchView)
+	mux.HandleFunc("DELETE /api/views/{id}", s.deleteView)
 	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(http.FileServer(http.Dir(filepath.Clean(s.CoverDir))))))
 	return mux
 }

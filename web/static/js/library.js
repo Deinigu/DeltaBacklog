@@ -1,56 +1,19 @@
-// Library view: instant search, faceted filters (URL-backed), sortable cover grid.
-import { h, norm, debounce, icon, gradientFor, initials } from './util.js';
-import { store, coverURL } from './api.js';
+// Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
+// With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
+import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog } from './util.js';
+import { store, coverURL, createView, updateView } from './api.js';
 import { openDrawer } from './drawer.js';
-import { buildComparator, parseSort, formatSort, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
+import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
+import {
+  GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
+  filterToJSON, stateFromView, stateFromQuery, stateToQuery, signature,
+} from './filters.js';
 
-const GROUPS = [
-  { key: 'status', label: 'Status', get: (g) => [g.status] },
-  { key: 'platform', label: 'Platform', get: (g) => g.platforms },
-  { key: 'genre', label: 'Genre', get: (g) => g.genres },
-  { key: 'theme', label: 'Theme', get: (g) => g.themes },
-  { key: 'year', label: 'Year played', get: (g) => [...g.years.map(String), ...g.periods] },
-  { key: 'ownership', label: 'Ownership', get: (g) => (g.ownership ? [g.ownership] : []) },
-  { key: 'player', label: 'Played with', get: (g) => g.players },
-];
-const FLAGS = [
-  { key: 'favorite', label: '★ Favorite' },
-  { key: 'vr', label: 'VR' },
-  { key: 'completed', label: '100% completed' },
-];
-
-function readState() {
-  const qs = new URLSearchParams(location.hash.split('?')[1] || '');
-  const sel = Object.fromEntries(GROUPS.map((g) => [g.key, new Set(qs.getAll(g.key))]));
-  const flags = new Set(FLAGS.map((f) => f.key).filter((k) => qs.get(k) === '1'));
-  const group = GROUP_FIELDS[qs.get('group')] ? qs.get('group') : '';
-  return { q: qs.get('q') || '', sel, flags, sorts: parseSort(qs.get('sort')), group };
-}
-
-function writeState(s) {
-  const qs = new URLSearchParams();
-  if (s.q) qs.set('q', s.q);
-  for (const g of GROUPS) for (const v of s.sel[g.key]) qs.append(g.key, v);
-  for (const f of s.flags) qs.set(f, '1');
-  if (s.sorts.length) qs.set('sort', formatSort(s.sorts));
-  if (s.group) qs.set('group', s.group);
-  const str = qs.toString();
-  history.replaceState(null, '', '#/library' + (str ? '?' + str : ''));
-}
-
-export function renderLibrary(root) {
-  const state = readState();
-
-  const matches = (g, skip) => {
-    if (state.q && !state.q.split(/\s+/).every((t) => g._search.includes(t))) return false;
-    for (const f of state.flags) if (!g[f]) return false;
-    for (const grp of GROUPS) {
-      const sel = state.sel[grp.key];
-      if (grp.key === skip || !sel.size) continue;
-      if (!grp.get(g).some((v) => sel.has(v))) return false;
-    }
-    return true;
-  };
+export function renderLibrary(root, opts = {}) {
+  const view = opts.view || null;
+  const state = view ? stateFromView(view) : stateFromQuery(location.hash.split('?')[1]);
+  let baseline = view ? signature(state) : null;
+  const dirty = () => view && signature(state) !== baseline;
 
   // Chip order is fixed from the whole library (by popularity) so chips don't jump around while filtering.
   const order = {};
@@ -58,6 +21,8 @@ export function renderLibrary(root) {
     if (grp.key === 'status') { order.status = store.statuses.map((s) => s.key); continue; }
     const tally = new Map();
     for (const g of store.games) for (const v of grp.get(g)) tally.set(v, (tally.get(v) || 0) + 1);
+    // Values used by a saved filter but absent from the library stay selectable, so a view never silently loses a condition.
+    for (const v of [...state.in[grp.key], ...state.ex[grp.key]]) if (!tally.has(v)) tally.set(v, 0);
     order[grp.key] = [...tally.keys()].sort((a, b) => {
       if (grp.key === 'year') return yearOrder(a, b);
       return tally.get(b) - tally.get(a) || a.localeCompare(b);
@@ -65,7 +30,7 @@ export function renderLibrary(root) {
   }
   const label = (grp, v) => (grp.key === 'status' ? store.statusByCode.get(v)?.label : null) ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
 
-  // ---------- toolbar ----------
+  // ---------- header + toolbar ----------
   const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search', value: state.q });
   const clearBtn = h('button.clear', { type: 'button', 'aria-label': 'Clear search', onclick: () => { input.value = ''; state.q = ''; input.focus(); update(); } }, '✕');
   const filterBadge = h('span.badge', { hidden: true });
@@ -73,45 +38,62 @@ export function renderLibrary(root) {
   const sortSheet = createSortSheet(state, () => update());
   const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort and group', onclick: () => sortSheet.open() }, icon('sort'), h('span.sort-label'));
   const meta = h('div.meta-row');
-  const toolbar = h('div.toolbar', {},
+
+  const saveBtn = h('button.btn.primary', { type: 'button', onclick: saveChanges }, 'Save');
+  const saveAsBtn = h('button.btn', { type: 'button', onclick: saveAs }, view ? 'Save as…' : 'Save as view');
+  const title = view
+    ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
+    : h('h1', {}, 'Library');
+  const head = h('div.view-head', {}, title, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
+
+  const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
 
   input.addEventListener('input', debounce(() => { state.q = norm(input.value.trim()); update(); }, 90));
-  if (state.q) input.value = state.q;
-  state.q = norm(state.q);
 
   // ---------- filter panel ----------
   const chipRefs = []; // {grp, v, btn, count}
   const groupRefs = {};
+  const modeRefs = {};
   const groupEls = GROUPS.map((grp) => {
     const nSel = h('span.n');
     const chips = h('div.chips', {}, order[grp.key].map((v) => {
       const count = h('span.c');
       const dot = grp.key === 'status' ? h('span.dot', { style: `background:${store.statusByCode.get(v)?.color}` }) : null;
-      const btn = h('button.chip', { type: 'button', 'aria-pressed': 'false', onclick: () => toggle(grp.key, v) }, dot, label(grp, v), count);
+      const btn = h('button.chip', { type: 'button', onclick: () => { cycle(state, grp.key, v); update(); } }, dot, label(grp, v), count);
       chipRefs.push({ grp, v, btn, count });
       return btn;
     }));
+    let mode = null;
+    if (grp.multi) {
+      const any = h('button', { type: 'button', onclick: () => { state.all.delete(grp.key); update(); } }, 'Any');
+      const all = h('button', { type: 'button', onclick: () => { state.all.add(grp.key); update(); } }, 'All');
+      mode = h('div.mode', { role: 'group', 'aria-label': `${grp.label}: match any or all` }, any, all);
+      modeRefs[grp.key] = { el: mode, any, all };
+    }
     groupRefs[grp.key] = nSel;
-    return h('details.group', { open: grp.key === 'status' || state.sel[grp.key].size > 0 || null }, h('summary', {}, h('span', {}, grp.label), nSel), chips);
+    const open = grp.key === 'status' || state.in[grp.key].size > 0 || state.ex[grp.key].size > 0;
+    return h('details.group', { open: open || null }, h('summary', {}, h('span', {}, grp.label), nSel), mode, chips);
   });
   const flagRefs = FLAGS.map((f) => {
-    const btn = h('button.chip', { type: 'button', 'aria-pressed': 'false', onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
+    const btn = h('button.chip', { type: 'button', onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
     return { f, btn };
   });
   const showBtn = h('button.btn.primary', { type: 'button', onclick: () => setSheet(false) });
-  const resetBtn = h('button.btn', { type: 'button', onclick: reset }, 'Reset');
+  const resetBtn = h('button.btn', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset');
   const panel = h('aside.filters', { 'aria-label': 'Filters' },
     h('div.filters-head', {}, h('span', {}, 'Filters'), h('button.btn.close-sheet', { type: 'button', onclick: () => setSheet(false), 'aria-label': 'Close filters' }, '✕')),
-    h('div.filters-body', {}, h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls),
+    h('div.filters-body', {},
+      h('p.chip-hint', {}, 'Tap a chip to include it, tap again to exclude it.'),
+      h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls),
     h('div.filters-foot', {}, resetBtn, showBtn));
   const scrim = h('div.scrim', { onclick: () => setSheet(false) });
   function setSheet(on) { panel.classList.toggle('open', on); scrim.classList.toggle('show', on); }
 
   // ---------- results ----------
   const results = h('section', { 'aria-label': 'Games' });
-
   root.replaceChildren(toolbar, h('div.library', {}, panel, scrim, results), ...sortSheet.el);
+  input.value = state.q;
 
   const cards = new Map();
   function card(g) {
@@ -130,21 +112,46 @@ export function renderLibrary(root) {
     return el;
   }
 
-  function toggle(key, v) {
-    const s = state.sel[key];
-    s.has(v) ? s.delete(v) : s.add(v);
-    update();
-  }
   function reset() {
-    state.q = ''; input.value = '';
-    for (const k in state.sel) state.sel[k].clear();
-    state.flags.clear();
+    const fresh = view ? stateFromView(view) : emptyState();
+    state.q = fresh.q; state.in = fresh.in; state.ex = fresh.ex; state.all = fresh.all; state.flags = fresh.flags;
+    if (view) { state.sorts = fresh.sorts; state.group = fresh.group; sortSheet.render(); }
+    input.value = state.q;
     update();
   }
+  const payload = () => ({ filter: filterToJSON(state), sort: state.sorts, group_by: state.group });
+
+  async function saveChanges() {
+    try {
+      await updateView(view.id, payload());
+      Object.assign(view, store.views.find((v) => v.id === view.id));
+      baseline = signature(state);
+      toast('View saved');
+      update();
+    } catch { toast('Could not save the view'); }
+  }
+  async function saveAs() {
+    const r = await askNameDialog({ title: 'Save as a new view', name: view ? `${view.name} copy` : '', icon: view?.icon || '⭐' });
+    if (!r) return;
+    try {
+      const created = await createView({ ...r, ...payload(), layout: 'cards' });
+      toast(`Saved “${created.name}”`);
+      location.hash = `#/view/${created.id}`;
+    } catch { toast('Could not save the view'); }
+  }
+  title.addEventListener('click', async () => {
+    if (!view) return;
+    const r = await askNameDialog({ title: 'Rename view', name: view.name, icon: view.icon || '⭐' });
+    if (!r) return;
+    try {
+      Object.assign(view, await updateView(view.id, r));
+      title.replaceChildren(h('span', {}, view.icon ? view.icon + ' ' : ''), view.name);
+    } catch { toast('Could not rename the view'); }
+  });
 
   function update() {
-    writeState(state);
-    const list = store.games.filter((g) => matches(g));
+    if (!view) history.replaceState(null, '', '#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
+    const list = store.games.filter((g) => matches(state, g));
     list.sort(buildComparator(state.sorts));
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');
 
@@ -157,29 +164,51 @@ export function renderLibrary(root) {
     const counts = {};
     for (const grp of GROUPS) {
       const m = new Map();
-      for (const g of store.games) if (matches(g, grp.key)) for (const v of new Set(grp.get(g))) m.set(v, (m.get(v) || 0) + 1);
+      for (const g of store.games) if (matches(state, g, grp.key)) for (const v of new Set(grp.get(g))) m.set(v, (m.get(v) || 0) + 1);
       counts[grp.key] = m;
     }
     for (const r of chipRefs) {
       const n = counts[r.grp.key].get(r.v) || 0;
+      const st = chipState(state, r.grp.key, r.v);
       r.count.textContent = n;
-      r.btn.classList.toggle('zero', n === 0 && !state.sel[r.grp.key].has(r.v));
-      r.btn.setAttribute('aria-pressed', state.sel[r.grp.key].has(r.v));
+      r.btn.dataset.state = st;
+      r.btn.setAttribute('aria-pressed', st === 'in' ? 'true' : st === 'ex' ? 'mixed' : 'false');
+      r.btn.classList.toggle('zero', n === 0 && st === 'off');
     }
-    for (const { f, btn } of flagRefs) btn.setAttribute('aria-pressed', state.flags.has(f.key));
-    for (const grp of GROUPS) groupRefs[grp.key].textContent = state.sel[grp.key].size || '';
+    for (const { f, btn } of flagRefs) {
+      const on = state.flags.has(f.key);
+      btn.dataset.state = on ? 'in' : 'off';
+      btn.setAttribute('aria-pressed', on);
+    }
+    for (const grp of GROUPS) {
+      const n = state.in[grp.key].size + state.ex[grp.key].size;
+      groupRefs[grp.key].textContent = n || '';
+      const m = modeRefs[grp.key];
+      if (m) {
+        m.el.hidden = state.in[grp.key].size < 2;
+        const all = state.all.has(grp.key);
+        m.any.setAttribute('aria-pressed', !all);
+        m.all.setAttribute('aria-pressed', all);
+      }
+    }
 
     // active filter pills
     const active = [];
-    for (const grp of GROUPS) for (const v of state.sel[grp.key]) active.push(h('button.pill', { type: 'button', onclick: () => toggle(grp.key, v) }, h('b', {}, grp.label), label(grp, v), ' ✕'));
+    for (const grp of GROUPS) {
+      for (const v of state.in[grp.key]) active.push(h('button.pill', { type: 'button', onclick: () => { state.in[grp.key].delete(v); if (state.in[grp.key].size < 2) state.all.delete(grp.key); update(); } }, h('b', {}, grp.label), label(grp, v), ' ✕'));
+      for (const v of state.ex[grp.key]) active.push(h('button.pill.ex', { type: 'button', onclick: () => { state.ex[grp.key].delete(v); update(); } }, h('b', {}, grp.label), `not ${label(grp, v)}`, ' ✕'));
+    }
     for (const f of state.flags) active.push(h('button.pill', { type: 'button', onclick: () => { state.flags.delete(f); update(); } }, FLAGS.find((x) => x.key === f).label, ' ✕'));
-    const nFilters = active.length;
+    const nFilters = activeCount(state);
     meta.replaceChildren(
       h('span.count', {}, `${list.length} of ${store.games.length} games`), ...active,
-      (nFilters || state.q) && h('button.pill.reset', { type: 'button', onclick: reset }, 'Reset'));
+      (nFilters || state.q) && h('button.pill.reset', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset'));
     filterBadge.hidden = !nFilters;
     filterBadge.textContent = nFilters;
     showBtn.textContent = `Show ${list.length} games`;
+
+    saveBtn.hidden = !(view && dirty());
+    saveAsBtn.hidden = view ? false : isPristine(state);
   }
   update();
 

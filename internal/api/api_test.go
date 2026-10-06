@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -79,4 +81,72 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("healthz: %v %v", err, res)
 	}
 	res.Body.Close()
+}
+
+func do(t *testing.T, method, url, body string) (*http.Response, []byte) {
+	t.Helper()
+	req, _ := http.NewRequest(method, url, strings.NewReader(body))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res, b
+}
+
+func TestViewsCRUD(t *testing.T) {
+	srv := newServer(t)
+
+	res, body := do(t, "GET", srv.URL+"/api/views", "")
+	var views []View
+	json.Unmarshal(body, &views)
+	if res.StatusCode != 200 || len(views) != 5 || views[0].Name != "Playing now" {
+		t.Fatalf("starters: %d %s", res.StatusCode, body)
+	}
+
+	res, body = do(t, "POST", srv.URL+"/api/views", `{"name":" Indie RPGs ","filter":{"in":{"genre":["RPG","Indie"]},"all":["genre"]},"sort":[{"field":"title","dir":"asc"}],"layout":"table"}`)
+	var v View
+	json.Unmarshal(body, &v)
+	if res.StatusCode != 201 || v.Name != "Indie RPGs" || v.Layout != "table" || !v.Pinned || v.Pos != 6 || !strings.Contains(string(v.Filter), `"all"`) {
+		t.Fatalf("create: %d %s", res.StatusCode, body)
+	}
+
+	url := srv.URL + "/api/views/" + strconv.FormatInt(v.ID, 10)
+	res, body = do(t, "PATCH", url, `{"name":"Renamed","pinned":false}`)
+	json.Unmarshal(body, &v)
+	if res.StatusCode != 200 || v.Name != "Renamed" || v.Pinned || v.Layout != "table" || !strings.Contains(string(v.Filter), "Indie") {
+		t.Fatalf("patch should change only given fields: %d %s", res.StatusCode, body)
+	}
+
+	for _, bad := range []string{`{"name":""}`, `{"layout":"grid"}`, `not json`} {
+		if res, _ := do(t, "PATCH", url, bad); res.StatusCode != 400 {
+			t.Errorf("PATCH %s = %d, want 400", bad, res.StatusCode)
+		}
+	}
+	if res, _ := do(t, "POST", srv.URL+"/api/views", `{"layout":"cards"}`); res.StatusCode != 400 {
+		t.Errorf("create without name = %d", res.StatusCode)
+	}
+	if res, _ := do(t, "PATCH", srv.URL+"/api/views/9999", `{"name":"x"}`); res.StatusCode != 404 {
+		t.Errorf("missing view = %d", res.StatusCode)
+	}
+
+	// reorder: put the new view first
+	ids := []int64{v.ID}
+	for _, o := range views {
+		ids = append(ids, o.ID)
+	}
+	b, _ := json.Marshal(ids)
+	res, body = do(t, "PUT", srv.URL+"/api/views/order", string(b))
+	json.Unmarshal(body, &views)
+	if res.StatusCode != 200 || views[0].ID != v.ID {
+		t.Fatalf("reorder: %d %s", res.StatusCode, body)
+	}
+
+	if res, _ := do(t, "DELETE", url, ""); res.StatusCode != 204 {
+		t.Errorf("delete = %d", res.StatusCode)
+	}
+	if res, _ := do(t, "DELETE", url, ""); res.StatusCode != 404 {
+		t.Errorf("second delete = %d", res.StatusCode)
+	}
 }
