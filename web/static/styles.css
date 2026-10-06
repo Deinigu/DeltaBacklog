@@ -95,7 +95,7 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .library { display: block; }
 @media (min-width: 900px) {
   .library { display: grid; grid-template-columns: 290px 1fr; gap: 24px; align-items: start; }
-  .filters { position: sticky; top: 76px; max-height: calc(100vh - 92px); }
+  .filters { position: sticky; top: calc(var(--toolbar-h, 126px) + 8px); max-height: calc(100vh - var(--toolbar-h, 126px) - 24px); }
 }
 
 /* ---- filter sheet (bottom sheet on phones, side panel on desktop) ---- */
@@ -113,7 +113,7 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .filters-foot { padding: 10px 16px 14px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
 .filters-foot .btn { flex: 1; }
 @media (min-width: 900px) {
-  .filters { position: sticky; transform: none; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: none; max-height: calc(100vh - 92px); }
+  .filters { position: sticky; transform: none; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: none; }
   .filters-head::before, .filters-foot, .close-sheet, .scrim { display: none; }
   .open-filters { display: none; }
 }
@@ -266,3 +266,11 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .vrow .tools { display: flex; gap: 6px; }
 a.btn { text-decoration: none; color: inherit; }
 a.btn.primary { color: var(--accent-text); }
+
+/* phones: sort shows its icon only so the search box keeps its width */
+@media (max-width: 599px) {
+  .sort-label { display: none; }
+  .sort-btn { min-width: 46px; padding: 0; }
+  .toolbar-row { gap: 6px; }
+  .search input { padding-right: 36px; }
+}

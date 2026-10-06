@@ -95,6 +95,12 @@ export function renderLibrary(root, opts = {}) {
   root.replaceChildren(toolbar, h('div.library', {}, panel, scrim, results), ...sortSheet.el);
   input.value = state.q;
 
+  // The filter panel sticks below the toolbar, whose height varies (view title row, wrapped pills).
+  const syncToolbar = () => document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+  const ro = new ResizeObserver(syncToolbar);
+  ro.observe(toolbar);
+  syncToolbar();
+
   const cards = new Map();
   function card(g) {
     let el = cards.get(g.id);
@@ -217,5 +223,5 @@ export function renderLibrary(root, opts = {}) {
     if (e.key === 'Escape') setSheet(false);
   };
   document.addEventListener('keydown', onKey);
-  return () => document.removeEventListener('keydown', onKey);
+  return () => { document.removeEventListener('keydown', onKey); ro.disconnect(); };
 }
