@@ -6,6 +6,7 @@ import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
+import { badgeStyle } from './colors.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -130,7 +131,7 @@ export function renderLibrary(root, opts = {}) {
         url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
         g.favorite && h('span.fav', { 'aria-label': 'Favorite' }, '★'),
         g.ownership && !isUsualOwnership(g.ownership) && h('span.own', { title: g.ownership, role: 'img', 'aria-label': g.ownership }, ownershipIcon(g.ownership)),
-        st && h('span.st', { style: `background:${st.color}` }, st.label)),
+        st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
       h('div.card-body', {},
         h('div.card-title', {}, g.title),
         platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
