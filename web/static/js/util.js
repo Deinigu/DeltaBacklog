@@ -88,3 +88,21 @@ export function askNameDialog({ title, name = '', icon: ic = '⭐', confirm = 'S
     nameIn.focus(); nameIn.select();
   });
 }
+
+/** Yes/no modal. Resolves true when confirmed. */
+export function confirmDialog({ title, message = '', confirm = 'Delete', danger = true }) {
+  return new Promise((resolve) => {
+    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const scrim = h('div.scrim.show', { onclick: () => done(false) });
+    scrim.style.zIndex = 95;
+    const box = h('div.dialog', { role: 'alertdialog', 'aria-modal': 'true', 'aria-label': title },
+      h('h2', {}, title),
+      message && h('p', { style: 'margin:0;color:var(--muted)' }, message),
+      h('div.dialog-actions', {}, h('button.btn', { type: 'button', onclick: () => done(false) }, 'Cancel'),
+        h('button.btn.primary', { type: 'button', class: danger ? 'danger' : '', onclick: () => done(true) }, confirm)));
+    const onKey = (e) => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.append(scrim, box);
+    box.querySelector('.btn').focus();
+  });
+}

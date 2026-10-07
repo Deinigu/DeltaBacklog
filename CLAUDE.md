@@ -8,6 +8,7 @@ DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `mode
 - Go is not on PATH on the dev machine: `export PATH="$PATH:$HOME/sdk/go/bin"` (Git Bash) or `$env:Path += ";$env:USERPROFILE\sdk\go\bin"` (PowerShell).
 - `go vet ./... && go test ./...` for the backend; `node --test web/test/*.test.mjs` for frontend logic (pure modules only: `filters.js`, `sort.js`, `order.js`). Tests live in `web/test/`, outside the embedded `web/static/`.
 - `go run ./cmd/deltabacklog` serves on `:8081` with data in `./data`. `web/static` is compiled into the binary, so restart after any frontend edit.
+- IGDB / SteamGridDB keys live in `.env` (loaded from the working directory; real environment variables win). Live check against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
 - Import from NocoDB: see README ("Import from NocoDB"); `cmd/import` is idempotent.
 - Cross-build for the Pi: `GOOS=linux GOARCH=arm GOARM=7`.
 

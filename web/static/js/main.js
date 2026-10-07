@@ -4,6 +4,7 @@ import { load, store } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
 import { closeDrawer } from './drawer.js';
+import { openAdd } from './add.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
@@ -82,6 +83,17 @@ window.addEventListener('hashchange', () => {
 });
 // Views changed (saved, pinned, renamed...): refresh navigation without re-rendering the open page.
 window.addEventListener('views-changed', buildNav);
+// A game was added or deleted: rebuild the open page (new genres, platforms... must show up as filter chips).
+window.addEventListener('games-reloaded', () => route());
+
+// "+" button: always reachable, above the bottom bar on phones.
+document.body.append(h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add')));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open')) {
+    e.preventDefault();
+    openAdd();
+  }
+});
 route();
 
 if ('serviceWorker' in navigator) {

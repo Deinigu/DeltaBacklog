@@ -11,7 +11,8 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Saved views: save, edit, pin, reorder, duplicate, delete (with undo); include/exclude chips and Any/All matching
 - [x] Change a game's status or favorite from its detail view; drag-to-reorder manual order (touch friendly)
 - [x] Table layout: sortable, resizable, hideable columns; inline editing of every field; CSV export; saved views remember cards vs table
-- [ ] Quick add, surprise me, years and tierlists, series, stats, packaging
+- [x] Quick add: search IGDB by title or Steam/GOG/Epic/IGDB link, pre-filled form, SteamGridDB cover picker; change cover and delete from the detail view
+- [ ] Surprise me, years and tierlists, series, stats, packaging
 
 ## Develop
 ```sh
@@ -28,3 +29,6 @@ go run ./cmd/import -csv games.csv -data ./data -nocodb http://192.168.1.50:8080
 
 ## Configuration
 Copy `.env.example` to `.env`. Never commit it.
+
+## Quick add (IGDB / SteamGridDB)
+Copy `.env.example` to `.env` and fill in `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` (a Twitch developer app) and `STEAMGRIDDB_API_KEY`. Without them the app works, but games must be added manually. The `.env` file is gitignored and loaded from the working directory (real environment variables win).

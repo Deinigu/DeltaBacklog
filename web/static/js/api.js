@@ -132,3 +132,51 @@ export async function reorderViews(ids) {
   store.views = await send('PUT', '/api/views/order', ids);
   changed();
 }
+
+// ---- adding, deleting, covers, lookups ----
+async function request(method, url, body) {
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = res.status === 204 ? null : await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || `${method} ${url}: ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+// The list of games itself changed (added or deleted): views must rebuild, not just refresh.
+const reloaded = () => window.dispatchEvent(new Event('games-reloaded'));
+
+/** Search IGDB by title or store link. Resolves {configured, query, results}. */
+export const lookup = (q) => request('GET', `/api/lookup?q=${encodeURIComponent(q)}`);
+/** SteamGridDB cover options for a title. Resolves {configured, covers}. */
+export const coverSearch = (q) => request('GET', `/api/covers/search?q=${encodeURIComponent(q)}`);
+
+/** Create a game. Resolves {game, cover_error}; rejects with err.status 409 and err.data.id when it already exists. */
+export async function createGame(body) {
+  const data = await request('POST', '/api/games', body);
+  const g = data.game;
+  indexGame(g);
+  store.games.push(g);
+  store.byId.set(g.id, g);
+  reloaded();
+  return data;
+}
+
+export async function deleteGame(id) {
+  await request('DELETE', `/api/games/${id}`);
+  store.games = store.games.filter((g) => g.id !== id);
+  store.byId.delete(id);
+  reloaded();
+}
+
+/** Replace a game's cover with an image from the metadata CDNs. */
+export async function setCover(id, url) {
+  const fresh = await request('POST', `/api/games/${id}/cover`, { url });
+  const g = store.byId.get(id);
+  Object.assign(g, fresh);
+  indexGame(g);
+  window.dispatchEvent(new Event('games-changed'));
+  return g;
+}

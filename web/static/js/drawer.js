@@ -1,6 +1,7 @@
 // Game detail drawer (read-only for now; editing arrives with the table view).
-import { h, gradientFor, initials, toast } from './util.js';
-import { store, coverURL, patchGame } from './api.js';
+import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
+import { store, coverURL, patchGame, deleteGame } from './api.js';
+import { openCoverPicker } from './add.js';
 
 let open = null;
 
@@ -60,7 +61,20 @@ export function openDrawer(game) {
         fact('Ownership', game.ownership),
         fact('VR', game.vr ? 'Yes' : null),
         fact('100% completed', game.completed ? 'Yes' : null)),
-      game.notes && h('div.notes', {}, game.notes)));
+      game.notes && h('div.notes', {}, game.notes),
+      h('div.drawer-actions', {},
+        h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
+        h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete game'))));
+
+  async function remove() {
+    const ok = await confirmDialog({ title: `Delete “${game.title}”?`, message: 'This removes the game, its years played and its cover. It cannot be undone.', confirm: 'Delete' });
+    if (!ok) return;
+    try {
+      await deleteGame(game.id);
+      closeDrawer();
+      toast(`Deleted “${game.title}”`);
+    } catch { toast('Could not delete the game'); }
+  }
 
   const onKey = (e) => { if (e.key === 'Escape') closeDrawer(); };
   document.addEventListener('keydown', onKey);
