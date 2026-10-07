@@ -84,6 +84,8 @@ Without keys the app works; lookups answer `configured: false` and the UI offers
 
 **Port 8081 belongs to the owner's own live server.** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
 
+**Other commands:** `deltabacklog backup <file>` writes a consistent copy of the database; `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty).
+
 **Importing from NocoDB:** see the README ("Import from NocoDB"). `cmd/import` is idempotent (keyed by the old row id, stored in `game.source_id`) and re-running it retries failed cover downloads.
 
 ## 4. Data model
@@ -230,11 +232,73 @@ Before opening a PR: all of the above pass; changes that touch the UI were looke
 
 ## 11. Build and deploy
 
-Cross-compile for the Pi: `GOOS=linux GOARCH=arm GOARM=7 go build -o deltabacklog ./cmd/deltabacklog` (no CGO needed). The container image, compose file, deploy script, nightly backup (`VACUUM INTO`, 14 days) and restore are the **packaging** step of the plan and are not written yet; this section will be completed then. The Pi already runs NocoDB and Postgres, so the app is meant to run beside them with a memory limit of about 64MB and port 8081.
+The program is **cross-compiled on the PC** and uploaded; the Pi never holds the source and never builds anything (compiling the SQLite library needs most of a 1GB Pi and minutes of CPU, which would starve the other services). It runs directly under **systemd**, with no container, to keep the memory use at about 15MB.
+
+**Deploy or update (from the PC, Go on PATH, `ssh raspberry` working):**
+
+```sh
+bash deploy/deploy.sh                       # build + upload + install; data and settings are kept
+bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.db and covers/; --env installs the keys
+```
+
+`deploy.sh` builds `GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0`, uploads to `/tmp/deltabacklog-deploy`, runs `install.sh` with sudo and deletes the upload. `install.sh` is idempotent: it never overwrites an existing database, restarts the service only when the program (or settings) changed, and waits until `/healthz` answers.
+
+**What is on the Pi**
+
+| Path | What |
+|---|---|
+| `/opt/deltabacklog/deltabacklog` | the program; `backup.sh` next to it |
+| `/var/lib/deltabacklog/` | the data: `app.db`, `covers/` (owner `deltabacklog`, mode 750) |
+| `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days |
+| `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600) |
+| `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer` | the units (sources in `deploy/`) |
+
+**Starting at boot.** `deltabacklog.service` is enabled (`WantedBy=multi-user.target`) with `Restart=always` (a crashed process is back in about 4 seconds, tested with `kill -9`). It runs as the unprivileged system user `deltabacklog` with `NoNewPrivileges`, a read-only file system except its data folder, and `Nice=5`. The Pi's kernel does not enforce systemd memory limits (the memory cgroup is off on Raspbian), so the real cap is `GOMEMLIMIT=96MiB` in the settings file.
+
+**Backups.** `deltabacklog-backup.timer` runs `backup.sh` every night at 03:30 (with `Persistent=true`, so a missed run happens at the next boot). It calls `deltabacklog backup <file>`, which uses SQLite's `VACUUM INTO` for a consistent copy while the app runs, never overwrites an existing file and writes under a temporary name. Covers are not backed up (they can be downloaded again).
+
+```sh
+ssh raspberry
+sudo systemctl start deltabacklog-backup.service            # a backup right now
+sudo /opt/deltabacklog/deltabacklog check /var/backups/deltabacklog/app-2026-10-07.db   # integrity, schema version, counts (read-only)
+# restore: stop, put the copy in place, fix the owner, start
+sudo systemctl stop deltabacklog
+sudo cp /var/backups/deltabacklog/app-2026-10-07.db /var/lib/deltabacklog/app.db
+sudo rm -f /var/lib/deltabacklog/app.db-wal /var/lib/deltabacklog/app.db-shm
+sudo chown deltabacklog:deltabacklog /var/lib/deltabacklog/app.db
+sudo systemctl start deltabacklog
+```
+
+**Day to day:** `journalctl -u deltabacklog -f` (log), `systemctl status deltabacklog`, `systemctl list-timers deltabacklog-backup.timer`.
+
+**Never test against the Pi's real database.** For experiments copy `app.db` to a temporary folder and run a second instance on another port (this is how the write timings below were measured), then delete it.
+
+**HTTP only, so no service worker on the Pi.** Browsers only allow service workers and "Install app" on HTTPS or `localhost`. Served as `http://192.168.1.50:8081` the app works fully, but the offline cache is inactive, and "Add to Home screen" creates a plain shortcut. Real installation needs HTTPS (for example a reverse proxy with a certificate); not set up.
+
+**Performance (measured on the Pi 3B+ from the PC over the LAN, with a real browser)**
+
+What makes it fast:
+- The two big reads (`/api/games`, `/api/facets`) are built once, gzip-compressed once, kept in memory with an `ETag`, and rebuilt in the background 400ms after the last write (`internal/api/cache.go`; `Server.Warm`). Reads cost no database work; a repeat visit is a 304 without a body.
+- Editing one game loads only that game's rows (`loadGames(d, id)`), not the whole library.
+- Static files are compressed and fingerprinted once at startup (`web/web.go`), served with `no-cache` + `ETag` (new deploys show at once; repeat visits are 304s), and `index.html` is sent with a `modulepreload` link for every module so the browser fetches the scripts in parallel instead of one import level at a time.
+- Covers load only when they are about to scroll into view (`lazyImg` in `util.js`, an `IntersectionObserver`). The browser's own `loading="lazy"` was not enough: Chrome requested all 599 covers (15MB) on every revisit or reload.
+
+| | Before | After |
+|---|---|---|
+| `GET /api/games`, requests per second | 9 | about 1,500 (gzip) |
+| `GET /api/games`, time per request | 136 ms (930 ms with 8 clients) | 1 to 10 ms |
+| `GET /api/games`, bytes on the wire | 285 KB | 22 KB |
+| first request after a restart or a write | 210 to 280 ms | 3 ms (warmed in the background) |
+| repeat visit, whole page | 15.6 MB, 624 requests | 5 KB, 39 requests (304) |
+| first card on screen: LAN / 4G-like phone / 3G-like phone (CPU throttled 4x) | 2.9 s / 0.9 s / 1.8 s | 0.18 s / 0.9 s / 1.8 s |
+| edit (PATCH), create, reorder | | 7 to 25 ms |
+| memory of the process | | about 15 to 19 MB |
+
+Under a sustained load of 8 clients the Pi's CPU reaches its thermal limit; ordinary use is far below that.
 
 ## 12. Known gaps
 
 - Games imported from NocoDB have no `igdb_id` until they are matched with **Fill from IGDB**; duplicate detection falls back to the title.
-- Not built yet: Surprise me, Year in review and tier lists (the tier tables exist), series progress, statistics, backups and JSON export, packaging and deployment.
-- No authentication (intended: home network only).
+- Not built yet: Surprise me, Year in review and tier lists (the tier tables exist), series progress, statistics, a JSON export.
+- No authentication (intended: home network only) and no HTTPS (see section 11: no offline cache or app install on the Pi).
 - The pasted-link resolver (Steam, GOG, Epic, IGDB pages) exists in the backend but is not offered in the UI; only Steam links were tried against the real site.

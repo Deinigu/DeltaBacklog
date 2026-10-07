@@ -1,0 +1,37 @@
+[Unit]
+Description=DeltaBacklog videogame tracker
+Documentation=https://github.com/Deinigu/DeltaBacklog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deltabacklog
+Group=deltabacklog
+# LISTEN_ADDR, DATA_DIR, GOMEMLIMIT and the IGDB / SteamGridDB keys (root-only file)
+EnvironmentFile=/etc/deltabacklog.env
+WorkingDirectory=/var/lib/deltabacklog
+ExecStart=/opt/deltabacklog/deltabacklog
+
+# Start at boot, and come back by itself if it ever stops.
+Restart=always
+RestartSec=3
+
+# The Pi is small and shared: stay out of the way of NocoDB, Pi-hole and the others.
+Nice=5
+MemoryMax=160M
+
+# Least privilege: it only needs to write its own data folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/deltabacklog
+
+[Install]
+WantedBy=multi-user.target

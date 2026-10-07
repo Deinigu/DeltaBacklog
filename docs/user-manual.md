@@ -25,9 +25,11 @@ This manual is task by task. For how the program is built, see the [developer ma
 
 Open the address of your Raspberry Pi in any browser, for example `http://<address-of-your-pi>:8081`. Use the same address on your phone and on your PC, as long as they are on your home network.
 
-To use it like a normal app on your phone, install it:
-- **Android (Chrome):** open the menu (⋮) and choose **Install app** or **Add to Home screen**.
+To open it with one tap from your phone's home screen, add a shortcut:
+- **Android (Chrome):** open the menu (⋮) and choose **Add to Home screen**.
 - **iPhone (Safari):** tap the Share button and choose **Add to Home Screen**.
+
+Because the Pi is reached over plain `http://`, browsers treat this as a shortcut that opens the page, not as an installed app, and the app does not keep an offline copy: it needs the Pi to be reachable.
 
 The app follows your phone's light or dark setting. On a PC, the **Theme** button at the bottom of the left sidebar switches between them.
 
@@ -209,4 +211,6 @@ Open a game and tap **Change cover**.
 
 ## 13. Not available yet
 
-These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and **automatic backups with export and restore** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+
+**Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).

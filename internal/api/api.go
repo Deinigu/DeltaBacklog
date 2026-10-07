@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"time"
 )
 
 // Server holds the dependencies of the HTTP handlers.
@@ -15,6 +16,24 @@ type Server struct {
 	CoverDir   string
 	Meta       Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
 	CoverHosts []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
+
+	cache respCache // the encoded /api/games and /api/facets responses
+}
+
+// Warm builds the cached read responses now and again shortly after every change, in the background, so that
+// a page load never waits for them. Call it once after the server is set up.
+func (s *Server) Warm() {
+	build := func() {
+		s.cache.get("games", func() (any, error) { return LoadGames(s.DB) })
+		s.cache.get("facets", s.buildFacets)
+	}
+	s.cache.mu.Lock()
+	s.cache.warm = build
+	if s.cache.warmDelay == 0 {
+		s.cache.warmDelay = 400 * time.Millisecond
+	}
+	s.cache.mu.Unlock()
+	go build()
 }
 
 // Handler returns the router for /api, /covers and /healthz.
@@ -42,11 +61,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/views/{id}", s.patchView)
 	mux.HandleFunc("DELETE /api/views/{id}", s.deleteView)
 	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(http.FileServer(http.Dir(filepath.Clean(s.CoverDir))))))
-	return mux
+	return s.invalidating(mux)
 }
 
 // cacheForever is safe because a cover file name is the game id and is only rewritten on a cover change
-// (the UI appends ?v=<updated_at>).
+// (the UI appends ?v=<cover_v>).
 func cacheForever(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=2592000")

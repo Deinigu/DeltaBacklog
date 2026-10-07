@@ -106,3 +106,23 @@ export function confirmDialog({ title, message = '', confirm = 'Delete', danger 
     box.querySelector('.btn').focus();
   });
 }
+
+// Covers load only when they are about to scroll into view. The browser's own loading="lazy" is not enough:
+// Chrome fetches every lazy image again on a reload or a repeat visit, which for a 600-game library is about
+// 600 requests and 15MB, a lot to spend on a phone. This observer asks for a cover 600px before it is seen.
+const coverObserver = typeof IntersectionObserver === 'function'
+  ? new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      coverObserver.unobserve(e.target);
+      e.target.src = e.target.dataset.src;
+    }
+  }, { rootMargin: '600px 0px' })
+  : null;
+
+/** An <img> whose picture is requested only once it is near the viewport. */
+export function lazyImg(src, attrs = {}) {
+  const img = h('img', { alt: '', decoding: 'async', ...attrs });
+  if (coverObserver) { img.dataset.src = src; coverObserver.observe(img); } else img.src = src;
+  return img;
+}

@@ -14,6 +14,10 @@ type Facet struct {
 }
 
 func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
+	s.serveCached(w, r, "facets", s.buildFacets)
+}
+
+func (s *Server) buildFacets() (any, error) {
 	out := map[string][]Facet{}
 	queries := []struct{ name, query string }{
 		{"status", `SELECT s.code, s.label, s.color, count(g.id) FROM status s LEFT JOIN game g ON g.status_id = s.id GROUP BY s.id ORDER BY s.sort`},
@@ -28,12 +32,11 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 	for _, q := range queries {
 		f, err := loadFacets(s.DB, q.query)
 		if err != nil {
-			fail(w, err)
-			return
+			return nil, err
 		}
 		out[q.name] = f
 	}
-	writeJSON(w, out)
+	return out, nil
 }
 
 func junctionFacet(table, junction, fk string) string {

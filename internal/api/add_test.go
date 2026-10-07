@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"image"
@@ -52,6 +53,7 @@ func (f *fakeMeta) ResolveLink(_ context.Context, l string) (string, error) {
 
 // addEnv is a server with a fake metadata service and a fake image host.
 type addEnv struct {
+	db       *sql.DB
 	srv      *httptest.Server
 	meta     *fakeMeta
 	coverDir string
@@ -90,7 +92,7 @@ func newAddEnv(t *testing.T) *addEnv {
 	s := &Server{DB: d, CoverDir: coverDir, Meta: fm, CoverHosts: []string{strings.TrimPrefix(images.URL, "http://")}}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return &addEnv{srv: srv, meta: fm, coverDir: coverDir, images: images}
+	return &addEnv{db: d, srv: srv, meta: fm, coverDir: coverDir, images: images}
 }
 
 func TestLookup(t *testing.T) {

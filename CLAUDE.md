@@ -10,6 +10,7 @@ DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `mode
 - **Port 8081 is the user's own live server** (their real data). Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`, check it is free with `netstat`) and be addressed as `127.0.0.1:<port>`, never `localhost` (it can resolve to the user's server). Never send POST/PATCH/DELETE to a port you did not start yourself.
 - `go run ./cmd/deltabacklog` serves on `:8081` with data in `./data`. `web/static` is compiled into the binary, so restart after any frontend edit.
 - IGDB / SteamGridDB keys live in `.env` (loaded from the working directory; real environment variables win). Live check against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
+- Deploy to the Raspberry Pi (the owner's, `ssh raspberry`, systemd, port 8081): `bash deploy/deploy.sh` (cross-compiled on the PC, data and settings are kept). See the developer manual, section 11. Never run experiments against the Pi's real database: copy `app.db` to /tmp and run a second instance on another port.
 - Import from NocoDB: see README ("Import from NocoDB"); `cmd/import` is idempotent.
 - Cross-build for the Pi: `GOOS=linux GOARCH=arm GOARM=7`.
 

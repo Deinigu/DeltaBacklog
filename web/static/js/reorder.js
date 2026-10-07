@@ -1,5 +1,5 @@
 // Touch-friendly drag list for manual ordering (order maths lives in order.js).
-import { h, gradientFor, initials } from './util.js';
+import { h, gradientFor, initials, lazyImg } from './util.js';
 import { store, coverURL } from './api.js';
 import { moveItem } from './order.js';
 
@@ -18,7 +18,7 @@ export function createReorderList(games, onCommit, onOpen) {
     const handle = h('button.handle', { type: 'button', 'aria-label': `Drag to move ${g.title}` }, '⠿');
     const el = h('div.rrow', { 'data-id': g.id },
       handle,
-      h('div.thumb', {}, url ? h('img', { src: url, alt: '', loading: 'lazy' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title))),
+      h('div.thumb', {}, url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title))),
       h('button.rtitle', { type: 'button', onclick: () => onOpen && onOpen(g) }, h('span', {}, g.title), st && h('small', { style: `color:${st.color}` }, st.label)),
       h('div.rbtns', {},
         h('button.btn', { type: 'button', 'aria-label': 'Move up', onclick: () => step(g.id, -1) }, '▲'),

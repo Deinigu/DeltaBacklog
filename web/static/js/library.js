@@ -1,6 +1,6 @@
 // Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
-import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog } from './util.js';
+import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -128,7 +128,7 @@ export function renderLibrary(root, opts = {}) {
     const platforms = g.platforms.slice(0, 2);
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
-        url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
+        url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
         g.favorite && h('span.fav', { 'aria-label': 'Favorite' }, '★'),
         g.ownership && !isUsualOwnership(g.ownership) && h('span.own', { title: g.ownership, role: 'img', 'aria-label': g.ownership }, ownershipIcon(g.ownership)),
         st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
