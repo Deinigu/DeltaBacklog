@@ -122,7 +122,7 @@ export function renderLibrary(root, opts = {}) {
     if (el) return el;
     const st = store.statusByCode.get(g.status);
     const url = coverURL(g);
-    const played = playedBadges(g, new Date().getFullYear(), innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
+    const played = playedBadges(g, innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
     const hasPlayed = played.years.length || played.periods.length;
     const platforms = g.platforms.slice(0, 2);
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
@@ -137,7 +137,7 @@ export function renderLibrary(root, opts = {}) {
         hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,
-          ...played.years.map((y) => h('span.yr', { class: y.current ? 'now' : '' }, String(y.year)))) : null));
+          ...played.years.map((y) => h('span.yr', {}, String(y.year)))) : null));
     cards.set(g.id, el);
     return el;
   }
