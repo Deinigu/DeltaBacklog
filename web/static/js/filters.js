@@ -140,3 +140,12 @@ export function stateToQuery(state) {
   if (state.layout === 'table') qs.set('layout', 'table');
   return qs.toString();
 }
+
+/** A string that changes when any filter chip value appears or disappears (a new genre, platform, year...). */
+export function facetSignature(games) {
+  return GROUPS.map((grp) => {
+    const seen = new Set();
+    for (const g of games) for (const v of grp.get(g)) seen.add(v);
+    return [...seen].sort().join('\u0001');
+  }).join('\u0002');
+}

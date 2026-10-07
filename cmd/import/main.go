@@ -100,7 +100,7 @@ func main() {
 			continue
 		}
 		ok++
-		if _, err := d.Exec("UPDATE game SET cover_file = ? WHERE id = ?", r.name, r.id); err != nil {
+		if _, err := d.Exec("UPDATE game SET cover_file = ?, cover_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?", r.name, r.id); err != nil {
 			log.Fatal(err)
 		}
 	}

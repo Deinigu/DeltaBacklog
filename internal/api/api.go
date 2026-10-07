@@ -54,8 +54,12 @@ func cacheForever(h http.Handler) http.Handler {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, v any) { writeJSONStatus(w, http.StatusOK, v) }
+
+// writeJSONStatus sets the content type before the status: headers added after WriteHeader are never sent.
+func writeJSONStatus(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.Printf("encode: %v", err)
 	}

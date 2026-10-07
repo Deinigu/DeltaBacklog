@@ -149,8 +149,7 @@ func (s *Server) createView(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, v)
+	writeJSONStatus(w, http.StatusCreated, v)
 }
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

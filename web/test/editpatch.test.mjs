@@ -93,3 +93,18 @@ test('typed year tokens are normalised or rejected', () => {
   assert.equal(normalizeYearToken('ALWAYS'), 'Always');
   for (const bad of ['24', 'later', '20245', '']) assert.equal(normalizeYearToken(bad), null, bad);
 });
+
+test('years outside what the API accepts (1970-2100) are rejected before saving', () => {
+  assert.equal(normalizeYearToken('1965'), null);
+  assert.equal(normalizeYearToken('2101'), null);
+  assert.equal(normalizeYearToken('1970'), '1970');
+  assert.equal(normalizeYearToken('2100'), '2100');
+  const f = formFromGame(game());
+  f.years = ['2025', '1965'];
+  assert.match(validateForm(f), /between 1970 and 2100/);
+  f.years = ['2025', '1970'];
+  assert.equal(validateForm(f), '');
+  // and a stray out-of-range year never reaches the patch
+  f.years = ['2025', '2026', '1965', 'Childhood'];
+  assert.deepEqual(buildPatch(game(), f), {});
+});

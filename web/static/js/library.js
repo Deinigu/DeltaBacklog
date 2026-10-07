@@ -9,7 +9,7 @@ import { playedBadges, playedSummary } from './years.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
-  GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
+  GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState, facetSignature,
   filterToJSON, stateFromView, stateFromQuery, stateToQuery, signature,
 } from './filters.js';
 
@@ -273,7 +273,18 @@ export function renderLibrary(root, opts = {}) {
   };
   // A game changed elsewhere (drawer, reorder): rebuild the cards and refresh counts.
   // While dragging we must not rebuild the list under the user's finger.
-  const onGames = () => { if (!reordering) { cards.clear(); update(); } };
+  let facets = facetSignature(store.games);
+  const onGames = (e) => {
+    if (reordering) return;
+    const d = e.detail || {};
+    if (!d.reorder) {
+      // A new genre, platform or year has no filter chip yet: rebuild the whole page once so it appears.
+      const now = facetSignature(store.games);
+      if (now !== facets) { facets = now; window.dispatchEvent(new Event('games-reloaded')); return; }
+    }
+    if (d.id) cards.delete(d.id); else if (!d.reorder) cards.clear(); // only the card that changed is rebuilt
+    update();
+  };
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {

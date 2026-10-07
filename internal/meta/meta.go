@@ -306,6 +306,23 @@ func allowedLinkHost(host string) bool {
 	return false
 }
 
+// linkClient is the HTTP client for fetching a pasted link's page. It follows redirects only between allowed
+// hosts, so an allowed page cannot bounce the server to an address inside the user's network.
+func (c *Client) linkClient() *http.Client {
+	return &http.Client{
+		Timeout: c.http.Timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 4 {
+				return errors.New("too many redirects")
+			}
+			if !allowedLinkHost(req.URL.Hostname()) {
+				return fmt.Errorf("redirect to %s is not allowed", req.URL.Hostname())
+			}
+			return nil
+		},
+	}
+}
+
 // ResolveLink turns a store or IGDB link into a game title to search for.
 func (c *Client) ResolveLink(ctx context.Context, link string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(link))
@@ -338,11 +355,14 @@ func (c *Client) ResolveLink(ctx context.Context, link string) (string, error) {
 	// GOG / Epic: read the page title.
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (DeltaBacklog link lookup)")
-	res, err := c.http.Do(req)
+	res, err := c.linkClient().Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("that page answered %s", res.Status)
+	}
 	html, _ := io.ReadAll(io.LimitReader(res.Body, 512<<10))
 	title := ""
 	if m := ogTitle.FindSubmatch(html); m != nil {

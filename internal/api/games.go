@@ -24,6 +24,7 @@ type Game struct {
 	IGDBID      *int64   `json:"igdb_id"`
 	AddedAt     string   `json:"added_at"`
 	UpdatedAt   string   `json:"updated_at"`
+	CoverV      string   `json:"cover_v"` // changes only when the cover image does: the browser cache key for /covers/
 	Platforms   []string `json:"platforms"`
 	Genres      []string `json:"genres"`
 	Themes      []string `json:"themes"`
@@ -63,7 +64,7 @@ func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
 // LoadGames returns every game ordered by status then queue position.
 func LoadGames(d *sql.DB) ([]Game, error) {
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, g.series_order, c.name, g.release_year,
-			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at
+			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
@@ -77,7 +78,7 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 	for rows.Next() {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.SeriesOrder, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt); err != nil {
+			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV); err != nil {
 			rows.Close()
 			return nil, err
 		}

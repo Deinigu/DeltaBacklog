@@ -124,6 +124,15 @@ func nullInt64(p *int64) any {
 	return *p
 }
 
+// foldThemes maps verbose IGDB theme names ("4X (explore, expand, ...)") to the short ones the library uses.
+func foldThemes(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = db.NormalizeTheme(strings.TrimSpace(n))
+	}
+	return out
+}
+
 func nullInt(n int) any {
 	if n == 0 {
 		return nil
@@ -360,7 +369,11 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 		if l.names == nil {
 			continue
 		}
-		if err := setLinks(tx, id, l.table, l.junction, l.fk, *l.names); err != nil {
+		names := *l.names
+		if l.table == "theme" {
+			names = foldThemes(names) // the same folding as the importer and quick add
+		}
+		if err := setLinks(tx, id, l.table, l.junction, l.fk, names); err != nil {
 			return err
 		}
 	}
