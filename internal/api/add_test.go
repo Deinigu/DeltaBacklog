@@ -246,3 +246,55 @@ func TestSetCoverAndDelete(t *testing.T) {
 		t.Error("deleted game still listed")
 	}
 }
+
+func TestLinkGameToIGDB(t *testing.T) {
+	e := newAddEnv(t)
+	_, body := do(t, "GET", e.srv.URL+"/api/games", "")
+	var games []Game
+	json.Unmarshal(body, &games)
+	a, b := games[0], games[1]
+	if a.IGDBID != nil {
+		t.Fatalf("imported games have no IGDB id yet: %v", *a.IGDBID)
+	}
+	urlOf := func(g Game) string { return e.srv.URL + "/api/games/" + itoa64(g.ID) }
+
+	res, body := do(t, "PATCH", urlOf(a), `{"igdb_id":228525}`)
+	var got Game
+	json.Unmarshal(body, &got)
+	if res.StatusCode != 200 || got.IGDBID == nil || *got.IGDBID != 228525 {
+		t.Fatalf("link: %d %s", res.StatusCode, body)
+	}
+	// setting the same id again on the same game is fine
+	if res, _ := do(t, "PATCH", urlOf(a), `{"igdb_id":228525,"notes":"x"}`); res.StatusCode != 200 {
+		t.Errorf("re-link same game = %d", res.StatusCode)
+	}
+	// another game cannot take it, and nothing else in that patch is applied
+	res, body = do(t, "PATCH", urlOf(b), `{"igdb_id":228525,"notes":"should not be saved"}`)
+	var conflict map[string]any
+	json.Unmarshal(body, &conflict)
+	if res.StatusCode != 409 || conflict["id"] == nil {
+		t.Errorf("conflict: %d %s", res.StatusCode, body)
+	}
+	_, body = do(t, "GET", e.srv.URL+"/api/games", "")
+	json.Unmarshal(body, &games)
+	for _, g := range games {
+		if g.ID == b.ID && g.Notes != "" {
+			t.Errorf("a rejected patch must not change other fields: %q", g.Notes)
+		}
+	}
+	// 0 clears the link; negative is invalid
+	_, body = do(t, "PATCH", urlOf(a), `{"igdb_id":0}`)
+	json.Unmarshal(body, &got)
+	if got.IGDBID != nil {
+		t.Errorf("0 should clear the link: %v", *got.IGDBID)
+	}
+	if res, _ := do(t, "PATCH", urlOf(a), `{"igdb_id":-5}`); res.StatusCode != 400 {
+		t.Errorf("negative id = %d", res.StatusCode)
+	}
+	// the freed id can now go to the other game
+	if res, _ := do(t, "PATCH", urlOf(b), `{"igdb_id":228525}`); res.StatusCode != 200 {
+		t.Errorf("freed id = %d", res.StatusCode)
+	}
+}
+
+func itoa64(n int64) string { b, _ := json.Marshal(n); return string(b) }

@@ -5,6 +5,7 @@ import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
 import { toCSV } from './csv.js';
 import { ownershipIcon } from './ownership.js';
+import { yearOptions, normalizeYearToken } from './editpatch.js';
 
 const ROW_H = 44;
 const OVERSCAN = 6;
@@ -13,10 +14,6 @@ const uniq = (get) => () => {
   const tally = new Map();
   for (const g of store.games) for (const v of get(g)) tally.set(v, (tally.get(v) || 0) + 1);
   return [...tally.keys()].sort((a, b) => tally.get(b) - tally.get(a) || a.localeCompare(b));
-};
-const yearOptions = () => {
-  const now = new Date().getFullYear();
-  return [...Array.from({ length: now - 1990 + 1 }, (_, i) => String(now - i)), 'Childhood', 'Always'];
 };
 const yearsOf = (g) => [...g.years.map(String), ...g.periods.map((p) => p[0].toUpperCase() + p.slice(1))];
 
@@ -28,7 +25,7 @@ export const COLUMNS = [
   { key: 'platforms', label: 'Platforms', w: 170, kind: 'multi', sort: 'platform', text: (g) => g.platforms.join('; '), values: (g) => g.platforms, options: uniq((g) => g.platforms), patch: (v) => ({ platforms: v }) },
   { key: 'genres', label: 'Genres', w: 220, kind: 'multi', text: (g) => g.genres.join('; '), values: (g) => g.genres, options: uniq((g) => g.genres), patch: (v) => ({ genres: v }) },
   { key: 'themes', label: 'Themes', w: 200, kind: 'multi', text: (g) => g.themes.join('; '), values: (g) => g.themes, options: uniq((g) => g.themes), patch: (v) => ({ themes: v }) },
-  { key: 'years', label: 'Years played', w: 150, kind: 'years', sort: 'last_year', text: (g) => yearsOf(g).join('; '), values: yearsOf, options: yearOptions,
+  { key: 'years', label: 'Years played', w: 150, kind: 'years', sort: 'last_year', text: (g) => yearsOf(g).join('; '), values: yearsOf, options: () => yearOptions(),
     patch: (v) => ({ years: v.filter((x) => /^\d{4}$/.test(x)).map(Number), periods: v.filter((x) => /^(childhood|always)$/i.test(x)).map((x) => x.toLowerCase()) }) },
   { key: 'series', label: 'Series', w: 170, kind: 'lookup', sort: 'series', text: (g) => g.series ?? '', options: uniq((g) => (g.series ? [g.series] : [])), patch: (v) => ({ series: v }) },
   { key: 'series_order', label: '# in series', w: 90, kind: 'number', text: (g) => g.series_order ?? '', patch: (v) => ({ series_order: v }) },
@@ -154,7 +151,7 @@ export function renderTable(ctx) {
         title: `${c.label} · ${g.title}`,
         options: c.options(),
         selected: c.values(g),
-        validate: c.kind === 'years' ? (t) => (/^\d{4}$/.test(t) ? t : /^(childhood|always)$/i.test(t) ? t[0].toUpperCase() + t.slice(1).toLowerCase() : null) : (t) => t,
+        validate: c.kind === 'years' ? normalizeYearToken : (t) => t,
       }).then((next) => next && commit(g, c, next));
       return;
     }

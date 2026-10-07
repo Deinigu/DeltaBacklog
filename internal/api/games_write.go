@@ -31,6 +31,7 @@ type gamePatch struct {
 	Players     *[]string `json:"players"`
 	Years       *[]int    `json:"years"`   // calendar years played
 	Periods     *[]string `json:"periods"` // "childhood", "always"
+	IGDBID      *int64    `json:"igdb_id"` // links the game to IGDB; 0 clears
 }
 
 var errInvalid = errors.New("invalid value")
@@ -47,6 +48,9 @@ func (in *gamePatch) validate() error {
 		if p != nil && len(*p) > 120 {
 			return errInvalid
 		}
+	}
+	if in.IGDBID != nil && *in.IGDBID < 0 {
+		return errInvalid
 	}
 	if in.ReleaseYear != nil && *in.ReleaseYear != 0 && (*in.ReleaseYear < 1950 || *in.ReleaseYear > 2100) {
 		return errInvalid
@@ -112,6 +116,14 @@ func nullableLookup(tx *sql.Tx, table, name string) (any, error) {
 	return db.GetOrCreate(tx, table, name)
 }
 
+// nullInt64 stores nil and 0 as NULL.
+func nullInt64(p *int64) any {
+	if p == nil || *p == 0 {
+		return nil
+	}
+	return *p
+}
+
 func nullInt(n int) any {
 	if n == 0 {
 		return nil
@@ -147,6 +159,14 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		fail(w, err)
 		return
+	}
+
+	if in.IGDBID != nil && *in.IGDBID != 0 {
+		var other int64
+		if err := tx.QueryRow("SELECT id FROM game WHERE igdb_id = ? AND id <> ?", *in.IGDBID, id).Scan(&other); err == nil {
+			writeErr(w, http.StatusConflict, "another game in your library already has that IGDB id", map[string]any{"id": other})
+			return
+		}
 	}
 
 	// Field edits come first: an explicit list of years must not wipe the year the status change records below.
@@ -315,6 +335,11 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 	}
 	if in.SeriesOrder != nil {
 		if _, err := tx.Exec("UPDATE game SET series_order = ? WHERE id = ?", nullInt(*in.SeriesOrder), id); err != nil {
+			return err
+		}
+	}
+	if in.IGDBID != nil {
+		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", nullInt64(in.IGDBID), id); err != nil {
 			return err
 		}
 	}

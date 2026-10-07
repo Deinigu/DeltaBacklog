@@ -1,20 +1,13 @@
 // Quick add: search IGDB by title or store link, pick a match, review the pre-filled form and cover, save.
-// Also the cover picker used by the game drawer.
+// Also the IGDB match picker and the cover picker used by the game drawer.
 import { h, icon, toast, norm, debounce, gradientFor, initials } from './util.js';
 import { store, lookup, coverSearch, createGame, setCover } from './api.js';
-import { pickMany } from './picker.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
-import { ownershipLabel } from './ownership.js';
+import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSelect } from './form.js';
 
-const unique = (get) => {
-  const tally = new Map();
-  for (const g of store.games) for (const v of get(g)) tally.set(v, (tally.get(v) || 0) + 1);
-  return [...tally.keys()].sort((a, b) => tally.get(b) - tally.get(a) || a.localeCompare(b));
-};
-
-/** A scrim + sheet pair that closes together. Returns {sheet, head, body, foot, close}. */
-function makeSheet(titleText, extraClass = '') {
+/** A scrim + sheet pair that closes together. Returns {sheet, head, body, foot, back, title, close}. */
+export function makeSheet(titleText, extraClass = '') {
   let onClose = null;
   const close = () => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
   const scrim = h('div.scrim.show', { onclick: close });
@@ -32,57 +25,80 @@ function makeSheet(titleText, extraClass = '') {
   return { sheet, head, body, foot, back, title, close, set onClose(fn) { onClose = fn; } };
 }
 
-// ---------------------------------------------------------------- add a game
+/** The game already in the library that a lookup result is: matched by IGDB id first, then by title. */
+function inLibrary(c, excludeId) {
+  const others = store.games.filter((g) => g.id !== excludeId);
+  return others.find((g) => g.igdb_id === c.igdb_id) || others.find((g) => norm(g.title) === norm(c.name));
+}
 
-export function openAdd({ query = '' } = {}) {
-  const ui = makeSheet('Add a game', 'add');
-  let lastQuery = query;
+/**
+ * The search step: a box for a title or store link and the IGDB matches under it.
+ * state: {query} (kept by the caller so going back restores it). handlers: {onPick(candidate), onManual(typedText) | null, excludeId}
+ */
+function renderSearch(ui, state, { onPick, onManual, excludeId }) {
+  const input = h('input', { type: 'search', placeholder: 'Title, or a Steam / GOG / Epic link…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Title or link', value: state.query });
+  const results = h('div.cands');
+  const manual = onManual && h('button.btn.manual', { type: 'button', onclick: () => onManual(input.value.trim()) });
+  ui.body.replaceChildren(h('div.search.pick-search', {}, icon('search'), input), results, manual);
 
-  // ---------- step 1: search ----------
-  function toSearch() {
-    ui.back.hidden = true;
-    ui.foot.hidden = true;
-    ui.title.textContent = 'Add a game';
-    const input = h('input', { type: 'search', placeholder: 'Title, or a Steam / GOG / Epic link…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Title or link', value: lastQuery });
-    const results = h('div.cands');
-    const manual = h('button.btn.manual', { type: 'button', onclick: () => toForm(null, input.value.trim()) });
-    ui.body.replaceChildren(h('div.search.pick-search', {}, icon('search'), input), results, manual);
-
-    let seq = 0;
-    const run = async () => {
-      const q = input.value.trim();
-      lastQuery = q;
-      manual.textContent = q && !/^https?:/i.test(q) ? `Add “${q}” without a lookup` : 'Add manually';
-      if (q.length < 2) { results.replaceChildren(h('p.hint', {}, 'Type a game title, or paste a store link.')); return; }
-      const mine = ++seq;
-      results.replaceChildren(h('p.hint', {}, 'Searching…'));
-      try {
-        const r = await lookup(q);
-        if (mine !== seq) return;
-        if (!r.configured) { results.replaceChildren(h('p.hint', {}, 'Lookups are not set up yet (IGDB keys are missing from .env). You can still add the game manually.')); return; }
-        if (!r.results.length) { results.replaceChildren(h('p.hint', {}, 'No matches. Try another spelling, or add it manually.')); return; }
-        results.replaceChildren(...r.results.map((c) => candidate(c)));
-      } catch (e) {
-        if (mine === seq) results.replaceChildren(h('p.hint', {}, e.status === 422 ? e.message : 'The lookup service did not answer. Check the connection, or add the game manually.'));
-      }
-    };
-    input.addEventListener('input', debounce(run, 450));
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
-    input.focus({ preventScroll: true });
-    run();
-  }
+  let seq = 0;
+  const run = async () => {
+    const q = input.value.trim();
+    state.query = q;
+    if (manual) manual.textContent = q && !/^https?:/i.test(q) ? `Add “${q}” without a lookup` : 'Add manually';
+    if (q.length < 2) { results.replaceChildren(h('p.hint', {}, 'Type a game title, or paste a store link.')); return; }
+    const mine = ++seq;
+    results.replaceChildren(h('p.hint', {}, 'Searching…'));
+    try {
+      const r = await lookup(q);
+      if (mine !== seq) return;
+      if (!r.configured) { results.replaceChildren(h('p.hint', {}, 'Lookups are not set up yet (IGDB keys are missing from .env).' + (manual ? ' You can still add the game manually.' : ''))); return; }
+      if (!r.results.length) { results.replaceChildren(h('p.hint', {}, 'No matches. Try another spelling' + (manual ? ', or add it manually.' : '.'))); return; }
+      results.replaceChildren(...r.results.map((c) => candidate(c)));
+    } catch (e) {
+      if (mine === seq) results.replaceChildren(h('p.hint', {}, e.status === 422 ? e.message : 'The lookup service did not answer. Check the connection' + (manual ? ', or add the game manually.' : '.')));
+    }
+  };
+  input.addEventListener('input', debounce(run, 450));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  input.focus({ preventScroll: true });
+  run();
 
   function candidate(c) {
-    const mine = store.games.find((g) => norm(g.title) === norm(c.name));
+    const mine = inLibrary(c, excludeId);
     const st = mine && store.statusByCode.get(mine.status);
     const sub = [c.developer, c.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ');
-    return h('button.cand', { type: 'button', onclick: () => toForm(c) },
+    return h('button.cand', { type: 'button', onclick: () => onPick(c) },
       h('div.cthumb', {}, c.cover_url ? h('img', { src: c.cover_url.replace('t_cover_big', 't_cover_small'), alt: '', loading: 'lazy' }) : h('div.ph', { style: `background:${gradientFor(c.name)}` }, initials(c.name))),
       h('div.cinfo', {},
         h('div.cname', {}, c.name, c.year ? h('span.year', {}, ` (${c.year})`) : null),
         sub && h('div.csub', {}, sub),
         c.platforms.length ? h('div.csub', {}, c.platforms.slice(0, 6).join(' · ')) : null,
         mine && h('span.inlib', {}, `Already in your library${st ? ': ' + st.label : ''}`)));
+  }
+}
+
+/** Search IGDB and resolve to the chosen match, or null when the sheet is dismissed. Used by "Fill from IGDB". */
+export function pickCandidate({ query = '', excludeId = null } = {}) {
+  return new Promise((resolve) => {
+    const ui = makeSheet('Match on IGDB');
+    let picked = null;
+    ui.onClose = () => resolve(picked);
+    renderSearch(ui, { query }, { onPick: (c) => { picked = c; ui.close(); }, onManual: null, excludeId });
+  });
+}
+
+// ---------------------------------------------------------------- add a game
+
+export function openAdd({ query = '' } = {}) {
+  const ui = makeSheet('Add a game', 'add');
+  const state = { query };
+
+  function toSearch() {
+    ui.back.hidden = true;
+    ui.foot.hidden = true;
+    ui.title.textContent = 'Add a game';
+    renderSearch(ui, state, { onPick: (c) => toForm(c), onManual: (typed) => toForm(null, typed) });
   }
 
   // ---------- step 2: review and save ----------
@@ -109,39 +125,10 @@ export function openAdd({ query = '' } = {}) {
       cover: null,
     };
 
-    const field = (label, control) => h('label.frow', {}, h('span.flabel', {}, label), control);
-    const text = (key, attrs = {}) => { const i = h('input', { type: 'text', value: f[key], ...attrs }); i.addEventListener('input', () => { f[key] = i.value; }); return i; };
-    const listRow = (label, key, options, suggestions = []) => {
-      const val = h('span.fval');
-      const chips = suggestions.map((name) => h('button.chip', { type: 'button', onclick: () => {
-        f[key] = f[key].includes(name) ? f[key].filter((v) => v !== name) : [...f[key], name];
-        draw();
-      } }, name));
-      const draw = () => {
-        val.textContent = f[key].length ? f[key].join(', ') : 'none';
-        val.classList.toggle('none', !f[key].length);
-        chips.forEach((c) => { const on = f[key].includes(c.textContent); c.dataset.state = on ? 'in' : 'off'; c.setAttribute('aria-pressed', String(on)); });
-      };
-      draw();
-      const edit = async () => { const next = await pickMany({ title: label, options, selected: f[key] }); if (next) { f[key] = next; draw(); } };
-      const row = h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
-      if (!chips.length) return row;
-      return h('div.rowgroup', {}, row, h('div.suggest', {}, h('span.hint', {}, 'Also on IGDB:'), ...chips));
-    };
-
-    const titleIn = text('title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
-    const statusSel = h('select', { 'aria-label': 'Status' }, store.statuses.map((s) => h('option', { value: s.key, selected: s.key === f.status }, s.label)));
-    statusSel.addEventListener('change', () => { f.status = statusSel.value; });
-    const ownSel = h('select', { 'aria-label': 'Ownership' }, [h('option', { value: '' }, '—'), ...unique((g) => (g.ownership ? [g.ownership] : [])).map((o) => h('option', { value: o, selected: o === f.ownership }, ownershipLabel(o)))]);
-    ownSel.addEventListener('change', () => { f.ownership = ownSel.value; });
-    const yearIn = text('release_year', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2025', 'aria-label': 'Release year' });
-    const seriesIn = text('series', { list: 'dl-add-series', 'aria-label': 'Series' });
-    const devIn = text('developer', { list: 'dl-add-dev', 'aria-label': 'Developer' });
-    for (const [id, opts] of [['dl-add-series', unique((g) => (g.series ? [g.series] : []))], ['dl-add-dev', unique((g) => (g.developer ? [g.developer] : []))]]) {
-      let dl = document.getElementById(id);
-      if (!dl) { dl = h('datalist', { id }); document.body.append(dl); }
-      dl.replaceChildren(...opts.map((o) => h('option', { value: o })));
-    }
+    const titleIn = text(f, 'title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
+    const yearIn = text(f, 'release_year', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2025', 'aria-label': 'Release year' });
+    const seriesIn = text(f, 'series', { list: ensureDatalist('dl-add-series', unique((g) => (g.series ? [g.series] : []))), 'aria-label': 'Series' });
+    const devIn = text(f, 'developer', { list: ensureDatalist('dl-add-dev', unique((g) => (g.developer ? [g.developer] : []))), 'aria-label': 'Developer' });
 
     // cover choices
     const strip = h('div.cover-strip');
@@ -175,8 +162,8 @@ export function openAdd({ query = '' } = {}) {
       }
     }
 
-    // A game with the same title may already be in the library (imported games have no IGDB id to match on).
-    const existing = c && store.games.find((g) => norm(g.title) === norm(c.name));
+    // The same game may already be in the library.
+    const existing = c && inLibrary(c, null);
     const existingStatus = existing && store.statusByCode.get(existing.status);
     const dupe = existing && h('div.dupe', {},
       h('span', {}, `“${existing.title}” is already in your library${existingStatus ? ' (' + existingStatus.label + ')' : ''}.`),
@@ -185,14 +172,14 @@ export function openAdd({ query = '' } = {}) {
     const form = h('div.addform', {},
       dupe,
       field('Title', titleIn),
-      field('Status', statusSel),
-      listRow('Platforms', 'platforms', platformOptions, suggested.slice(0, 10)),
-      listRow('Genres', 'genres', unique((g) => g.genres)),
-      listRow('Themes', 'themes', unique((g) => g.themes)),
+      field('Status', statusSelect(f)),
+      listRow(f, 'Platforms', 'platforms', platformOptions, { suggestions: suggested.slice(0, 10) }),
+      listRow(f, 'Genres', 'genres', unique((g) => g.genres)),
+      listRow(f, 'Themes', 'themes', unique((g) => g.themes)),
       field('Series', seriesIn),
       field('Developer', devIn),
       field('Released', yearIn),
-      field('Ownership', ownSel),
+      field('Ownership', ownershipSelect(f)),
       h('div.frow.col', {}, h('span.flabel', {}, 'Cover', h('button.pill', { type: 'button', style: 'margin-left:10px', onclick: findCovers }, 'Search again')), coverHint, strip));
     ui.body.replaceChildren(form);
 

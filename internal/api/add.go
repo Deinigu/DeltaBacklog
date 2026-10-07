@@ -119,7 +119,6 @@ func (s *Server) searchCovers(w http.ResponseWriter, r *http.Request) {
 
 type gameCreate struct {
 	gamePatch
-	IGDBID   *int64 `json:"igdb_id"`
 	CoverURL string `json:"cover_url"`
 }
 
@@ -157,7 +156,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	if in.IGDBID != nil {
+	if in.IGDBID != nil && *in.IGDBID != 0 {
 		var existing int64
 		if err := tx.QueryRow("SELECT id FROM game WHERE igdb_id = ?", *in.IGDBID).Scan(&existing); err == nil {
 			writeErr(w, http.StatusConflict, "already in your library", map[string]any{"id": existing})
@@ -171,7 +170,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 	}
 	title := strings.TrimSpace(*in.Title)
 	res, err := tx.Exec(`INSERT INTO game (title, title_sort, status_id, igdb_id, queue_pos)
-		VALUES (?, ?, ?, ?, (SELECT coalesce(max(queue_pos), 0) + 1 FROM game))`, title, db.TitleSort(title), sid, in.IGDBID)
+		VALUES (?, ?, ?, ?, (SELECT coalesce(max(queue_pos), 0) + 1 FROM game))`, title, db.TitleSort(title), sid, nullInt64(in.IGDBID))
 	if err != nil {
 		fail(w, err)
 		return

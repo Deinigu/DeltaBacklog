@@ -409,3 +409,14 @@ a.btn.primary { color: var(--accent-text); }
 .td .oicon { flex: none; font-size: 16px; line-height: 1; }
 
 @media (max-width: 599px) { .view-head .lbl { display: none; } .view-head .btn { padding: 0 12px; } }
+
+/* ---- edit mode in the drawer ---- */
+.editview .addform { padding-bottom: 8px; }
+.frow.toggle { cursor: pointer; }
+.frow.toggle input[type="checkbox"] { flex: none; width: 24px; height: 24px; margin-left: auto; accent-color: var(--accent); }
+.frow textarea { width: 100%; min-height: 84px; max-height: 320px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 10px 12px; font: inherit; font-size: 16px; resize: none; outline: none; }
+.frow textarea:focus { border-color: var(--accent); }
+.editbar { position: sticky; bottom: -16px; display: flex; gap: 10px; justify-content: flex-end; padding: 12px 0 14px; margin-top: 8px; background: linear-gradient(to top, var(--surface) 70%, transparent); }
+.editbar .btn { min-width: 110px; }
+.dupe.ok { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); }
+.drawer.editing .cover { aspect-ratio: 4 / 1; }

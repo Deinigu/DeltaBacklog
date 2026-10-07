@@ -106,7 +106,12 @@ export async function reorderGames(ids) {
 // ---- saved views ----
 async function send(method, url, body) {
   const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${method} ${url}: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`${method} ${url}: ${res.status}`);
+    err.status = res.status;
+    err.data = await res.json().catch(() => null);
+    throw err;
+  }
   return res.status === 204 ? null : res.json();
 }
 const changed = () => window.dispatchEvent(new Event('views-changed'));

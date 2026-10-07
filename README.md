@@ -12,6 +12,7 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Change a game's status or favorite from its detail view; drag-to-reorder manual order (touch friendly)
 - [x] Table layout: sortable, resizable, hideable columns; inline editing of every field; CSV export; saved views remember cards vs table
 - [x] Quick add: search IGDB by title or Steam/GOG/Epic/IGDB link, pre-filled form, SteamGridDB cover picker; change cover and delete from the detail view
+- [x] Edit every field of a game from its detail view (phone friendly), refill its metadata from IGDB, link it to IGDB
 - [ ] Surprise me, years and tierlists, series, stats, packaging
 
 ## Develop
