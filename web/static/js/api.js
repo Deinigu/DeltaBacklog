@@ -155,8 +155,16 @@ const reloaded = () => window.dispatchEvent(new Event('games-reloaded'));
 
 /** Search IGDB by title or store link. Resolves {configured, query, results}. */
 export const lookup = (q) => request('GET', `/api/lookup?q=${encodeURIComponent(q)}`);
-/** SteamGridDB cover options for a title. Resolves {configured, covers}. */
-export const coverSearch = (q) => request('GET', `/api/covers/search?q=${encodeURIComponent(q)}`);
+/**
+ * Cover options. source: 'steamgriddb' (search by title) or 'igdb' (the pictures IGDB holds; igdbId links to the
+ * exact game when known). Resolves {configured, source, covers}.
+ */
+export function coverSearch(q, { source = 'steamgriddb', igdbId = 0 } = {}) {
+  const p = new URLSearchParams({ q });
+  if (source !== 'steamgriddb') p.set('source', source);
+  if (igdbId) p.set('igdb_id', String(igdbId));
+  return request('GET', `/api/covers/search?${p}`);
+}
 
 /** Create a game. Resolves {game, cover_error}; rejects with err.status 409 and err.data.id when it already exists. */
 export async function createGame(body) {

@@ -224,17 +224,58 @@ export function openAdd({ query = '' } = {}) {
 
 // ---------------------------------------------------------------- change a cover
 
+const SOURCES = [
+  { key: 'steamgriddb', label: 'SteamGridDB', hint: 'Community-made covers. Wide images match your library.' },
+  { key: 'igdb', label: 'IGDB', hint: 'Official artwork, screenshots and the box cover. Wide pictures look best on the cards.' },
+];
+const LAST_SOURCE = 'cover-source';
+
+/** Change a game's cover: pick the source (SteamGridDB or IGDB), optionally search another title, tap an image. */
 export function openCoverPicker(game) {
   const ui = makeSheet(`Cover · ${game.title}`);
-  const status = h('p.hint', {}, 'Looking for covers…');
+  let source = 'steamgriddb';
+  try { const saved = localStorage.getItem(LAST_SOURCE); if (SOURCES.some((s) => s.key === saved)) source = saved; } catch { /* private mode */ }
+
+  const input = h('input', { type: 'search', value: game.title, placeholder: 'Search a different title…', 'aria-label': 'Title to search', enterkeyhint: 'search' });
+  const tabs = SOURCES.map((s) => h('button', { type: 'button', onclick: () => { source = s.key; try { localStorage.setItem(LAST_SOURCE, s.key); } catch { /* ignore */ } load(); } }, s.label));
+  const mode = h('div.mode', { role: 'group', 'aria-label': 'Cover source' }, ...tabs);
+  const status = h('p.hint', {});
   const grid = h('div.cover-grid');
-  ui.body.replaceChildren(status, grid);
-  coverSearch(game.title).then((r) => {
-    if (!r.configured) { status.textContent = 'Cover lookup is not set up (SteamGridDB key missing from .env).'; return; }
-    status.textContent = r.covers.length ? 'Tap an image to use it.' : 'No covers found for this title.';
-    grid.replaceChildren(...r.covers.map((o) => h('button.ctile.big', { type: 'button', 'aria-label': 'Use this cover', onclick: async () => {
+  ui.body.replaceChildren(
+    mode,
+    h('div.cover-tools', {}, h('div.search.pick-search', {}, icon('search'), input), h('button.btn', { type: 'button', onclick: () => load() }, 'Search')),
+    status, grid);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); load(); } });
+
+  let seq = 0;
+  async function load() {
+    const mine = ++seq;
+    SOURCES.forEach((s, i) => tabs[i].setAttribute('aria-pressed', String(s.key === source)));
+    const info = SOURCES.find((s) => s.key === source);
+    status.textContent = 'Looking for images…';
+    grid.replaceChildren();
+    const q = input.value.trim();
+    // The game's own IGDB link is only used while the title is unchanged: a different title means a different game.
+    const igdbId = source === 'igdb' && q === game.title ? game.igdb_id || 0 : 0;
+    try {
+      const r = await coverSearch(q, { source, igdbId });
+      if (mine !== seq) return;
+      if (!r.configured) { status.textContent = `${info.label} is not set up (its key is missing from .env).`; return; }
+      if (!r.covers.length) { status.textContent = `No images found on ${info.label} for this title. Try another spelling.`; return; }
+      status.textContent = info.hint;
+      grid.replaceChildren(...r.covers.map((o) => tile(o)));
+    } catch {
+      if (mine === seq) status.textContent = `Could not reach ${info.label}.`;
+    }
+  }
+
+  function tile(o) {
+    const shape = o.width && o.height ? `aspect-ratio:${o.width} / ${o.height}` : null;
+    return h('button.ctile.big', { type: 'button', style: shape, 'aria-label': `Use this ${(o.kind || 'cover').toLowerCase()}`, onclick: async () => {
       status.textContent = 'Saving…';
       try { await setCover(game.id, o.url); toast('Cover updated'); ui.close(); } catch { status.textContent = 'Could not use that image.'; }
-    } }, h('img', { src: o.thumb || o.url, alt: '', loading: 'lazy' }))));
-  }).catch(() => { status.textContent = 'Could not look up covers.'; });
+    } }, h('img', { src: o.thumb || o.url, alt: '', loading: 'lazy' }), o.kind ? h('span.kind', {}, o.kind) : null);
+  }
+
+  load();
 }

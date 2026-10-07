@@ -25,6 +25,9 @@ type fakeMeta struct {
 	igdb, sgdb bool
 	results    []meta.Candidate
 	covers     []meta.CoverOption
+	images     []meta.CoverOption
+	imgID      int64
+	imgTitle   string
 	resolved   string
 	resolveErr error
 	igdbErr    error
@@ -38,6 +41,10 @@ func (f *fakeMeta) SearchIGDB(_ context.Context, t string) ([]meta.Candidate, er
 }
 func (f *fakeMeta) SearchCovers(_ context.Context, t string) ([]meta.CoverOption, error) {
 	return f.covers, nil
+}
+func (f *fakeMeta) IGDBImages(_ context.Context, id int64, title string) ([]meta.CoverOption, error) {
+	f.imgID, f.imgTitle = id, title
+	return f.images, nil
 }
 func (f *fakeMeta) ResolveLink(_ context.Context, l string) (string, error) {
 	return f.resolved, f.resolveErr
@@ -298,3 +305,56 @@ func TestLinkGameToIGDB(t *testing.T) {
 }
 
 func itoa64(n int64) string { b, _ := json.Marshal(n); return string(b) }
+
+func TestCoverSources(t *testing.T) {
+	e := newAddEnv(t)
+	e.meta.covers = []meta.CoverOption{{URL: "https://cdn2.steamgriddb.com/a.png", Source: "steamgriddb"}}
+	e.meta.images = []meta.CoverOption{{URL: "https://images.igdb.com/x.jpg", Source: "igdb", Kind: "Artwork"}, {URL: "https://images.igdb.com/y.jpg", Source: "igdb", Kind: "Cover"}}
+	type resp struct {
+		Configured bool               `json:"configured"`
+		Source     string             `json:"source"`
+		Covers     []meta.CoverOption `json:"covers"`
+	}
+	get := func(q string) (int, resp) {
+		res, body := do(t, "GET", e.srv.URL+"/api/covers/search"+q, "")
+		var r resp
+		json.Unmarshal(body, &r)
+		return res.StatusCode, r
+	}
+
+	// default source is SteamGridDB, as before
+	if code, r := get("?q=hades"); code != 200 || r.Source != "steamgriddb" || len(r.Covers) != 1 {
+		t.Errorf("default: %d %+v", code, r)
+	}
+	// IGDB: the linked id and the title are both passed through
+	code, r := get("?source=igdb&q=Hades&igdb_id=228525")
+	if code != 200 || r.Source != "igdb" || len(r.Covers) != 2 || r.Covers[0].Kind != "Artwork" || e.meta.imgID != 228525 || e.meta.imgTitle != "Hades" {
+		t.Errorf("igdb: %d %+v id=%d title=%q", code, r, e.meta.imgID, e.meta.imgTitle)
+	}
+	// without an id the title alone is enough
+	if code, r := get("?source=igdb&q=Hades"); code != 200 || len(r.Covers) != 2 || e.meta.imgID != 0 {
+		t.Errorf("igdb by title: %d %+v", code, r)
+	}
+	// an id alone is enough too
+	if code, r := get("?source=igdb&igdb_id=5"); code != 200 || len(r.Covers) != 2 {
+		t.Errorf("igdb by id: %d %+v", code, r)
+	}
+	for _, bad := range []string{"?source=bing&q=x", "?source=igdb&igdb_id=abc", "?source=igdb&igdb_id=-1&q=x"} {
+		if code, _ := get(bad); code != 400 {
+			t.Errorf("%s = %d, want 400", bad, code)
+		}
+	}
+	// each source reports its own configuration
+	e.meta.igdb = false
+	if _, r := get("?source=igdb&q=x"); r.Configured || len(r.Covers) != 0 {
+		t.Errorf("igdb off: %+v", r)
+	}
+	if _, r := get("?source=steamgriddb&q=x"); !r.Configured || len(r.Covers) != 1 {
+		t.Errorf("sgdb still on: %+v", r)
+	}
+	// nothing to search for
+	e.meta.igdb = true
+	if _, r := get("?source=igdb"); len(r.Covers) != 0 {
+		t.Errorf("empty query: %+v", r)
+	}
+}

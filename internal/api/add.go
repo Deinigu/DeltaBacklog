@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type Meta interface {
 	Configured() (igdb, sgdb bool)
 	SearchIGDB(ctx context.Context, title string) ([]meta.Candidate, error)
 	SearchCovers(ctx context.Context, title string) ([]meta.CoverOption, error)
+	IGDBImages(ctx context.Context, igdbID int64, title string) ([]meta.CoverOption, error)
 	ResolveLink(ctx context.Context, link string) (string, error)
 }
 
@@ -92,27 +94,56 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"configured": true, "query": title, "results": meta.RankByTitle(res, title)})
 }
 
+// searchCovers lists cover options. ?source=steamgriddb (default) searches by title; ?source=igdb lists the pictures
+// IGDB holds for the game (igdb_id when the game is linked, otherwise the best match for the title).
 func (s *Server) searchCovers(w http.ResponseWriter, r *http.Request) {
-	sgdb := false
-	if s.Meta != nil {
-		_, sgdb = s.Meta.Configured()
+	source := r.URL.Query().Get("source")
+	if source == "" {
+		source = "steamgriddb"
+	}
+	if source != "steamgriddb" && source != "igdb" {
+		writeErr(w, http.StatusBadRequest, "unknown source", nil)
+		return
 	}
 	title := strings.TrimSpace(r.URL.Query().Get("q"))
-	if !sgdb || title == "" {
-		writeJSON(w, map[string]any{"configured": sgdb, "covers": []meta.CoverOption{}})
+	var igdbID int64
+	if v := r.URL.Query().Get("igdb_id"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			writeErr(w, http.StatusBadRequest, "invalid igdb_id", nil)
+			return
+		}
+		igdbID = n
+	}
+	configured := false
+	if s.Meta != nil {
+		igdb, sgdb := s.Meta.Configured()
+		configured = sgdb
+		if source == "igdb" {
+			configured = igdb
+		}
+	}
+	if !configured || (title == "" && igdbID == 0) {
+		writeJSON(w, map[string]any{"configured": configured, "source": source, "covers": []meta.CoverOption{}})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	c, err := s.Meta.SearchCovers(ctx, title)
+	var c []meta.CoverOption
+	var err error
+	if source == "igdb" {
+		c, err = s.Meta.IGDBImages(ctx, igdbID, title)
+	} else {
+		c, err = s.Meta.SearchCovers(ctx, title)
+	}
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "SteamGridDB lookup failed", nil)
+		writeErr(w, http.StatusBadGateway, "the image lookup failed", nil)
 		return
 	}
 	if c == nil {
 		c = []meta.CoverOption{}
 	}
-	writeJSON(w, map[string]any{"configured": true, "covers": c})
+	writeJSON(w, map[string]any{"configured": true, "source": source, "covers": c})
 }
 
 // ---------------- create / delete / cover ----------------

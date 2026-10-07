@@ -30,6 +30,16 @@ func fake(t *testing.T) (*Client, *int32) {
 		}
 		body := make([]byte, 2000)
 		n, _ := r.Body.Read(body)
+		if strings.Contains(string(body[:n]), "where id = 1;") { // the images query
+			w.Write([]byte(`[{"id":1,"name":"Hades","cover":{"image_id":"cover1"},
+			 "artworks":[{"image_id":"art1","width":1920,"height":620},{"image_id":"art2"}],
+			 "screenshots":[{"image_id":"s1"},{"image_id":"s2"},{"image_id":"s3"},{"image_id":"s4"},{"image_id":"s5"},{"image_id":"s6"},{"image_id":"s7"},{"image_id":"s8"},{"image_id":"s9"},{"image_id":"s10"}]}]`))
+			return
+		}
+		if strings.Contains(string(body[:n]), "where id = 404;") {
+			w.Write([]byte("[]"))
+			return
+		}
 		if !strings.Contains(string(body[:n]), `search "Hades \"II\""`) {
 			http.Error(w, "unexpected query: "+string(body[:n]), 400)
 			return
@@ -183,6 +193,58 @@ func TestLive(t *testing.T) {
 		t.Fatalf("sgdb: %v %v", covers, err)
 	}
 	t.Logf("SGDB: %d covers, first %+v", len(covers), covers[0])
+	imgs, err := c.IGDBImages(ctx, 0, "Hades II")
+	if err != nil || len(imgs) == 0 {
+		t.Fatalf("igdb images: %v %v", imgs, err)
+	}
+	kinds := map[string]int{}
+	for _, o := range imgs {
+		kinds[o.Kind]++
+	}
+	t.Logf("IGDB images: %d %v, first %s", len(imgs), kinds, imgs[0].URL)
 	title, err := c.ResolveLink(ctx, "https://store.steampowered.com/app/1145350/Hades_II/")
 	t.Logf("steam link -> %q %v", title, err)
+}
+
+func TestIGDBImages(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.IGDBImages(context.Background(), 1, "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2 artworks, then screenshots capped at 8, then the portrait cover last
+	if len(got) != 2+8+1 {
+		t.Fatalf("got %d options: %+v", len(got), got)
+	}
+	if got[0].Kind != "Artwork" || got[0].URL != "https://images.igdb.com/igdb/image/upload/t_1080p/art1.jpg" ||
+		got[0].Thumb != "https://images.igdb.com/igdb/image/upload/t_screenshot_med/art1.jpg" || got[0].Width != 1920 || got[0].Source != "igdb" {
+		t.Errorf("first = %+v", got[0])
+	}
+	if got[0].Width != 1920 || got[0].Height != 620 {
+		t.Errorf("an artwork keeps the shape IGDB reports: %dx%d", got[0].Width, got[0].Height)
+	}
+	if got[1].Width != 1920 || got[1].Height != 1080 {
+		t.Errorf("a missing size falls back to widescreen: %dx%d", got[1].Width, got[1].Height)
+	}
+	if got[2].Kind != "Screenshot" || got[9].Kind != "Screenshot" {
+		t.Errorf("screenshots: %+v %+v", got[2], got[9])
+	}
+	last := got[len(got)-1]
+	if last.Kind != "Cover" || last.URL != "https://images.igdb.com/igdb/image/upload/t_cover_big/cover1.jpg" || last.Height != 374 {
+		t.Errorf("cover = %+v", last)
+	}
+
+	// no id: the best title match is used
+	byTitle, err := c.IGDBImages(context.Background(), 0, `Hades "II"`)
+	if err != nil || len(byTitle) != 11 {
+		t.Errorf("by title: %d %v", len(byTitle), err)
+	}
+	// an unknown id gives an empty list, not an error
+	none, err := c.IGDBImages(context.Background(), 404, "")
+	if err != nil || len(none) != 0 || none == nil {
+		t.Errorf("unknown id: %v %v", none, err)
+	}
+	if _, err := New(Config{}).IGDBImages(context.Background(), 1, ""); err != ErrNotConfigured {
+		t.Errorf("unconfigured: %v", err)
+	}
 }
