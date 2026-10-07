@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { yearsOf, formFromGame, validateForm, buildPatch, applyCandidate, yearOptions, normalizeYearToken } from '../static/js/editpatch.js';
 
 const game = () => ({
-  id: 1, title: 'Hades II', notes: 'line one\nline two', series: 'Hades', series_order: 2, developer: 'Supergiant', release_year: 2025,
+  id: 1, title: 'Hades II', notes: 'line one\nline two', series: 'Hades', developer: 'Supergiant', release_year: 2025,
   ownership: 'Owned', platforms: ['PC', 'Switch'], genres: ['RPG', 'Indie'], themes: ['Action'], players: ['Solo'],
   years: [2025, 2026], periods: ['childhood'], vr: false, completed: false, igdb_id: null,
 });
@@ -35,8 +35,8 @@ test('years and periods are split, and only a changed half is sent', () => {
 
 test('clearing text and numbers sends the clearing values the API expects', () => {
   const f = formFromGame(game());
-  f.series = ''; f.series_order = ''; f.release_year = ''; f.developer = ''; f.ownership = ''; f.notes = '';
-  assert.deepEqual(buildPatch(game(), f), { series: '', series_order: 0, release_year: 0, developer: '', ownership: '', notes: '' });
+  f.series = ''; f.release_year = ''; f.developer = ''; f.ownership = ''; f.notes = '';
+  assert.deepEqual(buildPatch(game(), f), { series: '', release_year: 0, developer: '', ownership: '', notes: '' });
 });
 
 test('notes keep their line breaks and are compared exactly', () => {
@@ -60,8 +60,7 @@ test('validation catches the mistakes the API would reject', () => {
   assert.match(validateForm({ ...f, title: '   ' }), /title/);
   assert.match(validateForm({ ...f, release_year: '25' }), /four digits/);
   assert.match(validateForm({ ...f, release_year: '1800' }), /four digits/);
-  assert.match(validateForm({ ...f, series_order: '2.5' }), /whole number/);
-  assert.equal(validateForm({ ...f, release_year: '', series_order: '' }), '');
+  assert.equal(validateForm({ ...f, release_year: '' }), '');
 });
 
 test('filling from IGDB replaces metadata but keeps platforms, notes and ownership', () => {

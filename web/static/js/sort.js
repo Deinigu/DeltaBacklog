@@ -12,7 +12,7 @@ export const SORT_FIELDS = {
   title:      { label: 'Title', value: (g) => g.title, defDir: 'asc' },
   status:     { label: 'Status', value: (g) => store.statusOrder.get(g.status) ?? 99, defDir: 'asc' },
   platform:   { label: 'Platform', value: (g) => g.platforms[0] ?? null, defDir: 'asc' },
-  series:     { label: 'Series', value: (g) => g.series, then: (g) => g.series_order, defDir: 'asc' },
+  series:     { label: 'Series', value: (g) => g.series, defDir: 'asc' },
   release:    { label: 'Release year', value: (g) => g.release_year, defDir: 'desc' },
   last_year:  { label: 'Last year played', value: lastYear, defDir: 'desc' },
   first_year: { label: 'First year played', value: firstYear, defDir: 'asc' },

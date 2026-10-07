@@ -15,7 +15,7 @@ DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `mode
 
 ## Data model decisions
 - Migrations are numbered `.sql` files in `internal/db/migrations/` (tracked with `PRAGMA user_version`); add a new file, never edit an applied one. Tables are `STRICT`.
-- No ratings, by user choice. Do not reintroduce them.
+- No ratings and no "number in the series", by user choice. Do not reintroduce them (migrations 002 and 005 dropped the columns).
 - `game.queue_pos` is one global manual order shared by all views. Reorder by reusing the slots the moved games already occupy (`SlotOrder` in Go, `slotOrder` in `web/static/js/order.js`: keep the two in sync).
 - "Years played" is rows in `play` (a calendar year, or period `childhood`/`always`), not text.
 - Saved views store `filter_json` / `sort_json`; their shape is owned by `web/static/js/filters.js`.

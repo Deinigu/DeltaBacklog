@@ -12,7 +12,6 @@ type Game struct {
 	Status      string   `json:"status"` // status code
 	Ownership   *string  `json:"ownership"`
 	Series      *string  `json:"series"`
-	SeriesOrder *int     `json:"series_order"`
 	Developer   *string  `json:"developer"`
 	ReleaseYear *int     `json:"release_year"`
 	VR          bool     `json:"vr"`
@@ -63,7 +62,7 @@ func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
 
 // LoadGames returns every game ordered by status then queue position.
 func LoadGames(d *sql.DB) ([]Game, error) {
-	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, g.series_order, c.name, g.release_year,
+	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
 			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at
 		FROM game g
 		JOIN status s ON s.id = g.status_id
@@ -77,7 +76,7 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 	games := []Game{}
 	for rows.Next() {
 		var g Game
-		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.SeriesOrder, &g.Developer,
+		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
 			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV); err != nil {
 			rows.Close()
 			return nil, err

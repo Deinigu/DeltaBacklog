@@ -54,7 +54,7 @@ async function resync(id) {
 }
 
 const NULLABLE_TEXT = ['series', 'developer', 'ownership'];
-const NULLABLE_NUM = ['release_year', 'series_order'];
+const NULLABLE_NUM = ['release_year'];
 
 /** The values the server will store for a patch: cleared text and zero numbers become null. */
 export function localPatch(patch) {

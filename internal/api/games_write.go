@@ -22,7 +22,6 @@ type gamePatch struct {
 	Notes       *string   `json:"notes"`
 	Ownership   *string   `json:"ownership"`
 	Series      *string   `json:"series"`
-	SeriesOrder *int      `json:"series_order"`
 	Developer   *string   `json:"developer"`
 	ReleaseYear *int      `json:"release_year"`
 	Platforms   *[]string `json:"platforms"`
@@ -53,9 +52,6 @@ func (in *gamePatch) validate() error {
 		return errInvalid
 	}
 	if in.ReleaseYear != nil && *in.ReleaseYear != 0 && (*in.ReleaseYear < 1950 || *in.ReleaseYear > 2100) {
-		return errInvalid
-	}
-	if in.SeriesOrder != nil && (*in.SeriesOrder < 0 || *in.SeriesOrder > 1000) {
 		return errInvalid
 	}
 	for _, l := range []*[]string{in.Platforms, in.Genres, in.Themes, in.Players} {
@@ -339,11 +335,6 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			return err
 		}
 		if _, err := tx.Exec("UPDATE game SET "+f.column+" = ? WHERE id = ?", ref, id); err != nil { // column is a constant above
-			return err
-		}
-	}
-	if in.SeriesOrder != nil {
-		if _, err := tx.Exec("UPDATE game SET series_order = ? WHERE id = ?", nullInt(*in.SeriesOrder), id); err != nil {
 			return err
 		}
 	}

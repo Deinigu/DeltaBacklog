@@ -18,7 +18,6 @@ export function formFromGame(game) {
     title: game.title,
     platforms: [...game.platforms], genres: [...game.genres], themes: [...game.themes], players: [...game.players],
     series: game.series ?? '',
-    series_order: game.series_order == null ? '' : String(game.series_order),
     developer: game.developer ?? '',
     release_year: game.release_year == null ? '' : String(game.release_year),
     ownership: game.ownership ?? '',
@@ -35,8 +34,6 @@ export function validateForm(f) {
   if (!f.title.trim()) return 'A game needs a title.';
   const ry = String(f.release_year).trim();
   if (ry && (!YEAR.test(ry) || Number(ry) < 1950 || Number(ry) > 2100)) return 'The release year should be four digits, like 2025.';
-  const so = String(f.series_order).trim();
-  if (so && (!/^\d{1,4}$/.test(so) || Number(so) > 1000)) return 'The number in the series should be a whole number.';
   if (f.years.some((y) => YEAR.test(y) && !yearInRange(y))) return `Years played must be between ${MIN_YEAR} and ${MAX_YEAR}.`;
   return '';
 }
@@ -58,8 +55,6 @@ export function buildPatch(game, f) {
 
   const ry = String(f.release_year).trim() === '' ? 0 : Number(f.release_year);
   if (ry !== (game.release_year ?? 0)) patch.release_year = ry;
-  const so = String(f.series_order).trim() === '' ? 0 : Number(f.series_order);
-  if (so !== (game.series_order ?? 0)) patch.series_order = so;
 
   const years = f.years.filter(yearInRange).map(Number);
   const periods = f.years.filter((y) => /^(childhood|always)$/i.test(y)).map((y) => y.toLowerCase());

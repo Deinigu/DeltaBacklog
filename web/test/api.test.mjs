@@ -4,7 +4,7 @@ import { localPatch } from '../static/js/api.js';
 
 test('localPatch turns cleared text and zero numbers into null, like the server', () => {
   assert.deepEqual(localPatch({ series: '', developer: '', ownership: '' }), { series: null, developer: null, ownership: null });
-  assert.deepEqual(localPatch({ release_year: 0, series_order: 0 }), { release_year: null, series_order: null });
+  assert.deepEqual(localPatch({ release_year: 0 }), { release_year: null });
 });
 
 test('localPatch leaves real values and other fields alone', () => {
