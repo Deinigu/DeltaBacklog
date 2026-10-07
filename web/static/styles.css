@@ -316,8 +316,8 @@ a.btn.primary { color: var(--accent-text); }
 .th .hbtn:hover { color: var(--text); }
 .th[aria-sort="ascending"], .th[aria-sort="descending"] { color: var(--accent); }
 .th .hlabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.th .rz { position: absolute; right: -6px; top: 0; bottom: 0; width: 14px; cursor: col-resize; touch-action: none; z-index: 2; }
-.th .rz::after { content: ""; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 2px; border-radius: 1px; background: var(--border); }
+.th .rz { position: absolute; right: -12px; top: 0; bottom: 0; width: 24px; cursor: col-resize; touch-action: none; z-index: 2; }
+.th .rz::after { content: ""; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 2px; border-radius: 1px; background: var(--border); }
 .th .rz:hover::after { background: var(--accent); }
 .tr { position: absolute; left: 0; display: flex; height: 44px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .tr:hover { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
@@ -325,10 +325,12 @@ a.btn.primary { color: var(--accent-text); }
 .td .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .td.editable { cursor: text; }
 .td .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.td input[type="checkbox"] { width: 20px; height: 20px; margin: 0 auto; accent-color: var(--accent); }
+.td input[type="checkbox"] { width: 24px; height: 24px; margin: 0 auto; accent-color: var(--accent); cursor: pointer; }
+.td:has(> input[type="checkbox"]) { cursor: pointer; justify-content: center; }
 .td.editing { padding: 0; box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface); }
+.td.editing textarea { width: 100%; height: 100%; border: 0; background: transparent; padding: 11px 10px; font: inherit; font-size: 15px; resize: none; outline: none; overflow: auto; }
 .td.editing input, .td.editing select { width: 100%; height: 100%; border: 0; background: transparent; padding: 0 10px; font-size: 15px; outline: none; }
-.td .open { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; padding: 0; }
+.td .open { flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; padding: 0; }
 .sticky { position: sticky; left: 0; z-index: 3; background: inherit; box-shadow: 1px 0 0 var(--border); }
 .th.sticky { background: var(--surface-2); z-index: 5; }
 .tr .td.sticky { background: inherit; }

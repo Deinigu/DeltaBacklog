@@ -319,3 +319,18 @@ func TestEditFields(t *testing.T) {
 		t.Errorf("empty patch changed the game: %d %+v", code, g)
 	}
 }
+
+func TestStatusYearSurvivesExplicitYears(t *testing.T) {
+	srv := newServer(t)
+	_, body := do(t, "GET", srv.URL+"/api/games", "")
+	var games []Game
+	json.Unmarshal(body, &games)
+	old := games[1] // Backlog
+	year := time.Now().Year()
+	_, body = do(t, "PATCH", srv.URL+"/api/games/"+strconv.FormatInt(old.ID, 10), `{"status":"playing","years":[2020]}`)
+	var g Game
+	json.Unmarshal(body, &g)
+	if len(g.Years) != 2 || g.Years[0] != 2020 || g.Years[1] != year {
+		t.Errorf("years = %v, want [2020 %d]", g.Years, year)
+	}
+}

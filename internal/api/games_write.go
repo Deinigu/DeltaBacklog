@@ -149,6 +149,12 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Field edits come first: an explicit list of years must not wipe the year the status change records below.
+	if err := applyFieldEdits(tx, id, &in); err != nil {
+		fail(w, err)
+		return
+	}
+
 	if in.Status != nil {
 		var sid int64
 		if err := tx.QueryRow("SELECT id FROM status WHERE code = ?", *in.Status).Scan(&sid); err != nil {
@@ -178,10 +184,6 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 			fail(w, err)
 			return
 		}
-	}
-	if err := applyFieldEdits(tx, id, &in); err != nil {
-		fail(w, err)
-		return
 	}
 	if _, err := tx.Exec(`UPDATE game SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, id); err != nil {
 		fail(w, err)

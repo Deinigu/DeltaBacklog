@@ -42,22 +42,49 @@ export function coverURL(g) {
 // ---- game edits ----
 const gamesChanged = () => window.dispatchEvent(new Event('games-changed'));
 
-/** Quick edit (status, favorite, vr, completed). Updates the local game in place, then tells the views. */
-export async function patchGame(id, patch) {
+const NULLABLE_TEXT = ['series', 'developer', 'ownership'];
+const NULLABLE_NUM = ['release_year', 'series_order'];
+
+/** The values the server will store for a patch: cleared text and zero numbers become null. */
+export function localPatch(patch) {
+  const o = { ...patch };
+  for (const k of NULLABLE_TEXT) if (o[k] === '') o[k] = null;
+  for (const k of NULLABLE_NUM) if (o[k] === 0) o[k] = null;
+  return o;
+}
+
+// Edits to one game are sent one at a time, in order, so a slow response can never overwrite a newer edit.
+const inFlight = new Map(); // game id -> { chain, count }
+
+/**
+ * Quick edit of any game field. The local game changes immediately (optimistic); the server's answer
+ * is applied only when no newer edit of the same game is still pending, and a failure restores only
+ * the fields this edit touched.
+ */
+export function patchGame(id, patch) {
   const g = store.byId.get(id);
-  const prev = { ...g };
-  Object.assign(g, patch); // optimistic
+  const prev = Object.fromEntries(Object.keys(patch).map((k) => [k, g[k]]));
+  Object.assign(g, localPatch(patch));
   gamesChanged();
-  try {
-    const fresh = await send('PATCH', `/api/games/${id}`, patch);
-    Object.assign(g, fresh);
-    indexGame(g);
-  } catch (e) {
-    Object.assign(g, prev);
-    throw e;
-  } finally {
-    gamesChanged();
-  }
+
+  const slot = inFlight.get(id) || { chain: Promise.resolve(), count: 0 };
+  inFlight.set(id, slot);
+  slot.count++;
+  const run = async () => {
+    try {
+      const fresh = await send('PATCH', `/api/games/${id}`, patch);
+      if (slot.count === 1) { Object.assign(g, fresh); indexGame(g); } // this is the newest edit: authoritative
+    } catch (e) {
+      if (slot.count === 1) Object.assign(g, prev);
+      throw e;
+    } finally {
+      if (--slot.count === 0) inFlight.delete(id);
+      gamesChanged();
+    }
+  };
+  const result = slot.chain.then(run, run);
+  slot.chain = result.catch(() => {});
+  return result;
 }
 
 /** Persist a manual order for the given ids (the games a view shows, in the new order). */

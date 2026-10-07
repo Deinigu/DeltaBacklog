@@ -38,7 +38,7 @@ export const COLUMNS = [
   { key: 'favorite', label: 'Favorite', w: 90, kind: 'bool', sort: 'favorite', text: (g) => (g.favorite ? 'yes' : ''), patch: (v) => ({ favorite: v }) },
   { key: 'vr', label: 'VR', w: 64, kind: 'bool', text: (g) => (g.vr ? 'yes' : ''), patch: (v) => ({ vr: v }) },
   { key: 'completed', label: '100%', w: 74, kind: 'bool', sort: 'completed', text: (g) => (g.completed ? 'yes' : ''), patch: (v) => ({ completed: v }) },
-  { key: 'notes', label: 'Notes', w: 280, kind: 'text', text: (g) => g.notes, patch: (v) => ({ notes: v }) },
+  { key: 'notes', label: 'Notes', w: 280, kind: 'longtext', text: (g) => g.notes, patch: (v) => ({ notes: v }) },
   { key: 'added_at', label: 'Added', w: 110, kind: 'readonly', sort: 'added', text: (g) => (g.added_at || '').slice(0, 10) },
 ];
 const DEFAULT_HIDDEN = new Set(['themes', 'series_order', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
@@ -129,6 +129,7 @@ export function renderTable(ctx) {
     if (c.kind === 'bool') {
       const box = h('input', { type: 'checkbox', checked: g[c.key] || null, 'aria-label': `${c.label}: ${g.title}`, onchange: () => commit(g, c, box.checked) });
       el.replaceChildren(box);
+      el.onclick = (e) => { if (e.target !== box) { box.checked = !box.checked; commit(g, c, box.checked); } };
       return;
     }
     const text = c.text(g);
@@ -158,6 +159,8 @@ export function renderTable(ctx) {
     let input;
     if (c.kind === 'select') {
       input = h('select', { 'aria-label': c.label }, c.options().map((o) => h('option', { value: o.value, selected: o.value === c.value(g) }, o.label)));
+    } else if (c.kind === 'longtext') {
+      input = h('textarea', { rows: '1', 'aria-label': c.label }, c.text(g));
     } else {
       const listId = c.kind === 'lookup' ? `dl-${c.key}` : null;
       input = h('input', { type: c.kind === 'number' ? 'number' : 'text', value: c.kind === 'number' ? (c.text(g) || '') : c.text(g), list: listId, 'aria-label': c.label, inputmode: c.kind === 'number' ? 'numeric' : null });
@@ -170,23 +173,26 @@ export function renderTable(ctx) {
     el.replaceChildren(input);
     input.focus();
     if (input.select) input.select();
+    const initial = input.value; // opening and leaving a cell must never rewrite it
 
     let finished = false;
     const finish = (save, move) => {
       if (finished) return;
       finished = true;
       const raw = input.value;
-      if (save) {
-        const value = c.kind === 'number' ? (raw === '' ? 0 : Number(raw)) : raw;
-        const before = c.kind === 'select' ? c.value(g) : c.kind === 'number' ? (Number(c.text(g)) || 0) : c.text(g);
-        const changed = (c.kind === 'text' || c.kind === 'lookup') ? value.trim() !== String(before).trim() : value !== before;
-        if (changed && !(c.key === 'title' && !value.trim())) commit(g, c, c.kind === 'text' || c.kind === 'lookup' ? value.trim() : value);
-        else if (c.key === 'title' && !value.trim()) toast('A title can’t be empty');
+      // Where Enter/Tab go next is decided now: the commit below can re-sort the list under us.
+      const target = move === 'down' ? ctx.list[ctx.list.indexOf(g) + 1] : g;
+      if (save && raw !== initial) {
+        if (c.key === 'title' && !raw.trim()) toast('A title can\u2019t be empty');
+        else if (c.kind === 'number') commit(g, c, raw === '' ? 0 : Number(raw));
+        else if (c.kind === 'select' || c.kind === 'longtext') commit(g, c, raw);
+        else commit(g, c, raw.trim());
       }
       show(el, g, c, i);
-      if (move) moveEdit(g, i, move);
+      if (move && target) moveEdit(target, i, move);
     };
     input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && c.kind === 'longtext' && e.shiftKey) return; // newline inside notes
       if (e.key === 'Enter') { e.preventDefault(); finish(true, 'down'); }
       else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
       else if (e.key === 'Tab') { e.preventDefault(); finish(true, e.shiftKey ? 'left' : 'right'); }
@@ -195,19 +201,21 @@ export function renderTable(ctx) {
     if (c.kind === 'select') input.addEventListener('change', () => finish(true));
   }
 
-  // Excel-style navigation after Tab / Enter
-  function moveEdit(g, i, dir) {
+  // Excel-style navigation after Tab / Enter. `target` is the game whose row to continue in.
+  function moveEdit(target, i, dir) {
     const cols = visible();
-    const row = ctx.list.indexOf(g);
-    let r = row, ci = i;
-    if (dir === 'down') r = Math.min(ctx.list.length - 1, row + 1);
-    else ci += dir === 'right' ? 1 : -1;
-    while (ci >= 0 && ci < cols.length && (cols[ci].kind === 'readonly' || cols[ci].kind === 'bool')) ci += dir === 'left' ? -1 : 1;
+    let ci = i;
+    if (dir !== 'down') {
+      ci += dir === 'right' ? 1 : -1;
+      while (ci >= 0 && ci < cols.length && (cols[ci].kind === 'readonly' || cols[ci].kind === 'bool')) ci += dir === 'left' ? -1 : 1;
+    }
     if (ci < 0 || ci >= cols.length) return;
-    // let the patch re-render settle, then open the target cell
+    // let the save's re-render settle, then open the target cell wherever its row ended up
     setTimeout(() => {
+      const r = ctx.list.indexOf(target);
+      if (r < 0) return;
       scrollToRow(r);
-      const el = rendered.get(ctx.list[r].id)?.children[ci];
+      const el = rendered.get(target.id)?.children[ci];
       if (el && el.onclick) el.click();
     }, 60);
   }
@@ -219,8 +227,13 @@ export function renderTable(ctx) {
   }
 
   // ---------- windowed rows ----------
+  // What a row shows. If it is unchanged after a refresh the element is kept, so a click that began on it
+  // (for example the one that blurred a cell being edited) still completes.
+  const signature = (g) => visible().map((c) => (c.kind === 'bool' ? g[c.key] : c.text(g))).join('\u0001') + '|' + g.status;
+
   function row(g, idx) {
     const el = h('div.tr', { role: 'row', 'aria-rowindex': idx + 2, style: `top:${idx * ROW_H}px;width:${totalWidth()}px` });
+    el._sig = signature(g);
     visible().forEach((c, i) => el.append(cell(g, c, i)));
     return el;
   }
@@ -241,7 +254,7 @@ export function renderTable(ctx) {
         body.append(el);
       }
     }
-    for (const [id, el] of rendered) if (!want.has(id)) { el.remove(); rendered.delete(id); }
+    for (const [id, el] of rendered) if (!want.has(id) && !el.querySelector('.editing')) { el.remove(); rendered.delete(id); }
   }
 
   body.style.height = ctx.list.length * ROW_H + 'px';
@@ -265,7 +278,12 @@ export function renderTable(ctx) {
     ctx.sorts = sorts;
     const at = new Map(list.map((g, i) => [g.id, i]));
     for (const [id, el] of rendered) {
-      if (el.querySelector('.editing') && at.has(id)) { el.style.top = at.get(id) * ROW_H + 'px'; continue; }
+      const g = store.byId.get(id);
+      if (at.has(id) && (el.querySelector('.editing') || el._sig === signature(g))) {
+        el.style.top = at.get(id) * ROW_H + 'px';
+        el.setAttribute('aria-rowindex', at.get(id) + 2);
+        continue;
+      }
       el.remove();
       rendered.delete(id);
     }
