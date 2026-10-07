@@ -1,0 +1,212 @@
+# DeltaBacklog: user manual
+
+DeltaBacklog is your videogame library on your own Raspberry Pi. You can look at your games, filter them in any way you like, keep lists such as *Playing now* and *Up next*, record the years you played each game, and add new games with their cover and details filled in for you. It is made to be used on a phone first, and it works just as well on a PC.
+
+This manual is task by task. For how the program is built, see the [developer manual](developer-manual.md).
+
+**Contents**
+1. [Opening the app and installing it on your phone](#1-opening-the-app-and-installing-it-on-your-phone)
+2. [Finding your way around](#2-finding-your-way-around)
+3. [The Library: cards, search and filters](#3-the-library-cards-search-and-filters)
+4. [Sorting and grouping](#4-sorting-and-grouping)
+5. [Saved views](#5-saved-views)
+6. [Changing a game](#6-changing-a-game)
+7. [Putting games in your own order](#7-putting-games-in-your-own-order)
+8. [The table (spreadsheet) layout](#8-the-table-spreadsheet-layout)
+9. [Adding a game](#9-adding-a-game)
+10. [Covers](#10-covers)
+11. [What the little icons mean](#11-what-the-little-icons-mean)
+12. [If something looks wrong](#12-if-something-looks-wrong)
+13. [Not available yet](#13-not-available-yet)
+
+---
+
+## 1. Opening the app and installing it on your phone
+
+Open the address of your Raspberry Pi in any browser, for example `http://<address-of-your-pi>:8081`. Use the same address on your phone and on your PC, as long as they are on your home network.
+
+To use it like a normal app on your phone, install it:
+- **Android (Chrome):** open the menu (⋮) and choose **Install app** or **Add to Home screen**.
+- **iPhone (Safari):** tap the Share button and choose **Add to Home Screen**.
+
+The app follows your phone's light or dark setting. On a PC, the **Theme** button at the bottom of the left sidebar switches between them.
+
+## 2. Finding your way around
+
+![The Library on a phone](img/library-phone.jpg)
+
+**On a phone** the bar at the bottom has **Library**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*) and **Views**. The round **+** button adds a game.
+
+**On a PC** the same things are in the left sidebar, and all your pinned views are listed there. Two keys help: press **/** to jump to the search box and **n** to add a game.
+
+![The Library on a PC](img/library-desktop.jpg)
+
+## 3. The Library: cards, search and filters
+
+The Library shows every game as a card.
+
+**What is on a card**
+- The cover, with the game's **status** in the bottom-left corner (and a coloured line under the cover in the same colour).
+- A **★** in the top-right corner for favourites.
+- A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 11](#11-what-the-little-icons-mean)).
+- Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
+
+**Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
+
+**Filters.**
+
+![The filter sheet](img/filters-phone.jpg)
+
+Tap the filter button (the three lines next to the search box). On a PC the filters are always shown on the left.
+
+- **Tap a chip once to include it.** For example *Platform: PC* shows only PC games.
+- **Tap it again to exclude it.** The chip turns red and is crossed out. For example *Finished* excluded hides finished games.
+- **Tap a third time to clear it.**
+- When you include two or more values in *Platform*, *Genre*, *Theme*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
+- At the top are three quick switches: **Favorite**, **VR** and **100% completed**.
+- The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
+- The active filters appear as pills under the search box. Tap a pill's **✕** to remove it, or **Reset** to clear everything.
+- The button at the bottom shows how many games match (*Show 27 games*).
+
+The address in your browser changes with your filters, so you can bookmark a filtered list.
+
+## 4. Sorting and grouping
+
+![The sort sheet](img/sort-phone.jpg)
+
+Tap the sort button (the up/down arrows at the right of the search box).
+
+- **Sort levels.** Games are sorted by the first level. When two games tie, the next level decides, and so on. Each level has a field, an arrow for ascending or descending (↑ / ↓), buttons to move it up or down, and ✕ to remove it. **Add level** adds another one.
+- **Fields you can sort by:** Title, Status, Platform, Series, Release year, Last year played, First year played, Years played (count), Date added, Date edited, Favorites first, 100% completed first, and Manual order.
+- Titles sort naturally ("Fallout 2" comes before "Fallout 10"), and games that have no value for a field always go last.
+- **Default order** is: Status, then your Manual order, then Title.
+- **Group by** splits the list into sections: Status, Platform, Series, Genre, Year played or Ownership. A game that was played in several years appears under each year, and one with several genres under each genre.
+- **Reset** returns to the default order.
+
+## 5. Saved views
+
+A **view** is a name for a set of filters, a sort order and a layout, so you can open it with one tap.
+
+**Starter views.** You start with five: **Playing now**, **Up next**, **Backlog**, **On hold** and **Endless**. The first three are pinned to the bottom bar. They are ordinary views: change them or delete them.
+
+**Make your own.**
+1. Set up filters, sorting and (if you like) grouping or the table layout in the Library.
+2. Tap **Save as view**, type a name and an emoji, and tap **Save**.
+3. The view now appears in the bottom bar or sidebar.
+
+**Using a view.**
+- Open it from the bar. If you then change its filters or sort, a **Save** button appears. Tap it to keep the changes, or **Revert** to go back to how it was saved.
+- **Save as…** makes a new view from the current state without touching the old one.
+- Tap the view's title to rename it.
+
+![The Views page](img/views-phone.jpg)
+
+**Manage views.** Open **Views** (bottom bar or sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
+
+## 6. Changing a game
+
+Tap a card to open the game.
+
+![A game's details](img/game-phone.jpg)
+
+**Quick changes** (at the top, saved at once)
+- **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
+- **★ Favorite** switches the favourite mark.
+- **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
+
+**Edit** changes everything else.
+
+![Editing a game](img/edit-phone.jpg)
+
+Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, developer, release year, ownership, the years played, who you played with, VR, 100% completed and notes. Tap a list (like *Genres*) to open a sheet where you tick values and can type a new one. For **Played in** you can add years (4 digits, from 1970 to 2100) or the periods *Childhood* and *Always*.
+- **Save** keeps your changes. **Cancel** or the ✕ asks before throwing away unsaved edits.
+- **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match).
+
+**Change cover** is explained in [section 10](#10-covers). **Delete game** removes the game for good, after a confirmation: its years and cover go with it and it cannot be undone.
+
+## 7. Putting games in your own order
+
+The *manual order* is how you rank games yourself, for example the order you plan to play your *Up next* games.
+
+![Reordering a view](img/reorder-phone.jpg)
+
+1. Open the view or the Library list you want to order (for example *Up next*).
+2. Tap **⇅ Reorder** (on a phone, the icon with two arrows).
+3. Drag the **⠿** handle to move a game, or use the **▲ ▼** buttons.
+4. Tap **✓** (Done).
+
+What to know:
+- The order is saved as soon as you move a game.
+- Only the games in the list are moved. Your other games keep their place.
+- One order is shared by all views. A view shows it when it sorts by *Manual order*, which the default order does.
+
+## 8. The table (spreadsheet) layout
+
+Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Cards** to go back. The layout is part of a saved view, so you can keep a table view of your backlog.
+
+![The table on a PC](img/table-desktop.jpg)
+
+- **Sort** by tapping a column heading. Tap again to reverse it.
+- **Resize** a column by dragging the edge of its heading.
+- **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, developer, released, ownership, played with, favorite, VR, 100%, notes, added). **Defaults** brings the original set back. Your choices are remembered on this device.
+- **Edit in place:** tap a cell and type. **Enter** saves and moves down, **Tab** saves and moves right, **Esc** cancels. Status is a drop-down, checkboxes toggle with one tap, and lists (platforms, genres, years...) open a sheet. Notes can have several lines (**Shift+Enter** for a new line).
+- The ↗ button at the start of a row opens the game.
+- **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets.
+- On a phone the table scrolls sideways, with the title column kept in place.
+
+## 9. Adding a game
+
+Tap **+**.
+
+![Searching for a game to add](img/add-search-phone.jpg)
+
+1. **Type the title.** After a moment you see matching games from IGDB, with cover, year, developer and genres. A match that is already in your library has an orange **Already in your library** label.
+2. **Tap the right one.**
+
+![Reviewing the game before adding it](img/add-form-phone.jpg)
+
+3. **Check the form.** Genres, themes, developer, series and release year are filled in for you. You choose the **status** (Backlog by default), the **platforms** and the **ownership** (Owned by default).
+   - **Platforms:** the platform you play most among the ones the game is on is selected for you (for a PC game that is PC). The other platforms IGDB lists appear as chips: tap one to add or remove it.
+   - **Cover:** a row of pictures from SteamGridDB appears. The first is chosen. Tap another one, or **No cover**. **Search again** looks again with the title you typed.
+4. **Add to library.** The game is added at the end of your manual order and opens so you can adjust it.
+
+If the game is not found, tap **Add "..." without a lookup** to type everything in yourself. The lookups need keys that are set up once on the Pi (see the [developer manual](developer-manual.md#running-it)). Without them you can still add games by hand.
+
+## 10. Covers
+
+Open a game and tap **Change cover**.
+
+![Choosing a cover](img/cover-picker-phone.jpg)
+
+- Two tabs: **SteamGridDB** (community covers; wide pictures match your library) and **IGDB** (official artwork, screenshots and the box cover, each labelled). The tab you used last is remembered.
+- The search box starts with the game's title. Type another title and tap **Search** when the automatic match is the wrong game.
+- Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
+- Cards show the cover as a wide picture, so wide images look best.
+
+## 11. What the little icons mean
+
+**Ownership** (filters, the table, the game's details and a badge on cards):
+
+| Icon | Meaning |
+|---|---|
+| ✅ | Owned (shown on cards only for the other kinds, to keep them calm) |
+| 🏴‍☠️ | Pirated |
+| 🆓 | Free to play |
+| 👨‍👩‍👧 | Family share |
+| 🤝 | Borrowed |
+| 🚫 | Nope |
+| 🏷️ | Any other value you add yourself |
+
+**Years played on a card:** 🧒 childhood · ♾️ always played · a dashed **+N** older years not shown.
+
+## 12. If something looks wrong
+
+- **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
+- **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
+- **A cover is missing.** Open the game, tap **Change cover** and pick one. Adding a game never fails because of a cover: if the picture could not be downloaded you are told, and the game is added anyway.
+- **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
+- **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
+
+## 13. Not available yet
+
+These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and **automatic backups with export and restore** (the CSV export of the table already works).

@@ -22,6 +22,7 @@ DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `mode
 
 ## Workflow
 - Branches: `main` plus `features/<name>`, merged by pull request with merge commits; never commit straight to `main`. PRs are stacked on the previous feature branch; the user merges them (do not run `gh pr merge`).
+- Docs: `docs/user-manual.md` and `docs/developer-manual.md` describe the app. A change in behaviour updates the matching manual section in the same PR (API, data model or structure changes: the developer manual). Screenshots are regenerated with `docs/tools/screenshots.mjs` against a test server.
 - Secrets: IGDB/SteamGridDB keys go in `.env` (gitignored), never in the repo. Run `git grep` for keys before pushing.
 - UI is mobile-first (phone is the main client): check layouts at 390px and 1280px, tap targets at least 44px, no horizontal scroll.
 - After UI changes the browser may show a stale app (service worker): hard refresh or use 127.0.0.1 instead of localhost.

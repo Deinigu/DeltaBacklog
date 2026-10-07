@@ -2,6 +2,10 @@
 
 A lightweight, mobile-first videogame tracker for a Raspberry Pi 3B+ (armv7): Go + SQLite, no external services at runtime except optional metadata lookups (IGDB / SteamGridDB).
 
+## Documentation
+- [User manual](docs/user-manual.md): how to use the app, task by task, with screenshots.
+- [Developer manual](docs/developer-manual.md): architecture, data model, API, frontend, testing and workflow.
+
 ## Status
 Work in progress, built feature branch by feature branch (see `features/*`, merged into `main`).
 
@@ -13,6 +17,7 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Table layout: sortable, resizable, hideable columns; inline editing of every field; CSV export; saved views remember cards vs table
 - [x] Quick add: search IGDB by title or Steam/GOG/Epic/IGDB link, pre-filled form, SteamGridDB cover picker; change cover and delete from the detail view
 - [x] Edit every field of a game from its detail view (phone friendly), refill its metadata from IGDB, link it to IGDB
+- [x] User manual and developer manual in `docs/`
 - [ ] Surprise me, years and tierlists, series, stats, packaging
 
 ## Develop

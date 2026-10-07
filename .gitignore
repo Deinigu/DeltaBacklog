@@ -6,3 +6,5 @@
 /bin/
 /dist/
 *.exe
+docs/tools/node_modules/
+docs/tools/package*.json
