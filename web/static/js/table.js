@@ -4,6 +4,7 @@ import { h, toast } from './util.js';
 import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
 import { toCSV } from './csv.js';
+import { ownershipIcon } from './ownership.js';
 
 const ROW_H = 44;
 const OVERSCAN = 6;
@@ -135,6 +136,8 @@ export function renderTable(ctx) {
     const text = c.text(g);
     if (c.key === 'title') {
       el.replaceChildren(h('button.open', { type: 'button', 'aria-label': `Open ${g.title}`, onclick: (e) => { e.stopPropagation(); ctx.onOpen(g); } }, '↗'), h('span.txt', { title: text }, text));
+    } else if (c.key === 'ownership' && text) {
+      el.replaceChildren(h('span.oicon', { 'aria-hidden': 'true' }, ownershipIcon(text)), h('span.txt', { title: text }, text));
     } else if (c.key === 'status') {
       const st = store.statusByCode.get(g.status);
       el.replaceChildren(h('span.dot', { style: `background:${st?.color}` }), h('span.txt', {}, text));

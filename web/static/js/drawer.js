@@ -2,6 +2,7 @@
 import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker } from './add.js';
+import { ownershipLabel } from './ownership.js';
 
 let open = null;
 
@@ -58,7 +59,7 @@ export function openDrawer(game) {
         fact('Series', game.series),
         fact('Played in', years),
         fact('Played with', game.players),
-        fact('Ownership', game.ownership),
+        fact('Ownership', game.ownership && ownershipLabel(game.ownership)),
         fact('VR', game.vr ? 'Yes' : null),
         fact('100% completed', game.completed ? 'Yes' : null)),
       game.notes && h('div.notes', {}, game.notes),

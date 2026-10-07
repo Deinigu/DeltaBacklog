@@ -403,3 +403,9 @@ a.btn.primary { color: var(--accent-text); }
 .suggest .hint { margin: 0 4px 0 0; }
 .suggest .chip { min-height: 32px; font-size: 13px; padding: 0 10px; }
 @media (max-width: 420px) { .suggest { padding-left: 0; } }
+
+/* ---- ownership emoji ---- */
+.cover .own { position: absolute; top: 6px; left: 6px; width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,.55); display: grid; place-items: center; font-size: 14px; line-height: 1; }
+.td .oicon { flex: none; font-size: 16px; line-height: 1; }
+
+@media (max-width: 599px) { .view-head .lbl { display: none; } .view-head .btn { padding: 0 12px; } }

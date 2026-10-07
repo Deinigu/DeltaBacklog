@@ -1,6 +1,7 @@
 // Multi-level sorting and group-by, shared by every view.
 import { h, icon } from './util.js';
 import { store } from './api.js';
+import { ownershipLabel } from './ownership.js';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const lastYear = (g) => (g.years.length ? g.years[g.years.length - 1] : null);
@@ -69,7 +70,7 @@ export const GROUP_FIELDS = {
   series:   { label: 'Series', keys: (g) => (g.series ? [g.series] : []) },
   genre:    { label: 'Genre', keys: (g) => g.genres },
   year:     { label: 'Year played', keys: (g) => [...g.years.map(String), ...g.periods], order: yearOrder, label_of: (k) => (isNaN(k) ? k[0].toUpperCase() + k.slice(1) : k) },
-  ownership: { label: 'Ownership', keys: (g) => (g.ownership ? [g.ownership] : []) },
+  ownership: { label: 'Ownership', keys: (g) => (g.ownership ? [g.ownership] : []), label_of: ownershipLabel },
 };
 
 /** Splits an already-sorted list into [{key, label, games}] sections. Games without a value go last under "None". */

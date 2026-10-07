@@ -5,11 +5,18 @@ import { store, coverURL, createView, updateView, reorderGames } from './api.js'
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
+import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
   filterToJSON, stateFromView, stateFromQuery, stateToQuery, signature,
 } from './filters.js';
+
+/** A button's content: a symbol that always shows, and a text label that narrow screens hide (see .lbl in the CSS). */
+function setLabel(btn, symbol, label) {
+  btn.replaceChildren(h('span', { 'aria-hidden': 'true' }, symbol), h('span.lbl', {}, ' ' + label));
+  btn.setAttribute('aria-label', label);
+}
 
 export function renderLibrary(root, opts = {}) {
   const view = opts.view || null;
@@ -30,7 +37,7 @@ export function renderLibrary(root, opts = {}) {
       return tally.get(b) - tally.get(a) || a.localeCompare(b);
     });
   }
-  const label = (grp, v) => (grp.key === 'status' ? store.statusByCode.get(v)?.label : null) ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
+  const label = (grp, v) => (grp.key === 'ownership' ? ownershipLabel(v) : null) ?? (grp.key === 'status' ? store.statusByCode.get(v)?.label : null) ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
 
   // ---------- header + toolbar ----------
   const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search', value: state.q });
@@ -119,6 +126,7 @@ export function renderLibrary(root, opts = {}) {
       h('div.cover', {},
         url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
         g.favorite && h('span.fav', { 'aria-label': 'Favorite' }, '★'),
+        g.ownership && !isUsualOwnership(g.ownership) && h('span.own', { title: g.ownership, role: 'img', 'aria-label': g.ownership }, ownershipIcon(g.ownership)),
         st && h('span.st', { style: `background:${st.color}` }, st.label)),
       h('div.card-body', {}, h('div.card-title', {}, g.title), sub && h('div.card-sub', {}, sub)));
     cards.set(g.id, el);
@@ -169,8 +177,8 @@ export function renderLibrary(root, opts = {}) {
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');
 
     reorderBtn.setAttribute('aria-pressed', String(reordering));
-    reorderBtn.textContent = reordering ? '✓ Done' : '⇅ Reorder';
-    layoutBtn.textContent = state.layout === 'table' ? '▦ Cards' : '☰ Table';
+    setLabel(reorderBtn, reordering ? '✓' : '⇅', reordering ? 'Done' : 'Reorder');
+    setLabel(layoutBtn, state.layout === 'table' ? '▦' : '☰', state.layout === 'table' ? 'Cards' : 'Table');
     reorderBtn.hidden = state.layout === 'table';
     if (state.layout === 'table') {
       if (!tableInst) {

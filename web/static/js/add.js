@@ -5,6 +5,7 @@ import { store, lookup, coverSearch, createGame, setCover } from './api.js';
 import { pickMany } from './picker.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
+import { ownershipLabel } from './ownership.js';
 
 const unique = (get) => {
   const tally = new Map();
@@ -131,7 +132,7 @@ export function openAdd({ query = '' } = {}) {
     const titleIn = text('title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
     const statusSel = h('select', { 'aria-label': 'Status' }, store.statuses.map((s) => h('option', { value: s.key, selected: s.key === f.status }, s.label)));
     statusSel.addEventListener('change', () => { f.status = statusSel.value; });
-    const ownSel = h('select', { 'aria-label': 'Ownership' }, [h('option', { value: '' }, '—'), ...unique((g) => (g.ownership ? [g.ownership] : [])).map((o) => h('option', { value: o, selected: o === f.ownership }, o))]);
+    const ownSel = h('select', { 'aria-label': 'Ownership' }, [h('option', { value: '' }, '—'), ...unique((g) => (g.ownership ? [g.ownership] : [])).map((o) => h('option', { value: o, selected: o === f.ownership }, ownershipLabel(o)))]);
     ownSel.addEventListener('change', () => { f.ownership = ownSel.value; });
     const yearIn = text('release_year', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2025', 'aria-label': 'Release year' });
     const seriesIn = text('series', { list: 'dl-add-series', 'aria-label': 'Series' });
