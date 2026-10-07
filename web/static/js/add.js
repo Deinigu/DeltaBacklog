@@ -4,6 +4,7 @@ import { h, icon, toast, norm, debounce, gradientFor, initials } from './util.js
 import { store, lookup, coverSearch, createGame, setCover } from './api.js';
 import { pickMany } from './picker.js';
 import { openDrawer } from './drawer.js';
+import { mapPlatforms, defaultPlatforms } from './platforms.js';
 
 const unique = (get) => {
   const tally = new Map();
@@ -90,10 +91,14 @@ export function openAdd({ query = '' } = {}) {
     ui.title.textContent = c ? 'Review and add' : 'Add manually';
 
     const platformOptions = unique((g) => g.platforms);
+    // The platforms IGDB lists for this game, in the library's spelling: offered as one-tap suggestions.
+    const suggested = c ? mapPlatforms(c.platforms, platformOptions) : [];
+    const platformCounts = new Map();
+    for (const g of store.games) for (const n of g.platforms) platformCounts.set(n, (platformCounts.get(n) || 0) + 1);
     const f = {
       title: c?.name || typedTitle.replace(/^https?:.*/i, ''),
       status: 'backlog',
-      platforms: platformOptions.includes('PC') ? ['PC'] : [],
+      platforms: c ? defaultPlatforms(suggested, platformCounts) : (platformOptions.includes('PC') ? ['PC'] : []),
       genres: [...(c?.genres || [])],
       themes: [...(c?.themes || [])],
       series: c?.series || '',
@@ -105,12 +110,22 @@ export function openAdd({ query = '' } = {}) {
 
     const field = (label, control) => h('label.frow', {}, h('span.flabel', {}, label), control);
     const text = (key, attrs = {}) => { const i = h('input', { type: 'text', value: f[key], ...attrs }); i.addEventListener('input', () => { f[key] = i.value; }); return i; };
-    const listRow = (label, key, options) => {
+    const listRow = (label, key, options, suggestions = []) => {
       const val = h('span.fval');
-      const draw = () => { val.textContent = f[key].length ? f[key].join(', ') : 'none'; val.classList.toggle('none', !f[key].length); };
+      const chips = suggestions.map((name) => h('button.chip', { type: 'button', onclick: () => {
+        f[key] = f[key].includes(name) ? f[key].filter((v) => v !== name) : [...f[key], name];
+        draw();
+      } }, name));
+      const draw = () => {
+        val.textContent = f[key].length ? f[key].join(', ') : 'none';
+        val.classList.toggle('none', !f[key].length);
+        chips.forEach((c) => { const on = f[key].includes(c.textContent); c.dataset.state = on ? 'in' : 'off'; c.setAttribute('aria-pressed', String(on)); });
+      };
       draw();
       const edit = async () => { const next = await pickMany({ title: label, options, selected: f[key] }); if (next) { f[key] = next; draw(); } };
-      return h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
+      const row = h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
+      if (!chips.length) return row;
+      return h('div.rowgroup', {}, row, h('div.suggest', {}, h('span.hint', {}, 'Also on IGDB:'), ...chips));
     };
 
     const titleIn = text('title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
@@ -170,7 +185,7 @@ export function openAdd({ query = '' } = {}) {
       dupe,
       field('Title', titleIn),
       field('Status', statusSel),
-      listRow('Platforms', 'platforms', platformOptions),
+      listRow('Platforms', 'platforms', platformOptions, suggested.slice(0, 10)),
       listRow('Genres', 'genres', unique((g) => g.genres)),
       listRow('Themes', 'themes', unique((g) => g.themes)),
       field('Series', seriesIn),

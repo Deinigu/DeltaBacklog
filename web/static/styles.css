@@ -396,3 +396,10 @@ a.btn.primary { color: var(--accent-text); }
 .dupe { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 8px; border-radius: 12px; background: color-mix(in srgb, #f59e0b 18%, var(--surface)); color: #92400e; font-size: 14px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dupe { color: #fbbf24; } }
 :root[data-theme="dark"] .dupe { color: #fbbf24; }
+
+.rowgroup { border-bottom: 1px solid var(--border); }
+.rowgroup .frow { border-bottom: 0; }
+.suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 10px 108px; }
+.suggest .hint { margin: 0 4px 0 0; }
+.suggest .chip { min-height: 32px; font-size: 13px; padding: 0 10px; }
+@media (max-width: 420px) { .suggest { padding-left: 0; } }
