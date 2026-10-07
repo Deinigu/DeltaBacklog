@@ -1,9 +1,9 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v1';
+const VERSION = 'v10';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const API = 'api';
-const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/icon.svg'];
+const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/js/sort.js', '/js/filters.js', '/js/views.js', '/js/order.js', '/js/reorder.js', '/js/table.js', '/js/picker.js', '/js/csv.js', '/js/add.js', '/js/platforms.js', '/js/ownership.js', '/js/form.js', '/js/editpatch.js', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
@@ -28,7 +28,8 @@ self.addEventListener('fetch', (e) => {
   } else if (url.pathname.startsWith('/api/')) {
     e.respondWith(networkFirst(req, API));
   } else {
-    e.respondWith(staleWhileRevalidate(req, SHELL));
+    // Network first: new deploys show up immediately; the cache only matters when offline.
+    e.respondWith(networkFirst(req, SHELL));
   }
 });
 
@@ -54,12 +55,3 @@ async function networkFirst(req, name) {
   }
 }
 
-async function staleWhileRevalidate(req, name) {
-  const cache = await caches.open(name);
-  const hit = await cache.match(req);
-  const fresh = fetch(req).then((res) => {
-    if (res.ok) cache.put(req, res.clone());
-    return res;
-  }).catch(() => hit);
-  return hit || fresh;
-}

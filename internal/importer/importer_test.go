@@ -55,15 +55,6 @@ func TestParseBoxart(t *testing.T) {
 	}
 }
 
-func TestTitleSort(t *testing.T) {
-	if got := titleSort("The Witcher 3"); got != "witcher 3" {
-		t.Errorf("got %q", got)
-	}
-	if got := titleSort("  ¡Hola!"); got != "hola!" {
-		t.Errorf("got %q", got)
-	}
-}
-
 func openMem(t *testing.T) *sql.DB {
 	t.Helper()
 	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))

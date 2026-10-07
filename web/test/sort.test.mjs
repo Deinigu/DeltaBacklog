@@ -1,0 +1,57 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { store } from '../static/js/api.js';
+import { buildComparator, groupGames, parseSort, formatSort, DEFAULT_SORT } from '../static/js/sort.js';
+
+store.statusOrder = new Map([['playing', 0], ['backlog', 1], ['finished', 2]]);
+store.statusByCode = new Map([['playing', { label: 'Playing' }], ['backlog', { label: 'Backlog' }], ['finished', { label: 'Finished' }]]);
+
+const g = (title, o = {}) => ({ title, status: 'backlog', platforms: [], genres: [], years: [], periods: [], favorite: false, completed: false, series: null, series_order: null, release_year: null, queue_pos: null, added_at: '', updated_at: '', ownership: null, ...o });
+const titles = (list, levels) => [...list].sort(buildComparator(levels)).map((x) => x.title);
+
+test('natural title order', () => {
+  const list = [g('Fallout 10'), g('Fallout 2'), g('fallout 1')];
+  assert.deepEqual(titles(list, [{ field: 'title', dir: 'asc' }]), ['fallout 1', 'Fallout 2', 'Fallout 10']);
+});
+
+test('multi-level: status, then last year desc, then title', () => {
+  const list = [
+    g('B', { status: 'finished', years: [2020] }), g('A', { status: 'finished', years: [2024] }),
+    g('C', { status: 'playing', years: [2019] }), g('D', { status: 'finished', years: [2024] }),
+  ];
+  const lv = [{ field: 'status', dir: 'asc' }, { field: 'last_year', dir: 'desc' }, { field: 'title', dir: 'asc' }];
+  assert.deepEqual(titles(list, lv), ['C', 'A', 'D', 'B']);
+});
+
+test('nulls sort last in both directions', () => {
+  const list = [g('none'), g('old', { release_year: 1999 }), g('new', { release_year: 2020 })];
+  assert.deepEqual(titles(list, [{ field: 'release', dir: 'asc' }]), ['old', 'new', 'none']);
+  assert.deepEqual(titles(list, [{ field: 'release', dir: 'desc' }]), ['new', 'old', 'none']);
+});
+
+test('series sorts by name then order in series', () => {
+  const list = [g('x3', { series: 'X', series_order: 3 }), g('a1', { series: 'A', series_order: 1 }), g('x1', { series: 'X', series_order: 1 }), g('solo')];
+  assert.deepEqual(titles(list, [{ field: 'series', dir: 'asc' }]), ['a1', 'x1', 'x3', 'solo']);
+});
+
+test('default order is status, manual, title', () => {
+  const list = [g('z', { status: 'playing', queue_pos: 2 }), g('y', { status: 'playing', queue_pos: 1 }), g('a', { status: 'backlog', queue_pos: 1 })];
+  assert.deepEqual(titles(list, []), ['y', 'z', 'a']);
+  assert.ok(DEFAULT_SORT.length === 3);
+});
+
+test('favorites first', () => {
+  const list = [g('a'), g('b', { favorite: true })];
+  assert.deepEqual(titles(list, [{ field: 'favorite', dir: 'desc' }]), ['b', 'a']);
+});
+
+test('grouping by year puts a game under every year, newest first, "None" last', () => {
+  const list = [g('a', { years: [2024, 2025] }), g('b', { years: [2025], periods: ['childhood'] }), g('c')];
+  const groups = groupGames(list, 'year');
+  assert.deepEqual(groups.map((x) => x.label), ['2025', '2024', 'Childhood', 'None']);
+  assert.deepEqual(groups[0].games.map((x) => x.title), ['a', 'b']);
+});
+
+test('sort url round trip ignores unknown fields', () => {
+  assert.equal(formatSort(parseSort('status:asc,bogus:desc,last_year:desc')), 'status:asc,last_year:desc');
+});

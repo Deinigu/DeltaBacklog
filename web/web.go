@@ -18,12 +18,9 @@ func Handler() http.Handler {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The service worker and shell must always be revalidated so deploys take effect.
-		if r.URL.Path == "/" || r.URL.Path == "/sw.js" || r.URL.Path == "/index.html" {
-			w.Header().Set("Cache-Control", "no-cache")
-		} else {
-			w.Header().Set("Cache-Control", "public, max-age=3600")
-		}
+		// Embedded files carry no modification time, so browsers can't revalidate them cheaply. Always refetch:
+		// the files are small, and a stale shell after an upgrade is far worse than a few extra requests.
+		w.Header().Set("Cache-Control", "no-cache")
 		fileServer.ServeHTTP(w, r)
 	})
 }

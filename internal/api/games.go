@@ -21,6 +21,8 @@ type Game struct {
 	Notes       string   `json:"notes"`
 	Cover       *string  `json:"cover"` // file name under /covers/
 	QueuePos    *int     `json:"queue_pos"`
+	IGDBID      *int64   `json:"igdb_id"`
+	AddedAt     string   `json:"added_at"`
 	UpdatedAt   string   `json:"updated_at"`
 	Platforms   []string `json:"platforms"`
 	Genres      []string `json:"genres"`
@@ -61,7 +63,7 @@ func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
 // LoadGames returns every game ordered by status then queue position.
 func LoadGames(d *sql.DB) ([]Game, error) {
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, g.series_order, c.name, g.release_year,
-			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.updated_at
+			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
@@ -75,7 +77,7 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 	for rows.Next() {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.SeriesOrder, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.UpdatedAt); err != nil {
+			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -130,4 +132,19 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 		}
 	}
 	return games, yrows.Err()
+}
+
+// LoadGame returns one game with its links. At ~600 games, filtering the full load is simpler than
+// parallel single-game queries and costs a few milliseconds.
+func LoadGame(d *sql.DB, id int64) (Game, error) {
+	games, err := LoadGames(d)
+	if err != nil {
+		return Game{}, err
+	}
+	for _, g := range games {
+		if g.ID == id {
+			return g, nil
+		}
+	}
+	return Game{}, sql.ErrNoRows
 }

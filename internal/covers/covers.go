@@ -2,6 +2,7 @@
 package covers
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -41,9 +42,42 @@ func Fetch(url, dir string, gameID int64) (string, error) {
 	return Save(io.LimitReader(resp.Body, maxDownload), dir, gameID)
 }
 
+// strictClient never follows redirects, so a URL that passed a host allow-list cannot bounce elsewhere.
+var strictClient = &http.Client{
+	Timeout:       fetchTimeout,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// FetchStrict is Fetch for URLs supplied by a client: it refuses redirects.
+func FetchStrict(url, dir string, gameID int64) (string, error) {
+	resp, err := strictClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
+	}
+	return Save(io.LimitReader(resp.Body, maxDownload), dir, gameID)
+}
+
+// maxPixels bounds the memory a decode can use: a 15MB file can still describe a gigantic bitmap.
+const maxPixels = 30_000_000
+
 // Save decodes an image from r, scales it down and writes dir/<gameID>.jpg.
 func Save(r io.Reader, dir string, gameID int64) (string, error) {
-	img, _, err := image.Decode(r)
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return "", fmt.Errorf("decode: %w", err)
+	}
+	if cfg.Width*cfg.Height > maxPixels {
+		return "", fmt.Errorf("image too large (%dx%d)", cfg.Width, cfg.Height)
+	}
+	img, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return "", fmt.Errorf("decode: %w", err)
 	}

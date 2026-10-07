@@ -2,23 +2,47 @@
 import { h, icon } from './util.js';
 import { load, store } from './api.js';
 import { renderLibrary } from './library.js';
+import { renderViews } from './views.js';
 import { closeDrawer } from './drawer.js';
-
-// Later feature branches add their views here (shelves, years, table, add).
-const ROUTES = [
-  { path: 'library', label: 'Library', icon: 'library', render: renderLibrary },
-];
+import { openAdd } from './add.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
 let cleanup = null;
 
+const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'library';
+
+// Later feature branches add their routes here (table, years, add).
+function resolve(path) {
+  if (path === 'views') return { path, render: renderViews };
+  const m = /^view\/(\d+)$/.exec(path);
+  if (m) {
+    const v = store.views.find((x) => x.id === Number(m[1]));
+    if (v) return { path, render: (root) => renderLibrary(root, { view: structuredClone(v) }) };
+  }
+  return { path: 'library', render: renderLibrary };
+}
+
 function buildNav() {
+  const pinned = store.views.filter((v) => v.pinned);
   nav.replaceChildren(
     h('div.brand', {}, 'DeltaBacklog'),
-    ...ROUTES.map((r) => h('a', { href: `#/${r.path}`, 'data-path': r.path }, icon(r.icon), h('span', {}, r.label))),
+    h('a', { href: '#/library', 'data-path': 'library' }, icon('library'), h('span', {}, 'Library')),
+    pinned.length > 0 && h('div.nav-title', {}, 'My views'),
+    ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 3 ? 'extra' : '' },
+      h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
+    h('a', { href: '#/views', 'data-path': 'views' }, icon('views'), h('span', {}, 'Views')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
+  markActive();
+}
+
+function markActive() {
+  const path = resolve(currentPath()).path;
+  for (const a of nav.querySelectorAll('a')) {
+    if (a.dataset.path === path) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
 }
 
 function toggleTheme() {
@@ -34,33 +58,42 @@ try {
 } catch { /* ignore */ }
 
 async function route() {
-  const path = (location.hash.replace(/^#\/?/, '').split('?')[0]) || 'library';
-  const r = ROUTES.find((x) => x.path === path) || ROUTES[0];
-  for (const a of nav.querySelectorAll('a')) {
-    if (a.dataset.path === r.path) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  }
-  if (cleanup) { cleanup(); cleanup = null; }
-  closeDrawer();
   if (!store.loaded) {
     view.replaceChildren(h('div.grid', {}, Array.from({ length: 8 }, () => h('div.skeleton'))));
-    try { await load(); } catch (e) {
+    try { await load(); } catch {
       view.replaceChildren(h('div.empty', {}, 'Could not load games. ', h('button.btn', { onclick: route }, 'Retry')));
       return;
     }
+    buildNav();
   }
+  const r = resolve(currentPath());
+  markActive();
+  if (cleanup) { cleanup(); cleanup = null; }
+  closeDrawer();
   cleanup = r.render(view) || null;
   window.scrollTo(0, 0);
 }
 
 buildNav();
-// Re-render only when the route (not just the query string) changes: library filters rewrite the hash themselves.
-let lastPath = null;
+// Re-render only when the route (not just the query string) changes: the library rewrites its own query.
+let lastPath = currentPath();
 window.addEventListener('hashchange', () => {
-  const p = location.hash.replace(/^#\/?/, '').split('?')[0] || 'library';
+  const p = currentPath();
   if (p !== lastPath) { lastPath = p; route(); }
 });
-lastPath = location.hash.replace(/^#\/?/, '').split('?')[0] || 'library';
+// Views changed (saved, pinned, renamed...): refresh navigation without re-rendering the open page.
+window.addEventListener('views-changed', buildNav);
+// A game was added or deleted: rebuild the open page (new genres, platforms... must show up as filter chips).
+window.addEventListener('games-reloaded', () => route());
+
+// "+" button: always reachable, above the bottom bar on phones.
+document.body.append(h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add')));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open')) {
+    e.preventDefault();
+    openAdd();
+  }
+});
 route();
 
 if ('serviceWorker' in navigator) {
