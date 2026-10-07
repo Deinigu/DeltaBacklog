@@ -3,6 +3,7 @@ import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
+import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
@@ -20,7 +21,7 @@ function quickActions(game) {
     fav.setAttribute('aria-pressed', String(game.favorite));
     const st = store.statusByCode.get(game.status);
     const badge = open?.drawer.querySelector('.cover .st');
-    if (badge && st) { badge.textContent = st.label; badge.style.background = st.color; }
+    if (badge && st) { badge.textContent = st.label; badge.setAttribute('style', badgeStyle(st.color)); }
   }
   return h('div.quick', {}, sel, fav);
 }
@@ -80,7 +81,7 @@ export function openDrawer(game) {
     h('button.close', { onclick: requestClose, 'aria-label': 'Close' }, '✕'),
     h('div.cover', {},
       url ? h('img', { src: url, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)),
-      st && h('span.st', { style: `background:${st.color}` }, st.label)),
+      st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
     h('div.drawer-body', {}, title, quick, readView, editView));
 
   async function remove() {

@@ -7,7 +7,7 @@ import { toCSV } from './csv.js';
 import { ownershipIcon } from './ownership.js';
 import { yearOptions, normalizeYearToken } from './editpatch.js';
 
-const ROW_H = 44;
+const ROW_H = 48; // keep in step with .tr and .thead in styles.css
 const OVERSCAN = 6;
 
 const uniq = (get) => () => {
