@@ -36,7 +36,7 @@ function inLibrary(c, excludeId) {
  * state: {query} (kept by the caller so going back restores it). handlers: {onPick(candidate), onManual(typedText) | null, excludeId}
  */
 function renderSearch(ui, state, { onPick, onManual, excludeId }) {
-  const input = h('input', { type: 'search', placeholder: 'Title, or a Steam / GOG / Epic link…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Title or link', value: state.query });
+  const input = h('input', { type: 'search', placeholder: 'Game title…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Game title', value: state.query });
   const results = h('div.cands');
   const manual = onManual && h('button.btn.manual', { type: 'button', onclick: () => onManual(input.value.trim()) });
   ui.body.replaceChildren(h('div.search.pick-search', {}, icon('search'), input), results, manual);
@@ -46,7 +46,7 @@ function renderSearch(ui, state, { onPick, onManual, excludeId }) {
     const q = input.value.trim();
     state.query = q;
     if (manual) manual.textContent = q && !/^https?:/i.test(q) ? `Add “${q}” without a lookup` : 'Add manually';
-    if (q.length < 2) { results.replaceChildren(h('p.hint', {}, 'Type a game title, or paste a store link.')); return; }
+    if (q.length < 2) { results.replaceChildren(h('p.hint', {}, 'Type a game title.')); return; }
     const mine = ++seq;
     results.replaceChildren(h('p.hint', {}, 'Searching…'));
     try {
