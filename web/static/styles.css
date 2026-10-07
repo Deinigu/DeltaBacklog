@@ -432,3 +432,11 @@ a.btn.primary { color: var(--accent-text); }
 .yr.period { padding: 0 6px; border-color: transparent; background: var(--surface-2); font-size: 13px; }
 .yr.earlier { border-style: dashed; color: var(--muted); font-weight: 500; }
 @media (min-width: 640px) { .card-body { padding: 11px 13px 13px; gap: 8px; } .yr { font-size: 12.5px; } }
+
+/* ---- cover picker: source tabs, search, shaped tiles ---- */
+.cover-tools { display: flex; gap: 8px; margin: 10px 0 4px; align-items: center; }
+.cover-tools .pick-search { flex: 1; margin: 0; }
+.cover-tools .btn { height: 44px; }
+.cover-grid { align-items: start; }
+.ctile.big { position: relative; width: 100%; height: auto; }
+.ctile .kind { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 600; }

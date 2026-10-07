@@ -81,6 +81,7 @@ type CoverOption struct {
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
 	Source string `json:"source"`
+	Kind   string `json:"kind,omitempty"` // IGDB only: "Cover", "Artwork" or "Screenshot"
 }
 
 func (c *Client) do(req *http.Request, out any) error {
@@ -363,4 +364,70 @@ func RankByTitle(cands []Candidate, title string) []Candidate {
 		return strings.EqualFold(out[i].Name, title) && !strings.EqualFold(out[j].Name, title)
 	})
 	return out
+}
+
+// ---------------- IGDB images ----------------
+
+const igdbImg = "https://images.igdb.com/igdb/image/upload/"
+
+// IGDBImages returns the pictures IGDB holds for a game: wide artwork and screenshots first (the library's cards
+// are wide), then the portrait cover. igdbID may be 0, in which case the best title match is used.
+func (c *Client) IGDBImages(ctx context.Context, igdbID int64, title string) ([]CoverOption, error) {
+	if ok, _ := c.Configured(); !ok {
+		return nil, ErrNotConfigured
+	}
+	if igdbID == 0 {
+		cands, err := c.SearchIGDB(ctx, title)
+		if err != nil || len(cands) == 0 {
+			return []CoverOption{}, err
+		}
+		igdbID = RankByTitle(cands, title)[0].IGDBID
+	}
+	token, err := c.igdbToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf("fields name,cover.image_id,artworks.image_id,artworks.width,artworks.height,screenshots.image_id,screenshots.width,screenshots.height; where id = %d;", igdbID)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
+	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+	req.Header.Set("Authorization", "Bearer "+token)
+	type picture struct {
+		ImageID string `json:"image_id"`
+		Width   int    `json:"width"`
+		Height  int    `json:"height"`
+	}
+	var games []struct {
+		Cover struct {
+			ImageID string `json:"image_id"`
+		} `json:"cover"`
+		Artworks    []picture `json:"artworks"`
+		Screenshots []picture `json:"screenshots"`
+	}
+	if err := c.do(req, &games); err != nil {
+		return nil, err
+	}
+	out := []CoverOption{}
+	if len(games) == 0 {
+		return out, nil
+	}
+	g := games[0]
+	add := func(id, size, thumb, kind string, w, h int) {
+		if w <= 0 || h <= 0 { // IGDB did not say: assume widescreen
+			w, h = 1920, 1080
+		}
+		if id != "" {
+			out = append(out, CoverOption{URL: igdbImg + size + "/" + id + ".jpg", Thumb: igdbImg + thumb + "/" + id + ".jpg", Width: w, Height: h, Source: "igdb", Kind: kind})
+		}
+	}
+	for _, a := range g.Artworks {
+		add(a.ImageID, "t_1080p", "t_screenshot_med", "Artwork", a.Width, a.Height)
+	}
+	for i, s := range g.Screenshots {
+		if i == 8 { // screenshots are plentiful; the first few are enough
+			break
+		}
+		add(s.ImageID, "t_1080p", "t_screenshot_med", "Screenshot", s.Width, s.Height)
+	}
+	add(g.Cover.ImageID, "t_cover_big", "t_cover_small", "Cover", 264, 374)
+	return out, nil
 }
