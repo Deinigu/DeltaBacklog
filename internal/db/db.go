@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	_ "modernc.org/sqlite"
 )
@@ -123,4 +124,16 @@ func IndexGame(x Execer, gameID int64) error {
 		SELECT g.id, g.title, coalesce(s.name, ''), g.notes
 		FROM game g LEFT JOIN series s ON s.id = g.series_id WHERE g.id = ?`, gameID)
 	return err
+}
+
+// TitleSort lowercases and drops a leading article and punctuation so "The Witcher 3" sorts under W.
+func TitleSort(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	for _, a := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(t, a) {
+			t = t[len(a):]
+			break
+		}
+	}
+	return strings.TrimLeftFunc(t, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }

@@ -99,3 +99,12 @@ func TestSavedViewConstraintsAndStarters(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleSort(t *testing.T) {
+	if got := TitleSort("The Witcher 3"); got != "witcher 3" {
+		t.Errorf("got %q", got)
+	}
+	if got := TitleSort("  ¡Hola!"); got != "hola!" {
+		t.Errorf("got %q", got)
+	}
+}

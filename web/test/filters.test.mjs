@@ -56,8 +56,8 @@ test('saved view JSON round trip', () => {
   const s = emptyState();
   cycle(s, 'genre', 'RPG'); cycle(s, 'genre', 'Indie'); s.all.add('genre');
   cycle(s, 'status', 'finished'); cycle(s, 'status', 'finished');
-  s.flags.add('vr'); s.q = 'abc'; s.sorts = [{ field: 'title', dir: 'desc' }]; s.group = 'status';
-  const view = { filter: JSON.parse(JSON.stringify(filterToJSON(s))), sort: s.sorts, group_by: s.group };
+  s.flags.add('vr'); s.q = 'abc'; s.sorts = [{ field: 'title', dir: 'desc' }]; s.group = 'status'; s.layout = 'table';
+  const view = { filter: JSON.parse(JSON.stringify(filterToJSON(s))), sort: s.sorts, group_by: s.group, layout: s.layout };
   const back = stateFromView(view);
   assert.equal(signature(back), signature(s));
   assert.equal(activeCount(back), 4);
@@ -66,7 +66,7 @@ test('saved view JSON round trip', () => {
 test('url round trip', () => {
   const s = emptyState();
   cycle(s, 'genre', 'Hack and slash/Beat \'em up'); cycle(s, 'platform', 'PC'); cycle(s, 'platform', 'PC'); cycle(s, 'platform', 'PS3'); s.all.add('platform'); s.flags.add('favorite');
-  s.sorts = [{ field: 'status', dir: 'asc' }];
+  s.sorts = [{ field: 'status', dir: 'asc' }]; s.layout = 'table';
   const back = stateFromQuery(stateToQuery(s));
   assert.equal(signature(back), signature(s));
 });
@@ -76,4 +76,10 @@ test('unknown keys in a stored view are ignored', () => {
   assert.equal(s.all.size, 0);
   assert.equal(s.flags.size, 0);
   assert.equal(s.group, '');
+});
+
+test('layout defaults to cards and unknown values are ignored', () => {
+  assert.equal(emptyState().layout, 'cards');
+  assert.equal(stateFromView({ filter: {}, sort: [], layout: 'grid' }).layout, 'cards');
+  assert.equal(stateFromQuery('layout=table').layout, 'table');
 });

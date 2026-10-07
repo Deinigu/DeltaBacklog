@@ -4,6 +4,7 @@ import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog } 
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
+import { renderTable } from './table.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
@@ -41,13 +42,16 @@ export function renderLibrary(root, opts = {}) {
   const meta = h('div.meta-row');
 
   let reordering = false;
+  let tableInst = null, tableBox = null;
+  const tableScroll = { top: 0, left: 0 };
+  const layoutBtn = h('button.btn', { type: 'button', 'aria-label': 'Switch between cards and table', onclick: () => { state.layout = state.layout === 'table' ? 'cards' : 'table'; reordering = false; update(); } });
   const reorderBtn = h('button.btn', { type: 'button', 'aria-pressed': 'false', onclick: () => { reordering = !reordering; update(); } }, '⇅ Reorder');
   const saveBtn = h('button.btn.primary', { type: 'button', onclick: saveChanges }, 'Save');
   const saveAsBtn = h('button.btn', { type: 'button', onclick: saveAs }, view ? 'Save as…' : 'Save as view');
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const head = h('div.view-head', {}, title, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
+  const head = h('div.view-head', {}, title, layoutBtn, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
 
   const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
@@ -128,7 +132,7 @@ export function renderLibrary(root, opts = {}) {
     input.value = state.q;
     update();
   }
-  const payload = () => ({ filter: filterToJSON(state), sort: state.sorts, group_by: state.group });
+  const payload = () => ({ filter: filterToJSON(state), sort: state.sorts, group_by: state.group, layout: state.layout });
 
   async function saveChanges() {
     try {
@@ -143,7 +147,7 @@ export function renderLibrary(root, opts = {}) {
     const r = await askNameDialog({ title: 'Save as a new view', name: view ? `${view.name} copy` : '', icon: view?.icon || '⭐' });
     if (!r) return;
     try {
-      const created = await createView({ ...r, ...payload(), layout: 'cards' });
+      const created = await createView({ ...r, ...payload() });
       toast(`Saved “${created.name}”`);
       location.hash = `#/view/${created.id}`;
     } catch { toast('Could not save the view'); }
@@ -166,7 +170,24 @@ export function renderLibrary(root, opts = {}) {
 
     reorderBtn.setAttribute('aria-pressed', String(reordering));
     reorderBtn.textContent = reordering ? '✓ Done' : '⇅ Reorder';
-    if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
+    layoutBtn.textContent = state.layout === 'table' ? '▦ Cards' : '☰ Table';
+    reorderBtn.hidden = state.layout === 'table';
+    if (state.layout === 'table') {
+      if (!tableInst) {
+        tableInst = renderTable({
+          list, sorts: state.sorts, scroll: tableScroll, onOpen: openDrawer,
+          setSort: (field, dir) => { state.sorts = [{ field, dir }]; sortSheet.render(); update(); },
+        });
+        tableBox = h('div.tablebox', {},
+          h('div.table-tools', {},
+            h('button.btn', { type: 'button', onclick: () => tableInst.columnsSheet() }, 'Columns'),
+            h('button.btn', { type: 'button', onclick: () => tableInst.exportCSV() }, 'Export CSV'),
+            h('span.hint', {}, 'Tap a cell to edit it. Tab moves right, Enter moves down.')),
+          tableInst);
+      }
+      if (results.firstChild !== tableBox) { results.replaceChildren(tableBox); tableInst.mounted(); }
+      tableInst.setList(list, state.sorts);
+    } else if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
     else if (reordering) {
       // Reordering always works on the manual order of exactly the games shown, whatever the sort is.
       const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);

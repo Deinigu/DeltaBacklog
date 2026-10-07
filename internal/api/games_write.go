@@ -6,14 +6,117 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
+
+	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
 
-// gamePatch is the writable subset for quick edits. Pointers distinguish "absent" from false.
+// gamePatch is the writable subset of a game. Pointers distinguish "absent" from empty/false.
+// Text lookups (ownership, series, developer) clear with ""; numbers clear with 0; lists replace the whole set.
 type gamePatch struct {
-	Status    *string `json:"status"` // status code
-	Favorite  *bool   `json:"favorite"`
-	VR        *bool   `json:"vr"`
-	Completed *bool   `json:"completed"`
+	Status      *string   `json:"status"` // status code
+	Favorite    *bool     `json:"favorite"`
+	VR          *bool     `json:"vr"`
+	Completed   *bool     `json:"completed"`
+	Title       *string   `json:"title"`
+	Notes       *string   `json:"notes"`
+	Ownership   *string   `json:"ownership"`
+	Series      *string   `json:"series"`
+	SeriesOrder *int      `json:"series_order"`
+	Developer   *string   `json:"developer"`
+	ReleaseYear *int      `json:"release_year"`
+	Platforms   *[]string `json:"platforms"`
+	Genres      *[]string `json:"genres"`
+	Themes      *[]string `json:"themes"`
+	Players     *[]string `json:"players"`
+	Years       *[]int    `json:"years"`   // calendar years played
+	Periods     *[]string `json:"periods"` // "childhood", "always"
+}
+
+var errInvalid = errors.New("invalid value")
+
+// validate checks everything that does not need the database.
+func (in *gamePatch) validate() error {
+	if in.Title != nil && (strings.TrimSpace(*in.Title) == "" || len(*in.Title) > 200) {
+		return errInvalid
+	}
+	if in.Notes != nil && len(*in.Notes) > 20000 {
+		return errInvalid
+	}
+	for _, p := range []*string{in.Ownership, in.Series, in.Developer} {
+		if p != nil && len(*p) > 120 {
+			return errInvalid
+		}
+	}
+	if in.ReleaseYear != nil && *in.ReleaseYear != 0 && (*in.ReleaseYear < 1950 || *in.ReleaseYear > 2100) {
+		return errInvalid
+	}
+	if in.SeriesOrder != nil && (*in.SeriesOrder < 0 || *in.SeriesOrder > 1000) {
+		return errInvalid
+	}
+	for _, l := range []*[]string{in.Platforms, in.Genres, in.Themes, in.Players} {
+		if l == nil {
+			continue
+		}
+		if len(*l) > 50 {
+			return errInvalid
+		}
+		for _, n := range *l {
+			if len(n) > 120 {
+				return errInvalid
+			}
+		}
+	}
+	if in.Years != nil {
+		for _, y := range *in.Years {
+			if y < 1970 || y > 2100 {
+				return errInvalid
+			}
+		}
+	}
+	if in.Periods != nil {
+		for _, p := range *in.Periods {
+			if p != "childhood" && p != "always" {
+				return errInvalid
+			}
+		}
+	}
+	return nil
+}
+
+// setLinks replaces the lookup values of one game. table, junction and fk are constants from the caller.
+func setLinks(tx *sql.Tx, gameID int64, table, junction, fk string, names []string) error {
+	if _, err := tx.Exec("DELETE FROM "+junction+" WHERE game_id = ?", gameID); err != nil {
+		return err
+	}
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		id, err := db.GetOrCreate(tx, table, name)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO "+junction+"(game_id, "+fk+") VALUES (?, ?)", gameID, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// nullableLookup returns the id of a lookup row, or nil when name is empty (clearing the field).
+func nullableLookup(tx *sql.Tx, table, name string) (any, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, nil
+	}
+	return db.GetOrCreate(tx, table, name)
+}
+
+func nullInt(n int) any {
+	if n == 0 {
+		return nil
+	}
+	return n
 }
 
 // playingStatuses are the shelves that record the current year in the game's years played.
@@ -25,8 +128,8 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in gamePatch
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.validate() != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
@@ -75,6 +178,10 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 			fail(w, err)
 			return
 		}
+	}
+	if err := applyFieldEdits(tx, id, &in); err != nil {
+		fail(w, err)
+		return
 	}
 	if _, err := tx.Exec(`UPDATE game SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, id); err != nil {
 		fail(w, err)
@@ -169,4 +276,81 @@ func (s *Server) reorderGames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, next)
+}
+
+// applyFieldEdits writes the non-status fields of a patch inside the caller's transaction.
+func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
+	if in.Title != nil {
+		t := strings.TrimSpace(*in.Title)
+		if _, err := tx.Exec("UPDATE game SET title = ?, title_sort = ? WHERE id = ?", t, db.TitleSort(t), id); err != nil {
+			return err
+		}
+	}
+	if in.Notes != nil {
+		if _, err := tx.Exec("UPDATE game SET notes = ? WHERE id = ?", *in.Notes, id); err != nil {
+			return err
+		}
+	}
+	for _, f := range []struct {
+		val           *string
+		table, column string
+	}{{in.Ownership, "ownership", "ownership_id"}, {in.Series, "series", "series_id"}, {in.Developer, "company", "developer_id"}} {
+		if f.val == nil {
+			continue
+		}
+		ref, err := nullableLookup(tx, f.table, *f.val)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec("UPDATE game SET "+f.column+" = ? WHERE id = ?", ref, id); err != nil { // column is a constant above
+			return err
+		}
+	}
+	if in.SeriesOrder != nil {
+		if _, err := tx.Exec("UPDATE game SET series_order = ? WHERE id = ?", nullInt(*in.SeriesOrder), id); err != nil {
+			return err
+		}
+	}
+	if in.ReleaseYear != nil {
+		if _, err := tx.Exec("UPDATE game SET release_year = ? WHERE id = ?", nullInt(*in.ReleaseYear), id); err != nil {
+			return err
+		}
+	}
+	for _, l := range []struct {
+		names               *[]string
+		table, junction, fk string
+	}{
+		{in.Platforms, "platform", "game_platform", "platform_id"},
+		{in.Genres, "genre", "game_genre", "genre_id"},
+		{in.Themes, "theme", "game_theme", "theme_id"},
+		{in.Players, "player", "game_player", "player_id"},
+	} {
+		if l.names == nil {
+			continue
+		}
+		if err := setLinks(tx, id, l.table, l.junction, l.fk, *l.names); err != nil {
+			return err
+		}
+	}
+	if in.Years != nil {
+		if _, err := tx.Exec("DELETE FROM play WHERE game_id = ? AND year IS NOT NULL", id); err != nil {
+			return err
+		}
+		for _, y := range *in.Years {
+			if _, err := tx.Exec("INSERT OR IGNORE INTO play(game_id, year) VALUES (?, ?)", id, y); err != nil {
+				return err
+			}
+		}
+	}
+	if in.Periods != nil {
+		if _, err := tx.Exec("DELETE FROM play WHERE game_id = ? AND period IS NOT NULL", id); err != nil {
+			return err
+		}
+		for _, p := range *in.Periods {
+			if _, err := tx.Exec("INSERT OR IGNORE INTO play(game_id, period) VALUES (?, ?)", id, p); err != nil {
+				return err
+			}
+		}
+	}
+	return db.IndexGame(tx, id)
 }

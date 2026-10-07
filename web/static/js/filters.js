@@ -30,6 +30,7 @@ export function emptyState() {
     flags: new Set(),
     sorts: [],
     group: '',
+    layout: 'cards', // 'cards' | 'table'
   };
 }
 
@@ -59,7 +60,7 @@ export function activeCount(state) {
 }
 
 export function isPristine(state) {
-  return !state.q && activeCount(state) === 0 && !state.sorts.length && !state.group;
+  return !state.q && activeCount(state) === 0 && !state.sorts.length && !state.group && state.layout === 'cards';
 }
 
 /** Cycle a chip: off -> included -> excluded -> off. */
@@ -99,12 +100,13 @@ export function stateFromView(view) {
   for (const k of f.flags || []) if (FLAGS.some((x) => x.key === k)) s.flags.add(k);
   s.sorts = (view.sort || []).filter((l) => l && typeof l.field === 'string').map((l) => ({ field: l.field, dir: l.dir === 'desc' ? 'desc' : 'asc' }));
   s.group = GROUP_FIELDS[view.group_by] ? view.group_by : '';
+  s.layout = view.layout === 'table' ? 'table' : 'cards';
   return s;
 }
 
 /** Canonical string used to tell whether a view has unsaved changes. */
 export function signature(state) {
-  return JSON.stringify([filterToJSON(state), state.sorts, state.group]);
+  return JSON.stringify([filterToJSON(state), state.sorts, state.group, state.layout]);
 }
 
 // ---- URL query (library scratch view): status=x  ex_status=x  all=genre,theme  favorite=1  sort=  group= ----
@@ -120,6 +122,7 @@ export function stateFromQuery(search) {
   for (const f of FLAGS) if (qs.get(f.key) === '1') s.flags.add(f.key);
   s.sorts = parseSort(qs.get('sort'));
   s.group = GROUP_FIELDS[qs.get('group')] ? qs.get('group') : '';
+  s.layout = qs.get('layout') === 'table' ? 'table' : 'cards';
   return s;
 }
 
@@ -134,5 +137,6 @@ export function stateToQuery(state) {
   for (const f of state.flags) qs.set(f, '1');
   if (state.sorts.length) qs.set('sort', formatSort(state.sorts));
   if (state.group) qs.set('group', state.group);
+  if (state.layout === 'table') qs.set('layout', 'table');
   return qs.toString();
 }

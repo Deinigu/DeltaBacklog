@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
@@ -133,7 +132,7 @@ func Import(d *sql.DB, r io.Reader, opt Options) (Report, []CoverJob, error) {
 		res, err := tx.Exec(`INSERT INTO game
 			(title, title_sort, status_id, ownership_id, series_id, vr, favorite, completed, notes, cover_url, queue_pos, source_id)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-			title, titleSort(title), statusID, ownershipID, seriesID,
+			title, db.TitleSort(title), statusID, ownershipID, seriesID,
 			b2i(parseBool(get(row, "VR"))), b2i(parseBool(get(row, "Favorito"))), b2i(parseBool(get(row, "Completed"))),
 			get(row, "Notas"), nullIfEmpty(cover), n+1, srcID)
 		if err != nil {
@@ -206,16 +205,4 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
-}
-
-// titleSort lowercases and drops a leading article and punctuation so "The Witcher 3" sorts under W.
-func titleSort(t string) string {
-	t = strings.ToLower(strings.TrimSpace(t))
-	for _, a := range []string{"the ", "a ", "an "} {
-		if strings.HasPrefix(t, a) {
-			t = t[len(a):]
-			break
-		}
-	}
-	return strings.TrimLeftFunc(t, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }

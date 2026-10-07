@@ -257,3 +257,65 @@ func TestPatchAndReorderGames(t *testing.T) {
 		}
 	}
 }
+
+func TestEditFields(t *testing.T) {
+	srv := newServer(t)
+	_, body := do(t, "GET", srv.URL+"/api/games", "")
+	var games []Game
+	json.Unmarshal(body, &games)
+	hades := games[0]
+	url := srv.URL + "/api/games/" + strconv.FormatInt(hades.ID, 10)
+	patch := func(b string) (int, Game) {
+		res, body := do(t, "PATCH", url, b)
+		var g Game
+		json.Unmarshal(body, &g)
+		return res.StatusCode, g
+	}
+
+	code, g := patch(`{"title":"  The Hades 2 ","notes":"great","ownership":"Gifted","series":"Hades Saga","series_order":2,"developer":"Supergiant","release_year":2025,
+		"platforms":["PC","Switch"],"genres":["Roguelike"],"themes":[],"players":["Solo","Lucas"],"years":[2026,2024,2024],"periods":["always"]}`)
+	if code != 200 {
+		t.Fatalf("patch: %d", code)
+	}
+	if g.Title != "The Hades 2" || g.Notes != "great" || *g.Ownership != "Gifted" || *g.Series != "Hades Saga" || *g.SeriesOrder != 2 || *g.Developer != "Supergiant" || *g.ReleaseYear != 2025 {
+		t.Errorf("scalar fields: %+v", g)
+	}
+	if strings.Join(g.Platforms, ",") != "PC,Switch" || strings.Join(g.Genres, ",") != "Roguelike" || len(g.Themes) != 0 || strings.Join(g.Players, ",") != "Lucas,Solo" {
+		t.Errorf("lists: %v %v %v %v", g.Platforms, g.Genres, g.Themes, g.Players)
+	}
+	if len(g.Years) != 2 || g.Years[0] != 2024 || g.Years[1] != 2026 || len(g.Periods) != 1 || g.Periods[0] != "always" {
+		t.Errorf("years=%v periods=%v", g.Years, g.Periods)
+	}
+
+	// a patch touching one field leaves the others alone; empty string / 0 clear
+	code, g = patch(`{"series":"","release_year":0,"years":[]}`)
+	if code != 200 || g.Series != nil || g.ReleaseYear != nil || len(g.Years) != 0 || g.Title != "The Hades 2" || len(g.Periods) != 1 || len(g.Platforms) != 2 {
+		t.Errorf("clear: %d %+v", code, g)
+	}
+
+	// the same lookup value reused by another game is one row, not a duplicate
+	_, body = do(t, "PATCH", srv.URL+"/api/games/"+strconv.FormatInt(games[1].ID, 10), `{"platforms":["pc"]}`)
+	var o Game
+	json.Unmarshal(body, &o)
+	_, body = do(t, "GET", srv.URL+"/api/facets", "")
+	var facets map[string][]Facet
+	json.Unmarshal(body, &facets)
+	pcs := 0
+	for _, f := range facets["platform"] {
+		if strings.EqualFold(f.Key, "pc") {
+			pcs++
+		}
+	}
+	if pcs != 1 {
+		t.Errorf("platform PC duplicated: %v", facets["platform"])
+	}
+
+	for _, bad := range []string{`{"title":"  "}`, `{"release_year":1800}`, `{"years":[1900]}`, `{"periods":["later"]}`, `{"series_order":-1}`, `{"genres":["` + strings.Repeat("x", 200) + `"]}`} {
+		if code, _ := patch(bad); code != 400 {
+			t.Errorf("%s = %d, want 400", bad, code)
+		}
+	}
+	if code, g := patch(`{}`); code != 200 || g.Title != "The Hades 2" {
+		t.Errorf("empty patch changed the game: %d %+v", code, g)
+	}
+}

@@ -18,11 +18,16 @@ async function getJSON(url) {
   return res.json();
 }
 
+/** Recompute the lowercase, accent-free search text of a game after it changes. */
+export function indexGame(g) {
+  g._search = norm([g.title, g.series, g.notes, g.developer].filter(Boolean).join(' '));
+}
+
 export async function load() {
   const [games, facets, views] = await Promise.all([getJSON('/api/games'), getJSON('/api/facets'), getJSON('/api/views')]);
   store.views = views;
   store.games = games;
-  for (const g of games) g._search = norm([g.title, g.series, g.notes, g.developer].filter(Boolean).join(' '));
+  for (const g of games) indexGame(g);
   store.byId = new Map(games.map((g) => [g.id, g]));
   store.statuses = facets.status;
   store.statusByCode = new Map(facets.status.map((s) => [s.key, s]));
@@ -46,6 +51,7 @@ export async function patchGame(id, patch) {
   try {
     const fresh = await send('PATCH', `/api/games/${id}`, patch);
     Object.assign(g, fresh);
+    indexGame(g);
   } catch (e) {
     Object.assign(g, prev);
     throw e;

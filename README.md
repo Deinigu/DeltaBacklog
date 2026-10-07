@@ -10,7 +10,8 @@ Work in progress, built feature branch by feature branch (see `features/*`, merg
 - [x] Multi-level sort (any fields, asc/desc, saved in the URL) and group-by
 - [x] Saved views: save, edit, pin, reorder, duplicate, delete (with undo); include/exclude chips and Any/All matching
 - [x] Change a game's status or favorite from its detail view; drag-to-reorder manual order (touch friendly)
-- [ ] Table view, quick add, years and tierlists, packaging
+- [x] Table layout: sortable, resizable, hideable columns; inline editing of every field; CSV export; saved views remember cards vs table
+- [ ] Quick add, surprise me, years and tierlists, series, stats, packaging
 
 ## Develop
 ```sh
