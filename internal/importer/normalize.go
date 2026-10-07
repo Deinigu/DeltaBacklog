@@ -43,14 +43,6 @@ func splitList(s string) []string {
 	return out
 }
 
-// normalizeTheme folds verbose IGDB theme names (same mapping as the old genres.py).
-func normalizeTheme(name string) string {
-	if strings.HasPrefix(name, "4X (") {
-		return "4X"
-	}
-	return name
-}
-
 // Play is one entry of the old Years_played text: a year or a named period.
 type Play struct {
 	Year   int

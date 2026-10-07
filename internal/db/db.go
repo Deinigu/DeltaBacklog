@@ -126,6 +126,14 @@ func IndexGame(x Execer, gameID int64) error {
 	return err
 }
 
+// NormalizeTheme folds verbose IGDB theme names ("4X (explore, expand, ...)" becomes "4X").
+func NormalizeTheme(name string) string {
+	if strings.HasPrefix(name, "4X (") {
+		return "4X"
+	}
+	return name
+}
+
 // TitleSort lowercases and drops a leading article and punctuation so "The Witcher 3" sorts under W.
 func TitleSort(t string) string {
 	t = strings.ToLower(strings.TrimSpace(t))

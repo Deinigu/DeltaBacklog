@@ -142,7 +142,7 @@ func Import(d *sql.DB, r io.Reader, opt Options) (Report, []CoverJob, error) {
 
 		themes := splitList(get(row, "Style"))
 		for i := range themes {
-			themes[i] = normalizeTheme(themes[i])
+			themes[i] = db.NormalizeTheme(themes[i])
 		}
 		for _, l := range []struct {
 			table, junction, fk string

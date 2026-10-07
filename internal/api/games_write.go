@@ -163,8 +163,7 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		}
 		if sid != curStatus {
 			if playingStatuses[*in.Status] {
-				// Starting or finishing a game counts as playing it this year.
-				if _, err := tx.Exec(`INSERT OR IGNORE INTO play(game_id, year) VALUES (?, CAST(strftime('%Y', 'now') AS INTEGER))`, id); err != nil {
+				if err := recordCurrentYear(tx, id); err != nil {
 					fail(w, err)
 					return
 				}
@@ -199,6 +198,12 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, g)
+}
+
+// recordCurrentYear counts a game as played this year (starting or finishing it).
+func recordCurrentYear(tx *sql.Tx, id int64) error {
+	_, err := tx.Exec(`INSERT OR IGNORE INTO play(game_id, year) VALUES (?, CAST(strftime('%Y', 'now') AS INTEGER))`, id)
+	return err
 }
 
 func b2i(b bool) int {

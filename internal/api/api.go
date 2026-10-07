@@ -11,8 +11,10 @@ import (
 
 // Server holds the dependencies of the HTTP handlers.
 type Server struct {
-	DB       *sql.DB
-	CoverDir string
+	DB         *sql.DB
+	CoverDir   string
+	Meta       Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
+	CoverHosts []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
 }
 
 // Handler returns the router for /api, /covers and /healthz.
@@ -28,6 +30,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/games", s.listGames)
 	mux.HandleFunc("PATCH /api/games/{id}", s.patchGame)
 	mux.HandleFunc("POST /api/games/reorder", s.reorderGames)
+	mux.HandleFunc("POST /api/games", s.createGame)
+	mux.HandleFunc("DELETE /api/games/{id}", s.deleteGame)
+	mux.HandleFunc("POST /api/games/{id}/cover", s.setCover)
+	mux.HandleFunc("GET /api/lookup", s.lookup)
+	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/facets", s.facets)
 	mux.HandleFunc("GET /api/views", s.listViews)
 	mux.HandleFunc("POST /api/views", s.createView)
