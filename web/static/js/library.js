@@ -5,6 +5,7 @@ import { store, coverURL, createView, updateView, reorderGames } from './api.js'
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
+import { playedBadges, playedSummary } from './years.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -121,14 +122,22 @@ export function renderLibrary(root, opts = {}) {
     if (el) return el;
     const st = store.statusByCode.get(g.status);
     const url = coverURL(g);
-    const sub = [g.platforms.join(', '), g.years.length ? g.years[g.years.length - 1] : ''].filter(Boolean).join(' · ');
-    el = h('button.card', { type: 'button', onclick: () => openDrawer(g) },
+    const played = playedBadges(g, new Date().getFullYear(), innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
+    const hasPlayed = played.years.length || played.periods.length;
+    const platforms = g.platforms.slice(0, 2);
+    el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
         url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
         g.favorite && h('span.fav', { 'aria-label': 'Favorite' }, '★'),
         g.ownership && !isUsualOwnership(g.ownership) && h('span.own', { title: g.ownership, role: 'img', 'aria-label': g.ownership }, ownershipIcon(g.ownership)),
         st && h('span.st', { style: `background:${st.color}` }, st.label)),
-      h('div.card-body', {}, h('div.card-title', {}, g.title), sub && h('div.card-sub', {}, sub)));
+      h('div.card-body', {},
+        h('div.card-title', {}, g.title),
+        platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
+        hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
+          ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
+          played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,
+          ...played.years.map((y) => h('span.yr', { class: y.current ? 'now' : '' }, String(y.year)))) : null));
     cards.set(g.id, el);
     return el;
   }
