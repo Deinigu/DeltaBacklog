@@ -467,6 +467,10 @@ a.btn.primary { color: var(--accent-text); }
 .scard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 10px; overflow: hidden; }
 .scard summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 8px; padding: 12px; min-height: 44px; }
 .scard summary::-webkit-details-marker { display: none; }
+.scard summary { position: relative; padding-right: 36px; }
+.chev { position: absolute; right: 12px; top: 10px; font-size: 22px; line-height: 1; color: var(--muted); transition: transform .15s; }
+.scard[open] .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
 .shead { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stitle { font-weight: 600; overflow-wrap: anywhere; }
 .shead small, .sname small { color: var(--muted); font-size: 12px; }
