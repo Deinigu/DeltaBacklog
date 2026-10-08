@@ -3,9 +3,14 @@ import { h, icon } from './util.js';
 import { load, store, loadLinkPending } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
+import { renderStats } from './statspage.js';
+import { renderSeries } from './seriesview.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import { renderLink } from './link.js';
+import { renderYear, defaultYear } from './yearpage.js';
+import { parseYearPath } from './yearreview.js';
+import { MORE_PAGES, isMorePath, openMore, closeMore } from './more.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
@@ -17,6 +22,10 @@ const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'l
 function resolve(path) {
   if (path === 'views') return { path, render: renderViews };
   if (path === 'link') return { path, render: renderLink };
+  const year = parseYearPath(path);
+  if (year !== undefined) return { path: 'years', render: (root) => renderYear(root, year ?? defaultYear()) };
+  if (path === 'stats') return { path, render: renderStats };
+  if (path === 'series') return { path, render: renderSeries };
   const m = /^view\/(\d+)$/.exec(path);
   if (m) {
     const v = store.views.find((x) => x.id === Number(m[1]));
@@ -25,16 +34,23 @@ function resolve(path) {
   return { path: 'library', render: renderLibrary };
 }
 
+const SIDEBAR_ORDER = ['years', 'series', 'stats', 'views', 'link']; // the insight pages together, then Views
+
+// The sheet / sidebar pages; "Link IGDB" joins them only while the IGDB review queue is not empty.
+const morePages = () => (store.linkPending > 0 ? [...MORE_PAGES, { path: 'link', label: 'Link IGDB', icon: 'link' }] : MORE_PAGES);
+
 function buildNav() {
   const pinned = store.views.filter((v) => v.pinned);
   nav.replaceChildren(
     h('div.brand', {}, 'DeltaBacklog'),
     h('a', { href: '#/library', 'data-path': 'library' }, icon('library'), h('span', {}, 'Library')),
     pinned.length > 0 && h('div.nav-title', {}, 'My views'),
-    ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 3 ? 'extra' : '' },
+    // Phones: Library, the first two pinned views and "More" (at most 4 of the 5 slots); the sidebar lists everything.
+    ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 2 ? 'extra' : '' },
       h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
-    h('a', { href: '#/views', 'data-path': 'views' }, icon('views'), h('span', {}, 'Views')),
-    store.linkPending > 0 && h('a.nav-link', { href: '#/link', 'data-path': 'link' }, icon('link'), h('span', {}, 'Link IGDB')),
+    ...[...morePages()].sort((a, b) => SIDEBAR_ORDER.indexOf(a.path) - SIDEBAR_ORDER.indexOf(b.path)).map((p) =>
+      h('a.more-item', { href: `#/${p.path}`, 'data-path': p.path }, icon(p.icon), h('span', {}, p.label))),
+    h('button.more-btn', { type: 'button', 'aria-haspopup': 'dialog', onclick: (e) => openMore(e.currentTarget, resolve(currentPath()).path, morePages()) }, icon('more'), h('span', {}, 'More')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
   markActive();
@@ -46,6 +62,8 @@ function markActive() {
     if (a.dataset.path === path) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
+  const more = nav.querySelector('.more-btn'); // highlighted while inside one of the pages it holds
+  if (more) { if (isMorePath(path, morePages())) more.setAttribute('aria-current', 'page'); else more.removeAttribute('aria-current'); }
 }
 
 function toggleTheme() {
@@ -74,6 +92,7 @@ async function route() {
   markActive();
   if (cleanup) { cleanup(); cleanup = null; }
   closeDrawer();
+  closeMore(false);
   cleanup = r.render(view) || null;
   window.scrollTo(0, 0);
 }
@@ -93,7 +112,7 @@ window.addEventListener('games-reloaded', () => route());
 // "+" button: always reachable, above the bottom bar on phones.
 document.body.append(h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add')));
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open')) {
+  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open, .tier-menu-wrap, .more-wrap')) {
     e.preventDefault();
     openAdd();
   }

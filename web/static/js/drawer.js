@@ -5,9 +5,17 @@ import { openCoverPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
 import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
+import { seriesPosition } from './series.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
+
+/** "3 of 5 in Name" by release year, or "Name (5 games)" while some game of the series has no year. */
+function seriesFact(game) {
+  const p = seriesPosition(game, store.games);
+  if (!p) return game.series;
+  return p.position ? `${p.position} of ${p.total} in ${p.name}` : `${p.name} (${p.total} games)`;
+}
 
 /** Status picker and favorite toggle; changes apply immediately and refresh every open view. */
 function quickActions(game) {
@@ -59,7 +67,7 @@ export function openDrawer(game) {
       fact('Platforms', game.platforms),
       fact('Genres', game.genres),
       fact('Themes', game.themes),
-      fact('Series', game.series),
+      fact('Series', seriesFact(game)),
       fact('Developer', game.developer),
       fact('Released', game.release_year),
       fact('Played in', yearsOf(game)),

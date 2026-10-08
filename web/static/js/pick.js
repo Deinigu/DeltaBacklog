@@ -37,11 +37,15 @@ export function buildPool(state, games) {
   return shown.filter((g) => !EXCLUDED_STATUSES.includes(g.status) || asked.has(g.status));
 }
 
-/** Never played, or last played in a calendar year at least STALE_YEARS before `year` (periods are not calendar years). */
+/** Never played (`childhood` counts as long ago, `always` does not), or last played in a calendar year at least STALE_YEARS before `year` (periods are not calendar years). */
 export function notPlayedRecently(game, year) {
+  if (game.periods?.includes('always')) return false; // "always" means played all the time
   if (!game.years.length) return true;
   return Math.max(...game.years) <= year - STALE_YEARS;
 }
+
+/** The status "Play it" sets: Evergreen games stay Playing - Evergreen, everything else becomes Playing. */
+export const playTarget = (status) => (status === 'evergreen' || status === 'playing_evergreen' ? 'playing_evergreen' : 'playing');
 
 export const emptyMood = () => ({ platforms: new Set(), genres: new Set(), vr: false, stale: false });
 export const moodIsEmpty = (m) => !m.platforms.size && !m.genres.size && !m.vr && !m.stale;

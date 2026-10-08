@@ -232,3 +232,8 @@ export const linkNone = (gameId) => request('POST', '/api/link/none', { game_id:
 export async function loadLinkPending() {
   try { store.linkPending = (await linkQueue()).length; } catch { store.linkPending = 0; }
 }
+
+// ---- tier lists ----
+export const getTierlist = (year) => getJSON(`/api/tierlist/${year}`);
+/** Replace a year's tier list; `entries` is [{game_id, tier_id}] (see yearreview.toEntries). */
+export const saveTierlist = (year, entries) => send('PUT', `/api/tierlist/${year}`, { entries });

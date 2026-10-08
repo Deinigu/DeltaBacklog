@@ -15,11 +15,14 @@ This manual is task by task. For how the program is built, see the [developer ma
 8. [The table (spreadsheet) layout](#8-the-table-spreadsheet-layout)
 9. [Adding a game](#9-adding-a-game)
 10. [Covers](#10-covers)
+10b. [Series progress](#10b-series-progress)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
-12. [If something looks wrong](#12-if-something-looks-wrong)
-13. [Surprise me: let the app choose](#13-surprise-me-let-the-app-choose)
-14. [Link your games with IGDB](#14-link-your-games-with-igdb)
-15. [Not available yet](#15-not-available-yet)
+12. [Year in review and tier lists](#12-year-in-review-and-tier-lists)
+13. [Stats](#13-stats)
+14. [If something looks wrong](#14-if-something-looks-wrong)
+15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
+16. [Link your games with IGDB](#16-link-your-games-with-igdb)
+17. [Not available yet](#17-not-available-yet)
 
 ---
 
@@ -39,9 +42,9 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*) and **Views**. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series**, **Stats**, **Year in review** and **Views** (where you manage your views); it is highlighted while you are on one of those pages. The round **+** button adds a game.
 
-**On a PC** the same things are in the left sidebar, and all your pinned views are listed there. Two keys help: press **/** to jump to the search box and **n** to add a game.
+**On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
 ![The Library on a PC](img/library-desktop.jpg)
 
@@ -91,12 +94,12 @@ Tap the sort button (the up/down arrows at the right of the search box).
 
 A **view** is a name for a set of filters, a sort order and a layout, so you can open it with one tap.
 
-**Starter views.** You start with five: **Playing now**, **Up next**, **Backlog**, **On hold** and **Endless**. The first three are pinned to the bottom bar. They are ordinary views: change them or delete them.
+**Starter views.** You start with five: **Playing now**, **Up next**, **Backlog**, **On hold** and **Endless**. The first three are pinned; the bottom bar of a phone shows the first two (the sidebar shows all). They are ordinary views: change them or delete them.
 
 **Make your own.**
 1. Set up filters, sorting and (if you like) grouping or the table layout in the Library.
 2. Tap **Save as view**, type a name and an emoji, and tap **Save**.
-3. The view now appears in the bottom bar or sidebar.
+3. The view now appears in the sidebar and, if it is one of your first two pinned views, in the bottom bar of a phone. Other pinned views are reached through **More → Views**.
 
 **Using a view.**
 - Open it from the bar. If you then change its filters or sort, a **Save** button appears. Tap it to keep the changes, or **Revert** to go back to how it was saved.
@@ -105,7 +108,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 
 ![The Views page](img/views-phone.jpg)
 
-**Manage views.** Open **Views** (bottom bar or sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
+**Manage views.** Open **Views** (**More** on a phone, or the sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
 
 ## 6. Changing a game
 
@@ -187,6 +190,20 @@ Open a game and tap **Change cover**.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
 
+## 10b. Series progress
+
+Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
+
+- **Finished** means the game's status is **Finished**.
+- **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
+- **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
+- The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
+- **Games left to play** (the button at the top) hides series where nothing is left.
+- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
+- A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
+
+![The Series page with a series open](img/series-phone.jpg)
+
 ## 11. What the little icons mean
 
 **Ownership** (filters, the table, the game's details and a badge on cards):
@@ -203,7 +220,30 @@ Open a game and tap **Change cover**.
 
 **Years played on a card:** 🧒 childhood · ♾️ always played · a dashed **+N** older years not shown.
 
-## 12. If something looks wrong
+## 12. Year in review and tier lists
+
+**Year in review** (under **More** on a phone) opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
+
+- **The page.** The big **‹** and **›** buttons go to the previous and next year (one calendar year at a time, so a year with no games is reachable too; it says nothing was recorded). The strip under the title jumps to any year, with the number of games.
+- **Counts.** Games are grouped by their *current* status: **Finished**, **Dropped**, **Still playing** (Playing and Playing - Evergreen) and **Played** (everything else, for example Evergreen or Backlog). Next to them are the platforms and genres you played that year. Tap any game to open its details.
+- **Tier list.** Every game of that year starts in *Not ranked*. Put it in a tier **S, A, B, C, D or F**: on a PC drag it with the mouse; on a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). The easiest way on a phone: **tap a game** and choose the tier from the list that opens (**Not ranked** takes it out again). Dropping between games sets their order inside the tier. Every change is saved automatically, and each year has its own list.
+- **Export PNG** saves the tier list as a picture to share.
+
+If you remove a year from a game, the game leaves that year's tier list (and comes back to its tier if you add the year again).
+
+## 13. Stats
+
+Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
+
+- **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
+- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
+- **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
+- **Finished or dropped**: the share of games you finished against dropped.
+
+The charts have text labels and work in light and dark. Screen readers get the numbers as a table.
+
+## 14. If something looks wrong
 
 - **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
 - **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
@@ -211,27 +251,27 @@ Open a game and tap **Change cover**.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
 
-## 13. Surprise me: let the app choose
+## 15. Surprise me: let the app choose
 
-Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name).
+Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
 
 **What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
 
 **Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
 - **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
 - **VR only**.
-- **Not played recently**: games you never played, or whose last year played is two or more years ago.
+- **Not played recently**: games you never played, or whose last year played is two or more years ago. A game you play "always" never counts.
 
 If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
 
 **The result.** You see the cover, the title, platforms, genres and the years you played it, and three buttons:
-- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet.
+- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
 - **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
-- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings them back.
+- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).
 
 The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
 
-## 14. Link your games with IGDB
+## 16. Link your games with IGDB
 
 Games imported from your old table are not yet connected to their page on IGDB, the game database the app uses for covers and details. A one-off command on the Pi connects them (see the [developer manual](developer-manual.md#8-external-services)). It is safe: it first saves a copy of your library, and it only sets the link. It never changes anything you typed, and the app does not show IGDB's scores.
 
@@ -245,8 +285,8 @@ For each game you see its title, year and platforms, and IGDB's best guesses wit
 
 If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
 
-## 15. Not available yet
+## 17. Not available yet
 
-These are planned and will be added to this manual when they exist: **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
