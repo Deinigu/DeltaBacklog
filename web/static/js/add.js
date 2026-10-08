@@ -9,7 +9,12 @@ import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSe
 /** A scrim + sheet pair that closes together. Returns {sheet, head, body, foot, back, title, close}. */
 export function makeSheet(titleText, extraClass = '') {
   let onClose = null;
-  const close = () => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(); };
+  const opener = document.activeElement;
+  const close = () => {
+    scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey);
+    if (opener?.isConnected && typeof opener.focus === 'function') opener.focus({ preventScroll: true });
+    onClose && onClose();
+  };
   const scrim = h('div.scrim.show', { onclick: close });
   scrim.style.zIndex = 70;
   const back = h('button.btn', { type: 'button', hidden: true, 'aria-label': 'Back' }, '←');
@@ -17,7 +22,9 @@ export function makeSheet(titleText, extraClass = '') {
   const head = h('div.filters-head', {}, h('span.headl', {}, back, title), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: close }, '✕'));
   const body = h('div.filters-body');
   const foot = h('div.filters-foot', { hidden: true });
-  const sheet = h('div.sheet.open', { role: 'dialog', 'aria-modal': 'true', 'aria-label': titleText, class: extraClass }, head, body, foot);
+  // One persistent live region: screen readers often skip regions inserted together with their text
+  const live = h('div.sr-only', { role: 'status' });
+  const sheet = h('div.sheet.open', { role: 'dialog', 'aria-modal': 'true', 'aria-label': titleText, class: extraClass, tabindex: '-1' }, head, body, foot, live);
   sheet.style.zIndex = 71;
   // Escape closes only the sheet on top: a picker opened over this sheet handles its own Escape.
   const onKey = (e) => {
@@ -27,7 +34,19 @@ export function makeSheet(titleText, extraClass = '') {
   };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, sheet);
-  return { sheet, head, body, foot, back, title, close, set onClose(fn) { onClose = fn; } };
+  sheet.focus({ preventScroll: true });
+  /**
+   * Run a re-render without losing keyboard focus: a control marked data-fk keeps focus when it comes back
+   * with the same key; otherwise the primary footer button, then the sheet itself, takes it.
+   */
+  const render = (fn) => {
+    const key = sheet.contains(document.activeElement) ? document.activeElement.dataset?.fk : null;
+    fn();
+    const again = key && [...sheet.querySelectorAll('[data-fk]')].find((el) => el.dataset.fk === key && !el.disabled);
+    (again || sheet.querySelector('.filters-foot .btn.primary:not(:disabled)') || sheet).focus({ preventScroll: true });
+  };
+  const say = (text) => { live.textContent = text; };
+  return { sheet, head, body, foot, back, title, close, render, say, set onClose(fn) { onClose = fn; } };
 }
 
 /** The game already in the library that a lookup result is: matched by IGDB id first, then by title. */

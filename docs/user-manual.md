@@ -212,21 +212,21 @@ Open a game and tap **Change cover**.
 
 ## 13. Surprise me: let the app choose
 
-Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name).
+Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name). On a phone, while a view shows its **Save** button, the buttons move to a second row so the view name stays readable.
 
 **What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
 
 **Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
 - **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
 - **VR only**.
-- **Not played recently**: games you never played, or whose last year played is two or more years ago.
+- **Not played recently**: games you never played, or whose last year played is two or more years ago. A game you play "always" never counts.
 
 If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
 
 **The result.** You see the cover, the title, platforms, genres and the years you played it, and three buttons:
-- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet.
+- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
 - **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
-- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings them back.
+- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).
 
 The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
 

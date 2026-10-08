@@ -55,7 +55,7 @@ export function renderLibrary(root, opts = {}) {
   let tableInst = null, tableBox = null;
   const tableScroll = { top: 0, left: 0 };
   const layoutBtn = h('button.btn', { type: 'button', 'aria-label': 'Switch between cards and table', onclick: () => { state.layout = state.layout === 'table' ? 'cards' : 'table'; reordering = false; update(); } });
-  const surpriseBtn = h('button.btn', { type: 'button', onclick: () => openSurprise(state) });
+  const surpriseBtn = h('button.btn.surprise-btn', { type: 'button', onclick: () => openSurprise(state) });
   setLabel(surpriseBtn, '🎲', 'Surprise me');
   const reorderBtn = h('button.btn', { type: 'button', 'aria-pressed': 'false', onclick: () => { reordering = !reordering; update(); } }, '⇅ Reorder');
   const saveBtn = h('button.btn.primary', { type: 'button', onclick: saveChanges }, 'Save');
@@ -268,6 +268,7 @@ export function renderLibrary(root, opts = {}) {
 
     saveBtn.hidden = !(view && dirty());
     saveAsBtn.hidden = view ? false : isPristine(state);
+    head.classList.toggle('saving', !saveBtn.hidden); // on a phone the buttons wrap under the title while Save shows, so the view name stays readable
   }
   update();
 

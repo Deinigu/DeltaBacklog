@@ -185,7 +185,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `editpatch.js` | **pure**: form state from a game, validation, and the minimal patch of what changed |
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
 | `add.js` | add sheet, IGDB match picker, cover picker |
-| `pick.js` | **pure**: Surprise me rules: pool (Up next, else Backlog; never finished/dropped/not interested/evergreen unless filtered), mood narrowing and chip counts, seedable RNG, pick without repeats |
+| `pick.js` | **pure**: Surprise me rules: pool (Up next, else Backlog; never finished/dropped/not interested/evergreen unless filtered), mood narrowing and chip counts, seedable RNG, pick without repeats, the status "Play it" sets (`playTarget`) |
 | `surprise.js` | the Surprise me sheet (mood, result card, skip list in `sessionStorage`); opened from the Library/view header |
 | `views.js` | the "Views" management page |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
