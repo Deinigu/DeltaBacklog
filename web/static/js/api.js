@@ -209,3 +209,8 @@ export async function setCover(id, url) {
   gamesChanged(id);
   return g;
 }
+
+// ---- tier lists ----
+export const getTierlist = (year) => getJSON(`/api/tierlist/${year}`);
+/** Replace a year's tier list; `entries` is [{game_id, tier_id}] (see yearreview.toEntries). */
+export const saveTierlist = (year, entries) => send('PUT', `/api/tierlist/${year}`, { entries });
