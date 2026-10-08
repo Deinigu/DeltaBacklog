@@ -12,6 +12,7 @@ import (
 
 	"github.com/Deinigu/DeltaBacklog/internal/api"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
+	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"github.com/Deinigu/DeltaBacklog/web"
 )
@@ -63,6 +64,13 @@ func main() {
 	loadDotEnv(".env")
 	dataDir := env("DATA_DIR", "./data")
 	addr := env("LISTEN_ADDR", ":8081")
+
+	// `deltabacklog sync-igdb [--dry-run] [--db path]`: link games to IGDB (see docs/developer-manual.md).
+	if len(os.Args) > 1 && os.Args[1] == "sync-igdb" {
+		mc := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
+		os.Exit(igdblink.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), mc, os.Stdout))
+	}
+
 	if err := os.MkdirAll(filepath.Join(dataDir, "covers"), 0o755); err != nil {
 		log.Fatal(err)
 	}

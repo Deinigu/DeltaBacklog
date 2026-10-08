@@ -95,10 +95,19 @@ func (c *Client) do(req *http.Request, out any) error {
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s %s: %s", req.Method, req.URL.Host, res.Status)
+		return &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
 	}
 	return json.Unmarshal(body, out)
 }
+
+// HTTPError is a non-200 answer from a service. Callers that pace themselves (the IGDB sync) look at Status:
+// 429 means "slow down".
+type HTTPError struct {
+	Method, Host, Text string
+	Status             int
+}
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("%s %s: %s", e.Method, e.Host, e.Text) }
 
 // ---------------- IGDB ----------------
 

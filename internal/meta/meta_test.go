@@ -3,6 +3,7 @@ package meta
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -264,5 +265,23 @@ func TestLinkClientChecksEveryRedirect(t *testing.T) {
 	via := make([]*http.Request, 4)
 	if err := cl.CheckRedirect(req("https://www.gog.com/x"), via); err == nil {
 		t.Error("a redirect loop must stop")
+	}
+}
+
+func TestRateLimitIsATypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/token") {
+			w.Write([]byte(`{"access_token":"tok","expires_in":3600}`))
+			return
+		}
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
+	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	_, err := c.SearchIGDB(context.Background(), "Hades")
+	var he *HTTPError
+	if !errors.As(err, &he) || he.Status != 429 {
+		t.Fatalf("err = %v, want *HTTPError with status 429", err)
 	}
 }

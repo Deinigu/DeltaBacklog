@@ -9,6 +9,7 @@ export const store = {
   statusByCode: new Map(),
   statusOrder: new Map(),
   views: [],
+  linkPending: 0, // games waiting in the IGDB review queue; the nav shows its link while > 0
   loaded: false,
 };
 
@@ -208,4 +209,26 @@ export async function setCover(id, url) {
   indexGame(g);
   gamesChanged(id);
   return g;
+}
+
+// ---- Link with IGDB (review queue of the IGDB sync) ----
+
+/** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score}]}]. */
+export async function linkQueue() {
+  return (await request('GET', '/api/link/queue')).items;
+}
+
+/** Link a game to an IGDB game (a proposal, or one picked with the lookup). Rejects with err.status 409 when it is taken. */
+export async function linkAccept(gameId, igdbId) {
+  await request('POST', '/api/link/accept', { game_id: gameId, igdb_id: igdbId });
+  const g = store.byId.get(gameId);
+  if (g) g.igdb_id = igdbId;
+}
+
+/** Record that a game is not on IGDB, so the sync never searches for it again. */
+export const linkNone = (gameId) => request('POST', '/api/link/none', { game_id: gameId });
+
+/** Refresh store.linkPending (the navigation shows "Link IGDB" while the review queue is not empty). */
+export async function loadLinkPending() {
+  try { store.linkPending = (await linkQueue()).length; } catch { store.linkPending = 0; }
 }

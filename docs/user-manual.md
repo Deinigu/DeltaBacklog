@@ -18,7 +18,8 @@ This manual is task by task. For how the program is built, see the [developer ma
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [If something looks wrong](#12-if-something-looks-wrong)
 13. [Surprise me: let the app choose](#13-surprise-me-let-the-app-choose)
-14. [Not available yet](#14-not-available-yet)
+14. [Link your games with IGDB](#14-link-your-games-with-igdb)
+15. [Not available yet](#15-not-available-yet)
 
 ---
 
@@ -230,7 +231,21 @@ If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then t
 
 The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
 
-## 14. Not available yet
+## 14. Link your games with IGDB
+
+Games imported from your old table are not yet connected to their page on IGDB, the game database the app uses for covers and details. A one-off command on the Pi connects them (see the [developer manual](developer-manual.md#8-external-services)). It is safe: it first saves a copy of your library, and it only sets the link. It never changes anything you typed, and the app does not show IGDB's scores.
+
+Most games are linked automatically. The ones the app is not sure about wait for you in **Link IGDB** (an entry in the navigation that only appears while there is something to review).
+
+For each game you see its title, year and platforms, and IGDB's best guesses with a percentage that says how closely the title matches:
+- Tap **Link** next to the right guess.
+- **Search IGDB…** lets you look for it yourself; tap the right result.
+- **Not on IGDB** if the game is not there at all (a fan game, a regional title). The app will not ask again.
+- **Skip** leaves it for later; it comes back the next time you open the screen, or with **Review them again**.
+
+If IGDB's game is already linked to another game in your library you are told which one, and nothing changes.
+
+## 15. Not available yet
 
 These are planned and will be added to this manual when they exist: **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
 

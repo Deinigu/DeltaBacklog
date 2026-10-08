@@ -51,7 +51,8 @@ cmd/import/         one-off importer from a NocoDB CSV export (also downloads co
 internal/db/        open, migrate (embedded migrations/*.sql), GetOrCreate, FTS index, TitleSort, NormalizeTheme
 internal/importer/  CSV → normalized schema (idempotent)
 internal/api/       HTTP handlers: games, games_write, add (create/delete/cover/lookup), facets, views
-internal/meta/      IGDB, SteamGridDB and link resolution clients
+internal/meta/      IGDB, SteamGridDB and link resolution clients; TitleScore (fuzzy title match)
+internal/igdblink/  the IGDB sync: matching buckets, resumable runner, review queue, `sync-igdb` command
 internal/covers/    cover download (strict: no redirects) + resize + size guard
 web/web.go          go:embed of web/static
 web/static/         index.html, styles.css, sw.js, manifest, icon, js/*.js
@@ -101,6 +102,7 @@ SQLite, `STRICT` tables, `PRAGMA foreign_keys=ON`, WAL, one connection (`SetMaxO
 | 003 | `saved_view` and five starter views |
 | 004 | `game.cover_updated_at` (the cover's cache key) |
 | 005 | drops `game.series_order` and rebuilds `v_game_flat` |
+| 006 | IGDB link: `game.igdb_synced_at`, `igdb_checked_at`, `igdb_not_found`, and the `sync_candidate` table |
 
 **Tables**
 
@@ -109,7 +111,9 @@ status(id, code, label, sort, color)           9 rows; order = display order of 
 platform, genre, theme, ownership, series, company, player(id, name UNIQUE NOCASE)   lookup values
 game(id, title, title_sort, status_id, ownership_id, series_id, developer_id, release_year,
      vr, favorite, completed, notes, cover_url, cover_file, cover_updated_at,
-     igdb_id UNIQUE, steamgriddb_id, queue_pos, source_id UNIQUE, added_at, updated_at)
+     igdb_id UNIQUE, igdb_synced_at, igdb_checked_at, igdb_not_found, steamgriddb_id,
+     queue_pos, source_id UNIQUE, added_at, updated_at)
+sync_candidate(id, game_id, igdb_id, name, year, score, status pending/accepted/rejected)   proposals waiting in the review queue; UNIQUE(game_id, igdb_id)
 game_platform / game_genre / game_theme / game_player (game_id, x_id)   many-to-many, indexed both ways
 play(id, game_id, year NULL, period NULL)      one row per year played, or period 'childhood' / 'always'
 saved_view(id, name, icon, filter_json, sort_json, group_by, layout, pinned, pos, ...)
@@ -142,6 +146,9 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 | `POST /api/games/reorder` | body `[id, id, ...]` in the desired order; answers `{id: position}` |
 | `POST /api/games/{id}/cover` | body `{"url": ...}` replaces the cover |
 | `GET /api/lookup?q=` | IGDB search: `{configured, query, results:[candidate]}` |
+| `GET /api/link/queue` | the IGDB review queue: `{items:[{game_id, title, year, platforms[], status, cover, candidates:[{igdb_id, name, year, score}]}]}`; best proposals first, then games IGDB did not know |
+| `POST /api/link/accept` | body `{game_id, igdb_id}`: links the game (a proposal or a lookup pick) and closes its other proposals; 204, `404` unknown game, `409 {id}` when another game already has that IGDB id |
+| `POST /api/link/none` | body `{game_id}`: "not on IGDB"; the sync never searches that game again; 204 |
 | `GET /api/covers/search?q=&source=&igdb_id=` | cover options, `source` = `steamgriddb` (default) or `igdb` |
 | `GET/POST /api/views`, `PATCH/DELETE /api/views/{id}`, `PUT /api/views/order` | saved views |
 | `GET /covers/<file>` | cover images (cached for 30 days; the URL carries `?v=cover_v`) |
@@ -163,7 +170,8 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 - **`internal/db`**: `Open` (pragmas, single connection, migrations), `Migrate`, `GetOrCreate`, `IndexGame` (refresh one FTS row), `TitleSort`, `NormalizeTheme`.
 - **`internal/importer`**: `Import(db, csv, options)` splits comma lists (respecting parentheses), parses `Years_played` (`2025,2026`, `Childhood`, `Always`), maps the NocoDB attachment JSON to a cover URL, and returns a report with warnings plus the list of covers to download.
 - **`internal/api`**: handlers use a small `pathID`, `writeJSON`/`writeJSONStatus` (content type is set **before** the status) and `writeErr`. `LoadGames` builds the whole read model with one query per link table. `applyFieldEdits` is the single place that writes editable fields (used by patch and create), inside the caller's transaction, and re-indexes the FTS row.
-- **`internal/meta`**: `Client` with overridable base URLs (so tests use local fakes). IGDB access tokens are cached until just before they expire. `SearchIGDB` (up to 8 candidates), `IGDBImages` (artworks and screenshots with their real sizes, then the box cover), `SearchCovers` (SteamGridDB, wide shapes first), `ResolveLink`.
+- **`internal/meta`**: `Client` with overridable base URLs (so tests use local fakes). IGDB access tokens are cached until just before they expire. `SearchIGDB` (up to 8 candidates), `IGDBImages` (artworks and screenshots with their real sizes, then the box cover), `SearchCovers` (SteamGridDB, wide shapes first), `ResolveLink`. A non-200 answer is a `*meta.HTTPError` (the sync reads its `Status` to back off on 429). `TitleScore(a, b)` rates two titles 0 to 100 ignoring case, accents, punctuation, a leading "the" and roman numerals; titles with different numbers ("Resident Evil 2" and "3") are capped at 59, and a title that starts the other ("Dark Souls III" and "... The Ringed City") scores at least 75.
+- **`internal/igdblink`**: phase 1 of the IGDB sync (see section 8). `Classify` sorts one game's IGDB results into *confident* (exactly one candidate with `meta.TitleScore` >= 90 **and** a shared platform), *uncertain* (best score 60 to 89, no shared platform, or several equally good candidates; at most five stored) or *not found*. `Run` is the resumable runner (single goroutine, 4 requests/s, doubling backoff on 429), `Queue`/`Accept`/`NotOnIGDB` are the review queue, `Main` is the `sync-igdb` command. Only the link is stored: no IGDB scores or ratings.
 - **`internal/covers`**: `Fetch` (importer) and `FetchStrict` (client URLs, no redirects), `Save` (decode, size guard, scale to at most 480px wide, write `<id>.jpg` atomically).
 
 ## 7. Frontend
@@ -188,6 +196,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `pick.js` | **pure**: Surprise me rules: pool (Up next, else Backlog; never finished/dropped/not interested/evergreen unless filtered), mood narrowing and chip counts, seedable RNG, pick without repeats |
 | `surprise.js` | the Surprise me sheet (mood, result card, skip list in `sessionStorage`); opened from the Library/view header |
 | `views.js` | the "Views" management page |
+| `link.js`, `linkqueue.js` | the "Link with IGDB" review screen (route `#/link`; the navigation shows its link while the queue is not empty) and its **pure** logic (score tone, progress text, skipped games) |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
 | `util.js` | `h()` element builder, dialogs, toast, icons |
 
@@ -210,6 +219,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 ## 8. External services
 
 - **IGDB** (Twitch client credentials, token cached): game details, candidate search, artworks and screenshots. Its genre names are what the library already uses. `platforms.js` maps IGDB platform names onto the library's names and pre-selects the platform the library has the most games on.
+- **IGDB sync (phase 1: link every game).** `deltabacklog sync-igdb [--dry-run] [--db path] [--limit n]` (reads the keys from `.env`; the database defaults to `$DATA_DIR/app.db`). It searches IGDB by title for each game with no `igdb_id`, no earlier search and no "not on IGDB" mark, and buckets the answer (section 6). *Confident* matches set `igdb_id` and `igdb_synced_at`; *uncertain* ones are stored in `sync_candidate` for the review screen; every searched game gets `igdb_checked_at`, in the same transaction as its outcome, so a stopped run (Ctrl-C, repeated 429s, no network) simply continues next time. A confident match whose IGDB id another game already has goes to review instead (`igdb_id` is unique). A failed search leaves the game unchecked, so it is tried again. `--dry-run` searches and prints a report (counts and examples per bucket) and writes nothing (it does apply pending migrations, as any start does). A real run first writes a backup, `app-before-igdb-link-<time>.db` next to the database. Restart the server afterwards: it caches `/api/games`, and the command runs in another process. Phase 1 stores nothing but the link; filling empty fields, time to beat and the rest are later phases. IGDB scores are never fetched or stored (owner decision).
 - **SteamGridDB**: `search/autocomplete` for the best (exact-title preferred) match, then `grids/game/{id}` with `dimensions=460x215,920x430`, falling back to any shape.
 - **Steam** (`appdetails`, no key): used only by the link resolver.
 
@@ -219,6 +229,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 |---|---|
 | Backend | `go vet ./... && go test ./...` (in-memory databases, `httptest` fake IGDB/SteamGridDB/Steam/image servers) |
 | Pure frontend modules | `node --test web/test/*.test.mjs` |
+| IGDB sync | `internal/igdblink` tests use an offline fake IGDB (buckets, dry run writes nothing, backup, resume, 429 backoff, review queue, migration 006); `internal/api/link_test.go` covers the three endpoints |
 | Real services | `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v` |
 | In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images) |
 
@@ -300,7 +311,7 @@ Under a sustained load of 8 clients the Pi's CPU reaches its thermal limit; ordi
 
 ## 12. Known gaps
 
-- Games imported from NocoDB have no `igdb_id` until they are matched with **Fill from IGDB**; duplicate detection falls back to the title.
+- Games imported from NocoDB have no `igdb_id` until `deltabacklog sync-igdb` (or **Fill from IGDB**) links them; duplicate detection falls back to the title. Only the link is synced so far (IGDB phase 1).
 - Not built yet: Year in review and tier lists (the tier tables exist), series progress, statistics, a JSON export.
 - No authentication (intended: home network only) and no HTTPS (see section 11: no offline cache or app install on the Pi).
 - The pasted-link resolver (Steam, GOG, Epic, IGDB pages) exists in the backend but is not offered in the UI; only Steam links were tried against the real site.
