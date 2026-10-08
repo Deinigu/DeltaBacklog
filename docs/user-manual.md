@@ -98,7 +98,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 **Make your own.**
 1. Set up filters, sorting and (if you like) grouping or the table layout in the Library.
 2. Tap **Save as view**, type a name and an emoji, and tap **Save**.
-3. The view now appears in the bottom bar or sidebar.
+3. The view now appears in the sidebar and, if it is one of your first two pinned views, in the bottom bar of a phone. Other pinned views are reached through **More → Views**.
 
 **Using a view.**
 - Open it from the bar. If you then change its filters or sort, a **Save** button appears. Tap it to keep the changes, or **Revert** to go back to how it was saved.

@@ -464,6 +464,7 @@ a.btn.primary { color: var(--accent-text); }
 
 /* ---- year in review + tier list ---- */
 .year-page { display: flex; flex-direction: column; gap: 14px; }
+.year-body { display: flex; flex-direction: column; gap: 14px; }
 .year-head { display: flex; align-items: center; gap: 12px; }
 .year-title { flex: 1; text-align: center; }
 .year-title h1 { margin: 0; font-size: 30px; line-height: 1.1; }

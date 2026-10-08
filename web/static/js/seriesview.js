@@ -48,7 +48,7 @@ export function renderSeries(root) {
   function draw() {
     const all = buildSeries(store.games);
     const shown = onlyLeft ? withLeft(all) : all;
-    const noYear = all.reduce((n, s) => n + s.noYear, 0);
+    const noYear = all.reduce((n, s) => n + (s.total > 1 ? s.noYear : 0), 0); // a game alone in its series has no order to get wrong
     noYearHint.textContent = noYear ? `${noYear} ${noYear === 1 ? 'game has' : 'games have'} no release year, so ${noYear === 1 ? 'its' : 'their'} order is only by title. Use Fill from IGDB in a game’s details to set it.` : '';
     count.textContent = all.length ? `${shown.length} of ${all.length} series` : '';
     list.replaceChildren(...(shown.length ? shown.map(seriesCard)

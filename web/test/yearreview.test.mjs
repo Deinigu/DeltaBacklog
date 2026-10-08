@@ -77,3 +77,19 @@ test('toEntries lists tiers in order, games in row order', () => {
   const s = place(place(place(tierState(tiers, [], pool), 1, 11), 2, 10), 3, 11);
   assert.deepEqual(toEntries(s), [{ game_id: 2, tier_id: 10 }, { game_id: 1, tier_id: 11 }, { game_id: 3, tier_id: 11 }]);
 });
+
+test('a game that leaves the pool and returns gets its tier back', async () => {
+  const { remember, restored } = await import('../static/js/yearreview.js');
+  const tiers = [{ id: 10 }, { id: 11 }];
+  const known = new Map();
+  let s = tierState(tiers, [{ game_id: 1, tier_id: 10 }, { game_id: 2, tier_id: 11 }], [1, 2, 3]);
+  remember(known, s, [1, 2, 3]);
+  s = tierState(tiers, toEntries(s), [2, 3]); // game 1 lost the year: remembered, not forgotten
+  remember(known, s, [2, 3]);
+  assert.equal(known.get(1), 10);
+  s = tierState(tiers, [...toEntries(s), ...restored(known, [1])], [1, 2, 3]); // and got it back
+  assert.equal(tierOf(s, 1), 10);
+  assert.equal(tierOf(s, 2), 11);
+  remember(known, place(s, 2, null), [1, 2, 3]);
+  assert.ok(!known.has(2)); // moved to Not ranked: nothing to restore
+});

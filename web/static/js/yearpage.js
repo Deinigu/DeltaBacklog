@@ -1,8 +1,8 @@
 // Year in review page (#/years/<year>): what was played, a breakdown, and that year's tier list.
 import { h, toast, gradientFor, initials, lazyImg } from './util.js';
-import { store, coverURL, getTierlist, saveTierlist } from './api.js';
+import { store, coverURL, getTierlist, saveTierlist, load } from './api.js';
 import { openDrawer } from './drawer.js';
-import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, tierState, tierOf, unranked, place, toEntries } from './yearreview.js';
+import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, tierState, tierOf, unranked, place, toEntries, remember, restored } from './yearreview.js';
 import { exportTierlistPNG } from './tierpng.js';
 import { createSaveQueue } from './savequeue.js';
 
@@ -35,7 +35,7 @@ export function renderYear(root, year) {
     h('div.year-title', {}, h('h1', {}, String(year)), h('p.hint', {}, total ? `${total} game${total === 1 ? '' : 's'} played` : 'No games played')),
     nav(nb.next, 'Next year', '›'));
 
-  const body = h('div');
+  const body = h('div.year-body');
   root.replaceChildren(h('div.year-page', {}, head, strip, body));
 
   if (!total) {
@@ -59,6 +59,7 @@ export function renderYear(root, year) {
   const tierBox = h('section.year-box.tiers-box');
   body.append(tierBox);
   let state = null;
+  const known = new Map(); // game id -> tier id, last known placement (see remember)
   let menu = null;
   let loadFailed = false;
 
@@ -79,8 +80,26 @@ export function renderYear(root, year) {
     const next = gamesOfYear(store.games, year);
     const ids = next.map((g) => g.id);
     if (ids.length === poolIds.length && ids.every((id, i) => id === poolIds[i])) return;
+    const added = ids.filter((id) => !byId.has(id));
     pool = next; poolIds = ids; byId = new Map(next.map((g) => [g.id, g]));
-    if (state) { state = tierState(state.tiers, toEntries(state), poolIds); drawTiers(); }
+    if (!state) return;
+    // A game that got the year back returns to its tier (the server keeps that entry while the year is missing).
+    state = tierState(state.tiers, [...toEntries(state), ...restored(known, added)], poolIds);
+    drawTiers();
+    const unknown = added.filter((id) => !known.has(id));
+    if (unknown.length) restoreFromServer(unknown);
+  }
+  /** Games never seen in this list (the page opened while they lacked the year): ask the server where they were. */
+  async function restoreFromServer(ids) {
+    try {
+      const tl = await getTierlist(year);
+      if (!alive || !state) return;
+      const extra = tl.entries.filter((e) => ids.includes(e.game_id) && tierOf(state, e.game_id) == null);
+      if (!extra.length) return;
+      state = tierState(state.tiers, [...toEntries(state), ...extra], poolIds);
+      remember(known, state, poolIds);
+      drawTiers();
+    } catch { /* the entry stays on the server; the next visit shows it */ }
   }
   window.addEventListener('games-changed', syncPool);
 
@@ -112,10 +131,17 @@ export function renderYear(root, year) {
     save: () => { syncPool(); return saveTierlist(year, toEntries(state)); },
     isFatal: (e) => e.status === 400, // the server rejected this exact list: retrying it cannot help
     onError: () => toast('Could not save the tier list. Will retry.'),
-    onFatal: () => { toast('The tier list could not be saved because games changed. Reloaded it.'); if (alive) loadTiers(); },
+    onFatal: async () => {
+      toast('Games changed elsewhere, so your last change could not be saved and was undone. The tier list was reloaded.');
+      try { await load(); } catch { /* offline: the list reloads from what is in memory */ }
+      if (!alive) return;
+      syncPool();
+      loadTiers();
+    },
   });
   function changed(next) {
     state = next;
+    remember(known, state, poolIds);
     drawTiers();
     queue.change();
   }
@@ -128,6 +154,8 @@ export function renderYear(root, year) {
       const tl = await getTierlist(year);
       if (!alive) return;
       state = tierState(tl.tiers, tl.entries, poolIds);
+      known.clear();
+      remember(known, state, poolIds);
     } catch { if (!alive) return; loadFailed = true; }
     drawTiers();
   }

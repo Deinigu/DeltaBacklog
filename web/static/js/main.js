@@ -32,7 +32,7 @@ function resolve(path) {
   return { path: 'library', render: renderLibrary };
 }
 
-const SIDEBAR_ORDER = ['years', 'series', 'views', 'stats'];
+const SIDEBAR_ORDER = ['years', 'series', 'stats', 'views']; // the insight pages together, then Views
 
 function buildNav() {
   const pinned = store.views.filter((v) => v.pinned);

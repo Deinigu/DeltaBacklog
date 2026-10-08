@@ -75,6 +75,18 @@ export function tierState(tiers, entries, poolIds) {
   return { tiers, rows };
 }
 
+/**
+ * Remember where each game of the pool is ranked (`known`: game id -> tier id). Games outside the pool keep their
+ * last placement, so a year removed from a game and added back returns it to its tier.
+ */
+export function remember(known, state, poolIds) {
+  const ranked = new Map(Object.entries(state.rows).flatMap(([tier, ids]) => ids.map((id) => [id, Number(tier)])));
+  for (const id of poolIds) { if (ranked.has(id)) known.set(id, ranked.get(id)); else known.delete(id); }
+}
+
+/** Entries to put back for games that joined the pool again: their remembered placement, if any. */
+export const restored = (known, ids) => ids.filter((id) => known.has(id)).map((id) => ({ game_id: id, tier_id: known.get(id) }));
+
 export const tierOf = (state, gameId) => {
   for (const t of state.tiers) if (state.rows[t.id].includes(gameId)) return t.id;
   return null;
