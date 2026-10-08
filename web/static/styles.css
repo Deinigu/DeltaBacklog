@@ -247,7 +247,7 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 #nav a .emoji + span { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 899px) { #nav .nav-view.extra { display: none; } #nav .nav-title { display: none; } }
 @media (min-width: 900px) {
-  #nav .nav-title { display: block; padding: 14px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  #nav .nav-title { display: block; padding: 14px 12px 4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   #nav a .emoji { width: 22px; text-align: center; }
 }
 #nav .nav-title { display: none; }
@@ -611,3 +611,25 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pf.genre { background: none; border: 1px solid var(--border); }
 .pick-left { text-align: center; margin: 10px 0 0; }
 .sheet.surprise .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- phone navigation: "More" holds the pages that do not fit in the bottom bar ---- */
+#nav .more-btn {
+  flex: 1; min-height: var(--nav-h); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
+}
+#nav .more-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#nav .more-btn[aria-current="page"] { color: var(--accent); font-weight: 600; }
+@media (max-width: 899px) { #nav .more-item { display: none; } }
+@media (min-width: 900px) {
+  #nav .more-btn { display: none; }
+  .more-wrap { display: none; }
+}
+.more-wrap { position: fixed; inset: 0; z-index: 130; }
+.more-wrap .scrim { opacity: 1; pointer-events: auto; z-index: 0; }
+.more-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; background: var(--surface); border-radius: 18px 18px 0 0; padding: 12px 12px calc(12px + var(--safe-b)); box-shadow: var(--shadow); max-width: 520px; margin: 0 auto; }
+.more-links { display: flex; flex-direction: column; }
+.more-link { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 12px; border-radius: 10px; color: inherit; text-decoration: none; font-size: 16px; }
+.more-link:hover, .more-link:focus-visible { background: var(--surface-2); }
+.more-link[aria-current="page"] { color: var(--accent); font-weight: 600; background: var(--surface-2); }
+.more-link svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.more-close { width: 100%; min-height: 48px; margin-top: 8px; justify-content: center; }

@@ -41,9 +41,9 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, **Years**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*), **Views** and **Stats** (your statistics, section 13). The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series**, **Stats**, **Year in review** and **Views** (where you manage your views); it is highlighted while you are on one of those pages. The round **+** button adds a game.
 
-**On a PC** the same things are in the left sidebar, and all your pinned views are listed there. Two keys help: press **/** to jump to the search box and **n** to add a game.
+**On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
 ![The Library on a PC](img/library-desktop.jpg)
 
@@ -93,7 +93,7 @@ Tap the sort button (the up/down arrows at the right of the search box).
 
 A **view** is a name for a set of filters, a sort order and a layout, so you can open it with one tap.
 
-**Starter views.** You start with five: **Playing now**, **Up next**, **Backlog**, **On hold** and **Endless**. The first three are pinned to the bottom bar. They are ordinary views: change them or delete them.
+**Starter views.** You start with five: **Playing now**, **Up next**, **Backlog**, **On hold** and **Endless**. The first three are pinned; the bottom bar of a phone shows the first two (the sidebar shows all). They are ordinary views: change them or delete them.
 
 **Make your own.**
 1. Set up filters, sorting and (if you like) grouping or the table layout in the Library.
@@ -107,7 +107,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 
 ![The Views page](img/views-phone.jpg)
 
-**Manage views.** Open **Views** (bottom bar or sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
+**Manage views.** Open **Views** (**More** on a phone, or the sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
 
 ## 6. Changing a game
 
@@ -191,7 +191,7 @@ Open a game and tap **Change cover**.
 
 ## 10b. Series progress
 
-Open **Series** in the navigation to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
+Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
 
 - **Finished** means the game's status is **Finished**.
 - **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
@@ -221,7 +221,7 @@ Open **Series** in the navigation to see how far you are through every series. E
 
 ## 12. Year in review and tier lists
 
-**Years** in the navigation opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
+**Year in review** (under **More** on a phone) opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
 
 - **The page.** The big **‹** and **›** buttons go to the previous and next year (one calendar year at a time, so a year with no games is reachable too; it says nothing was recorded). The strip under the title jumps to any year, with the number of games.
 - **Counts.** Games are grouped by their *current* status: **Finished**, **Dropped**, **Still playing** (Playing and Playing - Evergreen) and **Played** (everything else, for example Evergreen or Backlog). Next to them are the platforms and genres you played that year. Tap any game to open its details.
@@ -232,7 +232,7 @@ If you remove a year from a game, the game leaves that year's tier list (and com
 
 ## 13. Stats
 
-Open **Stats** in the navigation. Everything is worked out from the games you already have; nothing is stored.
+Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
 
 - **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
 - **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.

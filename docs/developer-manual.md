@@ -181,7 +181,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 
 | Module | Role |
 |---|---|
-| `main.js` | router, navigation (bottom bar on phones, sidebar on desktop), theme, "+" button, service worker |
+| `main.js`, `more.js` | router, navigation (sidebar on desktop; on phones the bottom bar holds Library, the first two pinned views and **More**, a sheet from `more.js` listing Series, Stats, Year in review and Views; the same links stay in the sidebar and are hidden on phones with CSS), theme, "+" button, service worker |
 | `api.js` | the `store` (games, statuses, views), `load()`, edits (`patchGame`, `reorderGames`, `createGame`, `deleteGame`, `setCover`), view calls, lookups |
 | `library.js` | the Library and saved-view page: toolbar, filter panel, cards, reorder mode, table mounting |
 | `filters.js` | **pure**: filter state, `matches`, include/exclude cycling, (de)serialisation to URL and view JSON, `facetSignature` |
