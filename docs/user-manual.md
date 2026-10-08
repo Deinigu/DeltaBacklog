@@ -37,7 +37,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*) and **Views**. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*), **Views** and **Stats** (your statistics, section 12). The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, and all your pinned views are listed there. Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -201,7 +201,19 @@ Open a game and tap **Change cover**.
 
 **Years played on a card:** 🧒 childhood · ♾️ always played · a dashed **+N** older years not shown.
 
-## 12. If something looks wrong
+## 12. Stats
+
+Open **Stats** in the navigation. Everything is worked out from the games you already have; nothing is stored.
+
+- **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
+- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games with no year recorded are mentioned under the chart, not drawn.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Right after an import every game has the same date, so the card tells you there is nothing to compare yet.
+- **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
+- **Finished or dropped**: the share of games you finished against dropped.
+
+The charts have text labels and work in light and dark. Screen readers get the numbers as a table.
+
+## 13. If something looks wrong
 
 - **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
 - **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
@@ -209,8 +221,8 @@ Open a game and tap **Change cover**.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
 
-## 13. Not available yet
+## 14. Not available yet
 
-These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, and a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).

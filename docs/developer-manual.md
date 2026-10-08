@@ -168,7 +168,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 
 ## 7. Frontend
 
-Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`). No dependencies, no build.
+Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/stats`). No dependencies, no build.
 
 **Modules (`web/static/js/`)**
 
@@ -186,6 +186,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
 | `add.js` | add sheet, IGDB match picker, cover picker |
 | `views.js` | the "Views" management page |
+| `stats.js`, `statspage.js` | the `#/stats` page: `stats.js` is **pure** (backlog size, finished per year, time in status, top genres, finished vs dropped, chart scale); `statspage.js` draws it (HTML bars, inline SVG chart with a screen-reader table). Computed client-side from `store.games`; no endpoint, no tables |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
 | `util.js` | `h()` element builder, dialogs, toast, icons |
 
