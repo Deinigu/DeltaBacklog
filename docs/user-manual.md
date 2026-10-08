@@ -223,8 +223,8 @@ Open **Series** in the navigation to see how far you are through every series. E
 Open **Stats** in the navigation. Everything is worked out from the games you already have; nothing is stored.
 
 - **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
-- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games with no year recorded are mentioned under the chart, not drawn.
-- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Right after an import every game has the same date, so the card tells you there is nothing to compare yet.
+- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
 - **Finished or dropped**: the share of games you finished against dropped.
 

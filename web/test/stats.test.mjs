@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tally, backlogSize, finishedPerYear, daysBetween, timeInStatus, isPlayed, topGenres, finishedVsDropped, formatDays, niceScale } from '../static/js/stats.js';
+import { tally, backlogSize, finishedPerYear, daysBetween, timeInStatus, isPlayed, topGenres, finishedVsDropped, formatDays, niceScale, importBatch } from '../static/js/stats.js';
 
 const g = (o) => ({ id: 1, title: 'T', status: 'backlog', platforms: [], genres: [], years: [], periods: [], added_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...o });
 
@@ -8,6 +8,14 @@ test('tally sorts by count then name and honours the limit', () => {
   assert.deepEqual(tally(['b', 'a', 'b', 'c', 'a', 'b']), [{ label: 'b', count: 3 }, { label: 'a', count: 2 }, { label: 'c', count: 1 }]);
   assert.equal(tally(['a', 'b', 'c'], 2).length, 2);
   assert.deepEqual(tally([]), []);
+});
+
+test('backlog size says how many platforms the limit hid', () => {
+  const gs = ['A', 'B', 'C'].map((p, i) => g({ id: i + 1, platforms: [p] }));
+  const r = backlogSize(gs, 2);
+  assert.equal(r.byPlatform.length, 2);
+  assert.equal(r.morePlatforms, 1);
+  assert.equal(backlogSize(gs, 0).morePlatforms, 0);
 });
 
 test('backlog size counts backlog and up next, by platform', () => {
@@ -30,8 +38,19 @@ test('finished per year uses the latest year played, fills gaps, counts unknowns
   assert.equal(r.total, 4);
 });
 
+test('finished games with only a period are not "unknown"', () => {
+  const r = finishedPerYear([
+    g({ status: 'finished', years: [2020] }), g({ status: 'finished', periods: ['childhood'] }),
+    g({ status: 'finished', periods: ['always'] }), g({ status: 'finished' }),
+  ]);
+  assert.equal(r.periods, 2);
+  assert.equal(r.unknown, 1);
+  assert.equal(r.total, 4);
+  assert.deepEqual(r.bars, [{ year: 2020, count: 1 }]);
+});
+
 test('finished per year with nothing finished', () => {
-  assert.deepEqual(finishedPerYear([g({})]), { bars: [], unknown: 0, total: 0 });
+  assert.deepEqual(finishedPerYear([g({})]), { bars: [], periods: 0, unknown: 0, total: 0 });
 });
 
 test('daysBetween floors, clamps and survives bad dates', () => {
@@ -86,6 +105,7 @@ test('formatDays', () => {
   assert.equal(formatDays(45), '45 days');
   assert.equal(formatDays(150), '5 months');
   assert.equal(formatDays(900), '2.5 years');
+  assert.equal(formatDays(730), '2 years');
 });
 
 test('niceScale gives round ticks covering the maximum', () => {
@@ -93,9 +113,52 @@ test('niceScale gives round ticks covering the maximum', () => {
   assert.deepEqual(niceScale(7), { max: 8, ticks: [0, 2, 4, 6, 8] });
   assert.deepEqual(niceScale(0), { max: 1, ticks: [0, 1] });
   assert.ok(niceScale(123).max >= 123);
+  assert.deepEqual(niceScale(1), { max: 1, ticks: [0, 1] });
+  assert.deepEqual(niceScale(2), { max: 2, ticks: [0, 1, 2] });
+  assert.deepEqual(niceScale(3), { max: 3, ticks: [0, 1, 2, 3] });
 });
 
 test('a fresh import has no history to compare', () => {
   const r = timeInStatus([g({ id: 1 }), g({ id: 2 })], '2026-01-02T00:00:00Z');
   assert.equal(r.hasHistory, false);
+});
+
+const many = (n, o) => Array.from({ length: n }, (_, i) => g({ id: 100 + i, ...o(i) }));
+
+test('one shared old timestamp is not history, whatever the age', () => {
+  const old = '2026-01-01T00:00:00Z';
+  const r = timeInStatus(many(3, () => ({ updated_at: old, added_at: old })), '2026-10-01T00:00:00Z');
+  assert.equal(r.hasHistory, false);
+  assert.equal(r.untouched, 0);
+});
+
+test('the import batch is left out and counted as untouched', () => {
+  const stamp = (s) => `2026-01-01T00:00:${String(s).padStart(2, '0')}Z`;
+  const games = [
+    ...many(30, (i) => ({ id: 100 + i, updated_at: stamp(i % 3), added_at: stamp(i % 3) })), // the import, over a few seconds
+    g({ id: 1, title: 'Touched', updated_at: '2026-03-01T00:00:00Z', added_at: '2026-01-01T00:00:00Z' }),
+    g({ id: 2, title: 'Touched later', updated_at: '2026-03-20T00:00:00Z', added_at: '2026-01-01T00:00:00Z' }),
+  ];
+  const batch = importBatch(games);
+  assert.equal(batch.ids.size, 30);
+  assert.equal(batch.date, '2026-01-01');
+  const r = timeInStatus(games, '2026-04-01T00:00:00Z');
+  assert.equal(r.untouched, 30);
+  assert.equal(r.importDate, '2026-01-01');
+  assert.equal(r.rows.find((x) => x.key === 'backlog').count, 2);
+  assert.deepEqual(r.rows.find((x) => x.key === 'backlog').oldest.map((x) => x.title), ['Touched', 'Touched later']);
+  assert.ok(r.hasHistory); // 19 days between the two touched games
+});
+
+test('games changed within a few days after an import are not history yet', () => {
+  const games = [
+    ...many(30, () => ({ updated_at: '2026-01-01T00:00:00Z', added_at: '2026-01-01T00:00:00Z' })),
+    g({ id: 1, updated_at: '2026-01-02T00:00:00Z' }), g({ id: 2, updated_at: '2026-01-04T00:00:00Z' }),
+  ];
+  assert.equal(timeInStatus(games, '2026-06-01T00:00:00Z').hasHistory, false);
+});
+
+test('a small library or a varied one has no import batch', () => {
+  assert.equal(importBatch(many(5, () => ({ updated_at: '2026-01-01T00:00:00Z' }))), null);
+  assert.equal(importBatch(many(40, (i) => ({ updated_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }))), null);
 });

@@ -28,18 +28,24 @@ function barList(rows, { empty = 'Nothing to show yet.' } = {}) {
     h('span.hb-count', {}, r.count))));
 }
 
-/** Vertical bar chart (finished per year) as inline SVG with labelled axes and a screen-reader table. */
-function yearChart({ bars, unknown, total }) {
-  if (!bars.length) return h('p.hint', {}, 'No finished game has a year played yet.');
-  const W = 360, H = 220, L = 42, R = 8, T = 10, B = 44;
+/** The hint under the chart about finished games that are not in it. */
+function unplacedHint(periods, unknown) {
+  const parts = [];
+  if (periods > 0) parts.push(`${plural(periods, 'finished game was', 'finished games were')} played in childhood or always, so ${periods === 1 ? 'is' : 'are'} not in the chart`);
+  if (unknown > 0) parts.push(`${plural(unknown, 'finished game has', 'finished games have')} nothing recorded about when ${unknown === 1 ? 'it was' : 'they were'} played`);
+  return parts.length ? h('p.hint', {}, parts.join('; ') + '.') : null;
+}
+
+/** The SVG for a chart `W` units wide. Drawn at the width it is shown at, so its 12px text is never scaled down. */
+function chartSvg(bars, W) {
+  const H = 220, L = 42, R = 8, T = 10, B = 44;
   const pw = W - L - R, ph = H - T - B;
   const { max, ticks } = niceScale(Math.max(...bars.map((b) => b.count)));
   const slot = pw / bars.length, bw = Math.min(36, slot * 0.7);
   const y = (v) => T + ph - (v / max) * ph;
   const every = Math.max(1, Math.ceil(34 / slot)); // keep year labels from overlapping
   const g = svg('svg', {
-    class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img',
-    'aria-label': `Games finished per year, ${bars[0].year} to ${bars[bars.length - 1].year}: ${bars.map((b) => `${b.year} ${b.count}`).join(', ')}`,
+    class: 'chart', viewBox: `0 0 ${W} ${H}`, width: W, height: H, 'aria-hidden': 'true', // the table below carries the numbers
   });
   for (const t of ticks) {
     g.append(svg('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }));
@@ -55,8 +61,27 @@ function yearChart({ bars, unknown, total }) {
   g.append(svg('line', { class: 'axis', x1: L, x2: W - R, y1: T + ph, y2: T + ph }));
   g.append(svg('text', { class: 'axis-title', x: L + pw / 2, y: H - 6, 'text-anchor': 'middle' }, 'Year last played'));
   g.append(svg('text', { class: 'axis-title', transform: `translate(10 ${T + ph / 2}) rotate(-90)`, 'text-anchor': 'middle' }, 'Games finished'));
-  return h('div', {}, g,
-    unknown > 0 && h('p.hint', {}, `${plural(unknown, 'finished game has', 'finished games have')} no year recorded and ${unknown === 1 ? 'is' : 'are'} not in the chart.`),
+  return g;
+}
+
+/** Vertical bar chart (finished per year): inline SVG redrawn when its box changes width, plus a screen-reader table. */
+function yearChart({ bars, periods, unknown, total }, cleanups) {
+  if (!bars.length) return h('p.hint', {}, 'No finished game has a year played yet.');
+  const box = h('div.chart-box', {});
+  let width = 0;
+  const fit = (w) => {
+    w = Math.max(280, Math.min(720, Math.floor(w)));
+    if (w === width) return;
+    width = w;
+    box.replaceChildren(chartSvg(bars, w));
+  };
+  fit(320);
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => { if (box.clientWidth) fit(box.clientWidth); });
+    ro.observe(box);
+    cleanups.push(() => ro.disconnect());
+  }
+  return h('div', {}, box, unplacedHint(periods, unknown),
     h('table.sr-only', {}, h('caption', {}, `Games finished per year (${total} in all)`),
       h('thead', {}, h('tr', {}, h('th', {}, 'Year'), h('th', {}, 'Games finished'))),
       h('tbody', {}, bars.map((b) => h('tr', {}, h('td', {}, b.year), h('td', {}, b.count))))));
@@ -78,8 +103,9 @@ function ratioBar({ finished, dropped, share }) {
 
 function waitingTable(time) {
   const rows = time.rows.filter((r) => r.count > 0);
-  if (!rows.length) return h('p.hint', {}, 'No games are waiting.');
-  if (!time.hasHistory) return h('p.hint', {}, 'Every waiting game was added or changed within the last week (a fresh import, perhaps), so there is nothing to compare yet. Waiting times appear as time passes.');
+  if (!time.waiting) return h('p.hint', {}, 'No games are waiting.');
+  const since = time.untouched > 0 ? `${plural(time.untouched, 'waiting game is', 'waiting games are')} untouched since the import on ${time.importDate}.` : '';
+  if (!time.hasHistory) return h('p.hint', {}, `Not enough history to compare yet: the waiting games were all added or last changed around the same time (a fresh import, perhaps). Waiting times appear as you change games over the coming weeks. ${since}`.trim());
   return h('div', {},
     h('div.tscroll', {}, h('table.wait', {},
       h('thead', {}, h('tr', {}, h('th', {}, 'Status'), h('th.num', {}, 'Games'), h('th.num', {}, 'Typical'), h('th.num', {}, 'Longest'))),
@@ -88,21 +114,25 @@ function waitingTable(time) {
     h('h3', {}, 'Waiting the longest'),
     h('ol.oldest', {}, rows.flatMap((r) => r.oldest.slice(0, 3).map((o) => ({ ...o, key: r.key })))
       .sort((a, b) => b.days - a.days).slice(0, 5)
-      .map((o) => h('li', {}, h('a', { href: `#/library?q=${encodeURIComponent(o.title)}` }, o.title), h('small', {}, ` ${statusLabel(o.key)}, ${formatDays(o.days)}`)))));
+      .map((o) => h('li', {}, h('a', { href: `#/library?q=${encodeURIComponent(o.title)}` }, o.title), h('small', {}, ` ${statusLabel(o.key)}, ${formatDays(o.days)}`)))),
+    since && h('p.hint', {}, since));
 }
 
 export function renderStats(root) {
   const games = store.games;
   const size = backlogSize(games);
-  root.replaceChildren(h('div.stats', {},
+  const cleanups = [];
+  root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
     h('p.hint', {}, `Computed from the ${games.length} games in your library.`),
     h('div.stat-grid', {},
       card('Backlog', 'Games on the backlog or up next.',
         h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
-        h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' })),
-      card('Finished per year', 'Each finished game counts in the last year you played it.', yearChart(finishedPerYear(games))),
+        h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
+          size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`)),
+      card('Finished per year', 'Each finished game counts in the last year you played it.', yearChart(finishedPerYear(games), cleanups)),
       card('Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))),
       card('Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('Finished or dropped', null, ratioBar(finishedVsDropped(games))))));
+  return () => cleanups.forEach((f) => f());
 }
