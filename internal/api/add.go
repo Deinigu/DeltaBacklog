@@ -233,8 +233,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, map[string]any{"game": g, "cover_error": coverErr})
+	writeJSONStatus(w, http.StatusCreated, map[string]any{"game": g, "cover_error": coverErr})
 }
 
 // storeCover downloads url (already host-checked), writes the resized cover and records it on the game.
@@ -243,7 +242,7 @@ func (s *Server) storeCover(id int64, url string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.Exec(`UPDATE game SET cover_url = ?, cover_file = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, url, name, id)
+	_, err = s.DB.Exec(`UPDATE game SET cover_url = ?, cover_file = ?, cover_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, url, name, id)
 	return err
 }
 

@@ -1,0 +1,4 @@
+# shell scripts and unit files must keep Unix line endings even when checked out on Windows
+deploy/*.sh text eol=lf
+deploy/*.service text eol=lf
+deploy/*.timer text eol=lf

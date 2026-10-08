@@ -62,7 +62,11 @@ func FetchStrict(url, dir string, gameID int64) (string, error) {
 }
 
 // maxPixels bounds the memory a decode can use: a 15MB file can still describe a gigantic bitmap.
-const maxPixels = 30_000_000
+// 16 megapixels (4096x4096) is far more than any cover needs and about 64MB decoded. The product is computed in int64:
+// on the Pi (32-bit ARM) a plain int overflows for a header that claims a huge image.
+const maxPixels = 16_000_000
+
+func tooLarge(w, h int) bool { return w <= 0 || h <= 0 || int64(w)*int64(h) > maxPixels }
 
 // Save decodes an image from r, scales it down and writes dir/<gameID>.jpg.
 func Save(r io.Reader, dir string, gameID int64) (string, error) {
@@ -74,7 +78,7 @@ func Save(r io.Reader, dir string, gameID int64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decode: %w", err)
 	}
-	if cfg.Width*cfg.Height > maxPixels {
+	if tooLarge(cfg.Width, cfg.Height) {
 		return "", fmt.Errorf("image too large (%dx%d)", cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))

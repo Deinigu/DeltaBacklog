@@ -12,7 +12,6 @@ type Game struct {
 	Status      string   `json:"status"` // status code
 	Ownership   *string  `json:"ownership"`
 	Series      *string  `json:"series"`
-	SeriesOrder *int     `json:"series_order"`
 	Developer   *string  `json:"developer"`
 	ReleaseYear *int     `json:"release_year"`
 	VR          bool     `json:"vr"`
@@ -24,6 +23,7 @@ type Game struct {
 	IGDBID      *int64   `json:"igdb_id"`
 	AddedAt     string   `json:"added_at"`
 	UpdatedAt   string   `json:"updated_at"`
+	CoverV      string   `json:"cover_v"` // changes only when the cover image does: the browser cache key for /covers/
 	Platforms   []string `json:"platforms"`
 	Genres      []string `json:"genres"`
 	Themes      []string `json:"themes"`
@@ -33,8 +33,8 @@ type Game struct {
 }
 
 // loadLinks fetches (game_id, value) pairs from one junction query and groups them by game.
-func loadLinks(d *sql.DB, query string) (map[int64][]string, error) {
-	rows, err := d.Query(query)
+func loadLinks(d *sql.DB, query string, args ...any) (map[int64][]string, error) {
+	rows, err := d.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,32 +52,48 @@ func loadLinks(d *sql.DB, query string) (map[int64][]string, error) {
 }
 
 func (s *Server) listGames(w http.ResponseWriter, r *http.Request) {
-	games, err := LoadGames(s.DB)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	writeJSON(w, games)
+	s.serveCached(w, r, "games", func() (any, error) { return LoadGames(s.DB) })
 }
 
 // LoadGames returns every game ordered by status then queue position.
-func LoadGames(d *sql.DB) ([]Game, error) {
-	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, g.series_order, c.name, g.release_year,
-			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at
+func LoadGames(d *sql.DB) ([]Game, error) { return loadGames(d, 0) }
+
+// LoadGame returns one game with its links, reading only that game's rows (an edit must not cost a full reload).
+func LoadGame(d *sql.DB, id int64) (Game, error) {
+	games, err := loadGames(d, id)
+	if err != nil {
+		return Game{}, err
+	}
+	if len(games) == 0 {
+		return Game{}, sql.ErrNoRows
+	}
+	return games[0], nil
+}
+
+// loadGames reads all games, or only the game with id `only` when it is not 0.
+func loadGames(d *sql.DB, only int64) ([]Game, error) {
+	var args []any
+	where, linkWhere, playAnd := "", "", ""
+	if only != 0 {
+		args = []any{only}
+		where, linkWhere, playAnd = " WHERE g.id = ?", " WHERE x.game_id = ?", " AND game_id = ?"
+	}
+	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
+			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
 		LEFT JOIN series se ON se.id = g.series_id
-		LEFT JOIN company c ON c.id = g.developer_id
-		ORDER BY s.sort, g.queue_pos, g.title_sort`)
+		LEFT JOIN company c ON c.id = g.developer_id` + where + `
+		ORDER BY s.sort, g.queue_pos, g.title_sort`, args...)
 	if err != nil {
 		return nil, err
 	}
 	games := []Game{}
 	for rows.Next() {
 		var g Game
-		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.SeriesOrder, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
+			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -92,14 +108,14 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 		query string
 		set   func(*Game, []string)
 	}{
-		{`SELECT x.game_id, p.name FROM game_platform x JOIN platform p ON p.id = x.platform_id ORDER BY p.name`, func(g *Game, v []string) { g.Platforms = v }},
-		{`SELECT x.game_id, p.name FROM game_genre x JOIN genre p ON p.id = x.genre_id ORDER BY p.name`, func(g *Game, v []string) { g.Genres = v }},
-		{`SELECT x.game_id, p.name FROM game_theme x JOIN theme p ON p.id = x.theme_id ORDER BY p.name`, func(g *Game, v []string) { g.Themes = v }},
-		{`SELECT x.game_id, p.name FROM game_player x JOIN player p ON p.id = x.player_id ORDER BY p.name`, func(g *Game, v []string) { g.Players = v }},
-		{`SELECT game_id, period FROM play WHERE period IS NOT NULL ORDER BY period`, func(g *Game, v []string) { g.Periods = v }},
+		{`SELECT x.game_id, p.name FROM game_platform x JOIN platform p ON p.id = x.platform_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Platforms = v }},
+		{`SELECT x.game_id, p.name FROM game_genre x JOIN genre p ON p.id = x.genre_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Genres = v }},
+		{`SELECT x.game_id, p.name FROM game_theme x JOIN theme p ON p.id = x.theme_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Themes = v }},
+		{`SELECT x.game_id, p.name FROM game_player x JOIN player p ON p.id = x.player_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Players = v }},
+		{`SELECT game_id, period FROM play WHERE period IS NOT NULL` + playAnd + ` ORDER BY period`, func(g *Game, v []string) { g.Periods = v }},
 	}
 	for _, l := range links {
-		m, err := loadLinks(d, l.query)
+		m, err := loadLinks(d, l.query, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +128,7 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 		}
 	}
 
-	yrows, err := d.Query(`SELECT game_id, year FROM play WHERE year IS NOT NULL ORDER BY year`)
+	yrows, err := d.Query(`SELECT game_id, year FROM play WHERE year IS NOT NULL`+playAnd+` ORDER BY year`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,17 +150,3 @@ func LoadGames(d *sql.DB) ([]Game, error) {
 	return games, yrows.Err()
 }
 
-// LoadGame returns one game with its links. At ~600 games, filtering the full load is simpler than
-// parallel single-game queries and costs a few milliseconds.
-func LoadGame(d *sql.DB, id int64) (Game, error) {
-	games, err := LoadGames(d)
-	if err != nil {
-		return Game{}, err
-	}
-	for _, g := range games {
-		if g.ID == id {
-			return g, nil
-		}
-	}
-	return Game{}, sql.ErrNoRows
-}

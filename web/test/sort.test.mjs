@@ -6,7 +6,7 @@ import { buildComparator, groupGames, parseSort, formatSort, DEFAULT_SORT } from
 store.statusOrder = new Map([['playing', 0], ['backlog', 1], ['finished', 2]]);
 store.statusByCode = new Map([['playing', { label: 'Playing' }], ['backlog', { label: 'Backlog' }], ['finished', { label: 'Finished' }]]);
 
-const g = (title, o = {}) => ({ title, status: 'backlog', platforms: [], genres: [], years: [], periods: [], favorite: false, completed: false, series: null, series_order: null, release_year: null, queue_pos: null, added_at: '', updated_at: '', ownership: null, ...o });
+const g = (title, o = {}) => ({ title, status: 'backlog', platforms: [], genres: [], years: [], periods: [], favorite: false, completed: false, series: null, release_year: null, queue_pos: null, added_at: '', updated_at: '', ownership: null, ...o });
 const titles = (list, levels) => [...list].sort(buildComparator(levels)).map((x) => x.title);
 
 test('natural title order', () => {
@@ -29,8 +29,8 @@ test('nulls sort last in both directions', () => {
   assert.deepEqual(titles(list, [{ field: 'release', dir: 'desc' }]), ['new', 'old', 'none']);
 });
 
-test('series sorts by name then order in series', () => {
-  const list = [g('x3', { series: 'X', series_order: 3 }), g('a1', { series: 'A', series_order: 1 }), g('x1', { series: 'X', series_order: 1 }), g('solo')];
+test('series sorts by name, then title; games without a series go last', () => {
+  const list = [g('x3', { series: 'X' }), g('a1', { series: 'A' }), g('x1', { series: 'X' }), g('solo')];
   assert.deepEqual(titles(list, [{ field: 'series', dir: 'asc' }]), ['a1', 'x1', 'x3', 'solo']);
 });
 

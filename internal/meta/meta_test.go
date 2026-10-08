@@ -248,3 +248,21 @@ func TestIGDBImages(t *testing.T) {
 		t.Errorf("unconfigured: %v", err)
 	}
 }
+
+func TestLinkClientChecksEveryRedirect(t *testing.T) {
+	c := New(Config{})
+	cl := c.linkClient()
+	req := func(u string) *http.Request { r, _ := http.NewRequest("GET", u, nil); return r }
+	if err := cl.CheckRedirect(req("https://www.gog.com/game/x"), nil); err != nil {
+		t.Errorf("an allowed host should be followed: %v", err)
+	}
+	for _, bad := range []string{"http://192.168.1.50:8080/", "http://169.254.169.254/latest/meta-data", "https://evil.example.com/", "https://gog.com.evil.example.com/"} {
+		if err := cl.CheckRedirect(req(bad), nil); err == nil {
+			t.Errorf("redirect to %s must be refused", bad)
+		}
+	}
+	via := make([]*http.Request, 4)
+	if err := cl.CheckRedirect(req("https://www.gog.com/x"), via); err == nil {
+		t.Error("a redirect loop must stop")
+	}
+}

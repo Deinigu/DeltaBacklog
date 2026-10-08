@@ -36,14 +36,25 @@ export async function load() {
 }
 
 export function coverURL(g) {
-  return g.cover ? `/covers/${g.cover}?v=${encodeURIComponent(g.updated_at)}` : null;
+  // cover_v changes only with the image itself, so editing a game never re-downloads its cover
+  return g.cover ? `/covers/${g.cover}?v=${encodeURIComponent(g.cover_v || '')}` : null;
 }
 
 // ---- game edits ----
-const gamesChanged = () => window.dispatchEvent(new Event('games-changed'));
+// detail.id: the one game that changed (views rebuild only its card); detail.reorder: only positions moved.
+const gamesChanged = (id = null, extra = {}) => window.dispatchEvent(new CustomEvent('games-changed', { detail: { id, ...extra } }));
+
+/** Replace a game with the server's copy: the safe way out of a failed edit when others were chained behind it. */
+async function resync(id) {
+  try {
+    const fresh = (await getJSON('/api/games')).find((x) => x.id === id);
+    const g = store.byId.get(id);
+    if (fresh && g) { Object.assign(g, fresh); indexGame(g); }
+  } catch { /* offline: the next load fixes it */ }
+}
 
 const NULLABLE_TEXT = ['series', 'developer', 'ownership'];
-const NULLABLE_NUM = ['release_year', 'series_order'];
+const NULLABLE_NUM = ['release_year'];
 
 /** The values the server will store for a patch: cleared text and zero numbers become null. */
 export function localPatch(patch) {
@@ -65,7 +76,7 @@ export function patchGame(id, patch) {
   const g = store.byId.get(id);
   const prev = Object.fromEntries(Object.keys(patch).map((k) => [k, g[k]]));
   Object.assign(g, localPatch(patch));
-  gamesChanged();
+  gamesChanged(id);
 
   const slot = inFlight.get(id) || { chain: Promise.resolve(), count: 0 };
   inFlight.set(id, slot);
@@ -75,11 +86,16 @@ export function patchGame(id, patch) {
       const fresh = await send('PATCH', `/api/games/${id}`, patch);
       if (slot.count === 1) { Object.assign(g, fresh); indexGame(g); } // this is the newest edit: authoritative
     } catch (e) {
+      slot.failed = true;
       if (slot.count === 1) Object.assign(g, prev);
       throw e;
     } finally {
-      if (--slot.count === 0) inFlight.delete(id);
-      gamesChanged();
+      if (--slot.count === 0) {
+        inFlight.delete(id);
+        // Edits chained behind a failed one captured values that were never saved: ask the server what is true.
+        if (slot.failed) await resync(id);
+      }
+      gamesChanged(id);
     }
   };
   const result = slot.chain.then(run, run);
@@ -91,7 +107,7 @@ export function patchGame(id, patch) {
 export async function reorderGames(ids) {
   const before = new Map(ids.map((id) => [id, store.byId.get(id).queue_pos]));
   for (const [id, pos] of slotOrder(ids, before)) store.byId.get(id).queue_pos = pos; // optimistic
-  gamesChanged();
+  gamesChanged(null, { reorder: true });
   try {
     const next = await send('POST', '/api/games/reorder', ids);
     for (const [id, pos] of Object.entries(next)) store.byId.get(Number(id)).queue_pos = pos;
@@ -99,7 +115,7 @@ export async function reorderGames(ids) {
     for (const [id, pos] of before) store.byId.get(id).queue_pos = pos;
     throw e;
   } finally {
-    gamesChanged();
+    gamesChanged(null, { reorder: true });
   }
 }
 
@@ -190,6 +206,6 @@ export async function setCover(id, url) {
   const g = store.byId.get(id);
   Object.assign(g, fresh);
   indexGame(g);
-  window.dispatchEvent(new Event('games-changed'));
+  gamesChanged(id);
   return g;
 }

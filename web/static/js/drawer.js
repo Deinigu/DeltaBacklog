@@ -3,6 +3,7 @@ import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
+import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
@@ -20,7 +21,7 @@ function quickActions(game) {
     fav.setAttribute('aria-pressed', String(game.favorite));
     const st = store.statusByCode.get(game.status);
     const badge = open?.drawer.querySelector('.cover .st');
-    if (badge && st) { badge.textContent = st.label; badge.style.background = st.color; }
+    if (badge && st) { badge.textContent = st.label; badge.setAttribute('style', badgeStyle(st.color)); }
   }
   return h('div.quick', {}, sel, fav);
 }
@@ -51,7 +52,6 @@ export function openDrawer(game) {
     h('dt', {}, label),
     h('dd', {}, Array.isArray(value) ? h('div.tags', {}, value.map((v) => h('span.tag', {}, v))) : String(value)),
   ];
-  const seriesText = game.series && (game.series_order ? `${game.series} · #${game.series_order}` : game.series);
 
   const title = h('h2', {}, game.title);
   const readView = h('div.readview', {},
@@ -59,7 +59,7 @@ export function openDrawer(game) {
       fact('Platforms', game.platforms),
       fact('Genres', game.genres),
       fact('Themes', game.themes),
-      fact('Series', seriesText),
+      fact('Series', game.series),
       fact('Developer', game.developer),
       fact('Released', game.release_year),
       fact('Played in', yearsOf(game)),
@@ -81,7 +81,7 @@ export function openDrawer(game) {
     h('button.close', { onclick: requestClose, 'aria-label': 'Close' }, '✕'),
     h('div.cover', {},
       url ? h('img', { src: url, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)),
-      st && h('span.st', { style: `background:${st.color}` }, st.label)),
+      st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
     h('div.drawer-body', {}, title, quick, readView, editView));
 
   async function remove() {
@@ -104,7 +104,6 @@ export function openDrawer(game) {
     function render() {
       const seriesIn = text(f, 'series', { list: ensureDatalist('dl-edit-series', unique((g) => (g.series ? [g.series] : []))), 'aria-label': 'Series' });
       const devIn = text(f, 'developer', { list: ensureDatalist('dl-edit-dev', unique((g) => (g.developer ? [g.developer] : []))), 'aria-label': 'Developer' });
-      const orderIn = text(f, 'series_order', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2', 'aria-label': 'Number in series' });
       const yearIn = text(f, 'release_year', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2025', 'aria-label': 'Release year' });
       const titleIn = text(f, 'title', { 'aria-label': 'Title', required: true });
       const linked = f.igdb_id
@@ -117,7 +116,6 @@ export function openDrawer(game) {
         listRow(f, 'Genres', 'genres', unique((g) => g.genres)),
         listRow(f, 'Themes', 'themes', unique((g) => g.themes)),
         field('Series', seriesIn),
-        field('# in series', orderIn),
         field('Developer', devIn),
         field('Released', yearIn),
         field('Ownership', ownershipSelect(f)),

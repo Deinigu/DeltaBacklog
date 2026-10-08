@@ -272,12 +272,12 @@ func TestEditFields(t *testing.T) {
 		return res.StatusCode, g
 	}
 
-	code, g := patch(`{"title":"  The Hades 2 ","notes":"great","ownership":"Gifted","series":"Hades Saga","series_order":2,"developer":"Supergiant","release_year":2025,
+	code, g := patch(`{"title":"  The Hades 2 ","notes":"great","ownership":"Gifted","series":"Hades Saga","developer":"Supergiant","release_year":2025,
 		"platforms":["PC","Switch"],"genres":["Roguelike"],"themes":[],"players":["Solo","Lucas"],"years":[2026,2024,2024],"periods":["always"]}`)
 	if code != 200 {
 		t.Fatalf("patch: %d", code)
 	}
-	if g.Title != "The Hades 2" || g.Notes != "great" || *g.Ownership != "Gifted" || *g.Series != "Hades Saga" || *g.SeriesOrder != 2 || *g.Developer != "Supergiant" || *g.ReleaseYear != 2025 {
+	if g.Title != "The Hades 2" || g.Notes != "great" || *g.Ownership != "Gifted" || *g.Series != "Hades Saga" || *g.Developer != "Supergiant" || *g.ReleaseYear != 2025 {
 		t.Errorf("scalar fields: %+v", g)
 	}
 	if strings.Join(g.Platforms, ",") != "PC,Switch" || strings.Join(g.Genres, ",") != "Roguelike" || len(g.Themes) != 0 || strings.Join(g.Players, ",") != "Lucas,Solo" {
@@ -310,7 +310,7 @@ func TestEditFields(t *testing.T) {
 		t.Errorf("platform PC duplicated: %v", facets["platform"])
 	}
 
-	for _, bad := range []string{`{"title":"  "}`, `{"release_year":1800}`, `{"years":[1900]}`, `{"periods":["later"]}`, `{"series_order":-1}`, `{"genres":["` + strings.Repeat("x", 200) + `"]}`} {
+	for _, bad := range []string{`{"title":"  "}`, `{"release_year":1800}`, `{"years":[1900]}`, `{"periods":["later"]}`, `{"genres":["` + strings.Repeat("x", 200) + `"]}`} {
 		if code, _ := patch(bad); code != 400 {
 			t.Errorf("%s = %d, want 400", bad, code)
 		}

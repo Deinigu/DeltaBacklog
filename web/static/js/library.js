@@ -1,15 +1,16 @@
 // Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
-import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog } from './util.js';
+import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
+import { badgeStyle } from './colors.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
-  GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState,
+  GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState, facetSignature,
   filterToJSON, stateFromView, stateFromQuery, stateToQuery, signature,
 } from './filters.js';
 
@@ -122,22 +123,22 @@ export function renderLibrary(root, opts = {}) {
     if (el) return el;
     const st = store.statusByCode.get(g.status);
     const url = coverURL(g);
-    const played = playedBadges(g, new Date().getFullYear(), innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
+    const played = playedBadges(g, innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
     const hasPlayed = played.years.length || played.periods.length;
     const platforms = g.platforms.slice(0, 2);
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
-        url ? h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
+        url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
         g.favorite && h('span.fav', { 'aria-label': 'Favorite' }, '★'),
         g.ownership && !isUsualOwnership(g.ownership) && h('span.own', { title: g.ownership, role: 'img', 'aria-label': g.ownership }, ownershipIcon(g.ownership)),
-        st && h('span.st', { style: `background:${st.color}` }, st.label)),
+        st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
       h('div.card-body', {},
         h('div.card-title', {}, g.title),
         platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
         hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,
-          ...played.years.map((y) => h('span.yr', { class: y.current ? 'now' : '' }, String(y.year)))) : null));
+          ...played.years.map((y) => h('span.yr', {}, String(y.year)))) : null));
     cards.set(g.id, el);
     return el;
   }
@@ -273,7 +274,18 @@ export function renderLibrary(root, opts = {}) {
   };
   // A game changed elsewhere (drawer, reorder): rebuild the cards and refresh counts.
   // While dragging we must not rebuild the list under the user's finger.
-  const onGames = () => { if (!reordering) { cards.clear(); update(); } };
+  let facets = facetSignature(store.games);
+  const onGames = (e) => {
+    if (reordering) return;
+    const d = e.detail || {};
+    if (!d.reorder) {
+      // A new genre, platform or year has no filter chip yet: rebuild the whole page once so it appears.
+      const now = facetSignature(store.games);
+      if (now !== facets) { facets = now; window.dispatchEvent(new Event('games-reloaded')); return; }
+    }
+    if (d.id) cards.delete(d.id); else if (!d.reorder) cards.clear(); // only the card that changed is rebuilt
+    update();
+  };
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {

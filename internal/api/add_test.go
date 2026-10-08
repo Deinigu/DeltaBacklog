@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"image"
@@ -52,6 +53,7 @@ func (f *fakeMeta) ResolveLink(_ context.Context, l string) (string, error) {
 
 // addEnv is a server with a fake metadata service and a fake image host.
 type addEnv struct {
+	db       *sql.DB
 	srv      *httptest.Server
 	meta     *fakeMeta
 	coverDir string
@@ -90,7 +92,7 @@ func newAddEnv(t *testing.T) *addEnv {
 	s := &Server{DB: d, CoverDir: coverDir, Meta: fm, CoverHosts: []string{strings.TrimPrefix(images.URL, "http://")}}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return &addEnv{srv: srv, meta: fm, coverDir: coverDir, images: images}
+	return &addEnv{db: d, srv: srv, meta: fm, coverDir: coverDir, images: images}
 }
 
 func TestLookup(t *testing.T) {
@@ -356,5 +358,67 @@ func TestCoverSources(t *testing.T) {
 	e.meta.igdb = true
 	if _, r := get("?source=igdb"); len(r.Covers) != 0 {
 		t.Errorf("empty query: %+v", r)
+	}
+}
+
+func TestPatchFoldsThemesLikeCreate(t *testing.T) {
+	e := newAddEnv(t)
+	_, body := do(t, "GET", e.srv.URL+"/api/games", "")
+	var games []Game
+	json.Unmarshal(body, &games)
+	url := e.srv.URL + "/api/games/" + itoa64(games[0].ID)
+	_, body = do(t, "PATCH", url, `{"themes":["4X (explore, expand, exploit, and exterminate)","Action"]}`)
+	var g Game
+	json.Unmarshal(body, &g)
+	if len(g.Themes) != 2 || g.Themes[0] != "4X" {
+		t.Errorf("themes saved by an edit must be folded: %v", g.Themes)
+	}
+	_, body = do(t, "GET", e.srv.URL+"/api/facets", "")
+	var facets map[string][]Facet
+	json.Unmarshal(body, &facets)
+	for _, f := range facets["theme"] {
+		if len(f.Key) > 20 {
+			t.Errorf("an unfolded theme name reached the facets: %q", f.Key)
+		}
+	}
+}
+
+func TestCoverVersionOnlyChangesWithTheImage(t *testing.T) {
+	e := newAddEnv(t)
+	_, out := createGameReq(t, e, `{"title":"Versioned","cover_url":"`+e.images.URL+`/ok.png"}`)
+	g0, _ := out["game"].(map[string]any)
+	v0, _ := g0["cover_v"].(string)
+	if v0 == "" {
+		t.Fatalf("a game with a cover needs a cover version: %v", g0)
+	}
+	url := e.srv.URL + "/api/games/" + itoa64(int64(g0["id"].(float64)))
+	time.Sleep(1100 * time.Millisecond) // timestamps have one-second resolution
+
+	_, body := do(t, "PATCH", url, `{"status":"up_next","favorite":true,"notes":"edited"}`)
+	var g Game
+	json.Unmarshal(body, &g)
+	if g.CoverV != v0 {
+		t.Errorf("editing a game must not change its cover version: %q -> %q", v0, g.CoverV)
+	}
+	if g.UpdatedAt == g0["updated_at"] {
+		t.Error("updated_at should still move on an edit")
+	}
+
+	_, body = do(t, "POST", url+"/cover", `{"url":"`+e.images.URL+`/ok.png"}`)
+	json.Unmarshal(body, &g)
+	if g.CoverV == v0 || g.CoverV == "" {
+		t.Errorf("a new cover must get a new version: %q -> %q", v0, g.CoverV)
+	}
+}
+
+func TestCreateReturnsJSONContentType(t *testing.T) {
+	e := newAddEnv(t)
+	res, _ := do(t, "POST", e.srv.URL+"/api/games", `{"title":"Typed"}`)
+	if res.StatusCode != 201 || !strings.HasPrefix(res.Header.Get("Content-Type"), "application/json") {
+		t.Errorf("created: %d %q", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	res, _ = do(t, "POST", e.srv.URL+"/api/views", `{"name":"Typed view"}`)
+	if res.StatusCode != 201 || !strings.HasPrefix(res.Header.Get("Content-Type"), "application/json") {
+		t.Errorf("view created: %d %q", res.StatusCode, res.Header.Get("Content-Type"))
 	}
 }

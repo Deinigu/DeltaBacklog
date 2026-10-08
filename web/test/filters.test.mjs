@@ -83,3 +83,15 @@ test('layout defaults to cards and unknown values are ignored', () => {
   assert.equal(stateFromView({ filter: {}, sort: [], layout: 'grid' }).layout, 'cards');
   assert.equal(stateFromQuery('layout=table').layout, 'table');
 });
+
+test('facetSignature changes when a filter value appears or disappears, not when games merely change', async () => {
+  const { facetSignature } = await import('../static/js/filters.js');
+  const a = [g('A', { genres: ['RPG'], platforms: ['PC'] }), g('B', { genres: ['Indie'], platforms: ['PC'] })];
+  const base = facetSignature(a);
+  assert.equal(facetSignature([...a].reverse()), base, 'order does not matter');
+  assert.equal(facetSignature([g('A', { genres: ['RPG'], platforms: ['PC'], favorite: true }), a[1]]), base, 'unrelated fields do not matter');
+  assert.notEqual(facetSignature([a[0], g('B', { genres: ['Indie', 'Roguelike'], platforms: ['PC'] })]), base, 'a new genre');
+  assert.notEqual(facetSignature([a[0], g('B', { genres: ['Indie'], platforms: ['PC', 'Switch'] })]), base, 'a new platform');
+  assert.notEqual(facetSignature([a[0]]), base, 'a value that disappeared (Indie)');
+  assert.notEqual(facetSignature([a[0], g('B', { genres: ['Indie'], platforms: ['PC'], years: [2024] })]), base, 'a new year');
+});

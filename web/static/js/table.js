@@ -7,7 +7,7 @@ import { toCSV } from './csv.js';
 import { ownershipIcon } from './ownership.js';
 import { yearOptions, normalizeYearToken } from './editpatch.js';
 
-const ROW_H = 44;
+const ROW_H = 48; // keep in step with .tr and .thead in styles.css
 const OVERSCAN = 6;
 
 const uniq = (get) => () => {
@@ -28,7 +28,6 @@ export const COLUMNS = [
   { key: 'years', label: 'Years played', w: 150, kind: 'years', sort: 'last_year', text: (g) => yearsOf(g).join('; '), values: yearsOf, options: () => yearOptions(),
     patch: (v) => ({ years: v.filter((x) => /^\d{4}$/.test(x)).map(Number), periods: v.filter((x) => /^(childhood|always)$/i.test(x)).map((x) => x.toLowerCase()) }) },
   { key: 'series', label: 'Series', w: 170, kind: 'lookup', sort: 'series', text: (g) => g.series ?? '', options: uniq((g) => (g.series ? [g.series] : [])), patch: (v) => ({ series: v }) },
-  { key: 'series_order', label: '# in series', w: 90, kind: 'number', text: (g) => g.series_order ?? '', patch: (v) => ({ series_order: v }) },
   { key: 'developer', label: 'Developer', w: 160, kind: 'lookup', text: (g) => g.developer ?? '', options: uniq((g) => (g.developer ? [g.developer] : [])), patch: (v) => ({ developer: v }) },
   { key: 'release_year', label: 'Released', w: 100, kind: 'number', sort: 'release', text: (g) => g.release_year ?? '', patch: (v) => ({ release_year: v }) },
   { key: 'ownership', label: 'Ownership', w: 130, kind: 'lookup', text: (g) => g.ownership ?? '', options: uniq((g) => (g.ownership ? [g.ownership] : [])), patch: (v) => ({ ownership: v }) },
@@ -39,7 +38,7 @@ export const COLUMNS = [
   { key: 'notes', label: 'Notes', w: 280, kind: 'longtext', text: (g) => g.notes, patch: (v) => ({ notes: v }) },
   { key: 'added_at', label: 'Added', w: 110, kind: 'readonly', sort: 'added', text: (g) => (g.added_at || '').slice(0, 10) },
 ];
-const DEFAULT_HIDDEN = new Set(['themes', 'series_order', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
+const DEFAULT_HIDDEN = new Set(['themes', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
 
 // ---- per-device preferences (widths, visible columns) ----
 const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };

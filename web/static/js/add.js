@@ -19,7 +19,12 @@ export function makeSheet(titleText, extraClass = '') {
   const foot = h('div.filters-foot', { hidden: true });
   const sheet = h('div.sheet.open', { role: 'dialog', 'aria-modal': 'true', 'aria-label': titleText, class: extraClass }, head, body, foot);
   sheet.style.zIndex = 71;
-  const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.sheet.open + .sheet.open')) close(); };
+  // Escape closes only the sheet on top: a picker opened over this sheet handles its own Escape.
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    const open = document.querySelectorAll('.sheet.open');
+    if (open[open.length - 1] === sheet) close();
+  };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, sheet);
   return { sheet, head, body, foot, back, title, close, set onClose(fn) { onClose = fn; } };
@@ -39,7 +44,8 @@ function renderSearch(ui, state, { onPick, onManual, excludeId }) {
   const input = h('input', { type: 'search', placeholder: 'Game title…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Game title', value: state.query });
   const results = h('div.cands');
   const manual = onManual && h('button.btn.manual', { type: 'button', onclick: () => onManual(input.value.trim()) });
-  ui.body.replaceChildren(h('div.search.pick-search', {}, icon('search'), input), results, manual);
+  // replaceChildren is the DOM method, which would print a null as the text "null": only pass what exists
+  ui.body.replaceChildren(h('div.search.pick-search', {}, icon('search'), input), results, ...(manual ? [manual] : []));
 
   let seq = 0;
   const run = async () => {

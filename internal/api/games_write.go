@@ -22,7 +22,6 @@ type gamePatch struct {
 	Notes       *string   `json:"notes"`
 	Ownership   *string   `json:"ownership"`
 	Series      *string   `json:"series"`
-	SeriesOrder *int      `json:"series_order"`
 	Developer   *string   `json:"developer"`
 	ReleaseYear *int      `json:"release_year"`
 	Platforms   *[]string `json:"platforms"`
@@ -53,9 +52,6 @@ func (in *gamePatch) validate() error {
 		return errInvalid
 	}
 	if in.ReleaseYear != nil && *in.ReleaseYear != 0 && (*in.ReleaseYear < 1950 || *in.ReleaseYear > 2100) {
-		return errInvalid
-	}
-	if in.SeriesOrder != nil && (*in.SeriesOrder < 0 || *in.SeriesOrder > 1000) {
 		return errInvalid
 	}
 	for _, l := range []*[]string{in.Platforms, in.Genres, in.Themes, in.Players} {
@@ -122,6 +118,15 @@ func nullInt64(p *int64) any {
 		return nil
 	}
 	return *p
+}
+
+// foldThemes maps verbose IGDB theme names ("4X (explore, expand, ...)") to the short ones the library uses.
+func foldThemes(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = db.NormalizeTheme(strings.TrimSpace(n))
+	}
+	return out
 }
 
 func nullInt(n int) any {
@@ -333,11 +338,6 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			return err
 		}
 	}
-	if in.SeriesOrder != nil {
-		if _, err := tx.Exec("UPDATE game SET series_order = ? WHERE id = ?", nullInt(*in.SeriesOrder), id); err != nil {
-			return err
-		}
-	}
 	if in.IGDBID != nil {
 		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", nullInt64(in.IGDBID), id); err != nil {
 			return err
@@ -360,7 +360,11 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 		if l.names == nil {
 			continue
 		}
-		if err := setLinks(tx, id, l.table, l.junction, l.fk, *l.names); err != nil {
+		names := *l.names
+		if l.table == "theme" {
+			names = foldThemes(names) // the same folding as the importer and quick add
+		}
+		if err := setLinks(tx, id, l.table, l.junction, l.fk, names); err != nil {
 			return err
 		}
 	}
