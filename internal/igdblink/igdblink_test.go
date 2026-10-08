@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,11 +132,11 @@ func TestBuckets(t *testing.T) {
 			t.Errorf("%s: %d candidates, want %d", title, got, n)
 		}
 	}
-	// Resident Evil 2 vs 3: score capped below 60, so not found; no candidates stored.
+	// Resident Evil 2 vs 3: score capped below 60, so not found; IGDB's answer is kept as a weak proposal.
 	igdb, checked, _ := linkOf(t, d, ids["Resident Evil 2"])
 	var stored int
 	d.QueryRow("SELECT count(*) FROM sync_candidate WHERE game_id = ?", ids["Resident Evil 2"]).Scan(&stored)
-	if igdb.Valid || !checked.Valid || stored != 0 {
+	if igdb.Valid || !checked.Valid || stored != 1 { // one weak proposal (score 59), not a match
 		t.Errorf("RE2: igdb=%v checked=%v stored=%d", igdb, checked, stored)
 	}
 	// A game that already has an igdb_id is never searched.
@@ -312,7 +313,7 @@ func TestReviewQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Prey, Celeste (have candidates, best score first) and Resident Evil 2 (IGDB knew nothing), Obscure Thing (nothing).
-	if len(q) != 4 || len(q[0].Candidates) == 0 || len(q[1].Candidates) == 0 || len(q[2].Candidates) != 0 {
+	if len(q) != 4 || len(q[0].Candidates) == 0 || len(q[1].Candidates) == 0 || len(q[2].Candidates) != 1 || len(q[3].Candidates) != 0 {
 		t.Fatalf("queue = %+v", q)
 	}
 	// Accept Prey's second candidate: linked, the other proposal rejected, leaves the queue.
@@ -401,5 +402,116 @@ func TestMigration006(t *testing.T) {
 	d.QueryRow("SELECT count(*) FROM sync_candidate").Scan(&n)
 	if n != 0 {
 		t.Error("candidates survive their game")
+	}
+}
+
+func TestAlternativeNamesRescueLocalizedTitles(t *testing.T) {
+	c := cand(42, "Ni no Kuni: Wrath of the White Witch", 2011, "PS3")
+	c.AltNames = []string{"Ni no Kuni: La ira de la Bruja Blanca"}
+	res := Classify("Ni no Kuni: La ira de la Bruja Blanca", []string{"PS3"}, []meta.Candidate{c})
+	if res.Bucket != Confident {
+		t.Errorf("bucket = %s, want confident through the alternative name", res.Bucket)
+	}
+}
+
+func TestWeakResultsAreKeptAsProposals(t *testing.T) {
+	res := Classify("Brain Training", []string{"NDS"}, []meta.Candidate{cand(1, "Brain Age", 2005, "NDS"), cand(2, "Zzz", 2000), cand(3, "Yyy", 2000), cand(4, "Xxx", 2000)})
+	if res.Bucket != NotFound || len(res.Candidates) != 3 || res.Candidates[0].IGDBID != 1 && res.Candidates[0].Score < res.Candidates[1].Score {
+		t.Errorf("%s %+v", res.Bucket, res.Candidates)
+	}
+}
+
+func TestExactNameBreaksATie(t *testing.T) {
+	cands := []meta.Candidate{cand(1, "The Mirror's Edge", 2025, "PC"), cand(2, "Mirror's Edge", 2008, "PC")}
+	if res := Classify("Mirror's Edge", []string{"PC"}, cands); res.Bucket != Confident || res.Best.IGDBID != 2 {
+		t.Errorf("%+v", res)
+	}
+	both := []meta.Candidate{cand(1, "Prey", 2006, "PC"), cand(2, "Prey", 2017, "PC")}
+	if res := Classify("Prey", []string{"PC"}, both); res.Bucket != Uncertain {
+		t.Errorf("two exact names must stay uncertain, got %s", res.Bucket)
+	}
+}
+
+func TestDryRunSeesTwoGamesCompetingForOneID(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		d := openDB(t)
+		addGame(t, d, "Hades", "PC")
+		addGame(t, d, "Hades!", "PC")
+		f := &fakeIGDB{answers: map[string][]meta.Candidate{
+			"Hades":  {cand(1, "Hades", 2020, "PC")},
+			"Hades!": {cand(1, "Hades", 2020, "PC")},
+		}}
+		rep, err := Run(context.Background(), d, f, Options{DryRun: dry, Sleep: noSleep})
+		if err != nil || rep.Confident != 1 || rep.Uncertain != 1 || rep.Conflicts != 1 {
+			t.Errorf("dry=%v: %+v %v", dry, rep, err)
+		}
+	}
+}
+
+func TestAcceptNeverReplacesALink(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Outlast", "PC")
+	if err := Accept(d, id, 1910); err != nil {
+		t.Fatal(err)
+	}
+	if err := Accept(d, id, 1910); err != nil { // same id again: nothing to do
+		t.Errorf("same id: %v", err)
+	}
+	err := Accept(d, id, 77)
+	if e, ok := err.(*ErrAlreadyLinked); !ok || e.IGDBID != 1910 {
+		t.Fatalf("err = %v", err)
+	}
+	if igdb, _, _ := linkOf(t, d, id); igdb.Int64 != 1910 {
+		t.Errorf("link replaced: %v", igdb)
+	}
+}
+
+func TestCandidatePlatformsAndSlugAreStored(t *testing.T) {
+	d := openDB(t)
+	addGame(t, d, "Prey", "PC")
+	c1, c2 := cand(10, "Prey", 2006, "PC", "X360"), cand(11, "Prey", 2017, "PC", "PS4")
+	c1.Slug, c2.Slug = "prey--1", "prey"
+	f := &fakeIGDB{answers: map[string][]meta.Candidate{"Prey": {c1, c2}}}
+	if _, err := Run(context.Background(), d, f, Options{Sleep: noSleep}); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := Queue(d)
+	if len(q) != 1 || len(q[0].Candidates) != 2 || fmt.Sprint(q[0].Candidates[0].Platforms) != "[PC X360]" || q[0].Candidates[0].Slug != "prey--1" {
+		t.Errorf("%+v", q)
+	}
+}
+
+// A dry run must leave the file untouched, even when it is an older schema than this binary.
+func TestDryRunLeavesAnOlderDatabaseByteIdentical(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addGame(t, d, "Hades", "PC")
+	for _, q := range []string{
+		"DROP TABLE sync_candidate", "ALTER TABLE game DROP COLUMN igdb_synced_at", "ALTER TABLE game DROP COLUMN igdb_checked_at",
+		"ALTER TABLE game DROP COLUMN igdb_not_found", "PRAGMA user_version = 5", "PRAGMA journal_mode = DELETE",
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	d.Close()
+	before, _ := os.ReadFile(path)
+	f := &fakeIGDB{answers: map[string][]meta.Candidate{"Hades": {cand(1, "Hades", 2020, "PC")}}}
+	var out bytes.Buffer
+	if code := run([]string{"--dry-run", "--db", path}, "", f, true, &out); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out.String())
+	}
+	after, _ := os.ReadFile(path)
+	if !bytes.Equal(before, after) {
+		t.Error("the dry run changed the database file")
+	}
+	if !strings.Contains(out.String(), "confident:      1") {
+		t.Errorf("report:\n%s", out.String())
+	}
+	if m, _ := filepath.Glob(path + "*"); len(m) != 1 {
+		t.Errorf("stray files next to the database: %v", m)
 	}
 }

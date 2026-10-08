@@ -146,6 +146,7 @@ func Run(ctx context.Context, d *sql.DB, s Searcher, o Options) (*Report, error)
 	}
 
 	consecutiveErrors := 0
+	claimed := map[int64]int64{} // IGDB id -> the game this run linked it to (a dry run writes nothing, so the database cannot tell)
 	for i, g := range todo {
 		if i > 0 {
 			if err := o.Sleep(ctx, o.Interval); err != nil {
@@ -178,13 +179,19 @@ func Run(ctx context.Context, d *sql.DB, s Searcher, o Options) (*Report, error)
 		rep.Searched++
 		res := Classify(g.title, g.platforms, cands)
 		if res.Bucket == Confident {
-			taken, err := linkedElsewhere(d, res.Best.IGDBID, g.id)
-			if err != nil {
-				return rep, err
+			other, mine := claimed[res.Best.IGDBID]
+			taken := mine && other != g.id
+			if !taken {
+				var err error
+				if taken, err = linkedElsewhere(d, res.Best.IGDBID, g.id); err != nil {
+					return rep, err
+				}
 			}
 			if taken { // igdb_id is unique: two library games cannot both take it, so a person decides
 				res.Bucket, res.Best = Uncertain, nil
 				rep.Conflicts++
+			} else {
+				claimed[res.Best.IGDBID] = g.id
 			}
 		}
 		rep.count(res, g.title)
@@ -257,8 +264,8 @@ func apply(d *sql.DB, gameID int64, res Result) error {
 		if c.Year != 0 {
 			year = c.Year
 		}
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO sync_candidate (game_id, igdb_id, name, year, score) VALUES (?, ?, ?, ?, ?)`,
-			gameID, c.IGDBID, c.Name, year, c.Score); err != nil {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO sync_candidate (game_id, igdb_id, name, year, score, platforms, slug) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			gameID, c.IGDBID, c.Name, year, c.Score, strings.Join(c.Platforms, ", "), c.Slug); err != nil {
 			return err
 		}
 	}

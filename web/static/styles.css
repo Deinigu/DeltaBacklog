@@ -496,3 +496,9 @@ a.btn.primary { color: var(--accent-text); }
 .link-go { flex: none; color: var(--accent); font-weight: 600; }
 .link-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .link-actions .btn { flex: 1 1 120px; min-height: 44px; }
+.link-row { display: flex; align-items: stretch; gap: 8px; }
+.link-row .link-cand { flex: 1; min-width: 0; }
+.link-cand-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.link-cand-sub { color: var(--muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.link-page-link { flex: none; display: flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 8px; color: var(--accent); font-size: 13px; text-decoration: none; }
+.link-title:focus { outline: none; }

@@ -72,6 +72,8 @@ type Candidate struct {
 	Developer string   `json:"developer,omitempty"`
 	Series    string   `json:"series,omitempty"`
 	CoverURL  string   `json:"cover_url,omitempty"`
+	Slug      string   `json:"slug,omitempty"`
+	AltNames  []string `json:"-"` // IGDB's localized and alternative names; the IGDB sync scores against them too
 }
 
 // CoverOption is one SteamGridDB image.
@@ -148,9 +150,11 @@ type igdbGame struct {
 		Developer bool
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
-	Collections []struct{ Name string } `json:"collections"`
-	Franchises  []struct{ Name string } `json:"franchises"`
-	Cover       struct {
+	Collections      []struct{ Name string } `json:"collections"`
+	Franchises       []struct{ Name string } `json:"franchises"`
+	Slug             string                  `json:"slug"`
+	AlternativeNames []struct{ Name string } `json:"alternative_names"`
+	Cover            struct {
 		ImageID string `json:"image_id"`
 	} `json:"cover"`
 }
@@ -170,7 +174,7 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	}
 	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(title)
 	query := fmt.Sprintf(`search "%s"; fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,`+
-		`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id; limit 8;`, esc)
+		`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 8;`, esc)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
 	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -186,9 +190,12 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 }
 
 func (g igdbGame) candidate() Candidate {
-	cand := Candidate{IGDBID: g.ID, Name: g.Name, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
+	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
 	if g.FirstReleaseDate > 0 {
 		cand.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
+	}
+	for _, x := range g.AlternativeNames {
+		cand.AltNames = append(cand.AltNames, x.Name)
 	}
 	for _, x := range g.Genres {
 		cand.Genres = append(cand.Genres, x.Name)

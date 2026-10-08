@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
 )
@@ -35,6 +36,7 @@ func decodeLink(w http.ResponseWriter, r *http.Request, needIGDB bool) (linkBody
 
 func (s *Server) linkResult(w http.ResponseWriter, err error) {
 	var taken *igdblink.ErrTaken
+	var linked *igdblink.ErrAlreadyLinked
 	switch {
 	case err == nil:
 		s.cache.invalidate()
@@ -42,7 +44,9 @@ func (s *Server) linkResult(w http.ResponseWriter, err error) {
 	case errors.Is(err, igdblink.ErrNoGame):
 		http.Error(w, "no such game", http.StatusNotFound)
 	case errors.As(err, &taken):
-		writeErr(w, http.StatusConflict, "that IGDB game is already linked to “"+taken.Title+"”", map[string]any{"id": taken.GameID})
+		writeErr(w, http.StatusConflict, "that IGDB game is already linked to “"+taken.Title+"”", map[string]any{"id": taken.GameID, "code": "taken"})
+	case errors.As(err, &linked):
+		writeErr(w, http.StatusConflict, "this game is already linked to IGDB game "+strconv.FormatInt(linked.IGDBID, 10)+"; nothing was changed", map[string]any{"igdb_id": linked.IGDBID, "code": "already_linked"})
 	default:
 		fail(w, err)
 	}

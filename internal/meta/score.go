@@ -97,3 +97,14 @@ func TitleScore(a, b string) int {
 	}
 	return max(score, 0)
 }
+
+// SameName reports whether two titles are the same apart from case, accents and punctuation. Unlike TitleScore it
+// keeps a leading "the" and writes no roman numerals as digits: "Mirror's Edge" is not "The Mirror's Edge".
+func SameName(a, b string) bool {
+	fold := func(s string) string {
+		f := strings.FieldsFunc(foldRune.Replace(strings.ToLower(s)), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+		return strings.Join(f, " ")
+	}
+	fa := fold(a)
+	return fa != "" && fa == fold(b)
+}

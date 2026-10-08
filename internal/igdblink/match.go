@@ -14,6 +14,7 @@ const (
 	ConfidentScore = 90
 	MinScore       = 60
 	maxCandidates  = 5
+	lowProposals   = 3 // IGDB's first results kept as weak proposals when nothing links
 )
 
 // Bucket is the outcome of matching one game.
@@ -88,8 +89,13 @@ func overlaps(game []string, cand []string) bool {
 func Classify(title string, platforms []string, cands []meta.Candidate) Result {
 	scored := make([]Scored, 0, len(cands))
 	for _, c := range cands {
-		scored = append(scored, Scored{Candidate: c, Score: meta.TitleScore(title, c.Name), Overlap: overlaps(platforms, c.Platforms)})
+		sc := meta.TitleScore(title, c.Name)
+		for _, alt := range c.AltNames { // localized names rescue titles such as "La ira de la Bruja Blanca"
+			sc = max(sc, meta.TitleScore(title, alt))
+		}
+		scored = append(scored, Scored{Candidate: c, Score: sc, Overlap: overlaps(platforms, c.Platforms)})
 	}
+	byRelevance := append([]Scored(nil), scored...) // IGDB's own order, for the low-score proposals below
 	sort.SliceStable(scored, func(i, j int) bool {
 		if scored[i].Score != scored[j].Score {
 			return scored[i].Score > scored[j].Score
@@ -97,26 +103,47 @@ func Classify(title string, platforms []string, cands []meta.Candidate) Result {
 		return scored[i].Overlap && !scored[j].Overlap
 	})
 	res := Result{Bucket: NotFound}
-	strong := 0
+	var strong []Scored
 	for _, s := range scored {
-		if s.Score >= MinScore && len(res.Candidates) < maxCandidates {
-			res.Candidates = append(res.Candidates, s)
+		if s.Score >= MinScore {
+			res.Bucket = Uncertain
+			if len(res.Candidates) < maxCandidates {
+				res.Candidates = append(res.Candidates, s)
+			}
 		}
 		if s.Score >= ConfidentScore && s.Overlap {
-			strong++
+			strong = append(strong, s)
 		}
 	}
-	if len(res.Candidates) == 0 {
-		return res
+	if len(strong) > 1 { // several strong candidates: a single exact name ("Mirror's Edge", not "The Mirror's Edge") wins
+		var exact []Scored
+		for _, s := range strong {
+			if meta.SameName(title, s.Name) {
+				exact = append(exact, s)
+			}
+		}
+		if len(exact) == 1 {
+			strong = exact
+		}
 	}
-	res.Bucket = Uncertain
-	if strong == 1 {
+	if len(strong) == 1 {
 		for i := range res.Candidates {
-			if c := res.Candidates[i]; c.Score >= ConfidentScore && c.Overlap {
+			if res.Candidates[i].IGDBID == strong[0].IGDBID {
 				res.Bucket, res.Best = Confident, &res.Candidates[i]
-				break
+				return res
 			}
 		}
 	}
+	// Not linked: keep IGDB's top results by relevance even when weak. They are only proposals.
+	for i := 0; i < len(byRelevance) && i < lowProposals; i++ {
+		have := false
+		for _, c := range res.Candidates {
+			have = have || c.IGDBID == byRelevance[i].IGDBID
+		}
+		if !have && len(res.Candidates) < maxCandidates {
+			res.Candidates = append(res.Candidates, byRelevance[i])
+		}
+	}
+	sort.SliceStable(res.Candidates, func(i, j int) bool { return res.Candidates[i].Score > res.Candidates[j].Score })
 	return res
 }

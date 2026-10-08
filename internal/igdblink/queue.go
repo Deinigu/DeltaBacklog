@@ -15,6 +15,9 @@ type QueueCandidate struct {
 	Name   string `json:"name"`
 	Year   *int   `json:"year"`
 	Score  int    `json:"score"`
+	// Platforms IGDB lists for the game, and its igdb.com page name; they tell same-named games apart.
+	Platforms []string `json:"platforms"`
+	Slug      string   `json:"slug"`
 }
 
 // QueueItem is a game waiting for a decision. No candidates means the sync found nothing: search by hand.
@@ -35,6 +38,13 @@ type ErrTaken struct {
 }
 
 func (e *ErrTaken) Error() string { return fmt.Sprintf("already linked to %q", e.Title) }
+
+// ErrAlreadyLinked is returned by Accept when the game already has a different IGDB link: a link is never replaced.
+type ErrAlreadyLinked struct{ IGDBID int64 }
+
+func (e *ErrAlreadyLinked) Error() string {
+	return fmt.Sprintf("already linked to IGDB game %d", e.IGDBID)
+}
 
 // ErrNoGame is returned when the game does not exist.
 var ErrNoGame = errors.New("no such game")
@@ -71,7 +81,7 @@ func Queue(d *sql.DB) ([]QueueItem, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	crows, err := d.Query(`SELECT game_id, igdb_id, name, year, score FROM sync_candidate WHERE status = 'pending' ORDER BY game_id, score DESC, id`)
+	crows, err := d.Query(`SELECT game_id, igdb_id, name, year, score, platforms, slug FROM sync_candidate WHERE status = 'pending' ORDER BY game_id, score DESC, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -79,8 +89,13 @@ func Queue(d *sql.DB) ([]QueueItem, error) {
 	for crows.Next() {
 		var gid int64
 		var c QueueCandidate
-		if err := crows.Scan(&gid, &c.IGDBID, &c.Name, &c.Year, &c.Score); err != nil {
+		var plats string
+		if err := crows.Scan(&gid, &c.IGDBID, &c.Name, &c.Year, &c.Score, &plats, &c.Slug); err != nil {
 			return nil, err
+		}
+		c.Platforms = []string{}
+		if plats != "" {
+			c.Platforms = strings.Split(plats, ", ")
 		}
 		if i, ok := byID[gid]; ok {
 			items[i].Candidates = append(items[i].Candidates, c)
@@ -107,11 +122,17 @@ func Accept(d *sql.DB, gameID, igdbID int64) error {
 		return err
 	}
 	defer tx.Rollback()
-	var one int
-	if err := tx.QueryRow("SELECT 1 FROM game WHERE id = ?", gameID).Scan(&one); errors.Is(err, sql.ErrNoRows) {
+	var current sql.NullInt64
+	if err := tx.QueryRow("SELECT igdb_id FROM game WHERE id = ?", gameID).Scan(&current); errors.Is(err, sql.ErrNoRows) {
 		return ErrNoGame
 	} else if err != nil {
 		return err
+	}
+	if current.Valid {
+		if current.Int64 == igdbID {
+			return nil // already done (a second tab, a double tap)
+		}
+		return &ErrAlreadyLinked{IGDBID: current.Int64}
 	}
 	var other int64
 	var title string

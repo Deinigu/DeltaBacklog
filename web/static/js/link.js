@@ -15,19 +15,22 @@ export function renderLink(root) {
   const card = h('div.link-card');
   root.replaceChildren(h('div.manage.link-page', {}, h('h1', {}, 'Link with IGDB'), head, card));
 
-  async function refresh() {
+  async function refresh(keepFocus = false) {
     try { items = await linkQueue(); } catch { items = []; toast('Could not load the review queue'); }
-    if (alive) draw();
+    if (alive) draw(keepFocus);
   }
 
-  async function act(fn) {
+  async function act(fn, it) {
     if (busy) return;
     busy = true;
+    let stale = false;
     try { await fn(); } catch (e) {
-      toast(e.status === 409 ? e.message : 'Something went wrong. Check the connection and try again');
+      if (e.status === 409 && e.data?.code === 'already_linked') { stale = true; toast('That game was already linked elsewhere. Nothing was changed.'); }
+      else toast(e.status === 409 ? e.message : 'Something went wrong. Check the connection and try again');
     }
     busy = false;
-    if (alive) draw();
+    if (stale) { items = without(items, it.game_id); refresh(true); }
+    if (alive) draw(true);
   }
 
   function accept(it, igdbId) {
@@ -35,7 +38,7 @@ export function renderLink(root) {
       await linkAccept(it.game_id, igdbId);
       items = without(items, it.game_id);
       toast(`Linked “${it.title}”`);
-    });
+    }, it);
   }
 
   async function search(it) {
@@ -48,17 +51,18 @@ export function renderLink(root) {
       await linkNone(it.game_id);
       items = without(items, it.game_id);
       toast(`“${it.title}” marked as not on IGDB`);
-    });
+    }, it);
   }
 
   function candidate(it, c) {
     return h('button.link-cand', { type: 'button', onclick: () => accept(it, c.igdb_id) },
-      h('span.link-cand-name', {}, candidateLabel(c)),
+      h('span.link-cand-main', {}, h('span.link-cand-name', {}, candidateLabel(c)),
+        c.platforms?.length ? h('span.link-cand-sub', {}, c.platforms.join(', ')) : null),
       h('span.link-score', { class: scoreTone(c.score), title: 'How closely the title matches' }, `${c.score}%`),
       h('span.link-go', {}, 'Link'));
   }
 
-  function draw() {
+  function draw(focus = false) {
     if (items === null) { card.replaceChildren(h('p.hint', {}, 'Loading…')); return; }
     if (store.linkPending !== items.length) { store.linkPending = items.length; window.dispatchEvent(new Event('views-changed')); } // nav link
     head.replaceChildren(h('p.hint', {}, progressText(items, skipped)));
@@ -77,15 +81,18 @@ export function renderLink(root) {
     const it = left[0];
     const st = store.statusByCode.get(it.status);
     card.replaceChildren(
-      h('h2.link-title', {}, it.title),
+      h('h2.link-title', { tabindex: '-1' }, it.title),
       h('p.hint', {}, [gameMeta(it), st && st.label].filter(Boolean).join(' · ')),
       it.candidates.length
-        ? h('div.link-cands', {}, h('p.hint', {}, 'IGDB suggests:'), ...it.candidates.map((c) => candidate(it, c)))
+        ? h('div.link-cands', {}, h('p.hint', {}, it.candidates[0].score < 60 ? 'No close match. These are the top results on IGDB, in case one is right:' : 'IGDB suggests:'),
+          ...it.candidates.map((c) => h('div.link-row', {}, candidate(it, c),
+            c.slug ? h('a.link-page-link', { href: `https://www.igdb.com/games/${encodeURIComponent(c.slug)}`, target: '_blank', rel: 'noopener', 'aria-label': `Open ${c.name} on IGDB` }, 'IGDB ↗') : null)))
         : h('p.hint', {}, 'IGDB did not find a close match for this title.'),
       h('div.link-actions', {},
         h('button.btn', { type: 'button', onclick: () => search(it) }, 'Search IGDB…'),
         h('button.btn', { type: 'button', onclick: () => none(it) }, 'Not on IGDB'),
-        h('button.btn', { type: 'button', onclick: () => { skipped.add(it.game_id); draw(); } }, 'Skip')));
+        h('button.btn', { type: 'button', onclick: () => { skipped.add(it.game_id); draw(true); } }, 'Skip')));
+    if (focus) card.querySelector('.link-title')?.focus({ preventScroll: true });
   }
 
   draw();

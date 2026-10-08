@@ -67,6 +67,12 @@ func TestLinkQueueAcceptAndNone(t *testing.T) {
 	if c := post("/api/link/accept", `{"game_id":1,"igdb_id":10}`); c != http.StatusNoContent {
 		t.Errorf("accept: status %d", c)
 	}
+	if c := post("/api/link/accept", `{"game_id":1,"igdb_id":10}`); c != http.StatusNoContent { // same id again
+		t.Errorf("repeat accept: status %d", c)
+	}
+	if c := post("/api/link/accept", `{"game_id":1,"igdb_id":99}`); c != http.StatusConflict { // never replaces a link
+		t.Errorf("different id: status %d, want 409", c)
+	}
 	if c := post("/api/link/accept", `{"game_id":1}`); c != http.StatusBadRequest {
 		t.Errorf("missing igdb_id: status %d", c)
 	}

@@ -237,13 +237,13 @@ Games imported from your old table are not yet connected to their page on IGDB, 
 
 Most games are linked automatically. The ones the app is not sure about wait for you in **Link IGDB** (an entry in the navigation that only appears while there is something to review).
 
-For each game you see its title, year and platforms, and IGDB's best guesses with a percentage that says how closely the title matches:
+For each game you see its title, year and platforms, and IGDB's best guesses with the platforms IGDB lists for each (handy when two games share a name) and a percentage that says how closely the title matches. A low percentage means the app found no close match and shows IGDB's top results anyway, in case one is right. **IGDB ↗** opens that game's page on igdb.com:
 - Tap **Link** next to the right guess.
 - **Search IGDB…** lets you look for it yourself; tap the right result.
 - **Not on IGDB** if the game is not there at all (a fan game, a regional title). The app will not ask again.
 - **Skip** leaves it for later; it comes back the next time you open the screen, or with **Review them again**.
 
-If IGDB's game is already linked to another game in your library you are told which one, and nothing changes.
+If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
 
 ## 15. Not available yet
 

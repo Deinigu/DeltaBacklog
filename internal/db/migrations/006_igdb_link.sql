@@ -14,6 +14,8 @@ CREATE TABLE sync_candidate (
     name       TEXT NOT NULL,
     year       INTEGER,
     score      INTEGER NOT NULL CHECK (score BETWEEN 0 AND 100),
+    platforms  TEXT NOT NULL DEFAULT '', -- IGDB's platforms for the game, comma separated, shown in the review screen
+    slug       TEXT NOT NULL DEFAULT '', -- igdb.com/games/<slug>
     status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     UNIQUE (game_id, igdb_id)
