@@ -37,7 +37,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*) and **Views**. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, **Years**, your first three pinned views (for example *Playing now*, *Up next*, *Backlog*) and **Views**. The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, and all your pinned views are listed there. Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -201,7 +201,18 @@ Open a game and tap **Change cover**.
 
 **Years played on a card:** 🧒 childhood · ♾️ always played · a dashed **+N** older years not shown.
 
-## 12. If something looks wrong
+## 12. Year in review and tier lists
+
+**Years** in the navigation opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
+
+- **The page.** The big **‹** and **›** buttons go to the previous and next year (one calendar year at a time, so a year with no games is reachable too; it says nothing was recorded). The strip under the title jumps to any year, with the number of games.
+- **Counts.** Games are grouped by their *current* status: **Finished**, **Dropped**, **Still playing** (Playing and Playing - Evergreen) and **Played** (everything else, for example Evergreen or Backlog). Next to them are the platforms and genres you played that year. Tap any game to open its details.
+- **Tier list.** Every game of that year starts in *Not ranked*. Put it in a tier **S, A, B, C, D or F**: on a PC drag it with the mouse; on a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). The easiest way on a phone: **tap a game** and choose the tier from the list that opens (**Not ranked** takes it out again). Dropping between games sets their order inside the tier. Every change is saved automatically, and each year has its own list.
+- **Export PNG** saves the tier list as a picture to share.
+
+If you remove a year from a game, the game leaves that year's tier list (and comes back to its tier if you add the year again).
+
+## 13. If something looks wrong
 
 - **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
 - **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
@@ -209,8 +220,8 @@ Open a game and tap **Change cover**.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
 
-## 13. Not available yet
+## 14. Not available yet
 
-These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).

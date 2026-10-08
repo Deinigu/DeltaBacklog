@@ -60,6 +60,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/views/order", s.reorderViews)
 	mux.HandleFunc("PATCH /api/views/{id}", s.patchView)
 	mux.HandleFunc("DELETE /api/views/{id}", s.deleteView)
+	mux.HandleFunc("GET /api/tierlist/{year}", s.getTierlist)
+	mux.HandleFunc("PUT /api/tierlist/{year}", s.putTierlist)
 	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(http.FileServer(http.Dir(filepath.Clean(s.CoverDir))))))
 	return s.invalidating(mux)
 }

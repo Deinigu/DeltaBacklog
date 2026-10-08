@@ -1,9 +1,9 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v17';
+const VERSION = 'v18';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const API = 'api';
-const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/js/sort.js', '/js/filters.js', '/js/views.js', '/js/order.js', '/js/reorder.js', '/js/table.js', '/js/picker.js', '/js/csv.js', '/js/add.js', '/js/platforms.js', '/js/ownership.js', '/js/form.js', '/js/editpatch.js', '/js/years.js', '/js/colors.js', '/icon.svg'];
+const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/js/sort.js', '/js/filters.js', '/js/views.js', '/js/order.js', '/js/reorder.js', '/js/table.js', '/js/picker.js', '/js/csv.js', '/js/add.js', '/js/platforms.js', '/js/ownership.js', '/js/form.js', '/js/editpatch.js', '/js/years.js', '/js/yearreview.js', '/js/yearpage.js', '/js/tierpng.js', '/js/colors.js', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));

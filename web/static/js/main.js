@@ -5,6 +5,8 @@ import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
+import { renderYear, defaultYear } from './yearpage.js';
+import { parseYearPath } from './yearreview.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
@@ -15,6 +17,8 @@ const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'l
 // Later feature branches add their routes here (table, years, add).
 function resolve(path) {
   if (path === 'views') return { path, render: renderViews };
+  const year = parseYearPath(path);
+  if (year !== undefined) return { path: 'years', render: (root) => renderYear(root, year ?? defaultYear()) };
   const m = /^view\/(\d+)$/.exec(path);
   if (m) {
     const v = store.views.find((x) => x.id === Number(m[1]));
@@ -31,6 +35,7 @@ function buildNav() {
     pinned.length > 0 && h('div.nav-title', {}, 'My views'),
     ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 3 ? 'extra' : '' },
       h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
+    h('a', { href: '#/years', 'data-path': 'years' }, icon('years'), h('span', {}, 'Years')),
     h('a', { href: '#/views', 'data-path': 'views' }, icon('views'), h('span', {}, 'Views')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));

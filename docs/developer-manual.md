@@ -102,6 +102,8 @@ SQLite, `STRICT` tables, `PRAGMA foreign_keys=ON`, WAL, one connection (`SetMaxO
 | 004 | `game.cover_updated_at` (the cover's cache key) |
 | 005 | drops `game.series_order` and rebuilds `v_game_flat` |
 
+(`tier` and `tierlist_entry` are part of 001.)
+
 **Tables**
 
 ```
@@ -114,7 +116,8 @@ game_platform / game_genre / game_theme / game_player (game_id, x_id)   many-to-
 play(id, game_id, year NULL, period NULL)      one row per year played, or period 'childhood' / 'always'
 saved_view(id, name, icon, filter_json, sort_json, group_by, layout, pinned, pos, ...)
 game_fts                                       FTS5 (title, series, notes), kept by db.IndexGame (the UI searches client-side; not used by it yet)
-tier, tierlist_entry                           created for tier lists, not used by the UI yet
+tier(id, name UNIQUE, color, sort)             S, A, B, C, D, F (seeded in 001; fixed, not editable in the UI)
+tierlist_entry(year, game_id, tier_id, pos)    PK (year, game_id); one row per ranked game of a year; cascades with the game
 v_game_flat                                    flattened read view (group_concat of the links)
 ```
 
@@ -143,6 +146,8 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 | `POST /api/games/{id}/cover` | body `{"url": ...}` replaces the cover |
 | `GET /api/lookup?q=` | IGDB search: `{configured, query, results:[candidate]}` |
 | `GET /api/covers/search?q=&source=&igdb_id=` | cover options, `source` = `steamgriddb` (default) or `igdb` |
+| `GET /api/tierlist/{year}` | `{year, tiers:[{id,name,color}], entries:[{game_id,tier_id}]}`, entries ordered by tier then position |
+| `PUT /api/tierlist/{year}` | body `{"entries":[{game_id,tier_id}]}` replaces the whole list of that year (position = order inside each tier); answers the saved list |
 | `GET/POST /api/views`, `PATCH/DELETE /api/views/{id}`, `PUT /api/views/order` | saved views |
 | `GET /covers/<file>` | cover images (cached for 30 days; the URL carries `?v=cover_v`) |
 | `GET /healthz` | `ok` when the database answers |
@@ -152,6 +157,8 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 **`PATCH /api/games/{id}`** accepts any of: `status, favorite, vr, completed, title, notes, ownership, series, developer, release_year, platforms[], genres[], themes[], players[], years[], periods[], igdb_id`. Absent fields are untouched. Text lookups (`ownership, series, developer`) clear with `""`, numbers (`release_year`, `igdb_id`) with `0`, lists replace the whole set (`years` only the calendar years, `periods` only the periods). Validation: non-empty title (at most 200 characters), `release_year` 1950 to 2100, `years` 1970 to 2100, `periods` of `childhood` or `always`, at most 50 list items, names at most 120 characters. Answers the updated game, `400` for invalid input, `404`, or `409` for an `igdb_id` that another game has.
 
 **`POST /api/games`** takes the same fields plus `cover_url` (and requires `title`; `status` defaults to `backlog`). Answers `201 {"game": {...}, "cover_error": ""}`; a cover that fails to download does **not** fail the creation (the message is in `cover_error`). `409 {"id": <existing>}` when the `igdb_id` already exists.
+
+**Tier lists** (`internal/api/tierlist.go`). Year must be 1970 to 2100 (400 otherwise). A `PUT` is one transaction and is rejected with 400 (nothing changes) when a game has no `play` row for that year, a tier does not exist, a game is listed twice, or there are more than 1000 entries. `GET` returns only entries whose game still has a play in that year, so removing a year from a game hides its entry without a trigger (the patch of `years` deletes and re-inserts rows, which a trigger would misread). No migration was needed: `tier` and `tierlist_entry` already come from 001. Tier lists do not touch the games cache.
 
 **Safety limits** (enforced server-side, covered by tests)
 - A client-supplied cover URL must be on `cdn2.steamgriddb.com`, `cdn.steamgriddb.com` or `images.igdb.com`; redirects are never followed; images larger than 16 megapixels are rejected (computed in `int64` because the Pi is 32-bit).
@@ -168,7 +175,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 
 ## 7. Frontend
 
-Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`). No dependencies, no build.
+Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/years[/<year>]`). No dependencies, no build.
 
 **Modules (`web/static/js/`)**
 
@@ -186,6 +193,8 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
 | `add.js` | add sheet, IGDB match picker, cover picker |
 | `views.js` | the "Views" management page |
+| `yearreview.js` | **pure**: year grouping (`groupOf`), breakdowns, year strip and neighbours, route parsing, tier list state (`tierState`, `place`, `toEntries`) |
+| `yearpage.js`, `tierpng.js` | the `#/years/<year>` page (stats, tier list with pointer-event drag, long-press on touch, edge auto-scroll, tap-to-assign menu, debounced autosave) and the canvas PNG export |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
 | `util.js` | `h()` element builder, dialogs, toast, icons |
 
@@ -299,6 +308,6 @@ Under a sustained load of 8 clients the Pi's CPU reaches its thermal limit; ordi
 ## 12. Known gaps
 
 - Games imported from NocoDB have no `igdb_id` until they are matched with **Fill from IGDB**; duplicate detection falls back to the title.
-- Not built yet: Surprise me, Year in review and tier lists (the tier tables exist), series progress, statistics, a JSON export.
+- Not built yet: Surprise me, series progress, statistics, a JSON export.
 - No authentication (intended: home network only) and no HTTPS (see section 11: no offline cache or app install on the Pi).
 - The pasted-link resolver (Steam, GOG, Epic, IGDB pages) exists in the backend but is not offered in the UI; only Steam links were tried against the real site.
