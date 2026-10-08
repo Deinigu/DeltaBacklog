@@ -4,6 +4,7 @@ import { store, coverURL, getTierlist, saveTierlist } from './api.js';
 import { openDrawer } from './drawer.js';
 import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, tierState, tierOf, unranked, place, toEntries } from './yearreview.js';
 import { exportTierlistPNG } from './tierpng.js';
+import { createSaveQueue } from './savequeue.js';
 
 const thisYear = () => new Date().getFullYear();
 
@@ -18,8 +19,8 @@ export function renderYear(root, year) {
   const counts = yearCounts(store.games);
   const nb = neighbours(counts, year, thisYear());
   const groups = groupYear(store.games, year);
-  const pool = gamesOfYear(store.games, year);
-  const poolIds = pool.map((g) => g.id);
+  let pool = gamesOfYear(store.games, year);
+  let poolIds = pool.map((g) => g.id);
   const total = pool.length;
 
   const nav = (to, label, glyph) => to
@@ -43,19 +44,19 @@ export function renderYear(root, year) {
   }
 
   // ---- summary ----
-  const tile = (g) => h('div.stat', {}, h('b', {}, String(g.games.length)), h('span', {}, g.label));
+  const tile = (g) => h('div.year-stat', {}, h('b', {}, String(g.games.length)), h('span', {}, g.label));
   const bars = (title, rows) => {
     const top = rows.slice(0, 6);
     const max = top[0]?.count || 1;
-    return h('section.card-box', {}, h('h2', {}, title),
-      top.length ? h('ul.bars', {}, ...top.map((r) => h('li', {}, h('span.bar-name', {}, r.name), h('span.bar', {}, h('i', { style: `width:${Math.max(6, (r.count / max) * 100)}%` })), h('span.bar-n', {}, String(r.count))))) : h('p.hint', {}, 'None recorded'));
+    return h('section.year-box', {}, h('h2', {}, title),
+      top.length ? h('ul.year-bars', {}, ...top.map((r) => h('li', {}, h('span.year-bar-name', {}, r.name), h('span.year-bar', {}, h('i', { style: `width:${Math.max(6, (r.count / max) * 100)}%` })), h('span.year-bar-n', {}, String(r.count))))) : h('p.hint', {}, 'None recorded'));
   };
   body.append(
-    h('div.stats', {}, ...groups.map(tile)),
-    h('div.two', {}, bars('Platforms', breakdown(pool, (g) => g.platforms)), bars('Genres', breakdown(pool, (g) => g.genres))));
+    h('div.year-stats', {}, ...groups.map(tile)),
+    h('div.year-two', {}, bars('Platforms', breakdown(pool, (g) => g.platforms)), bars('Genres', breakdown(pool, (g) => g.genres))));
 
   // ---- tier list ----
-  const tierBox = h('section.card-box.tiers-box');
+  const tierBox = h('section.year-box.tiers-box');
   body.append(tierBox);
   let state = null;
   let menu = null;
@@ -71,7 +72,17 @@ export function renderYear(root, year) {
     attachDrag(el, g);
     return el;
   };
-  const byId = new Map(pool.map((g) => [g.id, g]));
+  let byId = new Map(pool.map((g) => [g.id, g]));
+
+  /** A game was edited (its years may have changed): follow the store so a stale id is never saved. */
+  function syncPool() {
+    const next = gamesOfYear(store.games, year);
+    const ids = next.map((g) => g.id);
+    if (ids.length === poolIds.length && ids.every((id, i) => id === poolIds[i])) return;
+    pool = next; poolIds = ids; byId = new Map(next.map((g) => [g.id, g]));
+    if (state) { state = tierState(state.tiers, toEntries(state), poolIds); drawTiers(); }
+  }
+  window.addEventListener('games-changed', syncPool);
 
   function drawTiers() {
     if (loadFailed) {
@@ -92,27 +103,23 @@ export function renderYear(root, year) {
       h('div.tcell.pool', { 'data-tier': '', role: 'group', 'aria-label': 'Not ranked' }, ...free.map((id) => tileEl(byId.get(id)))));
   }
 
-  // ---- saving: debounced, one request at a time, always sends the latest state ----
-  let timer = null, saving = false, dirty = false;
+  // ---- saving: debounced, one request at a time, the latest state always wins (see savequeue.js) ----
+  const sendBeacon = () => {
+    syncPool();
+    fetch(`/api/tierlist/${year}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: toEntries(state) }), keepalive: true }).catch(() => {});
+  };
+  const queue = createSaveQueue({
+    save: () => { syncPool(); return saveTierlist(year, toEntries(state)); },
+    isFatal: (e) => e.status === 400, // the server rejected this exact list: retrying it cannot help
+    onError: () => toast('Could not save the tier list. Will retry.'),
+    onFatal: () => { toast('The tier list could not be saved because games changed. Reloaded it.'); if (alive) loadTiers(); },
+  });
   function changed(next) {
     state = next;
     drawTiers();
-    dirty = true;
-    clearTimeout(timer);
-    timer = setTimeout(flush, 400);
+    queue.change();
   }
-  async function flush() {
-    if (saving || !dirty) return;
-    saving = true; dirty = false;
-    try { await saveTierlist(year, toEntries(state)); } catch { dirty = true; toast('Could not save the tier list. Will retry.'); setTimeout(flush, 4000); }
-    saving = false;
-    if (dirty && !timer) flush();
-  }
-  const onHide = () => { if (dirty && !saving) { clearTimeout(timer); saveTierlistBeacon(); } };
-  function saveTierlistBeacon() {
-    fetch(`/api/tierlist/${year}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: toEntries(state) }), keepalive: true }).catch(() => {});
-    dirty = false;
-  }
+  const onHide = () => queue.finish(sendBeacon);
   window.addEventListener('pagehide', onHide);
 
   async function loadTiers() {
@@ -126,22 +133,35 @@ export function renderYear(root, year) {
   }
 
   // ---- the tap menu: the touch-friendly alternative to dragging ----
-  function closeMenu() { menu?.remove(); menu = null; }
+  const focusTile = (id) => tierBox.querySelector(`.ttile[data-id="${id}"]`)?.focus();
+  /** Close the menu; focus goes back to the tile (found again by id, since a move redraws the tiles). */
+  function closeMenu(refocusId = null) {
+    if (!menu) return;
+    menu.remove(); menu = null;
+    if (refocusId != null) focusTile(refocusId);
+  }
   function openMenu(g) {
     closeMenu();
     const cur = tierOf(state, g.id);
-    const choose = (tierId) => { closeMenu(); if (tierId !== cur) changed(place(state, g.id, tierId)); };
-    const scrim = h('div.scrim', { onclick: closeMenu });
-    const sheet = h('div.tier-menu', { role: 'dialog', 'aria-label': `Move ${g.title}` },
+    const choose = (tierId) => { closeMenu(); if (tierId !== cur) changed(place(state, g.id, tierId)); focusTile(g.id); };
+    const scrim = h('div.scrim', { onclick: () => closeMenu(g.id) });
+    const sheet = h('div.tier-menu', { role: 'dialog', 'aria-modal': 'true', 'aria-label': `Move ${g.title}` },
       h('h3', {}, g.title),
       h('div.tier-choices', {}, ...state.tiers.map((t) => h('button.tier-choice', { type: 'button', style: `background:${t.color}`, 'aria-pressed': String(t.id === cur), onclick: () => choose(t.id) }, t.name)),
         h('button.btn.tier-none', { type: 'button', 'aria-pressed': String(cur == null), onclick: () => choose(null) }, 'Not ranked')),
-      h('div.dialog-actions', {}, h('button.btn', { type: 'button', onclick: () => { closeMenu(); openDrawer(g); } }, 'Details'), h('button.btn', { type: 'button', onclick: closeMenu }, 'Close')));
-    menu = h('div.tier-menu-wrap', {}, scrim, sheet);
+      h('div.dialog-actions', {}, h('button.btn', { type: 'button', onclick: () => { closeMenu(); openDrawer(g); } }, 'Details'), h('button.btn', { type: 'button', onclick: () => closeMenu(g.id) }, 'Close')));
+    sheet.addEventListener('keydown', (e) => { // keep Tab inside the sheet while it is open
+      if (e.key !== 'Tab') return;
+      const items = [...sheet.querySelectorAll('button')];
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    menu = h('div.tier-menu-wrap', { 'data-id': g.id }, scrim, sheet);
     document.body.append(menu);
     sheet.querySelector('button')?.focus();
   }
-  const onKey = (e) => { if (e.key === 'Escape' && menu) closeMenu(); };
+  const onKey = (e) => { if (e.key === 'Escape' && menu) { const id = menu.dataset.id; closeMenu(id ? Number(id) : null); } };
   document.addEventListener('keydown', onKey);
 
   // ---- dragging (pointer events: mouse drags at once, touch after a long press) ----
@@ -187,7 +207,10 @@ export function renderYear(root, year) {
         ghost.remove();
         el.classList.remove('dragging');
         hot?.classList.remove('hot');
-        el.addEventListener('click', (c) => c.stopImmediatePropagation(), { once: true, capture: true });
+        // A drag ends with a click on the tile when the pointer is released over it: swallow that one, then stop listening.
+        const block = (c) => c.stopImmediatePropagation();
+        el.addEventListener('click', block, { once: true, capture: true });
+        setTimeout(() => el.removeEventListener('click', block, true), 100);
         if (!cancelled && hot) {
           const tierId = hot.dataset.tier === '' ? null : Number(hot.dataset.tier);
           const others = [...hot.querySelectorAll('.ttile')].filter((t) => t !== el);
@@ -196,7 +219,8 @@ export function renderYear(root, year) {
             const r = t.getBoundingClientRect();
             if (r.bottom < ev.clientY || (ev.clientY <= r.bottom && ev.clientY >= r.top && r.left + r.width / 2 < ev.clientX)) index++;
           }
-          if (tierId !== tierOf(state, g.id) || index !== state.rows[tierId]?.indexOf(g.id)) changed(place(state, g.id, tierId, index));
+          const same = tierId === tierOf(state, g.id) && (tierId == null || index === state.rows[tierId].indexOf(g.id));
+          if (!same) changed(place(state, g.id, tierId, index));
         }
       };
       const onMove = (ev) => {
@@ -231,16 +255,16 @@ export function renderYear(root, year) {
       h('span.yinfo', {}, h('span.yname', {}, g.title), h('span.ysub', {}, [st?.label, g.platforms.slice(0, 2).join(', ')].filter(Boolean).join(' · '))));
   };
   body.append(h('div.ygroups', {}, ...groups.filter((g) => g.games.length).map((grp) =>
-    h('section.card-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
+    h('section.year-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
 
   loadTiers();
 
   return () => {
     alive = false;
     closeMenu();
-    clearTimeout(timer);
-    if (dirty && !saving && state) saveTierlistBeacon();
+    if (state) queue.finish(sendBeacon);
     window.removeEventListener('pagehide', onHide);
+    window.removeEventListener('games-changed', syncPool);
     document.removeEventListener('keydown', onKey);
   };
 }

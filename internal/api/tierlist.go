@@ -88,7 +88,9 @@ func (s *Server) getTierlist(w http.ResponseWriter, r *http.Request) {
 }
 
 // putTierlist replaces the whole list of a year. The body is {"entries": [{game_id, tier_id}, ...]}; the
-// order of the entries inside each tier is the order shown. A game must have a play in that year.
+// order of the entries inside each tier is the order shown. A game must have a play in that year, and the
+// "entries" key is required (an explicit [] clears the list; a missing key is a mistake, not a request to clear).
+// Entries of games that lost the year are hidden in GET and are kept here, so they return with the year.
 func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 	year, ok := parseYear(r)
 	if !ok {
@@ -96,9 +98,9 @@ func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Entries []TierEntry `json:"entries"`
+		Entries *[]TierEntry `json:"entries"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10)).Decode(&in); err != nil || len(in.Entries) > maxTierEntries {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10)).Decode(&in); err != nil || in.Entries == nil || len(*in.Entries) > maxTierEntries {
 		http.Error(w, "invalid tier list", http.StatusBadRequest)
 		return
 	}
@@ -108,13 +110,14 @@ func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM tierlist_entry WHERE year = ?`, year); err != nil {
+	if _, err := tx.Exec(`DELETE FROM tierlist_entry WHERE year = ?
+		AND EXISTS (SELECT 1 FROM play p WHERE p.game_id = tierlist_entry.game_id AND p.year = tierlist_entry.year)`, year); err != nil {
 		fail(w, err)
 		return
 	}
 	seen := map[int64]bool{}
 	pos := map[int64]int{}
-	for _, e := range in.Entries {
+	for _, e := range *in.Entries {
 		if seen[e.GameID] {
 			http.Error(w, "a game appears twice", http.StatusBadRequest)
 			return

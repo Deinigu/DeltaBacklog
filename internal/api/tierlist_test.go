@@ -92,3 +92,51 @@ func TestTierlistOrderAndOrphans(t *testing.T) {
 		t.Fatalf("orphan entry shown: %+v", got.Entries)
 	}
 }
+
+func TestTierlistKeepsHiddenEntriesAndNeedsEntries(t *testing.T) {
+	srv := newServer(t)
+	_, b := do(t, "POST", srv.URL+"/api/games", `{"title":"Second","years":[2025]}`)
+	var created struct{ Game Game }
+	json.Unmarshal(b, &created)
+	id2 := created.Game.ID
+	tl := getTL(t, srv.URL, 2025)
+	s, a := tl.Tiers[0].ID, tl.Tiers[1].ID
+	url := srv.URL + "/api/tierlist/2025"
+	do(t, "PUT", url, fmt.Sprintf(`{"entries":[{"game_id":%d,"tier_id":%d},{"game_id":1,"tier_id":%d}]}`, id2, s, a))
+
+	// a game loses 2025; saving the list must not forget where it was
+	do(t, "PATCH", fmt.Sprintf("%s/api/games/%d", srv.URL, id2), `{"years":[2024]}`)
+	if res, b := do(t, "PUT", url, fmt.Sprintf(`{"entries":[{"game_id":1,"tier_id":%d}]}`, s)); res.StatusCode != 200 {
+		t.Fatalf("PUT = %d %s", res.StatusCode, b)
+	}
+	do(t, "PATCH", fmt.Sprintf("%s/api/games/%d", srv.URL, id2), `{"years":[2024,2025]}`)
+	got := getTL(t, srv.URL, 2025)
+	if len(got.Entries) != 2 || got.Entries[0] != (TierEntry{1, s}) && got.Entries[1] != (TierEntry{1, s}) {
+		t.Fatalf("after save = %+v", got.Entries)
+	}
+	found := false
+	for _, e := range got.Entries {
+		if e == (TierEntry{id2, s}) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the hidden entry did not come back: %+v", got.Entries)
+	}
+
+	// a body without "entries" is rejected and changes nothing; an explicit [] still clears
+	for _, body := range []string{`{}`, `{"entires":[]}`, `{"entries":null}`} {
+		if res, _ := do(t, "PUT", url, body); res.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", body, res.StatusCode)
+		}
+	}
+	if got := getTL(t, srv.URL, 2025); len(got.Entries) != 2 {
+		t.Fatalf("a bad body changed the list: %+v", got.Entries)
+	}
+	if res, _ := do(t, "PUT", url, `{"entries":[]}`); res.StatusCode != 200 {
+		t.Fatal("clearing failed")
+	}
+	if got := getTL(t, srv.URL, 2025); len(got.Entries) != 0 {
+		t.Fatalf("cleared = %+v", got.Entries)
+	}
+}

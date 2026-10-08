@@ -147,7 +147,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 | `GET /api/lookup?q=` | IGDB search: `{configured, query, results:[candidate]}` |
 | `GET /api/covers/search?q=&source=&igdb_id=` | cover options, `source` = `steamgriddb` (default) or `igdb` |
 | `GET /api/tierlist/{year}` | `{year, tiers:[{id,name,color}], entries:[{game_id,tier_id}]}`, entries ordered by tier then position |
-| `PUT /api/tierlist/{year}` | body `{"entries":[{game_id,tier_id}]}` replaces the whole list of that year (position = order inside each tier); answers the saved list |
+| `PUT /api/tierlist/{year}` | body `{"entries":[{game_id,tier_id}]}` (the `entries` key is required: 400 when missing or null, `[]` clears) replaces the whole list of that year (position = order inside each tier); answers the saved list |
 | `GET/POST /api/views`, `PATCH/DELETE /api/views/{id}`, `PUT /api/views/order` | saved views |
 | `GET /covers/<file>` | cover images (cached for 30 days; the URL carries `?v=cover_v`) |
 | `GET /healthz` | `ok` when the database answers |
@@ -158,7 +158,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 
 **`POST /api/games`** takes the same fields plus `cover_url` (and requires `title`; `status` defaults to `backlog`). Answers `201 {"game": {...}, "cover_error": ""}`; a cover that fails to download does **not** fail the creation (the message is in `cover_error`). `409 {"id": <existing>}` when the `igdb_id` already exists.
 
-**Tier lists** (`internal/api/tierlist.go`). Year must be 1970 to 2100 (400 otherwise). A `PUT` is one transaction and is rejected with 400 (nothing changes) when a game has no `play` row for that year, a tier does not exist, a game is listed twice, or there are more than 1000 entries. `GET` returns only entries whose game still has a play in that year, so removing a year from a game hides its entry without a trigger (the patch of `years` deletes and re-inserts rows, which a trigger would misread). No migration was needed: `tier` and `tierlist_entry` already come from 001. Tier lists do not touch the games cache.
+**Tier lists** (`internal/api/tierlist.go`). Year must be 1970 to 2100 (400 otherwise). A `PUT` is one transaction and is rejected with 400 (nothing changes) when a game has no `play` row for that year, a tier does not exist, a game is listed twice, or there are more than 1000 entries. `GET` returns only entries whose game still has a play in that year, so removing a year from a game hides its entry without a trigger, and a `PUT` only replaces the entries of games that still have a play in that year (hidden entries survive it and return with the year) (the patch of `years` deletes and re-inserts rows, which a trigger would misread). No migration was needed: `tier` and `tierlist_entry` already come from 001. Tier lists do not touch the games cache.
 
 **Safety limits** (enforced server-side, covered by tests)
 - A client-supplied cover URL must be on `cdn2.steamgriddb.com`, `cdn.steamgriddb.com` or `images.igdb.com`; redirects are never followed; images larger than 16 megapixels are rejected (computed in `int64` because the Pi is 32-bit).
@@ -196,7 +196,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `surprise.js` | the Surprise me sheet (mood, result card, skip list in `sessionStorage`); opened from the Library/view header |
 | `views.js` | the "Views" management page |
 | `yearreview.js` | **pure**: year grouping (`groupOf`), breakdowns, year strip and neighbours, route parsing, tier list state (`tierState`, `place`, `toEntries`) |
-| `yearpage.js`, `tierpng.js` | the `#/years/<year>` page (stats, tier list with pointer-event drag, long-press on touch, edge auto-scroll, tap-to-assign menu, debounced autosave) and the canvas PNG export |
+| `yearpage.js`, `tierpng.js` | the `#/years/<year>` page (stats, tier list with pointer-event drag, long-press on touch, edge auto-scroll, tap-to-assign menu, debounced autosave) and the canvas PNG export. `savequeue.js` (**pure**, tested) is the autosave: debounce, one request at a time, last state wins, no retry of a 400, a final keepalive request when the page goes away. The page follows `games-changed` so a game that lost the year is never sent |
 | `stats.js`, `statspage.js` | the `#/stats` page: `stats.js` is **pure** (backlog size, finished per year, time in status, top genres, finished vs dropped, chart scale); `statspage.js` draws it (HTML bars, inline SVG chart with a screen-reader table). Computed client-side from `store.games`; no endpoint, no tables |
 | `series.js`, `seriesview.js` | **pure** series grouping, progress counts and the "3 of 5" position (definitions of finished / played / left are in the header of `series.js` and in the user manual, section 10b); and the `#/series` page. Client-side only: it groups `store.games` by series name (case-insensitive) and redraws on `games-changed` |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
