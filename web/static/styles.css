@@ -615,6 +615,30 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pick-left { text-align: center; margin: 10px 0 0; }
 .sheet.surprise .btn:disabled { opacity: .45; cursor: not-allowed; }
 
+/* ---- Link with IGDB (review queue) ---- */
+.link-page { max-width: 640px; }
+.link-card { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.link-title { margin: 0 0 2px; font-size: 20px; overflow-wrap: anywhere; }
+.link-cands { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.link-cand { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; text-align: left; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.link-cand-name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.link-score { flex: none; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--surface); border: 1px solid var(--border); }
+.link-score.high { color: #15803d; }
+.link-score.mid { color: #b45309; }
+.link-score.low { color: var(--muted); }
+:root[data-theme="dark"] .link-score.high { color: #4ade80; }
+:root[data-theme="dark"] .link-score.mid { color: #fbbf24; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .link-score.high { color: #4ade80; } :root:not([data-theme="light"]) .link-score.mid { color: #fbbf24; } }
+.link-go { flex: none; color: var(--accent); font-weight: 600; }
+.link-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.link-actions .btn { flex: 1 1 120px; min-height: 44px; }
+.link-row { display: flex; align-items: stretch; gap: 8px; }
+.link-row .link-cand { flex: 1; min-width: 0; }
+.link-cand-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.link-cand-sub { color: var(--muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.link-page-link { flex: none; display: flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 8px; color: var(--accent); font-size: 13px; text-decoration: none; }
+.link-title:focus { outline: none; }
+
 /* ---- phone navigation: "More" holds the pages that do not fit in the bottom bar ---- */
 #nav .more-btn {
   flex: 1; min-height: var(--nav-h); display: flex; flex-direction: column; align-items: center; justify-content: center;

@@ -72,6 +72,8 @@ type Candidate struct {
 	Developer string   `json:"developer,omitempty"`
 	Series    string   `json:"series,omitempty"`
 	CoverURL  string   `json:"cover_url,omitempty"`
+	Slug      string   `json:"slug,omitempty"`
+	AltNames  []string `json:"-"` // IGDB's localized and alternative names; the IGDB sync scores against them too
 }
 
 // CoverOption is one SteamGridDB image.
@@ -95,10 +97,19 @@ func (c *Client) do(req *http.Request, out any) error {
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s %s: %s", req.Method, req.URL.Host, res.Status)
+		return &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
 	}
 	return json.Unmarshal(body, out)
 }
+
+// HTTPError is a non-200 answer from a service. Callers that pace themselves (the IGDB sync) look at Status:
+// 429 means "slow down".
+type HTTPError struct {
+	Method, Host, Text string
+	Status             int
+}
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("%s %s: %s", e.Method, e.Host, e.Text) }
 
 // ---------------- IGDB ----------------
 
@@ -139,9 +150,11 @@ type igdbGame struct {
 		Developer bool
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
-	Collections []struct{ Name string } `json:"collections"`
-	Franchises  []struct{ Name string } `json:"franchises"`
-	Cover       struct {
+	Collections      []struct{ Name string } `json:"collections"`
+	Franchises       []struct{ Name string } `json:"franchises"`
+	Slug             string                  `json:"slug"`
+	AlternativeNames []struct{ Name string } `json:"alternative_names"`
+	Cover            struct {
 		ImageID string `json:"image_id"`
 	} `json:"cover"`
 }
@@ -159,27 +172,55 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	if err != nil {
 		return nil, err
 	}
-	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(title)
-	query := fmt.Sprintf(`search "%s"; fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,`+
-		`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id; limit 8;`, esc)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
-	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
-	req.Header.Set("Authorization", "Bearer "+token)
-	var games []igdbGame
-	if err := c.do(req, &games); err != nil {
-		return nil, err
+	// IGDB's search ignores alternative names and wants close spelling. When it finds nothing, try the localized
+	// names, then the title before its subtitle, then the title with its spaces removed ("Little Big Planet").
+	queries := []string{searchQuery(title), altNameQuery(title)}
+	if i := strings.IndexAny(title, ":-"); i >= 3 {
+		queries = append(queries, searchQuery(strings.TrimSpace(title[:i])))
 	}
-	out := make([]Candidate, 0, len(games))
-	for _, g := range games {
-		out = append(out, g.candidate())
+	if joined := strings.Join(strings.Fields(title), ""); joined != title && len(joined) >= 4 {
+		queries = append(queries, searchQuery(joined))
 	}
-	return out, nil
+	for _, q := range queries {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(q))
+		req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+		req.Header.Set("Authorization", "Bearer "+token)
+		var games []igdbGame
+		if err := c.do(req, &games); err != nil {
+			return nil, err
+		}
+		if len(games) == 0 {
+			continue
+		}
+		out := make([]Candidate, 0, len(games))
+		for _, g := range games {
+			out = append(out, g.candidate())
+		}
+		return out, nil
+	}
+	return []Candidate{}, nil
+}
+
+const searchFields = `fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 8;`
+
+var igdbEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+
+func searchQuery(title string) string {
+	return fmt.Sprintf(`search "%s"; `, igdbEscape.Replace(title)) + searchFields
+}
+
+func altNameQuery(title string) string {
+	return fmt.Sprintf(`where alternative_names.name ~ *"%s"*; `, igdbEscape.Replace(title)) + searchFields
 }
 
 func (g igdbGame) candidate() Candidate {
-	cand := Candidate{IGDBID: g.ID, Name: g.Name, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
+	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
 	if g.FirstReleaseDate > 0 {
 		cand.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
+	}
+	for _, x := range g.AlternativeNames {
+		cand.AltNames = append(cand.AltNames, x.Name)
 	}
 	for _, x := range g.Genres {
 		cand.Genres = append(cand.Genres, x.Name)

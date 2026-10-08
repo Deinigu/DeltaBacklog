@@ -1,12 +1,13 @@
 // App shell: hash router, navigation (bottom bar / sidebar), theme toggle, service worker.
 import { h, icon } from './util.js';
-import { load, store } from './api.js';
+import { load, store, loadLinkPending } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
 import { renderStats } from './statspage.js';
 import { renderSeries } from './seriesview.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
+import { renderLink } from './link.js';
 import { renderYear, defaultYear } from './yearpage.js';
 import { parseYearPath } from './yearreview.js';
 import { MORE_PAGES, isMorePath, openMore, closeMore } from './more.js';
@@ -20,6 +21,7 @@ const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'l
 // Later feature branches add their routes here (table, years, add).
 function resolve(path) {
   if (path === 'views') return { path, render: renderViews };
+  if (path === 'link') return { path, render: renderLink };
   const year = parseYearPath(path);
   if (year !== undefined) return { path: 'years', render: (root) => renderYear(root, year ?? defaultYear()) };
   if (path === 'stats') return { path, render: renderStats };
@@ -32,7 +34,10 @@ function resolve(path) {
   return { path: 'library', render: renderLibrary };
 }
 
-const SIDEBAR_ORDER = ['years', 'series', 'stats', 'views']; // the insight pages together, then Views
+const SIDEBAR_ORDER = ['years', 'series', 'stats', 'views', 'link']; // the insight pages together, then Views
+
+// The sheet / sidebar pages; "Link IGDB" joins them only while the IGDB review queue is not empty.
+const morePages = () => (store.linkPending > 0 ? [...MORE_PAGES, { path: 'link', label: 'Link IGDB', icon: 'link' }] : MORE_PAGES);
 
 function buildNav() {
   const pinned = store.views.filter((v) => v.pinned);
@@ -43,9 +48,9 @@ function buildNav() {
     // Phones: Library, the first two pinned views and "More" (at most 4 of the 5 slots); the sidebar lists everything.
     ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 2 ? 'extra' : '' },
       h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
-    ...[...MORE_PAGES].sort((a, b) => SIDEBAR_ORDER.indexOf(a.path) - SIDEBAR_ORDER.indexOf(b.path)).map((p) =>
+    ...[...morePages()].sort((a, b) => SIDEBAR_ORDER.indexOf(a.path) - SIDEBAR_ORDER.indexOf(b.path)).map((p) =>
       h('a.more-item', { href: `#/${p.path}`, 'data-path': p.path }, icon(p.icon), h('span', {}, p.label))),
-    h('button.more-btn', { type: 'button', 'aria-haspopup': 'dialog', onclick: (e) => openMore(e.currentTarget, resolve(currentPath()).path) }, icon('more'), h('span', {}, 'More')),
+    h('button.more-btn', { type: 'button', 'aria-haspopup': 'dialog', onclick: (e) => openMore(e.currentTarget, resolve(currentPath()).path, morePages()) }, icon('more'), h('span', {}, 'More')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
   markActive();
@@ -58,7 +63,7 @@ function markActive() {
     else a.removeAttribute('aria-current');
   }
   const more = nav.querySelector('.more-btn'); // highlighted while inside one of the pages it holds
-  if (more) { if (isMorePath(path)) more.setAttribute('aria-current', 'page'); else more.removeAttribute('aria-current'); }
+  if (more) { if (isMorePath(path, morePages())) more.setAttribute('aria-current', 'page'); else more.removeAttribute('aria-current'); }
 }
 
 function toggleTheme() {
@@ -81,6 +86,7 @@ async function route() {
       return;
     }
     buildNav();
+    loadLinkPending().then(() => { if (store.linkPending > 0) buildNav(); });
   }
   const r = resolve(currentPath());
   markActive();

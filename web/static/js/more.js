@@ -8,7 +8,7 @@ export const MORE_PAGES = [
   { path: 'years', label: 'Year in review', icon: 'years' },
   { path: 'views', label: 'Views', icon: 'views' },
 ];
-export const isMorePath = (path) => MORE_PAGES.some((p) => p.path === path);
+export const isMorePath = (path, pages = MORE_PAGES) => pages.some((p) => p.path === path);
 
 let open = null;
 
@@ -32,12 +32,12 @@ function onKey(e) {
 }
 
 /** Open the sheet; `current` is the active route, `opener` gets the focus back when it closes. */
-export function openMore(opener, current) {
+export function openMore(opener, current, pages = MORE_PAGES) {
   closeMore(false);
   const link = (p) => h('a.more-link', { href: `#/${p.path}`, 'aria-current': p.path === current ? 'page' : null, onclick: () => closeMore(false) },
     icon(p.icon), h('span', {}, p.label));
   const sheet = h('div.more-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'More pages' },
-    h('div.more-links', {}, MORE_PAGES.map(link)),
+    h('div.more-links', {}, pages.map(link)),
     h('button.btn.more-close', { type: 'button', onclick: () => closeMore() }, 'Close'));
   const wrap = h('div.more-wrap', {}, h('div.scrim', { onclick: () => closeMore() }), sheet);
   document.body.append(wrap);

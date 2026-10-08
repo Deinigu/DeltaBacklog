@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -25,7 +26,7 @@ func TestMigrateIsIdempotentAndSeeds(t *testing.T) {
 	x.QueryRow("PRAGMA user_version").Scan(&v)
 	x.QueryRow("SELECT count(*) FROM status").Scan(&statuses)
 	x.QueryRow("SELECT count(*) FROM tier").Scan(&tiers)
-	if v != 5 || statuses != 9 || tiers != 6 {
+	if v != 6 || statuses != 9 || tiers != 6 {
 		t.Errorf("version=%d statuses=%d tiers=%d", v, statuses, tiers)
 	}
 }
@@ -106,5 +107,29 @@ func TestTitleSort(t *testing.T) {
 	}
 	if got := TitleSort("  ¡Hola!"); got != "hola!" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestPathsWithURICharacters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a#b%20c")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "app.db")
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Exec("INSERT INTO game(title, title_sort, status_id) VALUES ('x','x',1)")
+	d.Close()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the database is not at the requested path: %v", err)
+	}
+	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "a*")); len(m) != 1 {
+		t.Errorf("stray files: %v", m)
+	}
+	r, err := Check(path)
+	if err != nil || r.Games != 1 {
+		t.Errorf("check: %+v %v", r, err)
 	}
 }
