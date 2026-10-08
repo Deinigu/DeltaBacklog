@@ -44,6 +44,11 @@ await shot(p, 'sort-phone');
 await go(p, '#/views');
 await shot(p, 'views-phone');
 
+await go(p, '#/series');
+await p.$$eval('.scard', (ds) => { const d = ds.find((x) => x.textContent.includes('Ace Attorney')) || ds[0]; d.open = true; d.scrollIntoView(); });
+await wait(300);
+await shot(p, 'series-phone');
+
 await go(p, '#/view/2'); // "Up next"
 await shot(p, 'view-upnext-phone');
 await clickText(p, '.view-head .btn', 'Reorder'); await wait(700);

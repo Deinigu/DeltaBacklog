@@ -49,6 +49,22 @@ test('bar shares add up to 100 and text is readable', () => {
   assert.equal(progressText(s), '1 finished · 2 played · 4 games');
 });
 
+test('series with a game without a release year have no position, only a count', () => {
+  const a = g('One', 'S', { release_year: 2000 }), b = g('Two', 'S'), c = g('Three', 'S', { release_year: 2010 });
+  const all = [a, b, c];
+  assert.equal(buildSeries(all)[0].noYear, 1);
+  assert.deepEqual(seriesPosition(a, all), { position: null, total: 3, name: 'S' });
+  assert.deepEqual(seriesPosition(b, all), { position: null, total: 3, name: 'S' });
+});
+
+test('ties on year and title fall back to the id; bar rest; empty withLeft', () => {
+  const x = g('Same', 'S', { release_year: 2000 }), y = g('Same', 'S', { release_year: 2000 });
+  assert.deepEqual(buildSeries([y, x])[0].games.map((q) => q.id), [x.id, y.id]);
+  const s = buildSeries([g('A', 'S', { status: 'finished' }), g('B', 'S')])[0];
+  assert.equal(barShares(s).rest, 50);
+  assert.deepEqual(withLeft(buildSeries([g('A', 'S', { status: 'finished' })])), []);
+});
+
 test('seriesPosition follows release order and hides single-game series', () => {
   const a = g('One', 'S', { release_year: 2000 }), b = g('Two', 'S', { release_year: 2005 }), c = g('Three', 'S', { release_year: 2010 }), solo = g('Solo', 'T');
   const all = [c, a, b, solo];

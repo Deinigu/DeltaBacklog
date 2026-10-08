@@ -197,8 +197,10 @@ Open **Series** in the navigation to see how far you are through every series. E
 - **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
 - The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
 - **Games left to play** (the button at the top) hides series where nothing is left.
-- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": set the release year to put a game in its place.
-- A game's details show where it falls, for example **3 of 5 in Ace Attorney** (only for series with at least two games). A series is every game with the same series name; capital letters do not matter.
+- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
+- A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
+
+![The Series page with a series open](img/series-phone.jpg)
 
 ## 11. What the little icons mean
 

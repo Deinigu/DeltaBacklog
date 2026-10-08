@@ -10,10 +10,11 @@ import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect
 
 let open = null;
 
-/** "3 of 5 in Name": where the game falls in its series by release year. */
+/** "3 of 5 in Name" by release year, or "Name (5 games)" while some game of the series has no year. */
 function seriesFact(game) {
   const p = seriesPosition(game, store.games);
-  return p ? `${p.position} of ${p.total} in ${p.name}` : game.series;
+  if (!p) return game.series;
+  return p.position ? `${p.position} of ${p.total} in ${p.name}` : `${p.name} (${p.total} games)`;
 }
 
 /** Status picker and favorite toggle; changes apply immediately and refresh every open view. */
