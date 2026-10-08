@@ -185,6 +185,8 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `editpatch.js` | **pure**: form state from a game, validation, and the minimal patch of what changed |
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
 | `add.js` | add sheet, IGDB match picker, cover picker |
+| `pick.js` | **pure**: Surprise me rules: pool (Up next, else Backlog; never finished/dropped/not interested/evergreen unless filtered), mood narrowing and chip counts, seedable RNG, pick without repeats |
+| `surprise.js` | the Surprise me sheet (mood, result card, skip list in `sessionStorage`); opened from the Library/view header |
 | `views.js` | the "Views" management page |
 | `series.js`, `seriesview.js` | **pure** series grouping, progress counts and the "3 of 5" position (definitions of finished / played / left are in the header of `series.js` and in the user manual, section 10b); and the `#/series` page. Client-side only: it groups `store.games` by series name (case-insensitive) and redraws on `games-changed` |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
@@ -300,6 +302,6 @@ Under a sustained load of 8 clients the Pi's CPU reaches its thermal limit; ordi
 ## 12. Known gaps
 
 - Games imported from NocoDB have no `igdb_id` until they are matched with **Fill from IGDB**; duplicate detection falls back to the title.
-- Not built yet: Surprise me, Year in review and tier lists (the tier tables exist), statistics, a JSON export.
+- Not built yet: Year in review and tier lists (the tier tables exist), statistics, a JSON export.
 - No authentication (intended: home network only) and no HTTPS (see section 11: no offline cache or app install on the Pi).
 - The pasted-link resolver (Steam, GOG, Epic, IGDB pages) exists in the backend but is not offered in the UI; only Steam links were tried against the real site.

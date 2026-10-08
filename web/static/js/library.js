@@ -7,6 +7,7 @@ import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
+import { openSurprise } from './surprise.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -54,13 +55,15 @@ export function renderLibrary(root, opts = {}) {
   let tableInst = null, tableBox = null;
   const tableScroll = { top: 0, left: 0 };
   const layoutBtn = h('button.btn', { type: 'button', 'aria-label': 'Switch between cards and table', onclick: () => { state.layout = state.layout === 'table' ? 'cards' : 'table'; reordering = false; update(); } });
+  const surpriseBtn = h('button.btn', { type: 'button', onclick: () => openSurprise(state) });
+  setLabel(surpriseBtn, '🎲', 'Surprise me');
   const reorderBtn = h('button.btn', { type: 'button', 'aria-pressed': 'false', onclick: () => { reordering = !reordering; update(); } }, '⇅ Reorder');
   const saveBtn = h('button.btn.primary', { type: 'button', onclick: saveChanges }, 'Save');
   const saveAsBtn = h('button.btn', { type: 'button', onclick: saveAs }, view ? 'Save as…' : 'Save as view');
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const head = h('div.view-head', {}, title, layoutBtn, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
+  const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
 
   const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
