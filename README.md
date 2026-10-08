@@ -23,6 +23,7 @@ One small Go program, one SQLite file, no cloud, no login. It is light enough fo
 | **Add games on the go** | Type a title: genres, themes, developer, series, release year and a cover come from IGDB and SteamGridDB, and the platform is pre-selected from the ones you play most. |
 | **Edit everything** | Change any field on a phone, refill a game's details from IGDB, and swap its cover for SteamGridDB or IGDB artwork. |
 | **Series progress** | See how far you are through every series: a progress bar per series, its games in release order, and a filter for series with games left to play. |
+| **Stats** | Backlog size by platform, games finished per year, how long games have been waiting, your most played genres, and finished against dropped. |
 | **Can't decide?** | **Surprise me** picks a random game from what you are looking at, narrowed by platform, genre, VR or "not played recently", and never repeats. |
 | **Yours to keep** | Covers are stored on the Pi, so the app keeps working when those websites do not. |
 
@@ -33,7 +34,7 @@ One small Go program, one SQLite file, no cloud, no login. It is light enough fo
   <img src="docs/img/cover-picker-phone.jpg" alt="Choosing a cover" width="200">
 </p>
 
-**Coming next:** year in review and tier lists, statistics, and automatic backups with export and restore.
+**Coming next:** year in review and tier lists, and automatic backups with export and restore.
 
 More in the **[user manual](docs/user-manual.md)** (with screenshots of every screen).
 
