@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { seededRng, buildPool, applyMood, moodCounts, emptyMood, notPlayedRecently, pickOne, hasNoFilters } from '../static/js/pick.js';
+import { seededRng, buildPool, applyMood, moodCounts, emptyMood, notPlayedRecently, pickOne, hasNoFilters, playTarget } from '../static/js/pick.js';
 import { emptyState, cycle } from '../static/js/filters.js';
 
 let n = 0;
@@ -77,10 +77,18 @@ test('search text counts as a filter', () => {
 test('not played recently: never played, or last calendar year at least 2 years ago', () => {
   assert.equal(notPlayedRecently(game({ years: [] }), 2026), true);
   assert.equal(notPlayedRecently(game({ years: [], periods: ['childhood'] }), 2026), true); // periods are not calendar years
+  assert.equal(notPlayedRecently(game({ years: [], periods: ['always'] }), 2026), false); // played all the time
+  assert.equal(notPlayedRecently(game({ years: [2010], periods: ['always'] }), 2026), false);
   assert.equal(notPlayedRecently(game({ years: [2024] }), 2026), true);
   assert.equal(notPlayedRecently(game({ years: [2010, 2024] }), 2026), true);
   assert.equal(notPlayedRecently(game({ years: [2025] }), 2026), false);
   assert.equal(notPlayedRecently(game({ years: [2010, 2026] }), 2026), false);
+});
+
+test('Play it keeps Evergreen games Evergreen and makes everything else Playing', () => {
+  assert.equal(playTarget('evergreen'), 'playing_evergreen');
+  assert.equal(playTarget('playing_evergreen'), 'playing_evergreen');
+  for (const st of ['backlog', 'up_next', 'hold', 'playing', 'finished']) assert.equal(playTarget(st), 'playing');
 });
 
 test('mood: any selected platform, any selected genre, and the parts combine', () => {

@@ -356,7 +356,8 @@ a.btn.primary { color: var(--accent-text); }
 
 /* ---- add sheet ---- */
 .sheet .headl { display: flex; align-items: center; gap: 10px; }
-.sheet .headl .btn { height: 40px; min-width: 40px; padding: 0; }
+.sheet .headl .btn { height: 44px; min-width: 44px; padding: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (min-width: 900px) { .sheet.add { width: 620px; margin-left: -310px; top: 6vh; } }
 .sheet.add .filters-body { min-height: 40vh; }
 .cands { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
@@ -409,6 +410,7 @@ a.btn.primary { color: var(--accent-text); }
 .td .oicon { flex: none; font-size: 16px; line-height: 1; }
 
 @media (max-width: 599px) { .view-head .lbl { display: none; } .view-head .btn { padding: 0 12px; } }
+.meta-row .btn { flex: none; height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; font-size: 14px; white-space: nowrap; }
 
 /* ---- edit mode in the drawer ---- */
 .editview .addform { padding-bottom: 8px; }
@@ -603,7 +605,7 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .sheet.surprise .filters-foot.three .btn { flex: 1 1 30%; min-width: 0; padding: 0 8px; }
 .sheet.surprise .filters-foot.three .btn.primary { flex-basis: 100%; }
 .sheet.surprise .filters-foot.three .btn { white-space: nowrap; }
-@media (min-width: 600px) { .sheet.surprise .filters-foot.three .btn.primary { flex: 1.4 1 0; } }
+@media (min-width: 600px) { .sheet.surprise .filters-foot.three .btn { flex: 1 1 0; } .sheet.surprise .filters-foot.three .btn.primary { flex: 1.4 1 0; } }
 .pick-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
 .pick-card .cover { border-bottom: 3px solid var(--st, transparent); }
 .pick-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
