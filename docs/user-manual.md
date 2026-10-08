@@ -198,8 +198,10 @@ Open **Series** in the navigation to see how far you are through every series. E
 - **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
 - The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
 - **Games left to play** (the button at the top) hides series where nothing is left.
-- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": set the release year to put a game in its place.
-- A game's details show where it falls, for example **3 of 5 in Ace Attorney** (only for series with at least two games). A series is every game with the same series name; capital letters do not matter.
+- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
+- A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
+
+![The Series page with a series open](img/series-phone.jpg)
 
 ## 11. What the little icons mean
 
@@ -233,8 +235,8 @@ If you remove a year from a game, the game leaves that year's tier list (and com
 Open **Stats** in the navigation. Everything is worked out from the games you already have; nothing is stored.
 
 - **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
-- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games with no year recorded are mentioned under the chart, not drawn.
-- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Right after an import every game has the same date, so the card tells you there is nothing to compare yet.
+- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
 - **Finished or dropped**: the share of games you finished against dropped.
 

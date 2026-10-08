@@ -23,7 +23,8 @@ const keyOf = (name) => name.trim().toLowerCase();
 
 /**
  * Every series that has at least one game, as
- *  { key, name, games (ordered), total, finished, played, left }
+ *  { key, name, games (ordered), total, finished, played, left, noYear }
+ * `noYear` counts the games without a release year (the order is then only partly known).
  * `played` includes the finished games. Series are ordered by name; names that differ only in case are one series.
  */
 export function buildSeries(games) {
@@ -42,6 +43,7 @@ export function buildSeries(games) {
     s.finished = s.games.filter(isFinished).length;
     s.played = s.games.filter(isPlayed).length;
     s.left = s.games.filter(isLeft).length;
+    s.noYear = s.games.filter((g) => g.release_year == null).length;
   }
   return out.sort((a, b) => collator.compare(a.name, b.name));
 }
@@ -62,11 +64,15 @@ export function progressText(s) {
   return `${s.finished} finished · ${s.played} played · ${s.total} ${s.total === 1 ? 'game' : 'games'}`;
 }
 
-/** Where a game stands in its series: { position, total, name } (position follows release order), or null. */
+/**
+ * Where a game stands in its series: { position, total, name }, or null outside a multi-game series.
+ * `position` follows release order and is null while any game of the series has no release year (it would be a guess).
+ */
 export function seriesPosition(game, games) {
   if (!game.series || !game.series.trim()) return null;
   const s = buildSeries(games).find((x) => x.key === keyOf(game.series));
   if (!s || s.total < 2) return null;
   const i = s.games.findIndex((g) => g.id === game.id);
-  return i < 0 ? null : { position: i + 1, total: s.total, name: s.name };
+  if (i < 0) return null;
+  return { position: s.noYear ? null : i + 1, total: s.total, name: s.name };
 }
