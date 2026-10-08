@@ -15,6 +15,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 8. [The table (spreadsheet) layout](#8-the-table-spreadsheet-layout)
 9. [Adding a game](#9-adding-a-game)
 10. [Covers](#10-covers)
+10b. [Series progress](#10b-series-progress)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [If something looks wrong](#12-if-something-looks-wrong)
 13. [Surprise me: let the app choose](#13-surprise-me-let-the-app-choose)
@@ -186,6 +187,20 @@ Open a game and tap **Change cover**.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
 
+## 10b. Series progress
+
+Open **Series** in the navigation to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
+
+- **Finished** means the game's status is **Finished**.
+- **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
+- **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
+- The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
+- **Games left to play** (the button at the top) hides series where nothing is left.
+- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
+- A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
+
+![The Series page with a series open](img/series-phone.jpg)
+
 ## 11. What the little icons mean
 
 **Ownership** (filters, the table, the game's details and a badge on cards):
@@ -232,6 +247,6 @@ The **←** button goes back to the mood, and **✕** (or Escape) closes the she
 
 ## 14. Not available yet
 
-These are planned and will be added to this manual when they exist: **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: **Year in review and tier lists**, **statistics**, and a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).

@@ -3,6 +3,7 @@ import { h, icon } from './util.js';
 import { load, store } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
+import { renderSeries } from './seriesview.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 
@@ -15,6 +16,7 @@ const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'l
 // Later feature branches add their routes here (table, years, add).
 function resolve(path) {
   if (path === 'views') return { path, render: renderViews };
+  if (path === 'series') return { path, render: renderSeries };
   const m = /^view\/(\d+)$/.exec(path);
   if (m) {
     const v = store.views.find((x) => x.id === Number(m[1]));
@@ -31,6 +33,7 @@ function buildNav() {
     pinned.length > 0 && h('div.nav-title', {}, 'My views'),
     ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 3 ? 'extra' : '' },
       h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
+    h('a', { href: '#/series', 'data-path': 'series' }, icon('series'), h('span', {}, 'Series')),
     h('a', { href: '#/views', 'data-path': 'views' }, icon('views'), h('span', {}, 'Views')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
