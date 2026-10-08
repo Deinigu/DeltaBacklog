@@ -461,3 +461,20 @@ a.btn.primary { color: var(--accent-text); }
   .table-tools .btn { height: 44px; }
 }
 .chip[data-state="in"] .c, .chip[aria-pressed="true"] .c { opacity: 1; } /* the count on a selected chip stays at full contrast */
+
+/* ---- Surprise me ---- */
+.mood-group h3 { margin: 10px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.surprise-msg { color: var(--muted); font-size: 14px; flex: 1; align-self: center; margin: 0; }
+.sheet.surprise .filters-foot { flex-wrap: wrap; align-items: center; }
+.sheet.surprise .filters-foot.three .btn { flex: 1 1 30%; min-width: 0; padding: 0 8px; }
+.sheet.surprise .filters-foot.three .btn.primary { flex-basis: 100%; }
+.sheet.surprise .filters-foot.three .btn { white-space: nowrap; }
+@media (min-width: 600px) { .sheet.surprise .filters-foot.three .btn.primary { flex: 1.4 1 0; } }
+.pick-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.pick-card .cover { border-bottom: 3px solid var(--st, transparent); }
+.pick-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.pick-title { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+.pick-never { color: var(--muted); font-size: 13px; }
+.pf.genre { background: none; border: 1px solid var(--border); }
+.pick-left { text-align: center; margin: 10px 0 0; }
+.sheet.surprise .btn:disabled { opacity: .45; cursor: not-allowed; }

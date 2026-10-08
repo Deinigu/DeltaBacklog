@@ -17,7 +17,8 @@ This manual is task by task. For how the program is built, see the [developer ma
 10. [Covers](#10-covers)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [If something looks wrong](#12-if-something-looks-wrong)
-13. [Not available yet](#13-not-available-yet)
+13. [Surprise me: let the app choose](#13-surprise-me-let-the-app-choose)
+14. [Not available yet](#14-not-available-yet)
 
 ---
 
@@ -209,8 +210,28 @@ Open a game and tap **Change cover**.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
 
-## 13. Not available yet
+## 13. Surprise me: let the app choose
 
-These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name).
+
+**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
+
+**Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
+- **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
+- **VR only**.
+- **Not played recently**: games you never played, or whose last year played is two or more years ago.
+
+If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
+
+**The result.** You see the cover, the title, platforms, genres and the years you played it, and three buttons:
+- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet.
+- **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
+- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings them back.
+
+The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
+
+## 14. Not available yet
+
+These are planned and will be added to this manual when they exist: **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
