@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v19';
+const VERSION = 'v20';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const API = 'api';

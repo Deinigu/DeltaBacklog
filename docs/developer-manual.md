@@ -184,7 +184,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `drawer.js` | game details, quick changes, edit mode, delete |
 | `editpatch.js` | **pure**: form state from a game, validation, and the minimal patch of what changed |
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
-| `add.js` | add sheet, IGDB match picker, cover picker |
+| `add.js` | add sheet, IGDB match picker, cover picker, and `makeSheet`, the shared scrim + sheet. `makeSheet` focuses the sheet on open and returns focus to the opener on close (not to a text field). Re-render with `sheet.render(fn)`, which keeps focus on the control with the same `data-fk` (else the primary footer button, else the sheet); announce with `sheet.say(text)`, one persistent `role=status` region. New sheets should use both instead of `replaceChildren` alone |
 | `pick.js` | **pure**: Surprise me rules: pool (Up next, else Backlog; never finished/dropped/not interested/evergreen unless filtered), mood narrowing and chip counts, seedable RNG, pick without repeats, the status "Play it" sets (`playTarget`) |
 | `surprise.js` | the Surprise me sheet (mood, result card, skip list in `sessionStorage`); opened from the Library/view header |
 | `views.js` | the "Views" management page |

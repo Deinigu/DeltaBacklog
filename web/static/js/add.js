@@ -12,7 +12,8 @@ export function makeSheet(titleText, extraClass = '') {
   const opener = document.activeElement;
   const close = () => {
     scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey);
-    if (opener?.isConnected && typeof opener.focus === 'function') opener.focus({ preventScroll: true });
+    // not into a text field: on iOS that would pop the keyboard back up
+    if (opener?.isConnected && typeof opener.focus === 'function' && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
     onClose && onClose();
   };
   const scrim = h('div.scrim.show', { onclick: close });

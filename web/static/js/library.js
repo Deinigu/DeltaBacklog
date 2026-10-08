@@ -63,7 +63,11 @@ export function renderLibrary(root, opts = {}) {
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, saveBtn, saveAsBtn, view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views')));
+  const manageBtn = view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views'));
+  const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, manageBtn);
+  // Below 600px Save / Save as… sit in the meta row (next to Revert), so the head stays one row while typing in a view
+  const narrow = window.matchMedia('(max-width: 599px)');
+  narrow.addEventListener('change', () => update());
 
   const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
@@ -259,16 +263,20 @@ export function renderLibrary(root, opts = {}) {
     }
     for (const f of state.flags) active.push(h('button.pill', { type: 'button', onclick: () => { state.flags.delete(f); update(); } }, FLAGS.find((x) => x.key === f).label, ' ✕'));
     const nFilters = activeCount(state);
-    meta.replaceChildren(
-      h('span.count', {}, `${list.length} of ${store.games.length} games`), ...active,
-      (nFilters || state.q) && h('button.pill.reset', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset'));
+    saveBtn.hidden = !(view && dirty());
+    saveAsBtn.hidden = view ? false : isPristine(state);
+    const revert = (nFilters || state.q) && h('button.pill.reset', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset');
+    if (narrow.matches) {
+      meta.replaceChildren(h('span.count', {}, `${list.length} of ${store.games.length} games`), revert, saveBtn, saveAsBtn, ...active);
+    } else {
+      meta.replaceChildren(h('span.count', {}, `${list.length} of ${store.games.length} games`), ...active, revert);
+      head.insertBefore(saveBtn, manageBtn || null);
+      head.insertBefore(saveAsBtn, manageBtn || null);
+    }
     filterBadge.hidden = !nFilters;
     filterBadge.textContent = nFilters;
     showBtn.textContent = `Show ${list.length} games`;
 
-    saveBtn.hidden = !(view && dirty());
-    saveAsBtn.hidden = view ? false : isPristine(state);
-    head.classList.toggle('saving', !saveBtn.hidden); // on a phone the buttons wrap under the title while Save shows, so the view name stays readable
   }
   update();
 

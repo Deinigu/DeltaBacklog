@@ -409,7 +409,8 @@ a.btn.primary { color: var(--accent-text); }
 .cover .own { position: absolute; top: 6px; left: 6px; width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,.55); display: grid; place-items: center; font-size: 14px; line-height: 1; }
 .td .oicon { flex: none; font-size: 16px; line-height: 1; }
 
-@media (max-width: 599px) { .view-head .lbl { display: none; } .view-head .btn { padding: 0 12px; } .view-head.saving { flex-wrap: wrap; } .view-head.saving h1 { flex-basis: 100%; } }
+@media (max-width: 599px) { .view-head .lbl { display: none; } .view-head .btn { padding: 0 12px; } }
+.meta-row .btn { flex: none; height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; font-size: 14px; white-space: nowrap; }
 
 /* ---- edit mode in the drawer ---- */
 .editview .addform { padding-bottom: 8px; }
@@ -470,7 +471,7 @@ a.btn.primary { color: var(--accent-text); }
 .sheet.surprise .filters-foot.three .btn { flex: 1 1 30%; min-width: 0; padding: 0 8px; }
 .sheet.surprise .filters-foot.three .btn.primary { flex-basis: 100%; }
 .sheet.surprise .filters-foot.three .btn { white-space: nowrap; }
-@media (min-width: 600px) { .sheet.surprise .filters-foot.three .btn.primary { flex: 1.4 1 30%; } }
+@media (min-width: 600px) { .sheet.surprise .filters-foot.three .btn { flex: 1 1 0; } .sheet.surprise .filters-foot.three .btn.primary { flex: 1.4 1 0; } }
 .pick-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
 .pick-card .cover { border-bottom: 3px solid var(--st, transparent); }
 .pick-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
