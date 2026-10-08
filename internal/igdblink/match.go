@@ -34,7 +34,8 @@ type Scored struct {
 }
 
 // Result is the matching outcome of one game: the bucket, the winner (Confident only) and the candidates worth
-// showing to the owner (score >= MinScore, best first, at most five).
+// showing to the owner (best first, at most five): those scoring >= MinScore, plus IGDB's first results as weak proposals
+// when the game is not linked.
 type Result struct {
 	Bucket     Bucket
 	Best       *Scored

@@ -30,7 +30,7 @@ func openDryRunCopy(path string) (*sql.DB, func(), error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, nil, err
 	}
-	ro, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
+	ro, err := sql.Open("sqlite", db.FileURI(path)+"?mode=ro")
 	if err != nil {
 		return nil, nil, err
 	}

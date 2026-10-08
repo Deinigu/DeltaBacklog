@@ -22,9 +22,15 @@ var lookupTables = map[string]bool{
 	"series": true, "company": true, "player": true,
 }
 
+// FileURI turns a file path into a SQLite "file:" URI, escaping the characters that would otherwise start the
+// query or fragment part (%, #, ?).
+func FileURI(path string) string {
+	return "file:" + strings.NewReplacer("%", "%25", "#", "%23", "?", "%3f").Replace(path)
+}
+
 // Open opens (creating if needed) the database at path and migrates it to the latest version.
 func Open(path string) (*sql.DB, error) {
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+	dsn := FileURI(path) + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 	d, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

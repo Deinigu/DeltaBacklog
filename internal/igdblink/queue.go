@@ -159,12 +159,17 @@ func NotOnIGDB(d *sql.DB, gameID int64) error {
 		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.Exec("UPDATE game SET igdb_not_found = 1, igdb_checked_at = coalesce(igdb_checked_at, ?) WHERE id = ? AND igdb_id IS NULL", now(), gameID)
-	if err != nil {
+	var current sql.NullInt64
+	if err := tx.QueryRow("SELECT igdb_id FROM game WHERE id = ?", gameID).Scan(&current); errors.Is(err, sql.ErrNoRows) {
+		return ErrNoGame
+	} else if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNoGame
+	if current.Valid { // linked meanwhile (another device, Fill from IGDB): never mark a linked game as absent
+		return &ErrAlreadyLinked{IGDBID: current.Int64}
+	}
+	if _, err := tx.Exec("UPDATE game SET igdb_not_found = 1, igdb_checked_at = coalesce(igdb_checked_at, ?) WHERE id = ?", now(), gameID); err != nil {
+		return err
 	}
 	if _, err := tx.Exec("UPDATE sync_candidate SET status = 'rejected' WHERE game_id = ? AND status = 'pending'", gameID); err != nil {
 		return err

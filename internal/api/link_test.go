@@ -79,6 +79,9 @@ func TestLinkQueueAcceptAndNone(t *testing.T) {
 	if c := post("/api/link/accept", `{"game_id":404,"igdb_id":5}`); c != http.StatusNotFound {
 		t.Errorf("unknown game: status %d", c)
 	}
+	if c := post("/api/link/none", `{"game_id":1}`); c != http.StatusConflict { // game 1 was linked above
+		t.Errorf("none on a linked game: status %d, want 409", c)
+	}
 	if c := post("/api/link/none", `{"game_id":2}`); c != http.StatusNoContent {
 		t.Errorf("none: status %d", c)
 	}

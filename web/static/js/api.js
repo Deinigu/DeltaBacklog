@@ -213,7 +213,7 @@ export async function setCover(id, url) {
 
 // ---- Link with IGDB (review queue of the IGDB sync) ----
 
-/** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score}]}]. */
+/** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score, platforms, slug}]}]. */
 export async function linkQueue() {
   return (await request('GET', '/api/link/queue')).items;
 }

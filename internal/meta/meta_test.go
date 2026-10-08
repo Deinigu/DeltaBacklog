@@ -285,3 +285,45 @@ func TestRateLimitIsATypedError(t *testing.T) {
 		t.Fatalf("err = %v, want *HTTPError with status 429", err)
 	}
 }
+
+func TestSearchFallsBackWhenTheTitleSearchFindsNothing(t *testing.T) {
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/token") {
+			w.Write([]byte(`{"access_token":"tok","expires_in":3600}`))
+			return
+		}
+		body := make([]byte, 2000)
+		n, _ := r.Body.Read(body)
+		q := string(body[:n])
+		queries = append(queries, q[:strings.Index(q, ";")])
+		switch {
+		case strings.HasPrefix(q, `where alternative_names.name ~ *"Profesor Layton y el Futuro Perdido"*`):
+			w.Write([]byte(`[{"id":9,"name":"Professor Layton and the Lost Future","alternative_names":[{"name":"Profesor Layton y el Futuro Perdido"}]}]`))
+		case strings.HasPrefix(q, `search "Little Big`): // only the spaceless spelling is known
+			w.Write([]byte(`[]`))
+		case strings.HasPrefix(q, `search "LittleBigPlanet2"`):
+			w.Write([]byte(`[{"id":5,"name":"LittleBigPlanet 2"}]`))
+		default:
+			w.Write([]byte(`[]`))
+		}
+	}))
+	defer srv.Close()
+	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
+	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+
+	got, err := c.SearchIGDB(context.Background(), "Profesor Layton y el Futuro Perdido")
+	if err != nil || len(got) != 1 || got[0].IGDBID != 9 || got[0].AltNames[0] != "Profesor Layton y el Futuro Perdido" {
+		t.Fatalf("alternative-name fallback: %+v %v", got, err)
+	}
+	if len(queries) != 2 || !strings.HasPrefix(queries[0], "search ") {
+		t.Errorf("queries = %q", queries)
+	}
+	got, err = c.SearchIGDB(context.Background(), "Little Big Planet 2")
+	if err != nil || len(got) != 1 || got[0].IGDBID != 5 {
+		t.Fatalf("spaceless fallback: %+v %v", got, err)
+	}
+	if got, _ := c.SearchIGDB(context.Background(), "Nothing Like This: At All"); got == nil || len(got) != 0 {
+		t.Errorf("nothing found must be an empty list, got %#v", got)
+	}
+}

@@ -172,21 +172,46 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	if err != nil {
 		return nil, err
 	}
-	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(title)
-	query := fmt.Sprintf(`search "%s"; fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,`+
-		`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 8;`, esc)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
-	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
-	req.Header.Set("Authorization", "Bearer "+token)
-	var games []igdbGame
-	if err := c.do(req, &games); err != nil {
-		return nil, err
+	// IGDB's search ignores alternative names and wants close spelling. When it finds nothing, try the localized
+	// names, then the title before its subtitle, then the title with its spaces removed ("Little Big Planet").
+	queries := []string{searchQuery(title), altNameQuery(title)}
+	if i := strings.IndexAny(title, ":-"); i >= 3 {
+		queries = append(queries, searchQuery(strings.TrimSpace(title[:i])))
 	}
-	out := make([]Candidate, 0, len(games))
-	for _, g := range games {
-		out = append(out, g.candidate())
+	if joined := strings.Join(strings.Fields(title), ""); joined != title && len(joined) >= 4 {
+		queries = append(queries, searchQuery(joined))
 	}
-	return out, nil
+	for _, q := range queries {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(q))
+		req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+		req.Header.Set("Authorization", "Bearer "+token)
+		var games []igdbGame
+		if err := c.do(req, &games); err != nil {
+			return nil, err
+		}
+		if len(games) == 0 {
+			continue
+		}
+		out := make([]Candidate, 0, len(games))
+		for _, g := range games {
+			out = append(out, g.candidate())
+		}
+		return out, nil
+	}
+	return []Candidate{}, nil
+}
+
+const searchFields = `fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 8;`
+
+var igdbEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+
+func searchQuery(title string) string {
+	return fmt.Sprintf(`search "%s"; `, igdbEscape.Replace(title)) + searchFields
+}
+
+func altNameQuery(title string) string {
+	return fmt.Sprintf(`where alternative_names.name ~ *"%s"*; `, igdbEscape.Replace(title)) + searchFields
 }
 
 func (g igdbGame) candidate() Candidate {

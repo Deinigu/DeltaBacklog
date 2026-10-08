@@ -17,7 +17,7 @@ type Report struct {
 // Check opens a database file strictly read-only (it never migrates or changes it, so it is safe on a backup)
 // and reports whether it is intact and what it holds.
 func Check(path string) (Report, error) {
-	d, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	d, err := sql.Open("sqlite", FileURI(path)+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return Report{}, err
 	}

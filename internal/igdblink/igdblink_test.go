@@ -416,7 +416,7 @@ func TestAlternativeNamesRescueLocalizedTitles(t *testing.T) {
 
 func TestWeakResultsAreKeptAsProposals(t *testing.T) {
 	res := Classify("Brain Training", []string{"NDS"}, []meta.Candidate{cand(1, "Brain Age", 2005, "NDS"), cand(2, "Zzz", 2000), cand(3, "Yyy", 2000), cand(4, "Xxx", 2000)})
-	if res.Bucket != NotFound || len(res.Candidates) != 3 || res.Candidates[0].IGDBID != 1 && res.Candidates[0].Score < res.Candidates[1].Score {
+	if res.Bucket != NotFound || len(res.Candidates) != 3 || res.Candidates[0].IGDBID != 1 || res.Candidates[0].Score <= res.Candidates[1].Score {
 		t.Errorf("%s %+v", res.Bucket, res.Candidates)
 	}
 }
@@ -513,5 +513,41 @@ func TestDryRunLeavesAnOlderDatabaseByteIdentical(t *testing.T) {
 	}
 	if m, _ := filepath.Glob(path + "*"); len(m) != 1 {
 		t.Errorf("stray files next to the database: %v", m)
+	}
+}
+
+func TestNotOnIGDBNeverMarksALinkedGame(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Outlast", "PC")
+	if err := Accept(d, id, 1910); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := NotOnIGDB(d, id).(*ErrAlreadyLinked); !ok || e.IGDBID != 1910 {
+		t.Errorf("err = %v", e)
+	}
+	var nf int
+	d.QueryRow("SELECT igdb_not_found FROM game WHERE id = ?", id).Scan(&nf)
+	if nf != 0 {
+		t.Error("a linked game was marked as not on IGDB")
+	}
+}
+
+func TestDryRunWithUnusualPath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a#b")
+	os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "app.db")
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addGame(t, d, "Hades", "PC")
+	d.Close()
+	f := &fakeIGDB{answers: map[string][]meta.Candidate{"Hades": {cand(1, "Hades", 2020, "PC")}}}
+	var out bytes.Buffer
+	if code := run([]string{"--dry-run", "--db", path}, "", f, true, &out); code != 0 || !strings.Contains(out.String(), "games to link:  1") {
+		t.Fatalf("exit %d:\n%s", code, out.String())
+	}
+	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "a*")); len(m) != 1 {
+		t.Errorf("stray files: %v", m)
 	}
 }

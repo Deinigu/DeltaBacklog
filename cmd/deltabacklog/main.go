@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -59,6 +60,17 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "backup" { // a typo must not start the server
+		fmt.Fprint(os.Stderr, "usage: deltabacklog                      serve the app\n"+
+			"       deltabacklog backup <file>         write a copy of the database\n"+
+			"       deltabacklog check <file>          verify a database or backup\n"+
+			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n")
+		if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
+			return
+		}
+		os.Exit(2)
 	}
 
 	loadDotEnv(".env")
