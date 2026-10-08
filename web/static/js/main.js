@@ -3,6 +3,7 @@ import { h, icon } from './util.js';
 import { load, store } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
+import { renderStats } from './statspage.js';
 import { renderSeries } from './seriesview.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
@@ -20,6 +21,7 @@ function resolve(path) {
   if (path === 'views') return { path, render: renderViews };
   const year = parseYearPath(path);
   if (year !== undefined) return { path: 'years', render: (root) => renderYear(root, year ?? defaultYear()) };
+  if (path === 'stats') return { path, render: renderStats };
   if (path === 'series') return { path, render: renderSeries };
   const m = /^view\/(\d+)$/.exec(path);
   if (m) {
@@ -40,6 +42,7 @@ function buildNav() {
     h('a', { href: '#/years', 'data-path': 'years' }, icon('years'), h('span', {}, 'Years')),
     h('a', { href: '#/series', 'data-path': 'series' }, icon('series'), h('span', {}, 'Series')),
     h('a', { href: '#/views', 'data-path': 'views' }, icon('views'), h('span', {}, 'Views')),
+    h('a', { href: '#/stats', 'data-path': 'stats' }, icon('stats'), h('span', {}, 'Stats')),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
   markActive();

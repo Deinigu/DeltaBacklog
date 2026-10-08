@@ -175,7 +175,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 
 ## 7. Frontend
 
-Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/years[/<year>]`). No dependencies, no build.
+Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/years[/<year>]`, `#/series`, `#/stats`). No dependencies, no build.
 
 **Modules (`web/static/js/`)**
 
@@ -197,6 +197,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `views.js` | the "Views" management page |
 | `yearreview.js` | **pure**: year grouping (`groupOf`), breakdowns, year strip and neighbours, route parsing, tier list state (`tierState`, `place`, `toEntries`) |
 | `yearpage.js`, `tierpng.js` | the `#/years/<year>` page (stats, tier list with pointer-event drag, long-press on touch, edge auto-scroll, tap-to-assign menu, debounced autosave) and the canvas PNG export |
+| `stats.js`, `statspage.js` | the `#/stats` page: `stats.js` is **pure** (backlog size, finished per year, time in status, top genres, finished vs dropped, chart scale); `statspage.js` draws it (HTML bars, inline SVG chart with a screen-reader table). Computed client-side from `store.games`; no endpoint, no tables |
 | `series.js`, `seriesview.js` | **pure** series grouping, progress counts and the "3 of 5" position (definitions of finished / played / left are in the header of `series.js` and in the user manual, section 10b); and the `#/series` page. Client-side only: it groups `store.games` by series name (case-insensitive) and redraws on `games-changed` |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
 | `util.js` | `h()` element builder, dialogs, toast, icons |
@@ -311,6 +312,6 @@ Under a sustained load of 8 clients the Pi's CPU reaches its thermal limit; ordi
 ## 12. Known gaps
 
 - Games imported from NocoDB have no `igdb_id` until they are matched with **Fill from IGDB**; duplicate detection falls back to the title.
-- Not built yet: statistics, a JSON export.
+- Not built yet: a JSON export.
 - No authentication (intended: home network only) and no HTTPS (see section 11: no offline cache or app install on the Pi).
 - The pasted-link resolver (Steam, GOG, Epic, IGDB pages) exists in the backend but is not offered in the UI; only Steam links were tried against the real site.
