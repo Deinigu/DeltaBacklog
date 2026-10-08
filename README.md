@@ -31,7 +31,7 @@ One small Go program, one SQLite file, no cloud, no login. It is light enough fo
   <img src="docs/img/cover-picker-phone.jpg" alt="Choosing a cover" width="200">
 </p>
 
-**Coming next:** Surprise me (a random pick to play), year in review and tier lists, series progress, statistics, and automatic backups with export and restore.
+**Coming next:** Surprise me (a random pick to play), year in review and tier lists, statistics, and automatic backups with export and restore.
 
 More in the **[user manual](docs/user-manual.md)** (with screenshots of every screen).
 

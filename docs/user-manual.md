@@ -185,6 +185,18 @@ Open a game and tap **Change cover**.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
 
+## 10b. Series progress
+
+Open **Series** in the navigation to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
+
+- **Finished** means the game's status is **Finished**.
+- **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
+- **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
+- The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
+- **Games left to play** (the button at the top) hides series where nothing is left.
+- Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": set the release year to put a game in its place.
+- A game's details show where it falls, for example **3 of 5 in Ace Attorney** (only for series with at least two games). A series is every game with the same series name; capital letters do not matter.
+
 ## 11. What the little icons mean
 
 **Ownership** (filters, the table, the game's details and a badge on cards):
@@ -211,6 +223,6 @@ Open a game and tap **Change cover**.
 
 ## 13. Not available yet
 
-These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **series progress**, **statistics**, and a **full export** (the CSV export of the table already works).
+These are planned and will be added to this manual when they exist: **Surprise me** (a random pick for what to play), **Year in review and tier lists**, **statistics**, and a **full export** (the CSV export of the table already works).
 
 **Backups already happen by themselves:** every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
