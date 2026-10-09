@@ -279,7 +279,7 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 | `/opt/deltabacklog/deltabacklog` | the program; `backup.sh` next to it |
 | `/var/lib/deltabacklog/` | the data: `app.db`, `covers/` (owner `deltabacklog`, mode 750) |
 | `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days |
-| `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600) |
+| `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600); `ALLOWED_HOSTS=name1,name2` goes here when the app is reached by a name other than `deltabacklog.local`, an IP address or the Pi's hostname (otherwise 421 "unknown host"); restart the service after editing |
 | `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer`, `deltabacklog-name.service` | the units (sources in `deploy/`) |
 
 **Starting at boot.** `deltabacklog.service` is enabled (`WantedBy=multi-user.target`) with `Restart=always` (a crashed process is back in about 4 seconds, tested with `kill -9`). It runs as the unprivileged system user `deltabacklog` with `NoNewPrivileges`, a read-only file system except its data folder, and `Nice=5`. The Pi's kernel does not enforce systemd memory limits (the memory cgroup is off on Raspbian), so the real cap is `GOMEMLIMIT=96MiB` in the settings file.

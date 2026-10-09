@@ -3,8 +3,12 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Deinigu/DeltaBacklog/internal/api"
+	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
 
 // guarded returns the protected handler around a stub that records whether it was reached.
@@ -137,6 +141,11 @@ func TestHealthzAnyHostReadOnly(t *testing.T) {
 	if got := do(h, "POST", "/healthz", "evil.example", "application/json", nil); got != http.StatusMisdirectedRequest {
 		t.Errorf("POST /healthz with a foreign host: got %d, want 421", got)
 	}
+	for _, c := range [][2]string{{"GET", "/healthz/"}, {"GET", "//healthz"}, {"OPTIONS", "/healthz"}, {"GET", "/healthz/../api/games"}, {"GET", "/healthz2"}} {
+		if got := do(h, c[0], c[1], "evil.example", "", nil); got != http.StatusMisdirectedRequest {
+			t.Errorf("%s %s with a foreign host: got %d, want 421", c[0], c[1], got)
+		}
+	}
 	if *hits != 0 {
 		t.Errorf("handler reached %d times", *hits)
 	}
@@ -146,11 +155,105 @@ func TestHealthzAnyHostReadOnly(t *testing.T) {
 // service worker's fetches.
 func TestPWAGetsWork(t *testing.T) {
 	h, _ := guarded("")
-	for _, p := range []string{"/", "/sw.js", "/manifest.webmanifest", "/js/app.js", "/api/games", "/covers/1.jpg"} {
+	for _, p := range []string{"/", "/sw.js", "/manifest.webmanifest", "/js/app.js", "/covers/1.jpg"} {
 		for _, hdr := range []map[string]string{nil, {"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "cross-site"}} {
 			if got := do(h, "GET", p, "deltabacklog.local", "", hdr); got != http.StatusNoContent {
 				t.Errorf("GET %s %v: got %d", p, hdr, got)
 			}
 		}
+	}
+}
+
+func TestZoneIDHostAllowed(t *testing.T) {
+	h, _ := guarded("")
+	if got := do(h, "GET", "/", "[fe80::1%25eth0]:8081", "", nil); got == http.StatusMisdirectedRequest {
+		t.Errorf("zone id host rejected")
+	}
+}
+
+// Other sites must not trigger API reads (lookups spend the metadata quota); the app and typed addresses can.
+func TestCrossSiteAPIReadRejected(t *testing.T) {
+	h, _ := guarded("")
+	for _, site := range []string{"cross-site", "same-site"} {
+		if got := do(h, "GET", "/api/lookup?q=x", "127.0.0.1:8081", "", map[string]string{"Sec-Fetch-Site": site}); got != http.StatusForbidden {
+			t.Errorf("GET /api %s: got %d, want 403", site, got)
+		}
+	}
+	for _, site := range []string{"same-origin", "none", ""} {
+		if got := do(h, "GET", "/api/lookup?q=x", "127.0.0.1:8081", "", map[string]string{"Sec-Fetch-Site": site}); got != http.StatusNoContent {
+			t.Errorf("GET /api %q: got %d, want 204", site, got)
+		}
+	}
+}
+
+func TestErrorBodiesAreJSON(t *testing.T) {
+	h, _ := guarded("")
+	check := func(name string, req *http.Request, code int) {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != code || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") || !strings.Contains(rec.Body.String(), `"error"`) {
+			t.Errorf("%s: code %d type %q body %q", name, rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+		}
+	}
+	r := httptest.NewRequest("POST", "/api/games", strings.NewReader("{}"))
+	r.Host = "127.0.0.1:8081"
+	r.Header.Set("Sec-Fetch-Site", "cross-site")
+	check("403", r, 403)
+	r = httptest.NewRequest("POST", "/api/games", strings.NewReader("{}"))
+	r.Host = "127.0.0.1:8081"
+	check("415", r, 415)
+	r = httptest.NewRequest("GET", "/api/games", nil)
+	r.Host = "evil.example"
+	check("421", r, 421)
+}
+
+// The real handler chain as main builds it, over a temp database: a cross-site text/plain POST is rejected and
+// leaves no data; a same-origin JSON POST works.
+func TestRealHandlerChain(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	srv := httptest.NewServer(newHandler(&api.Server{DB: d, CoverDir: t.TempDir()}, allowedHosts("")))
+	defer srv.Close()
+	count := func() int {
+		var n int
+		if err := d.QueryRow(`SELECT count(*) FROM game`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	post := func(ctype string, hdr map[string]string) int {
+		req, _ := http.NewRequest("POST", srv.URL+"/api/games", strings.NewReader(`{"title":"Evil Game","status":"backlog"}`))
+		req.Header.Set("Content-Type", ctype)
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	if got := post("text/plain", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "http://evil.example"}); got != 403 {
+		t.Errorf("cross-site text/plain: got %d, want 403", got)
+	}
+	if got := post("application/json", map[string]string{"Origin": "http://evil.example"}); got != 403 {
+		t.Errorf("cross-origin json: got %d, want 403", got)
+	}
+	if n := count(); n != 0 {
+		t.Fatalf("%d games after rejected requests", n)
+	}
+	if got := post("application/json", map[string]string{"Sec-Fetch-Site": "same-origin"}); got != 201 {
+		t.Errorf("same-origin json: got %d, want 201", got)
+	}
+	if n := count(); n != 1 {
+		t.Errorf("%d games after the same-origin POST, want 1", n)
+	}
+	res, err := http.Get(srv.URL + "/")
+	if err != nil || res.StatusCode != 200 {
+		t.Errorf("GET /: %v %v", res, err)
 	}
 }

@@ -299,6 +299,7 @@ If IGDB's game is already linked to another game in your library you are told wh
 
 - **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
 - **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
+- **A page saying "unknown host".** The app only answers to its own address, `deltabacklog.local`, the Pi's hostname and IP addresses. If you open it by another name (a router name, a Tailscale name, a reverse proxy), add that name to `ALLOWED_HOSTS` in `/etc/deltabacklog.env` on the Pi (for example `ALLOWED_HOSTS=raspberry.lan`) and restart the app with `sudo systemctl restart deltabacklog`.
 - **A cover is missing.** Open the game, tap **Change cover** and pick one. Adding a game never fails because of a cover: if the picture could not be downloaded you are told, and the game is added anyway.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.

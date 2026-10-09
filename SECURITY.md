@@ -1,6 +1,6 @@
 # Security
 
-DeltaBacklog is a single-user app for a home network. **It has no authentication**: anyone who can reach the port can read and change the library. Do not expose it to the internet; put it behind a VPN or an authenticating reverse proxy if you need remote access.
+DeltaBacklog is a single-user app for a home network. **It has no authentication**: anyone who can reach the port can read and change the library. Do not expose it to the internet; put it behind a VPN or an authenticating reverse proxy (it must forward the original `Host` header, and that public name must be listed in `ALLOWED_HOSTS`, or the app answers 421) if you need remote access.
 
 ## What is mitigated
 
