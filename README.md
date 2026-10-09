@@ -13,7 +13,7 @@
   <img src="docs/img/library-desktop.jpg" alt="The library on a PC" width="520">
 </p>
 
-<p align="center"><sub>Screenshots show a demo library with generated covers.</sub></p>
+<p align="center"><sub>Demo library of well-known games. Cover art from IGDB and SteamGridDB, &copy; its respective owners, shown for illustration.</sub></p>
 
 ## Features
 
@@ -170,4 +170,4 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 
 ## License
 
-[MIT](LICENSE). IGDB and SteamGridDB data and artwork belong to their owners and are used through their APIs under their terms; the repository ships no game artwork: the demo screenshots use generated covers, and IGDB and SteamGridDB artwork, which belongs to its owners, is only fetched at runtime with your own keys and stored on your machine.
+[MIT](LICENSE). IGDB and SteamGridDB data and artwork belong to their owners and are used through their APIs under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.

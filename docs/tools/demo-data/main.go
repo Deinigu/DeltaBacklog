@@ -1,15 +1,20 @@
-// Command demo-data builds a small demo library (about 40 well-known games, no personal data) with generated
-// placeholder covers, for screenshots and for trying the app out.
+// Command demo-data builds a small demo library (about 40 well-known games, no personal data), for screenshots
+// and for trying the app out.
 //
 //	go run ./docs/tools/demo-data -data /tmp/demo
 //	LISTEN_ADDR=127.0.0.1:18100 DATA_DIR=/tmp/demo go run ./cmd/deltabacklog
 //
-// The covers are plain gradients with the title, drawn here, so the repository carries no copyrighted artwork.
+// Every game gets a generated placeholder cover (a gradient with the title), so it works offline and the
+// repository carries no artwork. When IGDB / SteamGridDB keys are available (in the environment, or in the file
+// given with -env) the real covers are downloaded into the data directory through the same lookups the app uses,
+// for illustration in screenshots; they stay in that throwaway directory and are never committed.
 // It refuses to write into a data directory that already has a database.
 package main
 
 import (
 	"bytes"
+	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"hash/fnv"
@@ -20,9 +25,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/covers"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
+	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -93,7 +100,11 @@ func split(s string) []string {
 
 func main() {
 	dataDir := flag.String("data", "./demo-data", "data directory to create (app.db and covers/)")
+	envFile := flag.String("env", "", "a .env file with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET and STEAMGRIDDB_API_KEY, to download real covers")
 	flag.Parse()
+	if *envFile != "" {
+		loadEnv(*envFile)
+	}
 	dbPath := filepath.Join(*dataDir, "app.db")
 	if _, err := os.Stat(dbPath); err == nil {
 		log.Fatalf("%s already exists; refusing to touch it (choose an empty directory)", dbPath)
@@ -197,7 +208,67 @@ func main() {
 		_, err = d.Exec("UPDATE game SET cover_file = ?, cover_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?", name, ids[i])
 		must(err)
 	}
-	fmt.Printf("demo library with %d games written to %s\n", len(games), *dataDir)
+	real := 0
+	mc := meta.New(meta.Config{
+		IGDBClientID:     os.Getenv("IGDB_CLIENT_ID"),
+		IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET"),
+		SteamGridDBKey:   os.Getenv("STEAMGRIDDB_API_KEY"),
+	})
+	if igdb, sgdb := mc.Configured(); igdb || sgdb {
+		for i, g := range games {
+			url := realCover(mc, g.title, igdb, sgdb)
+			if url == "" {
+				log.Printf("no real cover found for %s; keeping the placeholder", g.title)
+				continue
+			}
+			// The same download (size guard, resize to JPEG) as the app's own cover change.
+			if _, err := covers.FetchStrict(url, filepath.Join(*dataDir, "covers"), ids[i]); err != nil {
+				log.Printf("cover for %s: %v; keeping the placeholder", g.title, err)
+				continue
+			}
+			real++
+		}
+	}
+	fmt.Printf("demo library with %d games written to %s (%d real covers, %d placeholders)\n", len(games), *dataDir, real, len(games)-real)
+}
+
+// realCover returns the URL of a cover for the title: a wide SteamGridDB grid (the shape the library's cards use)
+// when possible, otherwise an IGDB picture. Empty when nothing is found.
+func realCover(mc *meta.Client, title string, igdb, sgdb bool) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if sgdb {
+		if opts, err := mc.SearchCovers(ctx, title); err == nil && len(opts) > 0 {
+			return opts[0].URL
+		}
+	}
+	if igdb {
+		if opts, err := mc.IGDBImages(ctx, 0, title); err == nil && len(opts) > 0 {
+			return opts[0].URL
+		}
+	}
+	return ""
+}
+
+// loadEnv reads KEY=VALUE lines into the environment (variables that are already set win).
+func loadEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
+		if ok && k != "" && os.Getenv(k) == "" {
+			os.Setenv(k, v)
+		}
+	}
 }
 
 func b2i(b bool) int {

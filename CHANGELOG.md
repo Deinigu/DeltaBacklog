@@ -11,7 +11,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ### Added
 - Open-source readiness: MIT license, contributing guide, code of conduct, security policy, issue and pull request templates, CI and release workflows, Dependabot configuration.
-- A demo library (`docs/tools/demo-data`, 40 well-known games with generated covers) and a screenshot tool that uses it by default, so the documentation shows no personal data.
+- A demo library (`docs/tools/demo-data`, 40 well-known games, generated placeholder covers or real ones downloaded when keys are set) and a screenshot tool that uses it by default, so the documentation shows no personal data.
 - `deltabacklog` knows its version: it is printed in the startup log and in the usage text (`dev` for source builds, the tag for release binaries).
 - Release archives include `THIRD_PARTY_LICENSES.txt` with the notices of the Go modules and standard library linked into the binary.
 - Rewritten README with quick start, configuration table, backup and restore, FAQ and roadmap.
@@ -19,7 +19,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 ### Changed
 - `GOMEMLIMIT` set in `.env` is now applied (the Go runtime only reads it from the real environment at start-up).
 - `cmd/import` no longer defaults to a private NocoDB address; `-nocodb` is empty unless given.
-- The documentation screenshots come from the demo library; the lookup screens that showed third-party artwork were removed.
+- The documentation screenshots come from the demo library, with real cover art from IGDB and SteamGridDB (illustration only; no cover files are committed).
 
 ## 2026-10-09 (pre-release)
 

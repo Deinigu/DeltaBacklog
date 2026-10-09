@@ -32,7 +32,7 @@ go run ./cmd/deltabacklog                                # http://localhost:8081
 
 The web files are compiled into the binary: **restart the server after editing anything in `web/static`**. If the browser still shows the old page (the service worker caches it), hard-refresh or open `http://127.0.0.1:<port>` instead of `localhost`.
 
-To work with a realistic library without your own data, build the demo one (40 well-known games, generated covers):
+To work with a realistic library without your own data, build the demo one (40 well-known games with generated placeholder covers; add `-env <your .env>` to download real ones):
 
 ```sh
 go run ./docs/tools/demo-data -data /tmp/demo
@@ -66,7 +66,7 @@ The [developer manual](docs/developer-manual.md) describes the architecture, dat
 2. Keep the change focused: one fix or feature per PR, no unrelated reformatting.
 3. **Update the docs in the same PR**: behaviour changes go in `docs/user-manual.md`; API, data model or structure changes go in `docs/developer-manual.md`. Add a line under *Unreleased* in [CHANGELOG.md](CHANGELOG.md).
 4. Write a short commit message: a summary line, then what and why.
-5. Open the PR against `main` and fill in the template. Say how you tested it, with a screenshot for UI changes. Screenshots must not show private data; `docs/tools/screenshots.mjs` regenerates the manual's images from the demo library.
+5. Open the PR against `main` and fill in the template. Say how you tested it, with a screenshot for UI changes. Screenshots must not show private data: `docs/tools/screenshots.mjs` regenerates the manual's images from the demo library (with IGDB/SteamGridDB keys it downloads the real covers into a throwaway folder; cover files are never committed, and the images show cover art that belongs to its owners, for illustration).
 6. The maintainer merges with a merge commit once CI is green. Reviews may take a while; this is a spare-time project.
 
 Never commit secrets: keys belong in `.env`, which is git-ignored. Run `git grep` for them before you push.
