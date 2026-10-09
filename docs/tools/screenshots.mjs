@@ -1,20 +1,47 @@
-// Regenerates the screenshots used by the manuals (docs/img/*.jpg) from a running DeltaBacklog.
+// Regenerates the screenshots used by the README and the manuals (docs/img/*.jpg).
 //
 //   cd docs/tools && npm install puppeteer        (node_modules is git-ignored)
-//   BASE_URL=http://127.0.0.1:18100 node screenshots.mjs
+//   node screenshots.mjs
 //
-// The Link IGDB and Year screenshots need data: at least one game with a pending IGDB proposal (the nav check expects
-// 5 entries in the More sheet, so that is needed too) and games with years played.
-// Point BASE_URL at a TEST server with a copy of your data, never at your real one: the script opens
-// sheets and forms but saves nothing, yet it is still safest to keep it away from live data.
+// By default it builds the demo library (docs/tools/demo-data: 40 well-known games, generated covers, no personal
+// data), starts a throwaway server on a free port and shoots that. Go must be on PATH.
+// To shoot a server you started yourself instead: BASE_URL=http://127.0.0.1:18100 node screenshots.mjs
+// (a TEST server, never your real one: the script saves nothing, but keep it away from live data anyway).
+// The lookup screens (add a game, cover picker) are not shot: they would show third-party artwork from IGDB.
 import puppeteer from 'puppeteer';
-import { mkdirSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const BASE = (process.env.BASE_URL || 'http://127.0.0.1:18100').replace(/\/$/, '');
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'img');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, '..', '..');
+const OUT = join(HERE, '..', 'img');
 mkdirSync(OUT, { recursive: true });
+
+const freePort = () => new Promise((res, rej) => { const s = createServer(); s.on('error', rej); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => res(port)); }); });
+
+let server = null;
+let tmp = null;
+let BASE = (process.env.BASE_URL || '').replace(/\/$/, '');
+if (!BASE) {
+  tmp = mkdtempSync(join(tmpdir(), 'deltabacklog-demo-'));
+  const data = join(tmp, 'data');
+  const exe = join(tmp, process.platform === 'win32' ? 'deltabacklog.exe' : 'deltabacklog');
+  for (const args of [['run', './docs/tools/demo-data', '-data', data], ['build', '-o', exe, './cmd/deltabacklog']]) {
+    if (spawnSync('go', args, { cwd: ROOT, stdio: 'inherit' }).status !== 0) { console.error('go failed (is Go on PATH?)'); process.exit(1); }
+  }
+  const port = await freePort();
+  BASE = `http://127.0.0.1:${port}`;
+  // Started in the repo root; lookups stay off unless your environment has keys.
+  server = spawn(exe, [], { cwd: ROOT, env: { ...process.env, LISTEN_ADDR: `127.0.0.1:${port}`, DATA_DIR: data }, stdio: 'inherit' });
+  let up = false;
+  for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/healthz`)).ok) { up = true; break; } } catch {} await new Promise((r) => setTimeout(r, 500)); }
+  if (!up) { console.error(`the demo server did not answer at ${BASE}/healthz within 30 s`); process.exit(1); }
+}
+process.on('exit', () => { if (server) server.kill(); if (tmp) { try { rmSync(tmp, { recursive: true, force: true }); } catch {} } });
 
 const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
 const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
@@ -82,18 +109,6 @@ await shot(p, 'game-phone');
 await clickText(p, '.drawer-actions .btn', 'Edit'); await wait(700);
 await shot(p, 'edit-phone');
 await clickText(p, '.editbar .btn', 'Cancel'); await wait(400);
-await clickText(p, '.drawer-actions .btn', 'Change cover'); await wait(500);
-await clickText(p, '.sheet.open .mode button', 'IGDB'); await wait(4500);
-await shot(p, 'cover-picker-phone');
-
-await go(p, '');
-await p.click('.fab'); await wait(500);
-await p.type('.sheet.open .pick-search input', 'Stray');
-await p.waitForSelector('.cand', { timeout: 30000 }); await wait(1500);
-await shot(p, 'add-search-phone');
-// pick the first match that is not already in the library, so the form has no "already in your library" banner
-await p.$$eval('.cand', (c) => (c.find((x) => !x.querySelector('.inlib')) || c[0]).click()); await wait(5000);
-await shot(p, 'add-form-phone');
 await p.close();
 
 // ---- phone navigation: the bottom bar and the More sheet must fit (390px and 360px) ----

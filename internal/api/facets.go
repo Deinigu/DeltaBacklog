@@ -24,6 +24,8 @@ func (s *Server) buildFacets() (any, error) {
 		{"platform", junctionFacet("platform", "game_platform", "platform_id")},
 		{"genre", junctionFacet("genre", "game_genre", "genre_id")},
 		{"theme", junctionFacet("theme", "game_theme", "theme_id")},
+		{"mode", junctionFacet("game_mode", "game_game_mode", "game_mode_id")},
+		{"perspective", junctionFacet("perspective", "game_perspective", "perspective_id")},
 		{"player", junctionFacet("player", "game_player", "player_id")},
 		{"ownership", `SELECT o.name, o.name, '', count(g.id) FROM ownership o LEFT JOIN game g ON g.ownership_id = o.id GROUP BY o.id ORDER BY count(g.id) DESC, o.name`},
 		{"series", `SELECT s.name, s.name, '', count(g.id) FROM series s LEFT JOIN game g ON g.series_id = s.id GROUP BY s.id HAVING count(g.id) > 0 ORDER BY count(g.id) DESC, s.name`},

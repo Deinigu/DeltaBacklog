@@ -97,7 +97,11 @@ func (c *Client) do(req *http.Request, out any) error {
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
+		he := &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
+		if n, err := strconv.Atoi(strings.TrimSpace(res.Header.Get("Retry-After"))); err == nil && n > 0 {
+			he.RetryAfter = time.Duration(n) * time.Second
+		}
+		return he
 	}
 	return json.Unmarshal(body, out)
 }
@@ -107,6 +111,7 @@ func (c *Client) do(req *http.Request, out any) error {
 type HTTPError struct {
 	Method, Host, Text string
 	Status             int
+	RetryAfter         time.Duration // the Retry-After header, when the service sent one in seconds
 }
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("%s %s: %s", e.Method, e.Host, e.Text) }
@@ -490,5 +495,147 @@ func (c *Client) IGDBImages(ctx context.Context, igdbID int64, title string) ([]
 		add(s.ImageID, "t_1080p", "t_screenshot_med", "Screenshot", s.Width, s.Height)
 	}
 	add(g.Cover.ImageID, "t_cover_big", "t_cover_small", "Cover", 264, 374)
+	return out, nil
+}
+
+// ---------------- IGDB enrichment ----------------
+
+// StoreLink is a store or official-site page of a game. Kind is "steam", "gog", "epic" or "official".
+type StoreLink struct {
+	Kind string `json:"kind"`
+	URL  string `json:"url"`
+}
+
+// Details is what the IGDB enrichment reads for an already linked game. IGDB's critic and user scores
+// (aggregated_rating, total_rating, hypes) are deliberately not part of it and are never requested.
+type Details struct {
+	IGDBID       int64
+	Year         int
+	Platforms    []string
+	Genres       []string
+	Themes       []string
+	Developer    string
+	Series       string   // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
+	Modes        []string // game modes: Single player, Co-operative...
+	Perspectives []string // player perspectives: First person, Third person...
+	Links        []StoreLink
+}
+
+// TimeToBeat is IGDB's crowd-sourced playing time, in seconds; 0 means IGDB has no value.
+type TimeToBeat struct{ Hastily, Normally, Completely int }
+
+type igdbDetail struct {
+	igdbGame
+	GameModes         []struct{ Name string } `json:"game_modes"`
+	PlayerPerspective []struct{ Name string } `json:"player_perspectives"`
+	Websites          []struct {
+		URL  string `json:"url"`
+		Type int    `json:"type"`
+	} `json:"websites"`
+}
+
+const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.name,` +
+	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
+
+func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {
+	if ok, _ := c.Configured(); !ok {
+		return ErrNotConfigured
+	}
+	token, err := c.igdbToken(ctx)
+	if err != nil {
+		return err
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+endpoint, strings.NewReader(query))
+	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+	req.Header.Set("Authorization", "Bearer "+token)
+	return c.do(req, out)
+}
+
+func idList(ids []int64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+// GameDetails reads the facts of up to ~50 games in one request. Games IGDB no longer knows are absent from the result.
+func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var games []igdbDetail
+	q := fmt.Sprintf("%s where id = (%s); limit %d;", detailFields, idList(ids), len(ids))
+	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
+		return nil, err
+	}
+	out := make([]Details, 0, len(games))
+	for _, g := range games {
+		cand := g.igdbGame.candidate()
+		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
+		if len(g.Collections) > 0 {
+			d.Series = g.Collections[0].Name
+		}
+		for _, m := range g.GameModes {
+			d.Modes = append(d.Modes, m.Name)
+		}
+		for _, p := range g.PlayerPerspective {
+			d.Perspectives = append(d.Perspectives, p.Name)
+		}
+		d.Links = storeLinks(g)
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// storeLinks keeps at most one link per kind (Steam, GOG, Epic, official site), recognised by host.
+func storeLinks(g igdbDetail) []StoreLink {
+	seen := map[string]bool{}
+	var out []StoreLink
+	for _, w := range g.Websites {
+		u, err := url.Parse(strings.TrimSpace(w.URL))
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			continue
+		}
+		host := strings.ToLower(u.Hostname())
+		kind := ""
+		switch {
+		case host == "store.steampowered.com":
+			kind = "steam"
+		case host == "gog.com" || strings.HasSuffix(host, ".gog.com"):
+			kind = "gog"
+		case host == "epicgames.com" || strings.HasSuffix(host, ".epicgames.com"):
+			kind = "epic"
+		case w.Type == 1: // IGDB website type "official"
+			kind = "official"
+		}
+		if kind != "" && !seen[kind] {
+			seen[kind] = true
+			out = append(out, StoreLink{Kind: kind, URL: u.String()})
+		}
+	}
+	return out
+}
+
+// TimeToBeat reads IGDB's time to beat for up to ~50 games in one request. Games without one are absent.
+func (c *Client) TimeToBeat(ctx context.Context, ids []int64) (map[int64]TimeToBeat, error) {
+	out := map[int64]TimeToBeat{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		GameID     int64 `json:"game_id"`
+		Hastily    int   `json:"hastily"`
+		Normally   int   `json:"normally"`
+		Completely int   `json:"completely"`
+	}
+	q := fmt.Sprintf("fields game_id,hastily,normally,completely; where game_id = (%s); limit %d;", idList(ids), len(ids))
+	if err := c.igdbPost(ctx, "/game_time_to_beats", q, &rows); err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.GameID] = TimeToBeat{Hastily: r.Hastily, Normally: r.Normally, Completely: r.Completely}
+	}
 	return out, nil
 }

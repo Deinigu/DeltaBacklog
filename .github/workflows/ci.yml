@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+      - name: Frontend tests
+        run: node --test web/test/*.test.mjs
+      - name: Cross-build (linux/amd64)
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/deltabacklog
+      - name: Cross-build (linux/armv7, Raspberry Pi)
+        run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/deltabacklog

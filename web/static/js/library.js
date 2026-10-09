@@ -8,6 +8,7 @@ import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
+import { ttbMinutes, formatTime } from './ttb.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -96,10 +97,11 @@ export function renderLibrary(root, opts = {}) {
     }
     groupRefs[grp.key] = nSel;
     const open = grp.key === 'status' || state.in[grp.key].size > 0 || state.ex[grp.key].size > 0;
-    return h('details.group', { open: open || null }, h('summary', {}, h('span', {}, grp.label), nSel), mode, chips);
+    // Groups that only IGDB fills (game mode, perspective) stay hidden until some game has a value.
+    return h('details.group', { open: open || null, hidden: order[grp.key].length === 0 }, h('summary', {}, h('span', {}, grp.label), nSel), mode, chips);
   });
   const flagRefs = FLAGS.map((f) => {
-    const btn = h('button.chip', { type: 'button', onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
+    const btn = h('button.chip', { type: 'button', hidden: !!f.test && !state.flags.has(f.key) && !store.games.some(f.test), onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
     return { f, btn };
   });
   const showBtn = h('button.btn.primary', { type: 'button', onclick: () => setSheet(false) });
@@ -133,6 +135,7 @@ export function renderLibrary(root, opts = {}) {
     const played = playedBadges(g, innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
     const hasPlayed = played.years.length || played.periods.length;
     const platforms = g.platforms.slice(0, 2);
+    const time = ttbMinutes(g);
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
         url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
@@ -142,6 +145,7 @@ export function renderLibrary(root, opts = {}) {
       h('div.card-body', {},
         h('div.card-title', {}, g.title),
         platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
+        time !== null ? h('div.tags-row', {}, h('span.pf.ttb', { title: 'Time to beat, from IGDB' }, `⏱ ${formatTime(time)}`)) : null,
         hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,

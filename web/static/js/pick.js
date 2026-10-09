@@ -1,6 +1,7 @@
 // "Surprise me": which games can be picked, how the mood narrows them, and a random choice that never repeats.
 // Pure (no DOM, no Math.random unless no rng is given): unit-tested.
 import { matches, activeCount } from './filters.js';
+import { isShort } from './ttb.js';
 
 /** Statuses that are never offered unless the filters ask for them explicitly. */
 export const EXCLUDED_STATUSES = ['finished', 'dropped', 'not_interested', 'evergreen'];
@@ -47,15 +48,16 @@ export function notPlayedRecently(game, year) {
 /** The status "Play it" sets: Evergreen games stay Playing - Evergreen, everything else becomes Playing. */
 export const playTarget = (status) => (status === 'evergreen' || status === 'playing_evergreen' ? 'playing_evergreen' : 'playing');
 
-export const emptyMood = () => ({ platforms: new Set(), genres: new Set(), vr: false, stale: false });
-export const moodIsEmpty = (m) => !m.platforms.size && !m.genres.size && !m.vr && !m.stale;
+export const emptyMood = () => ({ platforms: new Set(), genres: new Set(), vr: false, stale: false, quick: false });
+export const moodIsEmpty = (m) => !m.platforms.size && !m.genres.size && !m.vr && !m.stale && !m.quick;
 
-/** Does the game pass the mood? `skip` ignores one part ('platform' | 'genre' | 'vr' | 'stale'), for chip counts. */
+/** Does the game pass the mood? `skip` ignores one part ('platform' | 'genre' | 'vr' | 'stale' | 'quick'), for chip counts. */
 function passes(mood, g, year, skip) {
   if (skip !== 'platform' && mood.platforms.size && !g.platforms.some((p) => mood.platforms.has(p))) return false;
   if (skip !== 'genre' && mood.genres.size && !g.genres.some((x) => mood.genres.has(x))) return false;
   if (skip !== 'vr' && mood.vr && !g.vr) return false;
   if (skip !== 'stale' && mood.stale && !notPlayedRecently(g, year)) return false;
+  if (skip !== 'quick' && mood.quick && !isShort(g)) return false;
   return true;
 }
 
@@ -63,7 +65,7 @@ function passes(mood, g, year, skip) {
 export const applyMood = (pool, mood, year) => pool.filter((g) => passes(mood, g, year));
 
 /**
- * What each mood choice would leave, given the other choices: {platform: Map, genre: Map, vr: n, stale: n}.
+ * What each mood choice would leave, given the other choices: {platform: Map, genre: Map, vr: n, stale: n, quick: n}.
  * Maps are ordered by count (then name), so the commonest chips come first.
  */
 export function moodCounts(pool, mood, year) {
@@ -78,6 +80,7 @@ export function moodCounts(pool, mood, year) {
     genre: tally('genre', (g) => g.genres),
     vr: pool.filter((g) => passes(mood, g, year, 'vr') && g.vr).length,
     stale: pool.filter((g) => passes(mood, g, year, 'stale') && notPlayedRecently(g, year)).length,
+    quick: pool.filter((g) => passes(mood, g, year, 'quick') && isShort(g)).length,
   };
 }
 

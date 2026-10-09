@@ -8,3 +8,10 @@
 *.exe
 docs/tools/node_modules/
 docs/tools/package*.json
+.env.*
+!.env.example
+/covers/
+/deltabacklog
+/deltabacklog.exe
+node_modules/
+.DS_Store

@@ -1,4 +1,5 @@
 // Mapping IGDB platform names onto the names the library already uses. Pure (no DOM): unit-tested.
+// KEEP IN SYNC with platformAliases / PlatformKey in internal/igdblink/match.go (the IGDB sync and enrichment); a Go test compares them.
 
 // Letters and digits only, lowercase: "Wii U", "WiiU" and "wii-u" are the same platform.
 const key = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
