@@ -2,7 +2,7 @@
 // All numbers come from stats.js (pure); this file only draws them.
 import { h } from './util.js';
 import { store } from './api.js';
-import { backlogSize, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
+import { backlogSize, backlogTime, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 function svg(tag, attrs, ...children) {
@@ -101,6 +101,20 @@ function ratioBar({ finished, dropped, share }) {
     h('p.big', {}, `${pct}%`, h('small', {}, ` finished, ${100 - pct}% dropped`)));
 }
 
+/** "At least 410 hours" and how much of the backlog that covers (leading with the coverage when it is under half); says how to get times when there are none. */
+function backlogHours(t) {
+  if (!t.known) return h('p.hint', {}, 'No time to beat yet. Run deltabacklog sync-igdb --enrich to read it from IGDB.');
+  const hours = `at least ${t.hours.toLocaleString()} hours`;
+  if (t.known * 2 < t.total) { // most of the backlog has no time yet: the sum would mislead as a headline
+    return h('div', {},
+      h('p.big', {}, `${t.known} of ${t.total}`, h('small', {}, t.known === 1 ? ' game has a time to beat' : ' games have a time to beat')),
+      h('p.hint', {}, `That is ${hours} for those; the other ${plural(t.unknown, 'has', 'have')} no time to beat yet.`));
+  }
+  return h('div', {},
+    h('p.big', {}, hours, h('small', {}, ' to beat the backlog')),
+    h('p.hint', {}, t.unknown ? `Counted for ${t.known} of ${t.total} games; ${plural(t.unknown, 'game has', 'games have')} no time to beat yet.` : `Counted for all ${t.total} games.`));
+}
+
 function waitingTable(time) {
   const rows = time.rows.filter((r) => r.count > 0);
   if (!time.waiting) return h('p.hint', {}, 'No games are waiting.');
@@ -128,6 +142,7 @@ export function renderStats(root) {
     h('div.stat-grid', {},
       card('Backlog', 'Games on the backlog or up next.',
         h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
+        backlogHours(backlogTime(games)),
         h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
           size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`)),
       card('Finished per year', 'Each finished game counts in the last year you played it.', yearChart(finishedPerYear(games), cleanups)),

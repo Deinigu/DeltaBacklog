@@ -64,6 +64,8 @@ The Library shows every game as a card.
 - A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 11](#11-what-the-little-icons-mean)).
 - Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
 
+- Once the IGDB details have been read (section 16), a small **⏱ 12 h** under the platforms: the time IGDB says it takes to beat the game.
+
 **Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
 
 **Filters.**
@@ -75,8 +77,9 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 - **Tap a chip once to include it.** For example *Platform: PC* shows only PC games.
 - **Tap it again to exclude it.** The chip turns red and is crossed out. For example *Finished* excluded hides finished games.
 - **Tap a third time to clear it.**
-- When you include two or more values in *Platform*, *Genre*, *Theme*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
-- At the top are three quick switches: **Favorite**, **VR** and **100% completed**.
+- When you include two or more values in *Platform*, *Genre*, *Theme*, *Game mode*, *Perspective*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
+- At the top are quick switches: **Favorite**, **VR**, **100% completed** and, once IGDB times exist, **Short game (under 10 h)**. Games IGDB has no time for are never shown as short.
+- **Game mode** (single player, co-op, multiplayer...) and **Perspective** (first person, third person, isometric...) come from IGDB and appear in the filters as soon as some game has them.
 - The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
 - The active filters appear as pills under the search box. Tap a pill's **✕** to remove it, or **Reset** to clear everything.
 - The button at the bottom shows how many games match (*Show 27 games*).
@@ -126,6 +129,8 @@ Tap a card to open the game.
 - **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
 - **★ Favorite** switches the favourite mark.
 - **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
+
+**What IGDB adds** (after the one-off command in section 16): the game's **Game modes**, **Perspective** and **Time to beat** (quick, usual and complete, as IGDB's players report them) appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
 
 **Edit** changes everything else.
 
@@ -245,7 +250,7 @@ If you remove a year from a game, the game leaves that year's tier list (and com
 
 Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
 
-- **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
+- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the usual time to beat from IGDB of each game added up; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
 - **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
 - **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
@@ -264,11 +269,12 @@ Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or
 **Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
 - **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
 - **VR only**.
+- **Quick game**: games that take under 10 hours to beat, according to IGDB. It only appears once IGDB times exist; games without a time are not offered by it.
 - **Not played recently**: games you never played, or whose last year played is two or more years ago. A game you play "always" never counts.
 
 If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
 
-**The result.** You see the cover, the title, platforms, genres and the years you played it, and three buttons:
+**The result.** You see the cover, the title, platforms, genres, the time to beat (when IGDB has one) and the years you played it, and three buttons:
 - **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
 - **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
 - **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).
@@ -294,6 +300,8 @@ For each game you see its title, year and platforms, and IGDB's best guesses wit
 ![The Link IGDB screen](img/link-phone.jpg)
 
 If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
+
+**Second step: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`, see the developer manual). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed, and it adds what the app did not have: time to beat, game modes, perspectives and store links. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. Restart the app afterwards to see the new data.
 
 ## 17. If something looks wrong
 

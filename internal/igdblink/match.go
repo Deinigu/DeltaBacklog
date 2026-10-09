@@ -42,7 +42,7 @@ type Result struct {
 	Candidates []Scored
 }
 
-// platformAliases maps IGDB's names onto the library's short names (the same table as web/static/js/platforms.js).
+// platformAliases maps IGDB's names onto the library's short names (the same table as web/static/js/platforms.js: KEEP IN SYNC, TestPlatformAliasesMatchTheJS compares them).
 var platformAliases = map[string]string{
 	"pcmicrosoftwindows": "pc", "windows": "pc", "microsoftwindows": "pc",
 	"nintendoswitch": "switch", "nintendoswitch2": "switch2", "nsw": "switch",

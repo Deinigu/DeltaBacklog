@@ -338,8 +338,33 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			return err
 		}
 	}
+	if in.Series != nil {
+		// Whatever the owner sets (or clears) is their decision: the enrichment must never fill this series again.
+		if _, err := tx.Exec("UPDATE game SET igdb_series = NULL WHERE id = ?", id); err != nil {
+			return err
+		}
+	}
 	if in.IGDBID != nil {
-		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", nullInt64(in.IGDBID), id); err != nil {
+		var current sql.NullInt64
+		if err := tx.QueryRow("SELECT igdb_id FROM game WHERE id = ?", id).Scan(&current); err != nil {
+			return err
+		}
+		next := nullInt64(in.IGDBID)
+		if (next == nil) != !current.Valid || (next != nil && next.(int64) != current.Int64) {
+			// A different (or no) IGDB game: what the enrichment stored for the old one is not this game's. All of it is
+			// IGDB's data, never owner-entered, so it goes; `sync-igdb --enrich` reads the new link.
+			for _, q := range []string{
+				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL WHERE id = ?",
+				"DELETE FROM game_game_mode WHERE game_id = ?",
+				"DELETE FROM game_perspective WHERE game_id = ?",
+				"DELETE FROM game_link WHERE game_id = ?",
+			} {
+				if _, err := tx.Exec(q, id); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", next, id); err != nil {
 			return err
 		}
 	}

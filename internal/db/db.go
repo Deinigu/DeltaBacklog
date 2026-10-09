@@ -19,7 +19,7 @@ var migrationFiles embed.FS
 // lookupTables are the tables GetOrCreate may write to (names are never user input).
 var lookupTables = map[string]bool{
 	"platform": true, "genre": true, "theme": true, "ownership": true,
-	"series": true, "company": true, "player": true,
+	"series": true, "company": true, "player": true, "game_mode": true, "perspective": true,
 }
 
 // FileURI turns a file path into a SQLite "file:" URI, escaping the characters that would otherwise start the

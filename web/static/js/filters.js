@@ -5,6 +5,7 @@
 // values and NONE of the excluded ones.
 import { parseSort, formatSort, GROUP_FIELDS } from './sort.js';
 import { norm } from './util.js';
+import { isShort } from './ttb.js';
 
 export const GROUPS = [
   { key: 'status', label: 'Status', get: (g) => [g.status], multi: false },
@@ -13,13 +14,18 @@ export const GROUPS = [
   { key: 'theme', label: 'Theme', get: (g) => g.themes, multi: true },
   { key: 'year', label: 'Year played', get: (g) => [...g.years.map(String), ...g.periods], multi: true },
   { key: 'ownership', label: 'Ownership', get: (g) => (g.ownership ? [g.ownership] : []), multi: false },
+  { key: 'mode', label: 'Game mode', get: (g) => g.modes || [], multi: true },
+  { key: 'perspective', label: 'Perspective', get: (g) => g.perspectives || [], multi: true },
   { key: 'player', label: 'Played with', get: (g) => g.players, multi: true },
 ];
 export const FLAGS = [
   { key: 'favorite', label: '★ Favorite' },
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
+  { key: 'short', label: 'Short game (under 10 h)', test: isShort }, // time to beat from IGDB; games without one never match
 ];
+
+const FLAG_TESTS = Object.fromEntries(FLAGS.filter((f) => f.test).map((f) => [f.key, f.test]));
 
 export function emptyState() {
   return {
@@ -37,7 +43,7 @@ export function emptyState() {
 /** True when the game passes every active filter. `skip` ignores one group (for facet counts). */
 export function matches(state, g, skip) {
   if (state.q && !state.q.split(/\s+/).every((t) => g._search.includes(t))) return false;
-  for (const f of state.flags) if (!g[f]) return false;
+  for (const f of state.flags) if (!(FLAG_TESTS[f] ? FLAG_TESTS[f](g) : g[f])) return false;
   for (const grp of GROUPS) {
     if (grp.key === skip) continue;
     const inc = state.in[grp.key], exc = state.ex[grp.key];
