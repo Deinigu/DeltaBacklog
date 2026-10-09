@@ -63,7 +63,6 @@ await go(p, '#/link'); // needs at least one game waiting in the IGDB review que
 await shot(p, 'link-phone');
 
 await go(p, '#/view/2'); // "Up next"
-await shot(p, 'view-upnext-phone');
 await clickText(p, '.view-head .btn', 'Reorder'); await wait(700);
 await shot(p, 'reorder-phone');
 

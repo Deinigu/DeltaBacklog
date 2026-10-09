@@ -6,9 +6,9 @@ Requires=avahi-daemon.service
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c 'iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8081 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8081'
-ExecStartPre=/bin/sh -c 'iptables -t nat -C OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-ports 8081 2>/dev/null || iptables -t nat -A OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-ports 8081'
-ExecStart=/bin/sh -c 'exec avahi-publish -a -R deltabacklog.local "$(hostname -I | awk "{print \$1}")"'
+ExecStartPre=/opt/deltabacklog/name.sh rules-add
+ExecStart=/opt/deltabacklog/name.sh publish
+ExecStopPost=/opt/deltabacklog/name.sh rules-del
 Restart=always
 RestartSec=5
 

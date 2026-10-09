@@ -91,11 +91,11 @@ go run ./cmd/import -csv games.csv -data ./data -nocodb http://192.168.1.50:8080
 ### Where things are
 
 ```
-cmd/deltabacklog/   the server              internal/api/    JSON API
-cmd/import/         NocoDB importer          internal/db/     SQLite + migrations
-deploy/             Raspberry Pi install     internal/igdblink/ IGDB linking
-web/static/         the app (vanilla JS)     internal/meta/   IGDB, SteamGridDB
-web/test/           frontend unit tests      docs/            manuals and screenshots
+cmd/deltabacklog/   the server              internal/api/       JSON API
+cmd/import/         NocoDB importer         internal/db/        SQLite + migrations
+deploy/             Raspberry Pi install    internal/igdblink/  IGDB linking
+web/static/         the app (vanilla JS)    internal/meta/      IGDB, SteamGridDB
+web/test/           frontend unit tests     docs/               manuals and screenshots
 ```
 
 The **[developer manual](docs/developer-manual.md)** covers the architecture, data model, every API call, the frontend modules and the testing approach in detail.
