@@ -34,24 +34,27 @@ type EnrichOptions struct {
 
 // EnrichReport is what an enrichment run did (or, in a dry run, would do on a copy).
 type EnrichReport struct {
-	DryRun          bool
-	Total           int // linked games to read at the start
-	Enriched        int // games read from IGDB and stored
-	Missing         int // linked games IGDB no longer returns
-	TimeToBeat      int // games that got a time to beat
-	Modes           int // games with game modes
-	Perspectives    int
-	Links           int // games with at least one store link
-	FilledYear      int // fill-only-empty counters: games whose empty field was filled
-	FilledGenres    int
-	FilledThemes    int
-	FilledDeveloper int
-	FilledSeries    int
-	FilledPlatforms int
-	PlatformsSkip   int // games with no platform where IGDB lists several, so none was guessed
-	Errors          int // batches that failed; those games are read again next run
-	Stopped         string
-	BackupFile      string
+	DryRun            bool
+	Total             int // linked games to read at the start
+	Enriched          int // games read from IGDB and stored
+	Missing           int // linked games IGDB no longer returns
+	TimeToBeat        int // games that got a time to beat
+	Modes             int // games with game modes
+	Perspectives      int
+	Links             int // games with at least one store link
+	FilledYear        int // fill-only-empty counters: games whose empty field was filled
+	FilledGenres      int
+	FilledThemes      int
+	FilledDeveloper   int
+	FilledSeries      int
+	FilledPlatforms   int
+	PlatformsSkip     int      // games with no platform where IGDB lists several, so none was guessed
+	PlatformsUnmapped int      // games with no platform whose single IGDB platform is not one the library has (never created)
+	SeriesProposed    int      // games whose IGDB collection was NOT used as a series (see applySeriesProposals)
+	SeriesExamples    []string // a few of them, "Game -> Collection"
+	Errors            int      // batches that failed; those games are read again next run
+	Stopped           string
+	BackupFile        string
 }
 
 type linked struct{ id, igdbID int64 }
@@ -89,7 +92,11 @@ func withBackoff(ctx context.Context, o EnrichOptions, f func() error) error {
 		if attempt >= o.MaxRetries {
 			return fmt.Errorf("IGDB keeps answering 429 (too many requests): %w", err)
 		}
-		if err := o.Sleep(ctx, wait); err != nil {
+		pause := wait
+		if he.RetryAfter > 0 { // the service said how long; believe it, within reason
+			pause = min(he.RetryAfter, time.Minute)
+		}
+		if err := o.Sleep(ctx, pause); err != nil {
 			return err
 		}
 		wait *= 2
@@ -101,7 +108,11 @@ func withBackoff(ctx context.Context, o EnrichOptions, f func() error) error {
 // platform; and stores the data that is new in the app (time to beat, game modes, perspectives, store links).
 // Owner-entered values are never overwritten. A batch is stored in one transaction together with its
 // igdb_enriched_at marks, so a stopped run (Ctrl-C, 429s, no network) continues where it left off.
-// The games' updated_at is left alone (the Stats page reads it). A dry run reads IGDB but writes nothing.
+// A series is only filled when IGDB's collection matches a series the library already has, or when at least two
+// library games share it (see applySeriesProposals): IGDB names a collection after almost every standalone game,
+// and an empty series means "not part of a series" to the owner.
+// The games' updated_at is left alone (the Stats page reads it). A dry run reads IGDB but writes nothing: it does all
+// its work in one transaction that is rolled back at the end, so its report is what a real run would do.
 func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*EnrichReport, error) {
 	if o.BatchSize <= 0 {
 		o.BatchSize = 20
@@ -136,6 +147,13 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 		rep.BackupFile = o.BackupTo
 	}
 
+	var dryTx *sql.Tx
+	if o.DryRun {
+		if dryTx, err = d.Begin(); err != nil {
+			return rep, err
+		}
+		defer dryTx.Rollback()
+	}
 	consecutiveErrors := 0
 	first := true
 	// pace waits between requests, not before the first one.
@@ -190,26 +208,45 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 		for _, det := range details {
 			byID[det.IGDBID] = det
 		}
-		tx, err := d.Begin()
-		if err != nil {
-			return rep, err
+		tx := dryTx
+		if !o.DryRun {
+			if tx, err = d.Begin(); err != nil {
+				return rep, err
+			}
 		}
 		for _, l := range batch {
 			det, ok := byID[l.igdbID]
-			if !ok {
-				rep.Missing++
-			}
 			if err := enrichGame(tx, l.id, det, ok, ttb[l.igdbID], rep); err != nil {
 				tx.Rollback()
 				return rep, err
 			}
-			rep.Enriched++
+			if ok {
+				rep.Enriched++
+			} else {
+				rep.Missing++
+			}
 		}
-		if o.DryRun {
-			// the copy is thrown away anyway, but a dry run must not depend on that
-			tx.Rollback()
-			continue
+		if !o.DryRun {
+			if err := tx.Commit(); err != nil {
+				return rep, err
+			}
 		}
+	}
+	if o.Progress != nil {
+		o.Progress(len(todo), len(todo))
+	}
+	// The series pass looks at every enriched game, also those of earlier runs, so it needs no state of its own.
+	tx := dryTx
+	if !o.DryRun {
+		if tx, err = d.Begin(); err != nil {
+			return rep, err
+		}
+	}
+	if err := applySeriesProposals(tx, rep); err != nil {
+		tx.Rollback()
+		return rep, err
+	}
+	if !o.DryRun {
 		if err := tx.Commit(); err != nil {
 			return rep, err
 		}
@@ -217,12 +254,35 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 	return rep, nil
 }
 
-// minutes converts IGDB's seconds, rounded to the nearest minute; nil (NULL) when IGDB has no value.
-func minutes(seconds int) any {
+// maxMinutes is the longest time to beat taken at face value (1000 h): crowd-sourced times have wild outliers.
+const maxMinutes = 1000 * 60
+
+// minutes converts IGDB's seconds, rounded to the nearest minute; 0 when IGDB has no (or an absurd) value.
+func minutes(seconds int) int {
 	if seconds <= 0 {
-		return nil
+		return 0
 	}
-	return max(1, (seconds+30)/60)
+	if m := max(1, (seconds+30)/60); m <= maxMinutes {
+		return m
+	}
+	return 0
+}
+
+// timesToBeat returns the three times as SQL values (nil = unknown). Times that contradict each other (quick longer
+// than usual, usual longer than complete) are not trusted at all.
+func timesToBeat(t meta.TimeToBeat) (h, n, c any) {
+	hm, nm, cm := minutes(t.Hastily), minutes(t.Normally), minutes(t.Completely)
+	both := func(a, b int) bool { return a > 0 && b > 0 }
+	if (both(hm, nm) && hm > nm) || (both(nm, cm) && nm > cm) || (both(hm, cm) && hm > cm) {
+		return nil, nil, nil
+	}
+	conv := func(m int) any {
+		if m == 0 {
+			return nil
+		}
+		return m
+	}
+	return conv(hm), conv(nm), conv(cm)
 }
 
 func isEmpty(tx *sql.Tx, query string, args ...any) (bool, error) {
@@ -261,10 +321,15 @@ func replaceLinks(tx *sql.Tx, gameID int64, table, junction, fk string, names []
 	return nil
 }
 
-// fillColumn sets a lookup-backed column of game only while it is NULL. It reports whether it did.
+// fillColumn sets a lookup-backed column of game only while it is NULL, and creates the lookup row only then
+// (a game that already has a value must not leave IGDB's spelling behind as a new row). It reports whether it did.
 func fillColumn(tx *sql.Tx, gameID int64, table, column, name string) (bool, error) {
 	if name == "" {
 		return false, nil
+	}
+	var empty int
+	if err := tx.QueryRow("SELECT "+column+" IS NULL FROM game WHERE id = ?", gameID).Scan(&empty); err != nil || empty == 0 {
+		return false, err
 	}
 	id, err := db.GetOrCreate(tx, table, name)
 	if err != nil {
@@ -295,13 +360,17 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found bool, ttb meta
 		} else if ok {
 			rep.FilledDeveloper++
 		}
-		if ok, err := fillColumn(tx, gameID, "series", "series_id", det.Series); err != nil {
+		var igdbSeries any
+		if det.Series != "" {
+			igdbSeries = det.Series
+		}
+		if _, err := tx.Exec("UPDATE game SET igdb_series = ? WHERE id = ?", igdbSeries, gameID); err != nil {
+			return err
+		}
+		if ok, err := fillSeriesFromLibrary(tx, gameID, det.Series); err != nil {
 			return err
 		} else if ok {
 			rep.FilledSeries++
-			if err := db.IndexGame(tx, gameID); err != nil { // the search index holds the series name
-				return err
-			}
 		}
 		if ok, err := fillLinks(tx, gameID, "genre", "game_genre", "genre_id", det.Genres); err != nil {
 			return err
@@ -323,10 +392,18 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found bool, ttb meta
 			return err
 		} else if empty && len(det.Platforms) > 0 {
 			if len(det.Platforms) == 1 {
-				if _, err := fillLinks(tx, gameID, "platform", "game_platform", "platform_id", det.Platforms); err != nil {
+				pid, ok, err := resolvePlatform(tx, det.Platforms[0])
+				if err != nil {
 					return err
 				}
-				rep.FilledPlatforms++
+				if !ok {
+					rep.PlatformsUnmapped++
+				} else {
+					if _, err := tx.Exec("INSERT OR IGNORE INTO game_platform (game_id, platform_id) VALUES (?, ?)", gameID, pid); err != nil {
+						return err
+					}
+					rep.FilledPlatforms++
+				}
 			} else {
 				rep.PlatformsSkip++
 			}
@@ -357,7 +434,7 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found bool, ttb meta
 			rep.Links++
 		}
 	}
-	if h, n, c := minutes(ttb.Hastily), minutes(ttb.Normally), minutes(ttb.Completely); h != nil || n != nil || c != nil {
+	if h, n, c := timesToBeat(ttb); h != nil || n != nil || c != nil {
 		// coalesce: a value IGDB no longer reports does not erase the one we had
 		if _, err := tx.Exec(`UPDATE game SET time_to_beat_hastily = coalesce(?, time_to_beat_hastily),
 			time_to_beat_normally = coalesce(?, time_to_beat_normally), time_to_beat_completely = coalesce(?, time_to_beat_completely)
@@ -386,6 +463,15 @@ func PrintEnrichReport(w io.Writer, r *EnrichReport) {
 		r.FilledYear, r.FilledGenres, r.FilledThemes, r.FilledDeveloper, r.FilledSeries, r.FilledPlatforms)
 	if r.PlatformsSkip > 0 {
 		fmt.Fprintf(w, "  %d games have no platform and IGDB lists several: left empty\n", r.PlatformsSkip)
+	}
+	if r.PlatformsUnmapped > 0 {
+		fmt.Fprintf(w, "  %d games have no platform and IGDB's one is not a platform of your library: left empty (none is created)\n", r.PlatformsUnmapped)
+	}
+	if r.SeriesProposed > 0 {
+		fmt.Fprintf(w, "  %d games have an IGDB collection that was not used as a series (it matches no series of yours and no other game shares it), for example:\n", r.SeriesProposed)
+		for _, e := range r.SeriesExamples {
+			fmt.Fprintln(w, "    "+e)
+		}
 	}
 	if r.Errors > 0 {
 		fmt.Fprintf(w, "%d requests failed; those games are read again next run.\n", r.Errors)

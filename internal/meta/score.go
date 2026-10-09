@@ -108,3 +108,15 @@ func SameName(a, b string) bool {
 	fa := fold(a)
 	return fa != "" && fa == fold(b)
 }
+
+// FoldKey is a comparison key for names: lowercase, accents folded, "&" read as "and", letters and digits only.
+// "Mario & Luigi", "mario and luigi" and "Mario-and-Luigi" share a key.
+func FoldKey(s string) string {
+	var b strings.Builder
+	for _, r := range foldRune.Replace(strings.ToLower(s)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}

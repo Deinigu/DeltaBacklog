@@ -34,8 +34,10 @@ test('times are shown in minutes below an hour, one decimal below ten hours, who
   assert.equal(formatTime(90), '1.5 h');
   assert.equal(formatTime(120), '2 h');
   assert.equal(formatTime(450), '7.5 h');
-  assert.equal(formatTime(719), '12 h');
-  assert.equal(formatTime(2500), '42 h');
+  assert.equal(formatTime(719), '11 h');
+  assert.equal(formatTime(599), '9.9 h'); // under 10 h (short) never reads "10 h"
+  assert.equal(formatTime(600), '10 h');
+  assert.equal(formatTime(2500), '41 h');
   assert.equal(formatTime(null), '');
   assert.equal(formatTime(0), '');
 });

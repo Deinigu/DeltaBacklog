@@ -101,12 +101,18 @@ function ratioBar({ finished, dropped, share }) {
     h('p.big', {}, `${pct}%`, h('small', {}, ` finished, ${100 - pct}% dropped`)));
 }
 
-/** "About 410 hours" plus how much of the backlog that covers; says how to get times when there are none. */
+/** "At least 410 hours" and how much of the backlog that covers (leading with the coverage when it is under half); says how to get times when there are none. */
 function backlogHours(t) {
   if (!t.known) return h('p.hint', {}, 'No time to beat yet. Run deltabacklog sync-igdb --enrich to read it from IGDB.');
+  const hours = `at least ${t.hours.toLocaleString()} hours`;
+  if (t.known * 2 < t.total) { // most of the backlog has no time yet: the sum would mislead as a headline
+    return h('div', {},
+      h('p.big', {}, `${t.known} of ${t.total}`, h('small', {}, ' games have a time to beat')),
+      h('p.hint', {}, `That is ${hours} for those; the other ${t.unknown} have no time to beat yet.`));
+  }
   return h('div', {},
-    h('p.big', {}, `${t.hours.toLocaleString()} hours`, h('small', {}, ' to beat the backlog')),
-    h('p.hint', {}, t.unknown ? `Counted for ${t.known} of ${t.total} games; ${plural(t.unknown, 'game has', 'games have')} no time on IGDB.` : `Counted for all ${t.total} games.`));
+    h('p.big', {}, hours, h('small', {}, ' to beat the backlog')),
+    h('p.hint', {}, t.unknown ? `Counted for ${t.known} of ${t.total} games; ${plural(t.unknown, 'game has', 'games have')} no time to beat yet.` : `Counted for all ${t.total} games.`));
 }
 
 function waitingTable(time) {

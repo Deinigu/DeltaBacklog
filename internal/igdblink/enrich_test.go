@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -98,16 +100,22 @@ func TestEnrichFillsEmptyFieldsAndStoresNewData(t *testing.T) {
 	d := openDB(t)
 	id := addGame(t, d, "Hades") // no platform
 	link(t, d, id, 1)
+	db.GetOrCreate(d, "platform", "PC") // the library has PC; enrichment never creates a platform
+	// a second game of the same IGDB collection: two library games sharing it make it a series
+	id2 := addGame(t, d, "Hades II")
+	link(t, d, id2, 2)
+	second := hades()
+	second.IGDBID, second.Year = 2, 2024
 	f := &fakeEnricher{
-		details: map[int64]meta.Details{1: hades()},
+		details: map[int64]meta.Details{1: hades(), 2: second},
 		ttb:     map[int64]meta.TimeToBeat{1: {Hastily: 36000, Normally: 72000, Completely: 150001}},
 	}
 	rep, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Total != 1 || rep.Enriched != 1 || rep.TimeToBeat != 1 || rep.FilledYear != 1 || rep.FilledGenres != 1 || rep.FilledThemes != 1 ||
-		rep.FilledDeveloper != 1 || rep.FilledSeries != 1 || rep.FilledPlatforms != 1 || rep.Modes != 1 || rep.Perspectives != 1 || rep.Links != 1 {
+	if rep.Total != 2 || rep.Enriched != 2 || rep.TimeToBeat != 1 || rep.FilledYear != 2 || rep.FilledGenres != 2 || rep.FilledThemes != 2 ||
+		rep.FilledDeveloper != 2 || rep.FilledSeries != 2 || rep.FilledPlatforms != 2 || rep.Modes != 2 || rep.Perspectives != 2 || rep.Links != 2 {
 		t.Errorf("report = %+v", rep)
 	}
 	var year, h, n, c int
@@ -140,7 +148,7 @@ func TestEnrichFillsEmptyFieldsAndStoresNewData(t *testing.T) {
 	if !enriched.Valid {
 		t.Error("igdb_enriched_at not set")
 	}
-	if g := names(t, d, "SELECT rowid FROM game_fts WHERE game_fts MATCH 'Hades'"); g == "" {
+	if g := names(t, d, "SELECT rowid FROM game_fts WHERE game_fts MATCH 'series:Hades' ORDER BY rowid"); g != "1,2" {
 		t.Error("search index lost the game")
 	}
 }
@@ -160,9 +168,16 @@ func TestEnrichNeverOverwritesWhatTheOwnerEntered(t *testing.T) {
 	d.QueryRow("SELECT updated_at FROM game WHERE id = ?", id).Scan(&updated)
 	d.Exec("UPDATE game SET updated_at = '2020-01-01T00:00:00Z' WHERE id = ?", id)
 
+	counts := func() string {
+		return names(t, d, "SELECT (SELECT count(*) FROM series) || '/' || (SELECT count(*) FROM company) || '/' || (SELECT count(*) FROM genre) || '/' || (SELECT count(*) FROM theme) || '/' || (SELECT count(*) FROM platform)")
+	}
+	rowsBefore := counts()
 	rep, err := Enrich(context.Background(), d, &fakeEnricher{details: map[int64]meta.Details{1: hades()}}, EnrichOptions{Sleep: noSleep})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if after := counts(); after != rowsBefore {
+		t.Errorf("lookup rows (series/company/genre/theme/platform) %s became %s: IGDB's spellings must not be created when nothing is filled", rowsBefore, after)
 	}
 	if rep.FilledYear+rep.FilledGenres+rep.FilledThemes+rep.FilledDeveloper+rep.FilledSeries+rep.FilledPlatforms != 0 {
 		t.Errorf("filled something that was not empty: %+v", rep)
@@ -330,7 +345,7 @@ func TestEnrichGameGoneFromIGDBIsMarkedDone(t *testing.T) {
 	d := openDB(t)
 	link(t, d, addGame(t, d, "Gone"), 99)
 	rep, _ := Enrich(context.Background(), d, &fakeEnricher{}, EnrichOptions{Sleep: noSleep})
-	if rep.Missing != 1 || rep.Enriched != 1 {
+	if rep.Missing != 1 || rep.Enriched != 0 {
 		t.Errorf("%+v", rep)
 	}
 	if rep, _ = Enrich(context.Background(), d, &fakeEnricher{}, EnrichOptions{Sleep: noSleep}); rep.Total != 0 {
@@ -417,7 +432,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	id := addGame(t, d, "Hades", "PC")
 	d.Exec("UPDATE game SET release_year = 2020, igdb_id = 5, igdb_synced_at = '2026-01-01T00:00:00Z' WHERE id = ?", id)
 	for _, q := range []string{ // put the file back to what version 6 looked like
-		"DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
+		"ALTER TABLE game DROP COLUMN igdb_series", "DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
 		"ALTER TABLE game DROP COLUMN time_to_beat_hastily", "ALTER TABLE game DROP COLUMN time_to_beat_normally",
 		"ALTER TABLE game DROP COLUMN time_to_beat_completely", "ALTER TABLE game DROP COLUMN igdb_enriched_at", "PRAGMA user_version = 6",
 	} {
@@ -426,7 +441,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 		}
 	}
 	d.Close()
-	d, err = db.Open(path) // migrates 6 -> 7
+	d, err = db.Open(path) // migrates 6 -> 8
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +453,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	if err := d.QueryRow("SELECT release_year, igdb_enriched_at, time_to_beat_normally FROM game WHERE id = ?", id).Scan(&year, &enriched, &ttb); err != nil {
 		t.Fatal(err)
 	}
-	if v != 7 || year != 2020 || enriched.Valid || ttb.Valid {
+	if v != 8 || year != 2020 || enriched.Valid || ttb.Valid {
 		t.Errorf("version %d, year %d, enriched %v, ttb %v", v, year, enriched, ttb)
 	}
 	for _, bad := range []string{
@@ -457,5 +472,173 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	d.QueryRow("SELECT count(*) FROM game_link").Scan(&n)
 	if n != 0 {
 		t.Error("links survive their game")
+	}
+}
+
+func TestEnrichStandaloneGameKeepsItsSeriesEmpty(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Undertale")
+	link(t, d, id, 1)
+	det := hades()
+	det.Series = "Undertale" // IGDB names a collection after the game itself
+	rep, _ := Enrich(context.Background(), d, &fakeEnricher{details: map[int64]meta.Details{1: det}}, EnrichOptions{Sleep: noSleep})
+	var series sql.NullInt64
+	d.QueryRow("SELECT series_id FROM game WHERE id = ?", id).Scan(&series)
+	if series.Valid || rep.FilledSeries != 0 || rep.SeriesProposed != 1 || len(rep.SeriesExamples) != 1 {
+		t.Errorf("series %v, report %+v", series, rep)
+	}
+	if n := names(t, d, "SELECT count(*) FROM series"); n != "0" {
+		t.Errorf("%s series rows created", n)
+	}
+	var out bytes.Buffer
+	PrintEnrichReport(&out, rep)
+	if !strings.Contains(out.String(), "Undertale -> Undertale") {
+		t.Errorf("proposal not listed: %s", out.String())
+	}
+}
+
+func TestEnrichSeriesMatchingAnExistingOneUsesTheOwnersSpelling(t *testing.T) {
+	d := openDB(t)
+	sid, _ := db.GetOrCreate(d, "series", "Mario and Luigi")
+	id := addGame(t, d, "Superstar Saga")
+	link(t, d, id, 1)
+	det := hades()
+	det.Series = "Mario & Luigi"
+	rep, _ := Enrich(context.Background(), d, &fakeEnricher{details: map[int64]meta.Details{1: det}}, EnrichOptions{Sleep: noSleep})
+	var got int64
+	d.QueryRow("SELECT series_id FROM game WHERE id = ?", id).Scan(&got)
+	if got != sid || rep.FilledSeries != 1 || names(t, d, "SELECT count(*) FROM series") != "1" {
+		t.Errorf("series %d (want %d), report %+v", got, sid, rep)
+	}
+}
+
+func TestEnrichSharedCollectionBecomesASeriesAcrossRuns(t *testing.T) {
+	d := openDB(t)
+	a, b := addGame(t, d, "Part One"), addGame(t, d, "Part Two")
+	link(t, d, a, 1)
+	f := &fakeEnricher{details: map[int64]meta.Details{}}
+	for i := int64(1); i <= 2; i++ {
+		det := hades()
+		det.IGDBID, det.Series = i, "Big Saga"
+		f.details[i] = det
+	}
+	// first run sees only one game of the collection: no series yet
+	Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
+	if n := names(t, d, "SELECT count(*) FROM series"); n != "0" {
+		t.Fatalf("series after one game: %s", n)
+	}
+	// the second game is linked later; the next run completes the pair, including the first game
+	link(t, d, b, 2)
+	rep, _ := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
+	if g := names(t, d, "SELECT s.name || ':' || count(*) FROM game g JOIN series s ON s.id = g.series_id GROUP BY s.id"); g != "Big Saga:2" || rep.FilledSeries != 2 {
+		t.Errorf("series %q, report %+v", g, rep)
+	}
+}
+
+func TestEnrichPlatformUsesTheLibrarysNamesAndNeverCreatesOne(t *testing.T) {
+	d := openDB(t)
+	addGame(t, d, "Anchor", "Switch") // the library calls it Switch
+	f := &fakeEnricher{details: map[int64]meta.Details{}}
+	for i, plat := range []string{"Nintendo Switch", "Meta Quest 2"} {
+		link(t, d, addGame(t, d, fmt.Sprintf("G%d", i)), int64(i+1))
+		det := hades()
+		det.IGDBID, det.Platforms, det.Series = int64(i+1), []string{plat}, ""
+		f.details[det.IGDBID] = det
+	}
+	rep, _ := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
+	if rep.FilledPlatforms != 1 || rep.PlatformsUnmapped != 1 {
+		t.Errorf("report %+v", rep)
+	}
+	if got := names(t, d, "SELECT name FROM platform ORDER BY name"); got != "Switch" {
+		t.Errorf("platform rows = %s (none may be created)", got)
+	}
+	if got := names(t, d, "SELECT p.name FROM game_platform x JOIN platform p ON p.id = x.platform_id JOIN game g ON g.id = x.game_id WHERE g.title = 'G0'"); got != "Switch" {
+		t.Errorf("G0 platform = %q", got)
+	}
+}
+
+// The Go and JavaScript platform alias tables describe the same mapping.
+func TestPlatformAliasesMatchTheJS(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "web", "static", "js", "platforms.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := string(src)
+	block = block[strings.Index(block, "const ALIASES = {"):]
+	block = block[:strings.Index(block, "};")]
+	pairs := regexp.MustCompile(`(\w+): '([^']+)'`).FindAllStringSubmatch(block, -1)
+	if len(pairs) < 20 {
+		t.Fatalf("parsed only %d aliases from platforms.js", len(pairs))
+	}
+	for _, p := range pairs {
+		if PlatformKey(p[1]) != PlatformKey(p[2]) {
+			t.Errorf("JS maps %q to %q, Go folds %q to %q", p[1], p[2], p[1], PlatformKey(p[1]))
+		}
+	}
+}
+
+func TestTimesToBeatDropOutliersAndContradictions(t *testing.T) {
+	val := func(v any) int {
+		if v == nil {
+			return 0
+		}
+		return v.(int)
+	}
+	h, n, c := timesToBeat(meta.TimeToBeat{Hastily: 36000, Normally: 72000, Completely: 338978 * 60}) // BG3's 5650 h
+	if val(h) != 600 || val(n) != 1200 || c != nil {
+		t.Errorf("outlier: %v %v %v", h, n, c)
+	}
+	h, n, c = timesToBeat(meta.TimeToBeat{Hastily: 72000, Normally: 36000, Completely: 90000}) // quick longer than usual
+	if h != nil || n != nil || c != nil {
+		t.Errorf("inverted: %v %v %v", h, n, c)
+	}
+	h, n, c = timesToBeat(meta.TimeToBeat{Normally: 3600})
+	if h != nil || val(n) != 60 || c != nil {
+		t.Errorf("single: %v %v %v", h, n, c)
+	}
+}
+
+func TestEnrichHonoursRetryAfter(t *testing.T) {
+	d := openDB(t)
+	link(t, d, addGame(t, d, "Hades"), 1)
+	f := &retryAfterEnricher{fakeEnricher: fakeEnricher{details: map[int64]meta.Details{1: hades()}}}
+	var slept []time.Duration
+	o := EnrichOptions{Sleep: func(_ context.Context, w time.Duration) error { slept = append(slept, w); return nil }}
+	if rep, err := Enrich(context.Background(), d, f, o); err != nil || rep.Enriched != 1 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if len(slept) == 0 || slept[0] != 7*time.Second {
+		t.Errorf("slept %v, want the 7s IGDB asked for first", slept)
+	}
+}
+
+type retryAfterEnricher struct {
+	fakeEnricher
+	done bool
+}
+
+func (r *retryAfterEnricher) GameDetails(ctx context.Context, ids []int64) ([]meta.Details, error) {
+	if !r.done {
+		r.done = true
+		return nil, &meta.HTTPError{Method: "POST", Host: "igdb", Status: 429, Text: "429", RetryAfter: 7 * time.Second}
+	}
+	return r.fakeEnricher.GameDetails(ctx, ids)
+}
+
+func TestEnrichDryRunReportsLikeARealRunAndWritesNothing(t *testing.T) {
+	d := openDB(t)
+	f := &fakeEnricher{details: map[int64]meta.Details{}}
+	for i := int64(1); i <= 2; i++ {
+		link(t, d, addGame(t, d, fmt.Sprintf("Part %d", i)), i)
+		det := hades()
+		det.IGDBID, det.Series = i, "Big Saga"
+		f.details[i] = det
+	}
+	rep, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, DryRun: true})
+	if err != nil || rep.FilledSeries != 2 || rep.Enriched != 2 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if n := names(t, d, "SELECT (SELECT count(*) FROM series) || (SELECT count(*) FROM game WHERE igdb_enriched_at IS NOT NULL OR igdb_series IS NOT NULL)"); n != "00" {
+		t.Errorf("a dry run wrote something: %s", n)
 	}
 }

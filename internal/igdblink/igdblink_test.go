@@ -490,7 +490,7 @@ func TestDryRunLeavesAnOlderDatabaseByteIdentical(t *testing.T) {
 	}
 	addGame(t, d, "Hades", "PC")
 	for _, q := range []string{
-		"DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
+		"ALTER TABLE game DROP COLUMN igdb_series", "DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
 		"ALTER TABLE game DROP COLUMN time_to_beat_hastily", "ALTER TABLE game DROP COLUMN time_to_beat_normally",
 		"ALTER TABLE game DROP COLUMN time_to_beat_completely", "ALTER TABLE game DROP COLUMN igdb_enriched_at",
 		"DROP TABLE sync_candidate", "ALTER TABLE game DROP COLUMN igdb_synced_at", "ALTER TABLE game DROP COLUMN igdb_checked_at",

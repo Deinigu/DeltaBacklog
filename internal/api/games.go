@@ -99,7 +99,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
 		LEFT JOIN series se ON se.id = g.series_id
-		LEFT JOIN company c ON c.id = g.developer_id` + where + `
+		LEFT JOIN company c ON c.id = g.developer_id`+where+`
 		ORDER BY s.sort, g.queue_pos, g.title_sort`, args...)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
 			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV,
-				&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely); err != nil {
+			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -190,4 +190,3 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	}
 	return games, yrows.Err()
 }
-

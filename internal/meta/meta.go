@@ -97,7 +97,11 @@ func (c *Client) do(req *http.Request, out any) error {
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
+		he := &HTTPError{Method: req.Method, Host: req.URL.Host, Status: res.StatusCode, Text: res.Status}
+		if n, err := strconv.Atoi(strings.TrimSpace(res.Header.Get("Retry-After"))); err == nil && n > 0 {
+			he.RetryAfter = time.Duration(n) * time.Second
+		}
+		return he
 	}
 	return json.Unmarshal(body, out)
 }
@@ -107,6 +111,7 @@ func (c *Client) do(req *http.Request, out any) error {
 type HTTPError struct {
 	Method, Host, Text string
 	Status             int
+	RetryAfter         time.Duration // the Retry-After header, when the service sent one in seconds
 }
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("%s %s: %s", e.Method, e.Host, e.Text) }
@@ -510,7 +515,7 @@ type Details struct {
 	Genres       []string
 	Themes       []string
 	Developer    string
-	Series       string
+	Series       string   // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
 	Modes        []string // game modes: Single player, Co-operative...
 	Perspectives []string // player perspectives: First person, Third person...
 	Links        []StoreLink
@@ -568,7 +573,10 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 	out := make([]Details, 0, len(games))
 	for _, g := range games {
 		cand := g.igdbGame.candidate()
-		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer, Series: cand.Series}
+		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
+		if len(g.Collections) > 0 {
+			d.Series = g.Collections[0].Name
+		}
 		for _, m := range g.GameModes {
 			d.Modes = append(d.Modes, m.Name)
 		}

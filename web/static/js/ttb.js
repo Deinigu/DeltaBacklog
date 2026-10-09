@@ -17,12 +17,12 @@ export const isShort = (g) => {
   return m !== null && m < SHORT_MINUTES;
 };
 
-/** 45 -> "45 min", 90 -> "1.5 h", 450 -> "7.5 h", 720 -> "12 h", 2500 -> "42 h". */
+/** 45 -> "45 min", 90 -> "1.5 h", 450 -> "7.5 h", 720 -> "12 h", 2500 -> "41 h". Rounds down, so a game under 10 h (isShort) never reads "10 h". */
 export function formatTime(minutes) {
   if (!has(minutes)) return '';
   if (minutes < 60) return `${Math.round(minutes)} min`;
   const h = minutes / 60;
-  return h < 10 ? `${+h.toFixed(1)} h` : `${Math.round(h)} h`;
+  return h < 10 ? `${Math.floor(h * 10) / 10} h` : `${Math.floor(h)} h`;
 }
 
 /** "Quick 8 h, usual 12 h, complete 40 h" for the drawer; parts IGDB does not know are left out. */
@@ -41,5 +41,5 @@ export function totalTime(games) {
     const m = ttbMinutes(g);
     if (m !== null) { minutes += m; known++; }
   }
-  return { minutes, hours: Math.round(minutes / 60), known, unknown: games.length - known };
+  return { minutes, hours: Math.floor(minutes / 60), known, unknown: games.length - known };
 }

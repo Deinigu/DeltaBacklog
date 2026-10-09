@@ -665,3 +665,6 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pf.ttb { background: none; padding-left: 0; font-weight: 500; }
 .store-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; }
 .store-links .btn { text-decoration: none; color: inherit; font-size: 14px; }
+/* Phone width without a touch screen (a narrow window): the same 44px hit area for chips, so the filter flags
+   (Short game...) and the Surprise me mood chips meet the tap-target minimum at 390px. */
+@media (max-width: 599px) { .chip { min-height: 44px; } }
