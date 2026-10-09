@@ -58,12 +58,12 @@ web/web.go          go:embed of web/static
 web/static/         index.html, styles.css, sw.js, manifest, icon, js/*.js
 web/test/           Node unit tests for the pure frontend modules (outside the embedded folder)
 deploy/             deploy.sh (build + upload), install.sh (runs on the Pi), the systemd units and backup.sh
-docs/               these manuals; docs/img screenshots; docs/tools/screenshots.mjs regenerates them
+docs/               these manuals; docs/img screenshots; docs/tools/screenshots.mjs regenerates them from the demo library in docs/tools/demo-data
 ```
 
 ## 3. Running it
 
-Go is not on the dev machine's PATH: `export PATH="$PATH:$HOME/sdk/go/bin"` (Git Bash).
+Go 1.27 and Node 20+ must be on your PATH (Node is only for the frontend tests and the screenshot tool).
 
 ```sh
 go vet ./... && go test ./...
@@ -81,10 +81,12 @@ go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 | `DATA_DIR` | default `./data` (holds `app.db` and `covers/`) |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | a Twitch developer application; enables lookups |
 | `STEAMGRIDDB_API_KEY` | enables SteamGridDB covers |
+| `GOMEMLIMIT` | Go soft memory limit (for example `96MiB`). The runtime reads it only from the real environment at start-up, so `loadDotEnv` applies a value found in `.env` itself with `debug.SetMemoryLimit` |
 
 Without keys the app works; lookups answer `configured: false` and the UI offers manual entry.
+The version printed at start-up and in the usage text is `main.version` (`dev` by default); the release workflow sets it from the tag with `-ldflags "-X main.version=<tag>"`, and `deploy/third-party-licenses.sh` writes the `THIRD_PARTY_LICENSES.txt` that goes into each release archive.
 
-**Port 8081 belongs to the owner's own live server.** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
+**Port 8081 may be a real, live server (it is the default port).** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
 
 **Other commands:** `deltabacklog` with any other first argument than `backup`, `check` or `sync-igdb` prints usage and exits 2 (a typo never starts the server); `deltabacklog backup <file>` writes a consistent copy of the database; `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty).
 
@@ -252,7 +254,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | Backend, by area | `internal/api` (games, views, tier lists, link endpoints), `internal/db` (migrations, backup/check), `internal/meta`, `internal/igdblink`, `internal/importer`, `internal/covers` |
 | IGDB sync | `internal/igdblink` tests use an offline fake IGDB (buckets, dry run writes nothing, backup, resume, 429 backoff, review queue, migration 006; `enrich_test.go`: fill-only-empty (also no new lookup rows), series rules, platform mapping and Go/JS alias parity, outlier times, Retry-After, batching, resume after throttling, backoff doubling, refresh, dry run, migration 007 on a populated database); `internal/meta/enrich_test.go` (query shape, no scores, store-link classification); `internal/api/enrich_test.go` (read model and facets); `internal/api/link_test.go` covers the three endpoints |
 | Real services | `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v` |
-| In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images) |
+| In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images). By default it builds and serves the demo library from `docs/tools/demo-data` (40 well-known games, generated covers, no personal data), so the images never show anyone's real collection |
 
 Before opening a PR: all of the above pass; changes that touch the UI were looked at in a browser at 390px and 1280px (light and dark where it matters), with no horizontal page scroll. Every bug fix comes with a test that fails without it.
 
@@ -268,7 +270,7 @@ Before opening a PR: all of the above pass; changes that touch the UI were looke
 
 The program is **cross-compiled on the PC** and uploaded; the Pi never holds the source and never builds anything (compiling the SQLite library needs most of a 1GB Pi and minutes of CPU, which would starve the other services). It runs directly under **systemd**, with no container, to keep the memory use at about 15MB.
 
-**Deploy or update (from the PC, Go on PATH, `ssh raspberry` working):**
+**Deploy or update (from the PC, Go on PATH, `ssh raspberry` working, or `DEPLOY_HOST=user@host`):**
 
 ```sh
 bash deploy/deploy.sh                       # build + upload + install; data and settings are kept
@@ -291,12 +293,12 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 
 **Friendly address (`http://deltabacklog.local`).** `deltabacklog-name.service` runs `/opt/deltabacklog/name.sh` (source `deploy/name.sh`), which does two things: it announces the name `deltabacklog.local` with `avahi-publish` (mDNS, pointing at the source address of the default route, `ip -4 route get 1.1.1.1`), and it keeps two `iptables` NAT rules that send port 80 to 8081. The PREROUTING rule matches only traffic **addressed to the Pi** (`-m addrtype --dst-type LOCAL`), so containers on the Pi going out to port 80 elsewhere are untouched; the OUTPUT rule covers the Pi's own requests to itself. The app still listens only on `:8081`. The rules are added when the unit starts and removed when it stops (`ExecStopPost`, which also removes the first version of the rule that had no address match), so they come back at every boot and disappear when the unit stops (for example `systemctl disable --now`; `disable` alone keeps them until the next boot). Anything else listening on port 80 on the Pi (for example another web UI) is shadowed for traffic addressed to the Pi.
 
-`install.sh` installs `avahi-daemon`, `avahi-utils` and `iptables` with apt (running `apt-get update` first, only when something is missing), installs `name.sh` and the unit, and enables it. **Re-running it also updates the name unit**: when the unit file or `name.sh` changed it clears (for a changed `name.sh`, the old script removes its own rules first) the old rules and restarts the unit, otherwise it just makes sure it is running. This step is optional: if it fails the install still succeeds and prints a warning. The unit was first installed by hand on the owner's Pi, so the first deploy of this version replaces it (the old rule is removed by `name.sh rules-del`). Caveats: mDNS needs a client that understands `.local` (Windows 10+, macOS, iOS and Linux with avahi do; **some Android versions do not**, and then `http://<ip>:8081` is the fallback), and the name keeps the address it had when the unit started, so give the Pi a fixed IP in the router.
+`install.sh` installs `avahi-daemon`, `avahi-utils` and `iptables` with apt (running `apt-get update` first, only when something is missing), installs `name.sh` and the unit, and enables it. **Re-running it also updates the name unit**: when the unit file or `name.sh` changed it clears (for a changed `name.sh`, the old script removes its own rules first) the old rules and restarts the unit, otherwise it just makes sure it is running. This step is optional: if it fails the install still succeeds and prints a warning. The unit was first installed by hand on the maintainer's Pi, so the first deploy of this version replaces it (the old rule is removed by `name.sh rules-del`). Caveats: mDNS needs a client that understands `.local` (Windows 10+, macOS, iOS and Linux with avahi do; **some Android versions do not**, and then `http://<ip>:8081` is the fallback), and the name keeps the address it had when the unit started, so give the Pi a fixed IP in the router.
 
 **Backups.** `deltabacklog-backup.timer` runs `backup.sh` every night at 03:30 (with `Persistent=true`, so a missed run happens at the next boot). It calls `deltabacklog backup <file>`, which uses SQLite's `VACUUM INTO` for a consistent copy while the app runs, never overwrites an existing file and writes under a temporary name. Covers are not backed up (they can be downloaded again).
 
 ```sh
-ssh raspberry
+ssh <user>@<pi-address>   # the same host you gave as DEPLOY_HOST
 sudo systemctl start deltabacklog-backup.service            # a backup right now
 sudo /opt/deltabacklog/deltabacklog check /var/backups/deltabacklog/app-2026-10-07.db   # integrity, schema version, counts (read-only)
 # restore: stop, put the copy in place, fix the owner, start
@@ -311,7 +313,7 @@ sudo systemctl start deltabacklog
 
 **Never test against the Pi's real database.** For experiments copy `app.db` to a temporary folder and run a second instance on another port (this is how the write timings below were measured), then delete it.
 
-**HTTP only, so no service worker on the Pi.** Browsers only allow service workers and "Install app" on HTTPS or `localhost`. Served as `http://deltabacklog.local` or `http://192.168.1.50:8081` the app works fully, but the offline cache is inactive, and "Add to Home screen" creates a plain shortcut. Real installation needs HTTPS (for example a reverse proxy with a certificate); not set up.
+**HTTP only, so no service worker on the Pi.** Browsers only allow service workers and "Install app" on HTTPS or `localhost`. Served as `http://deltabacklog.local` or `http://<pi-address>:8081` the app works fully, but the offline cache is inactive, and "Add to Home screen" creates a plain shortcut. Real installation needs HTTPS (for example a reverse proxy with a certificate); not set up.
 
 **Performance (measured on the Pi 3B+ from the PC over the LAN, with a real browser)**
 

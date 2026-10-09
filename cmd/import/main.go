@@ -21,7 +21,7 @@ import (
 func main() {
 	dataDir := flag.String("data", "./data", "data directory (app.db and covers/)")
 	csvPath := flag.String("csv", "", "path to the exported Games_Library CSV")
-	nocodb := flag.String("nocodb", "http://192.168.1.50:8080", "NocoDB base URL, for uploaded cover paths")
+	nocodb := flag.String("nocodb", "", "NocoDB base URL (for example http://nocodb.local:8080), needed only to download covers that were uploaded to NocoDB")
 	fetch := flag.Bool("covers", true, "download and resize covers after importing")
 	flag.Parse()
 	if *csvPath == "" {

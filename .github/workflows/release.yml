@@ -1,0 +1,65 @@
+name: Release
+
+# Pushing a tag such as v0.1.0 builds the binaries for every platform and attaches them, with checksums, to a
+# GitHub release. No other event publishes anything. Building and testing run with a read-only token; only the
+# last job can write to the repository.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go vet ./... && go test ./...
+      - name: Third-party licenses
+        run: bash deploy/third-party-licenses.sh THIRD_PARTY_LICENSES.txt
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir dist
+          build() { # os arch goarm archive-suffix
+            local os=$1 arch=$2 arm=$3 name=$4 exe=deltabacklog
+            [ "$os" = windows ] && exe=deltabacklog.exe
+            local dir=deltabacklog-${GITHUB_REF_NAME}-$name
+            mkdir "$dir"
+            GOOS=$os GOARCH=$arch GOARM=$arm CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o "$dir/$exe" ./cmd/deltabacklog
+            cp README.md LICENSE THIRD_PARTY_LICENSES.txt CHANGELOG.md .env.example "$dir/"
+            if [ "$os" = windows ]; then zip -qr "dist/$dir.zip" "$dir"; else tar -czf "dist/$dir.tar.gz" "$dir"; fi
+            rm -rf "$dir"
+          }
+          build linux   amd64 ""  linux-amd64
+          build linux   arm64 ""  linux-arm64
+          build linux   arm   7   linux-armv7
+          build windows amd64 ""  windows-amd64
+          build darwin  amd64 ""  macos-amd64
+          build darwin  arm64 ""  macos-arm64
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

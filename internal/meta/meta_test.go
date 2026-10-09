@@ -257,7 +257,7 @@ func TestLinkClientChecksEveryRedirect(t *testing.T) {
 	if err := cl.CheckRedirect(req("https://www.gog.com/game/x"), nil); err != nil {
 		t.Errorf("an allowed host should be followed: %v", err)
 	}
-	for _, bad := range []string{"http://192.168.1.50:8080/", "http://169.254.169.254/latest/meta-data", "https://evil.example.com/", "https://gog.com.evil.example.com/"} {
+	for _, bad := range []string{"http://192.168.1.10:8080/", "http://169.254.169.254/latest/meta-data", "https://evil.example.com/", "https://gog.com.evil.example.com/"} {
 		if err := cl.CheckRedirect(req(bad), nil); err == nil {
 			t.Errorf("redirect to %s must be refused", bad)
 		}
