@@ -48,10 +48,20 @@ elif [ -d "$STAGE/seed" ]; then
   echo "a database already exists: seed data ignored"
 fi
 
-# 5. the program, replaced atomically
+# 5. the program, replaced atomically. A new program may migrate the database when it starts, so the database is
+#    copied first (as the service user, so no file in the data folder ends up owned by root). `backup` never migrates.
 CHANGED=0
 if ! cmp -s "$STAGE/deltabacklog" "$APP/deltabacklog" 2>/dev/null; then
   install -m 755 "$STAGE/deltabacklog" "$APP/deltabacklog.new"
+  if [ -f "$DATA/app.db" ]; then
+    PRE="$BACKUPS/app-before-upgrade-$(date +%Y%m%d-%H%M%S).db"
+    if ! (cd "$DATA" && runuser -u deltabacklog -- env DATA_DIR="$DATA" "$APP/deltabacklog.new" backup "$PRE"); then
+      rm -f "$APP/deltabacklog.new"
+      echo "the backup before the upgrade failed: the program was not updated"
+      exit 1
+    fi
+    echo "backup before the upgrade: $PRE"
+  fi
   mv -f "$APP/deltabacklog.new" "$APP/deltabacklog"
   CHANGED=1
 fi

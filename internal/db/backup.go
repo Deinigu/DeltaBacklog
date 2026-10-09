@@ -27,3 +27,19 @@ func Backup(d *sql.DB, dest string) error {
 	}
 	return os.Rename(tmp, dest)
 }
+
+// BackupFile copies the database file src to dest (see Backup) exactly as it is: it never migrates src, so a newer
+// program can back up an older database before it upgrades it, and a missing src is an error, not a new empty database.
+func BackupFile(src, dest string) error {
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("backup: %w", err)
+	}
+	// mode=rw never creates the file; read-write (not ro) so a WAL database opens even when its -shm file is missing.
+	d, err := sql.Open("sqlite", FileURI(src)+"?mode=rw&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return fmt.Errorf("backup: %w", err)
+	}
+	defer d.Close()
+	d.SetMaxOpenConns(1)
+	return Backup(d, dest)
+}
