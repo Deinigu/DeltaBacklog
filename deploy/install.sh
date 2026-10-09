@@ -3,7 +3,7 @@
 #
 #   sudo ./install.sh <stage-dir>
 #
-# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files, backup.sh, and optionally
+# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service), backup.sh, name.sh, and optionally
 #   env       the settings file; installed to /etc/deltabacklog.env (root only) when given, kept otherwise
 #   seed/     app.db and covers/ for a first install; only used when no database exists yet
 # It is safe to run again: data is never overwritten, the service is restarted only if the program changed.
@@ -55,10 +55,18 @@ if ! cmp -s "$STAGE/deltabacklog" "$APP/deltabacklog" 2>/dev/null; then
   mv -f "$APP/deltabacklog.new" "$APP/deltabacklog"
   CHANGED=1
 fi
-install -m 755 "$STAGE/backup.sh" "$APP/backup.sh"
+# name.sh holds the iptables rules: when it changes, the OLD script removes its rules before the new one is installed
+NAME_CHANGED=0
+if ! cmp -s "$STAGE/name.sh" "$APP/name.sh" 2>/dev/null; then
+  NAME_CHANGED=1
+  [ -x "$APP/name.sh" ] && "$APP/name.sh" rules-del || true
+fi
+install -m 755 "$STAGE/backup.sh" "$STAGE/name.sh" "$APP/"
 
 # 6. systemd units
 install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" /etc/systemd/system/
+cmp -s "$STAGE/deltabacklog-name.service" /etc/systemd/system/deltabacklog-name.service 2>/dev/null || NAME_CHANGED=1
+install -m 644 "$STAGE/deltabacklog-name.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable deltabacklog.service deltabacklog-backup.timer >/dev/null 2>&1
 if systemctl is-active --quiet deltabacklog.service; then
@@ -68,7 +76,23 @@ else
 fi
 systemctl start deltabacklog-backup.timer
 
-# 7. wait for it to answer
+# 7. the friendly address http://deltabacklog.local (mDNS name + port 80 -> 8081). Optional: a failure here
+#    must not fail the install, the app itself is already running.
+name_setup() {
+  if ! command -v avahi-publish >/dev/null 2>&1 || ! command -v iptables >/dev/null 2>&1 || ! systemctl cat avahi-daemon.service >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq && apt-get install -y -qq avahi-daemon avahi-utils iptables || return 1
+  fi
+  if ss -ltnH 'sport = :80' 2>/dev/null | grep -q .; then
+    echo "note: something already listens on port 80 on this Pi; traffic addressed to the Pi on port 80 now goes to DeltaBacklog"
+  fi
+  systemctl enable deltabacklog-name.service >/dev/null 2>&1 || return 1
+  # an older unit never removed its rules (the first one also caught forwarded traffic): clear them before restarting
+  if [ "$NAME_CHANGED" = 1 ]; then "$APP/name.sh" rules-del; systemctl restart deltabacklog-name.service; else systemctl start deltabacklog-name.service; fi
+}
+name_setup || echo "warning: http://deltabacklog.local was not set up; use http://<address>:8081"
+
+# 8. wait for it to answer
 i=0
 until curl -fsS -m 3 http://127.0.0.1:8081/healthz >/dev/null 2>&1; do
   i=$((i + 1))
@@ -79,4 +103,4 @@ until curl -fsS -m 3 http://127.0.0.1:8081/healthz >/dev/null 2>&1; do
   fi
   sleep 1
 done
-echo "DeltaBacklog is running (enabled at boot): http://$(hostname -I | awk '{print $1}'):8081"
+echo "DeltaBacklog is running (enabled at boot): http://deltabacklog.local or http://$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'):8081"
