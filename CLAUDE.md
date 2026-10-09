@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `modernc.org/sqlite`, no CGO) with a vanilla-JS PWA embedded via `go:embed`. It replaced the maintainer's NocoDB videogame table and must run on a Raspberry Pi 3B+ (armv7, ~900MB RAM shared with other containers), so keep it light: no frontend build step, no heavy dependencies.
 
 ## Commands
-- If Go is not on PATH, add its `bin` directory (Git Bash: `export PATH="$PATH:$HOME/sdk/go/bin"`; PowerShell: `$env:Path += ";$env:USERPROFILEsdkgoin"`; adjust to where Go is installed).
+- If Go is not on PATH, add its `bin` directory (Git Bash: `export PATH="$PATH:$HOME/sdk/go/bin"`; PowerShell: `$env:Path += ";$env:USERPROFILE\sdk\go\bin"`; adjust to where Go is installed).
 - `go vet ./... && go test ./...` for the backend; `node --test web/test/*.test.mjs` for frontend logic (the pure modules, see developer manual section 9). Tests live in `web/test/`, outside the embedded `web/static/`.
 - **A running instance on :8081 may be someone's real data** (it is the default port). Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`, check it is free with `netstat`) and be addressed as `127.0.0.1:<port>`, never `localhost` (it can resolve to a real server). Never send POST/PATCH/DELETE to a port you did not start yourself.
 - `go run ./cmd/deltabacklog` serves on `:8081` with data in `./data`. Subcommands: `deltabacklog check <file>`, `backup <file>`, `sync-igdb [--dry-run]` (link games to IGDB; see the developer manual, section 8). `web/static` is compiled into the binary, so restart after any frontend edit.
