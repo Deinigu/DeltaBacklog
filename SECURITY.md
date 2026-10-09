@@ -17,6 +17,7 @@ Only the latest release (and `main`) receives security fixes. The project is you
 
 | Version | Supported |
 |---|---|
+| `main` | yes |
 | latest release | yes |
 | older releases | no |
 
@@ -26,4 +27,6 @@ Please report it **privately** with GitHub's *private vulnerability reporting*: 
 
 Include what you found, how to reproduce it, and the version or commit. You can expect an acknowledgement within about a week; this is a one-person, spare-time project, so please be patient. Once a fix is released the report is disclosed, and you are credited if you wish.
 
-Out of scope: the missing authentication and TLS described above, and attacks that need access to the machine or network that the app is already running on.
+Known limitation, not a vulnerability report: the app has no authentication, so **any web page opened in a browser on your network can currently send requests to it and change the library** (a malicious page can add games, reorder the queue or change covers, and a DNS-rebinding page may read and delete data). The app does not yet check where a request comes from. Do not browse untrusted sites from a machine that can reach it while it holds data you care about, keep backups, and never expose it to the internet. Protection against such cross-site requests is planned; this document will describe it once it exists.
+
+Out of scope: the missing authentication and TLS described above.

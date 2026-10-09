@@ -81,8 +81,10 @@ go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 | `DATA_DIR` | default `./data` (holds `app.db` and `covers/`) |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | a Twitch developer application; enables lookups |
 | `STEAMGRIDDB_API_KEY` | enables SteamGridDB covers |
+| `GOMEMLIMIT` | Go soft memory limit (for example `96MiB`). The runtime reads it only from the real environment at start-up, so `loadDotEnv` applies a value found in `.env` itself with `debug.SetMemoryLimit` |
 
 Without keys the app works; lookups answer `configured: false` and the UI offers manual entry.
+The version printed at start-up and in the usage text is `main.version` (`dev` by default); the release workflow sets it from the tag with `-ldflags "-X main.version=<tag>"`, and `deploy/third-party-licenses.sh` writes the `THIRD_PARTY_LICENSES.txt` that goes into each release archive.
 
 **Port 8081 may be a real, live server (it is the default port).** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
 
@@ -260,7 +262,7 @@ Before opening a PR: all of the above pass; changes that touch the UI were looke
 
 The program is **cross-compiled on the PC** and uploaded; the Pi never holds the source and never builds anything (compiling the SQLite library needs most of a 1GB Pi and minutes of CPU, which would starve the other services). It runs directly under **systemd**, with no container, to keep the memory use at about 15MB.
 
-**Deploy or update (from the PC, Go on PATH, `ssh raspberry` working):**
+**Deploy or update (from the PC, Go on PATH, `ssh raspberry` working, or `DEPLOY_HOST=user@host`):**
 
 ```sh
 bash deploy/deploy.sh                       # build + upload + install; data and settings are kept
@@ -288,7 +290,7 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 **Backups.** `deltabacklog-backup.timer` runs `backup.sh` every night at 03:30 (with `Persistent=true`, so a missed run happens at the next boot). It calls `deltabacklog backup <file>`, which uses SQLite's `VACUUM INTO` for a consistent copy while the app runs, never overwrites an existing file and writes under a temporary name. Covers are not backed up (they can be downloaded again).
 
 ```sh
-ssh raspberry
+ssh <user>@<pi-address>   # the same host you gave as DEPLOY_HOST
 sudo systemctl start deltabacklog-backup.service            # a backup right now
 sudo /opt/deltabacklog/deltabacklog check /var/backups/deltabacklog/app-2026-10-07.db   # integrity, schema version, counts (read-only)
 # restore: stop, put the copy in place, fix the owner, start

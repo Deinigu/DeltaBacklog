@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,9 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"github.com/Deinigu/DeltaBacklog/web"
 )
+
+// version is set at release time with -ldflags "-X main.version=...".
+var version = "dev"
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -45,7 +50,35 @@ func loadDotEnv(path string) {
 			continue
 		}
 		os.Setenv(k, v)
+		// The Go runtime reads GOMEMLIMIT only at process start, so a value from the file must be applied by hand.
+		if k == "GOMEMLIMIT" {
+			if n, err := parseMemLimit(v); err != nil {
+				log.Printf("ignoring GOMEMLIMIT in %s: %v", path, err)
+			} else {
+				debug.SetMemoryLimit(n)
+			}
+		}
 	}
+}
+
+// parseMemLimit parses a GOMEMLIMIT value: a number of bytes with an optional B, KiB, MiB, GiB or TiB suffix.
+func parseMemLimit(v string) (int64, error) {
+	v = strings.TrimSpace(v)
+	mult := int64(1)
+	for _, u := range []struct {
+		suffix string
+		mult   int64
+	}{{"KiB", 1 << 10}, {"MiB", 1 << 20}, {"GiB", 1 << 30}, {"TiB", 1 << 40}, {"B", 1}} {
+		if strings.HasSuffix(v, u.suffix) {
+			v, mult = strings.TrimSuffix(v, u.suffix), u.mult
+			break
+		}
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 || n > (1<<62)/mult {
+		return 0, fmt.Errorf("invalid memory limit %q (use for example 96MiB)", v)
+	}
+	return n * mult, nil
 }
 
 func main() {
@@ -63,7 +96,8 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "backup" { // a typo must not start the server
-		fmt.Fprint(os.Stderr, "usage: deltabacklog                      serve the app\n"+
+		fmt.Fprint(os.Stderr, "deltabacklog "+version+"\n\n"+
+			"usage: deltabacklog                      serve the app\n"+
 			"       deltabacklog backup <file>         write a copy of the database\n"+
 			"       deltabacklog check <file>          verify a database or backup\n"+
 			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n")
@@ -125,7 +159,7 @@ func main() {
 		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Printf("DeltaBacklog listening on %s (data: %s)", addr, dataDir)
+	log.Printf("DeltaBacklog %s listening on %s (data: %s)", version, addr, dataDir)
 	log.Fatal(hs.ListenAndServe())
 }
 

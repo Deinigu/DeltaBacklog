@@ -40,7 +40,7 @@
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
   <img src="docs/img/views-phone.jpg" alt="Saved views" width="180">
-  <img src="docs/img/add-form-phone.jpg" alt="Adding a game" width="180">
+  <img src="docs/img/game-phone.jpg" alt="A game" width="180">
   <img src="docs/img/tierlist-phone.jpg" alt="A tier list" width="180">
 </p>
 
@@ -169,4 +169,4 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 
 ## License
 
-[MIT](LICENSE). IGDB and SteamGridDB data and artwork belong to their owners and are used through their APIs under their terms; this project ships no game artwork (the demo covers are generated).
+[MIT](LICENSE). IGDB and SteamGridDB data and artwork belong to their owners and are used through their APIs under their terms; the repository ships no game artwork: the demo screenshots use generated covers, and IGDB and SteamGridDB artwork, which belongs to its owners, is only fetched at runtime with your own keys and stored on your machine.
