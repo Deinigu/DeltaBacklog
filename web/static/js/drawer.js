@@ -42,7 +42,9 @@ const ttbText = (game) => ttbParts(game).map((p) => `${p.label} ${p.text}`).join
 
 /** Buttons to the game's store pages and official site (links come from IGDB; only http(s) is ever opened). */
 function storeLinks(game) {
-  const links = (game.links || []).filter((l) => STORE_LABELS[l.kind] && /^https?:\/\//.test(l.url));
+  const order = Object.keys(STORE_LABELS);
+  const links = (game.links || []).filter((l) => STORE_LABELS[l.kind] && /^https?:\/\//.test(l.url))
+    .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   if (!links.length) return null;
   return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, STORE_LABELS[l.kind], ' ↗')));
 }
