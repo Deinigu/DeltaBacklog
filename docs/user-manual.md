@@ -183,7 +183,7 @@ Tap **+**.
    - **Cover:** a row of pictures from SteamGridDB appears. The first is chosen. Tap another one, or **No cover**. **Search again** looks again with the title you typed.
 4. **Add to library.** The game is added at the end of your manual order and opens so you can adjust it.
 
-If the game is not found, tap **Add "..." without a lookup** to type everything in yourself. The lookups need keys that are set up once on the Pi (see the [developer manual](developer-manual.md#running-it)). Without them you can still add games by hand.
+If the game is not found, tap **Add "..." without a lookup** to type everything in yourself. The lookups need keys that are set up once on the Pi (see the [developer manual](developer-manual.md#3-running-it)). Without them you can still add games by hand.
 
 ## 10. Covers
 

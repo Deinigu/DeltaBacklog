@@ -15,7 +15,7 @@ import (
 
 // Options configures an import run.
 type Options struct {
-	NocoDBBase string // e.g. http://192.168.1.50:8080, used to resolve uploaded cover paths
+	NocoDBBase string // e.g. http://nocodb.local:8080, used to resolve uploaded cover paths
 }
 
 // Report summarises a run; Warnings lists rows or values that needed a decision.
