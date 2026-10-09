@@ -7,10 +7,10 @@ const key = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 // IGDB sometimes gives only a long name. Keys are normalised names, values the short names used in the library.
 const ALIASES = {
   pcmicrosoftwindows: 'PC', windows: 'PC', microsoftwindows: 'PC',
-  nintendoswitch: 'Switch', nintendoswitch2: 'Switch 2',
+  nintendoswitch: 'Switch', nintendoswitch2: 'Switch 2', nsw: 'Switch',
   wiiu: 'WiiU', nintendowiiu: 'WiiU', nintendowii: 'Wii',
   nintendods: 'NDS', nintendo3ds: '3DS', new3dsnintendo: '3DS', nintendogamecube: 'NGC', gamecube: 'NGC',
-  nintendoentertainmentsystem: 'NES', playstation: 'PS1', playstation2: 'PS2', playstation3: 'PS3', playstation4: 'PS4', playstation5: 'PS5',
+  nintendoentertainmentsystem: 'NES', playstation: 'PS1', ps: 'PS1', playstation2: 'PS2', playstation3: 'PS3', playstation4: 'PS4', playstation5: 'PS5',
   playstationportable: 'PSP', playstationvita: 'Vita', psvita: 'Vita',
   xboxone: 'XONE', xbox360: 'X360', xboxseriesxs: 'Series X|S',
   oculusquest: 'Quest', oculusquest2: 'Quest', metaquest2: 'Quest', metaquest3: 'Quest',

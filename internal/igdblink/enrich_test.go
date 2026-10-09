@@ -570,9 +570,20 @@ func TestPlatformAliasesMatchTheJS(t *testing.T) {
 	if len(pairs) < 20 {
 		t.Fatalf("parsed only %d aliases from platforms.js", len(pairs))
 	}
+	js := map[string]string{}
 	for _, p := range pairs {
+		js[p[1]] = p[2]
 		if PlatformKey(p[1]) != PlatformKey(p[2]) {
 			t.Errorf("JS maps %q to %q, Go folds %q to %q", p[1], p[2], p[1], PlatformKey(p[1]))
+		}
+	}
+	// and the other way: every Go alias that renames something must be in the JS table too
+	for k, v := range platformAliases {
+		if k == v {
+			continue
+		}
+		if name, ok := js[k]; !ok || PlatformKey(name) != v {
+			t.Errorf("Go folds %q to %q, but platforms.js maps it to %q", k, v, name)
 		}
 	}
 }

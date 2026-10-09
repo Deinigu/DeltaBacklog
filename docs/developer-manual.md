@@ -237,7 +237,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 
 **Table.** Rows have a fixed height; only the visible ones exist in the DOM (`paint`). Each row remembers a signature of what it shows, so a refresh rebuilds only rows whose data changed (a click that started on an unchanged row still completes). The row being edited is never destroyed by a refresh. Column widths and visibility are kept in `localStorage` (a per-device convenience).
 
-**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page. The server sends `Cache-Control: no-cache` for the shell.
+**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page; `TestServiceWorkerCachesTheWholeShell` (`web/web_test.go`) fails when a module is missing from `SHELL_FILES` (the `VERSION` bump is still on you). The server sends `Cache-Control: no-cache` for the shell.
 
 **Style.** `styles.css` uses CSS variables for light and dark (`prefers-color-scheme`, with a `data-theme` override). Breakpoints: below 600px phone layout, from 900px sidebar plus filter panel.
 
