@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "run gofmt -w on the files above"; exit 1; }
       - name: go vet
         run: go vet ./...
       - name: go test

@@ -48,6 +48,7 @@ Lookups (IGDB, SteamGridDB) need free API keys in a git-ignored `.env`; see the 
 Run these before opening a PR; CI runs the same:
 
 ```sh
+gofmt -l .                             # must print nothing (CI fails otherwise)
 go vet ./... && go test ./...          # backend
 node --test web/test/*.test.mjs        # frontend logic (the pure modules)
 ```
