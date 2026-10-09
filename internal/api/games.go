@@ -30,6 +30,20 @@ type Game struct {
 	Players     []string `json:"players"`
 	Years       []int    `json:"years"`   // calendar years played
 	Periods     []string `json:"periods"` // "childhood", "always"
+
+	// IGDB enrichment (empty until `deltabacklog sync-igdb --enrich` has run). Times are minutes.
+	TTBHastily    *int        `json:"ttb_hastily"`
+	TTBNormally   *int        `json:"ttb_normally"`
+	TTBCompletely *int        `json:"ttb_completely"`
+	Modes         []string    `json:"modes"`
+	Perspectives  []string    `json:"perspectives"`
+	Links         []StoreLink `json:"links"`
+}
+
+// StoreLink is a store or official-site page of a game: Kind is "steam", "gog", "epic" or "official".
+type StoreLink struct {
+	Kind string `json:"kind"`
+	URL  string `json:"url"`
 }
 
 // loadLinks fetches (game_id, value) pairs from one junction query and groups them by game.
@@ -79,7 +93,8 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		where, linkWhere, playAnd = " WHERE g.id = ?", " WHERE x.game_id = ?", " AND game_id = ?"
 	}
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
-			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at
+			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at,
+			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
@@ -93,7 +108,8 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	for rows.Next() {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV); err != nil {
+			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV,
+				&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -112,6 +128,8 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		{`SELECT x.game_id, p.name FROM game_genre x JOIN genre p ON p.id = x.genre_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Genres = v }},
 		{`SELECT x.game_id, p.name FROM game_theme x JOIN theme p ON p.id = x.theme_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Themes = v }},
 		{`SELECT x.game_id, p.name FROM game_player x JOIN player p ON p.id = x.player_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Players = v }},
+		{`SELECT x.game_id, p.name FROM game_game_mode x JOIN game_mode p ON p.id = x.game_mode_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Modes = v }},
+		{`SELECT x.game_id, p.name FROM game_perspective x JOIN perspective p ON p.id = x.perspective_id` + linkWhere + ` ORDER BY p.name`, func(g *Game, v []string) { g.Perspectives = v }},
 		{`SELECT game_id, period FROM play WHERE period IS NOT NULL` + playAnd + ` ORDER BY period`, func(g *Game, v []string) { g.Periods = v }},
 	}
 	for _, l := range links {
@@ -125,6 +143,29 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 				v = []string{}
 			}
 			l.set(&games[i], v)
+		}
+	}
+
+	lrows, err := d.Query(`SELECT x.game_id, x.kind, x.url FROM game_link x`+linkWhere+` ORDER BY x.game_id, x.kind`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer lrows.Close()
+	storeLinks := map[int64][]StoreLink{}
+	for lrows.Next() {
+		var id int64
+		var l StoreLink
+		if err := lrows.Scan(&id, &l.Kind, &l.URL); err != nil {
+			return nil, err
+		}
+		storeLinks[id] = append(storeLinks[id], l)
+	}
+	if err := lrows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range games {
+		if games[i].Links = storeLinks[games[i].ID]; games[i].Links == nil {
+			games[i].Links = []StoreLink{}
 		}
 	}
 

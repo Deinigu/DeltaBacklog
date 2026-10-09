@@ -17,7 +17,7 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
-// Main runs `deltabacklog sync-igdb [--dry-run] [--db path] [--limit n]` and returns the process exit code.
+// Main runs `deltabacklog sync-igdb [--dry-run] [--enrich [--refresh]] [--db path] [--limit n]` and returns the process exit code.
 // defaultDB is used when --db is not given.
 func Main(args []string, defaultDB string, mc *meta.Client, out io.Writer) int {
 	ok, _ := mc.Configured()
@@ -59,7 +59,13 @@ func run(args []string, defaultDB string, s Searcher, configured bool, out io.Wr
 	dry := fs.Bool("dry-run", false, "search IGDB and print a report; works on a temporary copy, the database is not touched")
 	dbPath := fs.String("db", defaultDB, "database file")
 	limit := fs.Int("limit", 0, "stop after this many games (0 = all)")
+	enrich := fs.Bool("enrich", false, "phase 2: read the linked games from IGDB and fill empty fields, time to beat, modes, perspectives and store links")
+	refresh := fs.Bool("refresh", false, "with --enrich: read games again that were enriched before")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *refresh && !*enrich {
+		fmt.Fprintln(out, "--refresh only works together with --enrich")
 		return 2
 	}
 	if !configured {
@@ -87,6 +93,14 @@ func run(args []string, defaultDB string, s Searcher, configured bool, out io.Wr
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	if *enrich {
+		e, ok := s.(Enricher)
+		if !ok {
+			fmt.Fprintln(out, "this IGDB client cannot enrich")
+			return 1
+		}
+		return runEnrich(ctx, d, e, out, *dbPath, EnrichOptions{DryRun: *dry, Refresh: *refresh, Limit: *limit})
+	}
 	opts := Options{DryRun: *dry, Limit: *limit}
 	if !*dry {
 		opts.BackupTo = filepath.Join(filepath.Dir(*dbPath), "app-before-igdb-link-"+time.Now().Format("20060102-150405")+".db")
@@ -99,6 +113,25 @@ func run(args []string, defaultDB string, s Searcher, configured bool, out io.Wr
 	rep, err := Run(ctx, d, s, opts)
 	if rep != nil {
 		PrintReport(out, rep)
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		fmt.Fprintln(out, "error:", err)
+		return 1
+	}
+	if rep != nil && rep.Stopped != "" {
+		return 1
+	}
+	return 0
+}
+
+func runEnrich(ctx context.Context, d *sql.DB, e Enricher, out io.Writer, dbPath string, opts EnrichOptions) int {
+	if !opts.DryRun {
+		opts.BackupTo = filepath.Join(filepath.Dir(dbPath), "app-before-igdb-enrich-"+time.Now().Format("20060102-150405")+".db")
+	}
+	opts.Progress = func(done, total int) { fmt.Fprintf(out, "  %d/%d\n", done, total) }
+	rep, err := Enrich(ctx, d, e, opts)
+	if rep != nil {
+		PrintEnrichReport(out, rep)
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(out, "error:", err)
