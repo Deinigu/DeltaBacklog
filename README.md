@@ -26,7 +26,8 @@ One small Go program, one SQLite file, no cloud, no login. It is light enough fo
 | **Year in review and tier lists** | Pick a year to see what you played, split by outcome, platform and genre, and rank that year's games in an S to F tier list: drag them, or tap to choose a tier. Export it as a picture. |
 | **Stats** | Backlog size by platform, games finished per year, how long games have been waiting, your most played genres, and finished against dropped. |
 | **Can't decide?** | **Surprise me** picks a random game from what you are looking at, narrowed by platform, genre, VR or "not played recently", and never repeats. |
-| **Yours to keep** | Covers are stored on the Pi, so the app keeps working when those websites do not. |
+| **Linked to IGDB** | `deltabacklog sync-igdb` connects imported games to their IGDB page; the uncertain ones wait in a **Link IGDB** screen where you pick the right match. |
+| **Yours to keep** | Covers are stored on the Pi, so the app keeps working when those websites do not, and the library is backed up every night. |
 
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="200">
@@ -35,7 +36,7 @@ One small Go program, one SQLite file, no cloud, no login. It is light enough fo
   <img src="docs/img/cover-picker-phone.jpg" alt="Choosing a cover" width="200">
 </p>
 
-**Coming next:** automatic backups with export and restore.
+**On your network** the app is at `http://deltabacklog.local` (no port; some Android phones cannot resolve `.local` names, then use `http://<pi-address>:8081`). Details in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
 
 More in the **[user manual](docs/user-manual.md)** (with screenshots of every screen).
 
@@ -83,16 +84,18 @@ go run ./cmd/import -csv games.csv -data ./data -nocodb http://192.168.1.50:8080
 
 - **Port 8081 may be someone's live server.** When testing, run another instance on a spare port (`LISTEN_ADDR=127.0.0.1:18090 go run ./cmd/deltabacklog`) and address it as `127.0.0.1:<port>`.
 - **Database changes are new numbered files** in `internal/db/migrations/`; never edit one that has been applied.
-- **Cross-compile for the Pi:** `GOOS=linux GOARCH=arm GOARM=7 go build -o deltabacklog ./cmd/deltabacklog`.
+- **Cross-compile for the Pi:** `GOOS=linux GOARCH=arm GOARM=7 go build -o deltabacklog ./cmd/deltabacklog`. To install or update it there: `bash deploy/deploy.sh` (see the developer manual, section 11).
+- **Subcommands:** `deltabacklog check <file>`, `backup <file>` and `sync-igdb [--dry-run]`.
 - **Workflow:** work on a `features/<name>` branch and open a pull request into `main`; update the matching manual section when behaviour changes. See `CLAUDE.md` for the short list of rules.
 
 ### Where things are
 
 ```
-cmd/deltabacklog/   the server              internal/api/    JSON API
-cmd/import/         NocoDB importer          internal/db/     SQLite + migrations
-web/static/         the app (vanilla JS)     internal/meta/   IGDB, SteamGridDB
-web/test/           frontend unit tests      docs/            manuals and screenshots
+cmd/deltabacklog/   the server              internal/api/       JSON API
+cmd/import/         NocoDB importer         internal/db/        SQLite + migrations
+deploy/             Raspberry Pi install    internal/igdblink/  IGDB linking
+web/static/         the app (vanilla JS)    internal/meta/      IGDB, SteamGridDB
+web/test/           frontend unit tests     docs/               manuals and screenshots
 ```
 
 The **[developer manual](docs/developer-manual.md)** covers the architecture, data model, every API call, the frontend modules and the testing approach in detail.

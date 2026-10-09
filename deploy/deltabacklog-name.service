@@ -1,0 +1,16 @@
+[Unit]
+Description=Announce deltabacklog.local on the network (mDNS) and send port 80 to DeltaBacklog
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+Requires=avahi-daemon.service
+
+[Service]
+Type=simple
+ExecStartPre=/opt/deltabacklog/name.sh rules-add
+ExecStart=/opt/deltabacklog/name.sh publish
+ExecStopPost=/opt/deltabacklog/name.sh rules-del
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

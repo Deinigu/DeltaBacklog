@@ -32,7 +32,7 @@ echo "==> building for linux/arm (armv7)"
 GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$OUT/deltabacklog" ./cmd/deltabacklog
 ls -l "$OUT/deltabacklog" | awk '{printf "    binary: %.1f MB\n", $5/1048576}'
 
-cp deploy/deltabacklog.service deploy/deltabacklog-backup.service deploy/deltabacklog-backup.timer deploy/backup.sh deploy/install.sh "$OUT/"
+cp deploy/deltabacklog.service deploy/deltabacklog-backup.service deploy/deltabacklog-backup.timer deploy/deltabacklog-name.service deploy/name.sh deploy/backup.sh deploy/install.sh "$OUT/"
 
 if [ -n "$ENVFILE" ]; then
   {
