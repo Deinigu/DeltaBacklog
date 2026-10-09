@@ -55,11 +55,16 @@ if ! cmp -s "$STAGE/deltabacklog" "$APP/deltabacklog" 2>/dev/null; then
   mv -f "$APP/deltabacklog.new" "$APP/deltabacklog"
   CHANGED=1
 fi
+# name.sh holds the iptables rules: when it changes, the OLD script removes its rules before the new one is installed
+NAME_CHANGED=0
+if ! cmp -s "$STAGE/name.sh" "$APP/name.sh" 2>/dev/null; then
+  NAME_CHANGED=1
+  [ -x "$APP/name.sh" ] && "$APP/name.sh" rules-del || true
+fi
 install -m 755 "$STAGE/backup.sh" "$STAGE/name.sh" "$APP/"
 
 # 6. systemd units
 install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" /etc/systemd/system/
-NAME_CHANGED=0
 cmp -s "$STAGE/deltabacklog-name.service" /etc/systemd/system/deltabacklog-name.service 2>/dev/null || NAME_CHANGED=1
 install -m 644 "$STAGE/deltabacklog-name.service" /etc/systemd/system/
 systemctl daemon-reload

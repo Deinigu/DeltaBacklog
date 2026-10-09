@@ -17,9 +17,10 @@ case "${1:-}" in
     out -C 2>/dev/null || out -A
     ;;
   rules-del)
-    pre -D 2>/dev/null || true
-    out -D 2>/dev/null || true
-    legacy -D 2>/dev/null || true
+    # -D removes one copy: loop until none is left
+    while pre -D 2>/dev/null; do :; done
+    while out -D 2>/dev/null; do :; done
+    while legacy -D 2>/dev/null; do :; done
     ;;
   publish)
     ADDR=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
