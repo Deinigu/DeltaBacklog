@@ -1,4 +1,5 @@
 // Backlog statistics computed from the games already in memory. Pure (no DOM): unit-tested.
+import { totalTime } from './ttb.js';
 
 export const WAITING = ['backlog', 'up_next'];                  // "the backlog" for the size and platform counts
 export const WAITING_STATUSES = ['backlog', 'up_next', 'hold']; // statuses where "time waiting" is meaningful
@@ -145,4 +146,13 @@ export function niceScale(maxValue, wanted = 4) {
   const ticks = [];
   for (let v = 0; v <= max + 1e-9; v += step) ticks.push(Math.round(v));
   return { max, ticks };
+}
+
+/**
+ * How long the backlog would take: the time to beat (IGDB) of the games on the backlog or up next, added up.
+ * `known` games have a time, `unknown` have none and are not in the sum; `hours` is 0 and `known` 0 before the IGDB enrichment ran.
+ */
+export function backlogTime(games) {
+  const t = totalTime(games.filter((g) => WAITING.includes(g.status)));
+  return { hours: t.hours, known: t.known, unknown: t.unknown, total: t.known + t.unknown };
 }

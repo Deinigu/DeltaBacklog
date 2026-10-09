@@ -660,3 +660,8 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .more-link[aria-current="page"] { color: var(--accent); font-weight: 600; background: var(--surface-2); }
 .more-link svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .more-close { width: 100%; min-height: 48px; margin-top: 8px; justify-content: center; }
+
+/* IGDB enrichment: time to beat chip on the cards, store buttons in the drawer */
+.pf.ttb { background: none; padding-left: 0; font-weight: 500; }
+.store-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; }
+.store-links .btn { text-decoration: none; color: inherit; font-size: 14px; }

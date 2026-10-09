@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -86,4 +87,34 @@ func TestGameDetailsAndTimeToBeat(t *testing.T) {
 			t.Errorf("query does not batch the ids: %s", q)
 		}
 	}
+}
+
+// TestLiveEnrich checks the enrichment queries against the real IGDB (DELTABACKLOG_LIVE=1 plus the keys).
+func TestLiveEnrich(t *testing.T) {
+	if os.Getenv("DELTABACKLOG_LIVE") != "1" {
+		t.Skip("set DELTABACKLOG_LIVE=1 with IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to run")
+	}
+	c := New(Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
+	ctx := context.Background()
+	cands, err := c.SearchIGDB(ctx, "Hades II")
+	if err != nil || len(cands) == 0 {
+		t.Fatalf("search: %v %v", cands, err)
+	}
+	other, err := c.SearchIGDB(ctx, "The Witcher 3")
+	if err != nil || len(other) == 0 {
+		t.Fatalf("search: %v %v", other, err)
+	}
+	ids := []int64{cands[0].IGDBID, other[0].IGDBID}
+	details, err := c.GameDetails(ctx, ids)
+	if err != nil || len(details) != 2 {
+		t.Fatalf("details: %+v %v", details, err)
+	}
+	for _, d := range details {
+		t.Logf("%+v", d)
+	}
+	ttb, err := c.TimeToBeat(ctx, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("ttb: %+v", ttb)
 }

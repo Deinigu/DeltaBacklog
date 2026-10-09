@@ -6,6 +6,7 @@ import { ownershipLabel } from './ownership.js';
 import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
 import { seriesPosition } from './series.js';
+import { ttbParts } from './ttb.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
@@ -32,6 +33,18 @@ function quickActions(game) {
     if (badge && st) { badge.textContent = st.label; badge.setAttribute('style', badgeStyle(st.color)); }
   }
   return h('div.quick', {}, sel, fav);
+}
+
+const STORE_LABELS = { steam: 'Steam', gog: 'GOG', epic: 'Epic Games', official: 'Official site' };
+
+/** "Quick 8 h, Usual 12 h, Complete 40 h" from IGDB, or null when IGDB has no time. */
+const ttbText = (game) => ttbParts(game).map((p) => `${p.label} ${p.text}`).join(' · ') || null;
+
+/** Buttons to the game's store pages and official site (links come from IGDB; only http(s) is ever opened). */
+function storeLinks(game) {
+  const links = (game.links || []).filter((l) => STORE_LABELS[l.kind] && /^https?:\/\//.test(l.url));
+  if (!links.length) return null;
+  return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, STORE_LABELS[l.kind], ' ↗')));
 }
 
 export function closeDrawer() {
@@ -67,6 +80,9 @@ export function openDrawer(game) {
       fact('Platforms', game.platforms),
       fact('Genres', game.genres),
       fact('Themes', game.themes),
+      fact('Game modes', game.modes),
+      fact('Perspective', game.perspectives),
+      fact('Time to beat', ttbText(game)),
       fact('Series', seriesFact(game)),
       fact('Developer', game.developer),
       fact('Released', game.release_year),
@@ -76,6 +92,7 @@ export function openDrawer(game) {
       fact('VR', game.vr ? 'Yes' : null),
       fact('100% completed', game.completed ? 'Yes' : null)),
     game.notes && h('div.notes', {}, game.notes),
+    storeLinks(game),
     h('div.drawer-actions', {},
       h('button.btn.primary', { type: 'button', onclick: startEdit }, '✎ Edit'),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),

@@ -2,7 +2,7 @@
 // All numbers come from stats.js (pure); this file only draws them.
 import { h } from './util.js';
 import { store } from './api.js';
-import { backlogSize, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
+import { backlogSize, backlogTime, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 function svg(tag, attrs, ...children) {
@@ -101,6 +101,14 @@ function ratioBar({ finished, dropped, share }) {
     h('p.big', {}, `${pct}%`, h('small', {}, ` finished, ${100 - pct}% dropped`)));
 }
 
+/** "About 410 hours" plus how much of the backlog that covers; says how to get times when there are none. */
+function backlogHours(t) {
+  if (!t.known) return h('p.hint', {}, 'No time to beat yet. Run deltabacklog sync-igdb --enrich to read it from IGDB.');
+  return h('div', {},
+    h('p.big', {}, `${t.hours.toLocaleString()} hours`, h('small', {}, ' to beat the backlog')),
+    h('p.hint', {}, t.unknown ? `Counted for ${t.known} of ${t.total} games; ${plural(t.unknown, 'game has', 'games have')} no time on IGDB.` : `Counted for all ${t.total} games.`));
+}
+
 function waitingTable(time) {
   const rows = time.rows.filter((r) => r.count > 0);
   if (!time.waiting) return h('p.hint', {}, 'No games are waiting.');
@@ -128,6 +136,7 @@ export function renderStats(root) {
     h('div.stat-grid', {},
       card('Backlog', 'Games on the backlog or up next.',
         h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
+        backlogHours(backlogTime(games)),
         h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
           size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`)),
       card('Finished per year', 'Each finished game counts in the last year you played it.', yearChart(finishedPerYear(games), cleanups)),

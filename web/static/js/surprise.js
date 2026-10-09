@@ -5,6 +5,7 @@ import { store, coverURL, patchGame } from './api.js';
 import { makeSheet } from './add.js';
 import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
+import { ttbMinutes, formatTime } from './ttb.js';
 import { hasNoFilters, buildPool, applyMood, moodCounts, emptyMood, pickOne, playTarget } from './pick.js';
 
 // Games skipped for the rest of the browser session (they survive a reload, not a closed tab).
@@ -55,6 +56,7 @@ export function openSurprise(state) {
     sheet.foot.classList.remove('three');
     const counts = moodCounts(pool, mood, year);
     const left = applyMood(pool, mood, year);
+    const hasTimes = pool.some((g) => ttbMinutes(g) !== null); // the chip only makes sense once IGDB times exist
 
     const chip = (label, n, on, toggle) => {
       const b = h('button.chip', { type: 'button', 'data-fk': `chip:${label}`, 'aria-pressed': String(on), onclick: () => { toggle(); shown = new Set(); sheet.render(renderMood); } }, label, h('span.c', {}, n));
@@ -71,8 +73,9 @@ export function openSurprise(state) {
       h('section.mood-group', {}, h('h3', {}, 'Also'),
         h('div.chips', {},
           chip('VR only', counts.vr, mood.vr, () => { mood.vr = !mood.vr; }),
+          hasTimes && chip('Quick game', counts.quick, mood.quick, () => { mood.quick = !mood.quick; }),
           chip('Not played recently', counts.stale, mood.stale, () => { mood.stale = !mood.stale; }))),
-      h('p.hint', {}, 'Not played recently: never played, or last played two or more years ago.')].filter(Boolean));
+      h('p.hint', {}, 'Not played recently: never played, or last played two or more years ago.' + (hasTimes ? ' Quick game: under 10 hours to beat, according to IGDB.' : ''))].filter(Boolean));
 
     const go = h('button.btn.primary', { type: 'button', 'data-fk': 'go', disabled: left.length === 0, onclick: () => deal(left) }, left.length ? `Pick one of ${left.length}` : 'Pick one');
     sheet.foot.replaceChildren(...[left.length ? null : h('span.surprise-msg', {}, 'No game fits this mood. Remove a choice.'), go].filter(Boolean));
@@ -103,6 +106,7 @@ export function openSurprise(state) {
         h('h2.pick-title', {}, g.title),
         g.platforms.length ? h('div.tags-row', {}, ...g.platforms.map((p) => h('span.pf', {}, p))) : null,
         g.genres.length ? h('div.tags-row', {}, ...g.genres.map((x) => h('span.pf.genre', {}, x))) : null,
+        ttbMinutes(g) !== null ? h('div.tags-row', {}, h('span.pf.ttb', { title: 'Time to beat, from IGDB' }, '⏱ ' + formatTime(ttbMinutes(g)))) : null,
         h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           hasPlayed ? [
             ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
