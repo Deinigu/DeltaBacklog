@@ -28,7 +28,7 @@ func decodeLink(w http.ResponseWriter, r *http.Request, needIGDB bool) (linkBody
 	var in linkBody
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.GameID <= 0 || (needIGDB && in.IGDBID <= 0) {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "invalid body", nil)
 		return in, false
 	}
 	return in, true
@@ -42,7 +42,7 @@ func (s *Server) linkResult(w http.ResponseWriter, err error) {
 		s.cache.invalidate()
 		w.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, igdblink.ErrNoGame):
-		http.Error(w, "no such game", http.StatusNotFound)
+		writeErr(w, http.StatusNotFound, "no such game", nil)
 	case errors.As(err, &taken):
 		writeErr(w, http.StatusConflict, "that IGDB game is already linked to “"+taken.Title+"”", map[string]any{"id": taken.GameID, "code": "taken"})
 	case errors.As(err, &linked):

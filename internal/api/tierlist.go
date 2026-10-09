@@ -76,7 +76,7 @@ func loadTierlist(d *sql.DB, year int) (Tierlist, error) {
 func (s *Server) getTierlist(w http.ResponseWriter, r *http.Request) {
 	year, ok := parseYear(r)
 	if !ok {
-		http.Error(w, "bad year", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "bad year", nil)
 		return
 	}
 	tl, err := loadTierlist(s.DB, year)
@@ -94,14 +94,14 @@ func (s *Server) getTierlist(w http.ResponseWriter, r *http.Request) {
 func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 	year, ok := parseYear(r)
 	if !ok {
-		http.Error(w, "bad year", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "bad year", nil)
 		return
 	}
 	var in struct {
 		Entries *[]TierEntry `json:"entries"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10)).Decode(&in); err != nil || in.Entries == nil || len(*in.Entries) > maxTierEntries {
-		http.Error(w, "invalid tier list", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "invalid tier list", nil)
 		return
 	}
 	tx, err := s.DB.Begin()
@@ -119,14 +119,14 @@ func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 	pos := map[int64]int{}
 	for _, e := range *in.Entries {
 		if seen[e.GameID] {
-			http.Error(w, "a game appears twice", http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "a game appears twice", nil)
 			return
 		}
 		seen[e.GameID] = true
 		var one int
 		err := tx.QueryRow(`SELECT 1 FROM play WHERE game_id = ? AND year = ?`, e.GameID, year).Scan(&one)
 		if err == sql.ErrNoRows {
-			http.Error(w, "game "+strconv.FormatInt(e.GameID, 10)+" was not played in "+strconv.Itoa(year), http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "game "+strconv.FormatInt(e.GameID, 10)+" was not played in "+strconv.Itoa(year), nil)
 			return
 		} else if err != nil {
 			fail(w, err)
@@ -134,7 +134,7 @@ func (s *Server) putTierlist(w http.ResponseWriter, r *http.Request) {
 		}
 		err = tx.QueryRow(`SELECT 1 FROM tier WHERE id = ?`, e.TierID).Scan(&one)
 		if err == sql.ErrNoRows {
-			http.Error(w, "unknown tier", http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "unknown tier", nil)
 			return
 		} else if err != nil {
 			fail(w, err)

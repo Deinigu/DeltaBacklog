@@ -261,7 +261,7 @@ func (s *Server) setCover(w http.ResponseWriter, r *http.Request) {
 	}
 	var one int
 	if err := s.DB.QueryRow("SELECT 1 FROM game WHERE id = ?", id).Scan(&one); errors.Is(err, sql.ErrNoRows) {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
 		fail(w, err)
@@ -292,7 +292,7 @@ func (s *Server) deleteGame(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	var cover sql.NullString
 	if err := tx.QueryRow("SELECT cover_file FROM game WHERE id = ?", id).Scan(&cover); errors.Is(err, sql.ErrNoRows) {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
 		fail(w, err)

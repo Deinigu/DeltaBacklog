@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -41,7 +42,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.DB.PingContext(r.Context()); err != nil {
-			http.Error(w, "db down", http.StatusServiceUnavailable)
+			writeErr(w, http.StatusServiceUnavailable, "db down", nil)
 			return
 		}
 		w.Write([]byte("ok"))
@@ -65,8 +66,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/views/{id}", s.deleteView)
 	mux.HandleFunc("GET /api/tierlist/{year}", s.getTierlist)
 	mux.HandleFunc("PUT /api/tierlist/{year}", s.putTierlist)
-	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(http.FileServer(http.Dir(filepath.Clean(s.CoverDir))))))
+	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(filesOnly(http.FileServer(http.Dir(filepath.Clean(s.CoverDir)))))))
 	return s.invalidating(mux)
+}
+
+// filesOnly answers 404 for a folder: the cover folder is never listed.
+func filesOnly(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" || strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // cacheForever is safe because a cover file name is the game id and is only rewritten on a cover change
@@ -91,5 +103,5 @@ func writeJSONStatus(w http.ResponseWriter, code int, v any) {
 
 func fail(w http.ResponseWriter, err error) {
 	log.Printf("api error: %v", err)
-	http.Error(w, "internal error", http.StatusInternalServerError)
+	writeErr(w, http.StatusInternalServerError, "internal error", nil)
 }

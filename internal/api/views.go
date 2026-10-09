@@ -108,7 +108,7 @@ func decodeView(w http.ResponseWriter, r *http.Request, creating bool) (viewInpu
 	var in viewInput
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.validate(creating) != nil {
-		http.Error(w, "invalid view", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "invalid view", nil)
 		return in, false
 	}
 	return in, true
@@ -155,7 +155,7 @@ func (s *Server) createView(w http.ResponseWriter, r *http.Request) {
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return 0, false
 	}
 	return id, true
@@ -172,7 +172,7 @@ func (s *Server) patchView(w http.ResponseWriter, r *http.Request) {
 	}
 	cur, err := s.getView(id)
 	if errors.Is(err, sql.ErrNoRows) {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
 		fail(w, err)
@@ -224,7 +224,7 @@ func (s *Server) deleteView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -235,7 +235,7 @@ func (s *Server) reorderViews(w http.ResponseWriter, r *http.Request) {
 	var ids []int64
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
-		http.Error(w, "expected a list of view ids", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "expected a list of view ids", nil)
 		return
 	}
 	tx, err := s.DB.Begin()

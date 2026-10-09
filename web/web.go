@@ -66,7 +66,9 @@ func load() map[string]*asset {
 	// Tell the browser about every module up front. Without this it discovers them one import level at a
 	// time (main.js, then the modules it imports, then theirs...), each level a round trip on a slow link.
 	if idx := out["index.html"]; idx != nil {
-		sort.Slice(modules, func(i, j int) bool { return modules[i] == "js/main.js" || (modules[j] != "js/main.js" && modules[i] < modules[j]) })
+		sort.Slice(modules, func(i, j int) bool {
+			return modules[i] == "js/main.js" || (modules[j] != "js/main.js" && modules[i] < modules[j])
+		})
 		var links strings.Builder
 		for _, m := range modules {
 			links.WriteString(`<link rel="modulepreload" href="` + m + `">` + "\n")

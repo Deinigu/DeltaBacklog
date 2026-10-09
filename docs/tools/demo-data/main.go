@@ -12,8 +12,8 @@
 package main
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
