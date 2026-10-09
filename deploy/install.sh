@@ -3,7 +3,7 @@
 #
 #   sudo ./install.sh <stage-dir>
 #
-# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files, backup.sh, and optionally
+# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service), backup.sh, and optionally
 #   env       the settings file; installed to /etc/deltabacklog.env (root only) when given, kept otherwise
 #   seed/     app.db and covers/ for a first install; only used when no database exists yet
 # It is safe to run again: data is never overwritten, the service is restarted only if the program changed.
@@ -58,7 +58,7 @@ fi
 install -m 755 "$STAGE/backup.sh" "$APP/backup.sh"
 
 # 6. systemd units
-install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" /etc/systemd/system/
+install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" "$STAGE/deltabacklog-name.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable deltabacklog.service deltabacklog-backup.timer >/dev/null 2>&1
 if systemctl is-active --quiet deltabacklog.service; then
@@ -68,7 +68,13 @@ else
 fi
 systemctl start deltabacklog-backup.timer
 
-# 7. wait for it to answer
+# 7. the friendly address http://deltabacklog.local (mDNS name + port 80 -> 8081); needs avahi-publish and iptables
+if ! command -v avahi-publish >/dev/null 2>&1 || ! command -v iptables >/dev/null 2>&1; then
+  apt-get install -y avahi-utils iptables
+fi
+systemctl enable --now deltabacklog-name.service
+
+# 8. wait for it to answer
 i=0
 until curl -fsS -m 3 http://127.0.0.1:8081/healthz >/dev/null 2>&1; do
   i=$((i + 1))
@@ -79,4 +85,4 @@ until curl -fsS -m 3 http://127.0.0.1:8081/healthz >/dev/null 2>&1; do
   fi
   sleep 1
 done
-echo "DeltaBacklog is running (enabled at boot): http://$(hostname -I | awk '{print $1}'):8081"
+echo "DeltaBacklog is running (enabled at boot): http://deltabacklog.local or http://$(hostname -I | awk '{print $1}'):8081"

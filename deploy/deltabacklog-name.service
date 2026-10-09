@@ -1,0 +1,16 @@
+[Unit]
+Description=Announce deltabacklog.local on the network (mDNS) and send port 80 to DeltaBacklog
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+Requires=avahi-daemon.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8081 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8081'
+ExecStartPre=/bin/sh -c 'iptables -t nat -C OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-ports 8081 2>/dev/null || iptables -t nat -A OUTPUT -o lo -p tcp --dport 80 -j REDIRECT --to-ports 8081'
+ExecStart=/bin/sh -c 'exec avahi-publish -a -R deltabacklog.local "$(hostname -I | awk "{print \$1}")"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

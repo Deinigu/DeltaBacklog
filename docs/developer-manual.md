@@ -46,7 +46,7 @@ Principles that shape every decision:
 ## 2. Repository layout
 
 ```
-cmd/deltabacklog/   the server (main.go: .env loading, wiring)
+cmd/deltabacklog/   the server and its subcommands (main.go: .env loading, wiring; `check`, `backup`, `sync-igdb`)
 cmd/import/         one-off importer from a NocoDB CSV export (also downloads covers)
 internal/db/        open, migrate (embedded migrations/*.sql), GetOrCreate, FTS index, TitleSort, NormalizeTheme
 internal/importer/  CSV → normalized schema (idempotent)
@@ -57,6 +57,7 @@ internal/covers/    cover download (strict: no redirects) + resize + size guard
 web/web.go          go:embed of web/static
 web/static/         index.html, styles.css, sw.js, manifest, icon, js/*.js
 web/test/           Node unit tests for the pure frontend modules (outside the embedded folder)
+deploy/             deploy.sh (build + upload), install.sh (runs on the Pi), the systemd units and backup.sh
 docs/               these manuals; docs/img screenshots; docs/tools/screenshots.mjs regenerates them
 ```
 
@@ -183,7 +184,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 
 ## 7. Frontend
 
-Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/years[/<year>]`, `#/series`, `#/stats`). No dependencies, no build.
+Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<id>`, `#/views`, `#/years[/<year>]`, `#/series`, `#/stats`, `#/link`). The sidebar and the phone's More sheet order the pages Series, Stats, Year in review, Views, Link IGDB (`SIDEBAR_ORDER` in `main.js`). No dependencies, no build.
 
 **Modules (`web/static/js/`)**
 
@@ -206,7 +207,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | `yearreview.js` | **pure**: year grouping (`groupOf`), breakdowns, year strip and neighbours, route parsing, tier list state (`tierState`, `place`, `toEntries`) |
 | `yearpage.js`, `tierpng.js` | the `#/years/<year>` page (stats, tier list with pointer-event drag, long-press on touch, edge auto-scroll, tap-to-assign menu, debounced autosave) and the canvas PNG export. `savequeue.js` (**pure**, tested) is the autosave: debounce, one request at a time, last state wins, no retry of a 400, a final keepalive request when the page goes away. The page follows `games-changed` so a game that lost the year is never sent |
 | `stats.js`, `statspage.js` | the `#/stats` page: `stats.js` is **pure** (backlog size, finished per year, time in status, top genres, finished vs dropped, chart scale); `statspage.js` draws it (HTML bars, inline SVG chart with a screen-reader table). Computed client-side from `store.games`; no endpoint, no tables |
-| `series.js`, `seriesview.js` | **pure** series grouping, progress counts and the "3 of 5" position (definitions of finished / played / left are in the header of `series.js` and in the user manual, section 10b); and the `#/series` page. Client-side only: it groups `store.games` by series name (case-insensitive) and redraws on `games-changed` |
+| `series.js`, `seriesview.js` | **pure** series grouping, progress counts and the "3 of 5" position (definitions of finished / played / left are in the header of `series.js` and in the user manual, section 12); and the `#/series` page. Client-side only: it groups `store.games` by series name (case-insensitive) and redraws on `games-changed` |
 | `link.js`, `linkqueue.js` | the "Link with IGDB" review screen (route `#/link`; the navigation shows its link while the queue is not empty) and its **pure** logic (score tone, progress text, skipped games) |
 | `platforms.js`, `ownership.js`, `years.js` | pure helpers: IGDB platform mapping, ownership emojis, card year chips |
 | `util.js` | `h()` element builder, dialogs, toast, icons |
@@ -223,7 +224,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 
 **Table.** Rows have a fixed height; only the visible ones exist in the DOM (`paint`). Each row remembers a signature of what it shows, so a refresh rebuilds only rows whose data changed (a click that started on an unchanged row still completes). The row being edited is never destroyed by a refresh. Column widths and visibility are kept in `localStorage` (a per-device convenience).
 
-**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). Bump `VERSION` and add new files to `SHELL_FILES` when you add a module. The server sends `Cache-Control: no-cache` for the shell.
+**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page. The server sends `Cache-Control: no-cache` for the shell.
 
 **Style.** `styles.css` uses CSS variables for light and dark (`prefers-color-scheme`, with a `data-theme` override). Breakpoints: below 600px phone layout, from 900px sidebar plus filter panel.
 
@@ -239,7 +240,8 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | What | How |
 |---|---|
 | Backend | `go vet ./... && go test ./...` (in-memory databases, `httptest` fake IGDB/SteamGridDB/Steam/image servers) |
-| Pure frontend modules | `node --test web/test/*.test.mjs` |
+| Pure frontend modules | `node --test web/test/*.test.mjs`: one file per pure module (`filters`, `sort`, `order`, `reorder`, `editpatch`, `csv`, `colors`, `ownership`, `platforms`, `years`, `api`, `more`, `pick`, `series`, `stats`, `yearreview`, `savequeue`, `linkqueue`). Pages that draw the DOM (`*page.js`, `seriesview.js`, `surprise.js`, `link.js`) are checked in a browser |
+| Backend, by area | `internal/api` (games, views, tier lists, link endpoints), `internal/db` (migrations, backup/check), `internal/meta`, `internal/igdblink`, `internal/importer`, `internal/covers` |
 | IGDB sync | `internal/igdblink` tests use an offline fake IGDB (buckets, dry run writes nothing, backup, resume, 429 backoff, review queue, migration 006); `internal/api/link_test.go` covers the three endpoints |
 | Real services | `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v` |
 | In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images) |
@@ -275,9 +277,11 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 | `/var/lib/deltabacklog/` | the data: `app.db`, `covers/` (owner `deltabacklog`, mode 750) |
 | `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days |
 | `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600) |
-| `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer` | the units (sources in `deploy/`) |
+| `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer`, `deltabacklog-name.service` | the units (sources in `deploy/`) |
 
 **Starting at boot.** `deltabacklog.service` is enabled (`WantedBy=multi-user.target`) with `Restart=always` (a crashed process is back in about 4 seconds, tested with `kill -9`). It runs as the unprivileged system user `deltabacklog` with `NoNewPrivileges`, a read-only file system except its data folder, and `Nice=5`. The Pi's kernel does not enforce systemd memory limits (the memory cgroup is off on Raspbian), so the real cap is `GOMEMLIMIT=96MiB` in the settings file.
+
+**Friendly address (`http://deltabacklog.local`).** `deltabacklog-name.service` does two things: it announces the name `deltabacklog.local` on the network with `avahi-publish` (mDNS, pointing at the Pi's first IP), and it adds two `iptables` NAT rules that send port 80 to 8081 (one for traffic from the network, one for the Pi itself). The app still listens only on `:8081`; nothing else changes. `install.sh` installs the packages `avahi-utils` and `iptables` with apt (only when missing), installs the unit and runs `systemctl enable --now`, so re-running it is safe (the rules are added only if absent). The rules live in the unit, not in a saved firewall, so they come back at every boot. Caveats: mDNS needs a client that understands `.local` (Windows 10+, macOS, iOS and Linux with avahi do; **some Android versions do not**, and then `http://<ip>:8081` is the fallback), and the name follows the Pi's first address, so give the Pi a fixed IP in the router. The unit was already installed by hand on the owner's Pi; deploying the repository only keeps it in step.
 
 **Backups.** `deltabacklog-backup.timer` runs `backup.sh` every night at 03:30 (with `Persistent=true`, so a missed run happens at the next boot). It calls `deltabacklog backup <file>`, which uses SQLite's `VACUUM INTO` for a consistent copy while the app runs, never overwrites an existing file and writes under a temporary name. Covers are not backed up (they can be downloaded again).
 
@@ -297,7 +301,7 @@ sudo systemctl start deltabacklog
 
 **Never test against the Pi's real database.** For experiments copy `app.db` to a temporary folder and run a second instance on another port (this is how the write timings below were measured), then delete it.
 
-**HTTP only, so no service worker on the Pi.** Browsers only allow service workers and "Install app" on HTTPS or `localhost`. Served as `http://192.168.1.50:8081` the app works fully, but the offline cache is inactive, and "Add to Home screen" creates a plain shortcut. Real installation needs HTTPS (for example a reverse proxy with a certificate); not set up.
+**HTTP only, so no service worker on the Pi.** Browsers only allow service workers and "Install app" on HTTPS or `localhost`. Served as `http://deltabacklog.local` or `http://192.168.1.50:8081` the app works fully, but the offline cache is inactive, and "Add to Home screen" creates a plain shortcut. Real installation needs HTTPS (for example a reverse proxy with a certificate); not set up.
 
 **Performance (measured on the Pi 3B+ from the PC over the LAN, with a real browser)**
 
