@@ -79,6 +79,7 @@ go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 |---|---|
 | `LISTEN_ADDR` | default `:8081` |
 | `DATA_DIR` | default `./data` (holds `app.db` and `covers/`) |
+| `ALLOWED_HOSTS` | extra `Host` names, comma separated (see "Security" in section 5); empty by default |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | a Twitch developer application; enables lookups |
 | `STEAMGRIDDB_API_KEY` | enables SteamGridDB covers |
 | `GOMEMLIMIT` | Go soft memory limit (for example `96MiB`). The runtime reads it only from the real environment at start-up, so `loadDotEnv` applies a value found in `.env` itself with `debug.SetMemoryLimit` |
@@ -147,6 +148,8 @@ v_game_flat                                    flattened read view (group_concat
 ## 5. HTTP API
 
 JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodies are size-limited. There is no authentication: the app is for the home network only.
+
+**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415. Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
 
 | Method and path | Purpose |
 |---|---|
@@ -286,7 +289,7 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 | `/opt/deltabacklog/deltabacklog` | the program; `backup.sh` next to it |
 | `/var/lib/deltabacklog/` | the data: `app.db`, `covers/` (owner `deltabacklog`, mode 750) |
 | `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days |
-| `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600) |
+| `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600); `ALLOWED_HOSTS=name1,name2` goes here when the app is reached by a name other than `deltabacklog.local`, an IP address or the Pi's hostname (otherwise 421 "unknown host"); restart the service after editing |
 | `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer`, `deltabacklog-name.service` | the units (sources in `deploy/`) |
 
 **Starting at boot.** `deltabacklog.service` is enabled (`WantedBy=multi-user.target`) with `Restart=always` (a crashed process is back in about 4 seconds, tested with `kill -9`). It runs as the unprivileged system user `deltabacklog` with `NoNewPrivileges`, a read-only file system except its data folder, and `Nice=5`. The Pi's kernel does not enforce systemd memory limits (the memory cgroup is off on Raspbian), so the real cap is `GOMEMLIMIT=96MiB` in the settings file.

@@ -148,19 +148,26 @@ func main() {
 
 	srv := &api.Server{DB: d, CoverDir: filepath.Join(dataDir, "covers"), Meta: mc}
 	srv.Warm()
+	handler := newHandler(srv, allowedHosts(os.Getenv("ALLOWED_HOSTS")))
+	hs := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Printf("DeltaBacklog %s listening on %s (data: %s)", version, addr, dataDir)
+	log.Fatal(hs.ListenAndServe())
+}
+
+// newHandler is the complete handler chain: the API, covers, health check and the embedded web app, behind the
+// cross-site and Host guard. main and the tests both use it.
+func newHandler(srv *api.Server, allowed map[string]bool) http.Handler {
 	apiHandler := srv.Handler()
 	root := http.NewServeMux()
 	root.Handle("/api/", apiHandler)
 	root.Handle("/covers/", apiHandler)
 	root.Handle("/healthz", apiHandler)
 	root.Handle("/", web.Handler())
-	hs := &http.Server{
-		Addr:              addr,
-		Handler:           root,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	log.Printf("DeltaBacklog %s listening on %s (data: %s)", version, addr, dataDir)
-	log.Fatal(hs.ListenAndServe())
+	return protect(root, allowed)
 }
 
 func onOff(b bool) string {

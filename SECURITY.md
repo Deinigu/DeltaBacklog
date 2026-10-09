@@ -11,6 +11,16 @@ DeltaBacklog is built to run on a home network, for one person or one household.
 
 What the app does to limit damage even on a trusted network: the service on the Raspberry Pi runs as an unprivileged user with systemd sandboxing, the API keys (IGDB, SteamGridDB) are read from environment variables or a git-ignored `.env` and never sent to the browser, covers are only downloaded from an allow-list of known hosts without following redirects, and image sizes are bounded.
 
+## What is protected against other web pages
+
+A web page opened in a browser on your network cannot silently use the app:
+
+- **Cross-site writes (CSRF).** Unsafe requests (POST, PUT, PATCH, DELETE) are checked with Go's `http.CrossOriginProtection` (`Sec-Fetch-Site` / `Origin`) and rejected with 403 when they come from another origin. Same-origin requests from the app and non-browser clients (curl, the backup timer) keep working. `GET /api/*` from another site (`Sec-Fetch-Site: cross-site` or `same-site`) is rejected too, so a page cannot trigger lookups that use your IGDB / SteamGridDB quota.
+- **Content type.** POST, PUT and PATCH under `/api/` must be `Content-Type: application/json` (415 otherwise), so a simple cross-site form or `text/plain` request is never read as JSON.
+- **DNS rebinding.** The `Host` header must be an IP address, `localhost`, `deltabacklog.local`, the machine's hostname or `<hostname>.local`, or a name listed in `ALLOWED_HOSTS` (comma separated); anything else gets 421. `/healthz` (GET and HEAD only) answers for any host so monitors and deploy scripts work. Behind a reverse proxy, the proxy must forward the original `Host` header and its public name must be listed in `ALLOWED_HOSTS`.
+
+This does not replace authentication: anyone who can reach the port directly (curl, another device on your network) can still use the app.
+
 ## Supported versions
 
 Only the latest release (and `main`) receives security fixes. The project is young; please update before reporting.
@@ -27,6 +37,5 @@ Please report it **privately** with GitHub's *private vulnerability reporting*: 
 
 Include what you found, how to reproduce it, and the version or commit. You can expect an acknowledgement within about a week; this is a one-person, spare-time project, so please be patient. Once a fix is released the report is disclosed, and you are credited if you wish.
 
-Known limitation, not a vulnerability report: the app has no authentication, so **any web page opened in a browser on your network can currently send requests to it and change the library** (a malicious page can add games, reorder the queue or change covers, and a DNS-rebinding page may read and delete data). The app does not yet check where a request comes from. Do not browse untrusted sites from a machine that can reach it while it holds data you care about, keep backups, and never expose it to the internet. Protection against such cross-site requests is planned; this document will describe it once it exists.
 
 Out of scope: the missing authentication and TLS described above.

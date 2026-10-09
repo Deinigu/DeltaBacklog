@@ -31,7 +31,7 @@ if [ -f "$STAGE/env" ]; then
   install -m 600 -o root -g root "$STAGE/env" /etc/deltabacklog.env
   echo "settings installed to /etc/deltabacklog.env"
 elif [ ! -f /etc/deltabacklog.env ]; then
-  printf 'LISTEN_ADDR=:8081\nDATA_DIR=%s\nGOMEMLIMIT=96MiB\n' "$DATA" > /etc/deltabacklog.env
+  printf 'LISTEN_ADDR=:8081\nDATA_DIR=%s\nGOMEMLIMIT=96MiB\n#ALLOWED_HOSTS=\n' "$DATA" > /etc/deltabacklog.env
   chmod 600 /etc/deltabacklog.env
   echo "created a default /etc/deltabacklog.env (add the IGDB / SteamGridDB keys to enable lookups)"
 fi

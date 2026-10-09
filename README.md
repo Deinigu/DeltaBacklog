@@ -95,6 +95,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 |---|---|---|
 | `LISTEN_ADDR` | `:8081` | Address and port to serve on. Use `127.0.0.1:8081` to keep it on this machine only. |
 | `DATA_DIR` | `./data` | Where `app.db` and the `covers/` folder live. |
+| `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |

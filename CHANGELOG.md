@@ -4,6 +4,11 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Security
+- Cross-origin POST/PUT/PATCH/DELETE requests are rejected (403) with `http.CrossOriginProtection`; cross-site and same-site `GET /api/*` are rejected too, so other sites cannot trigger lookups.
+- JSON write routes under `/api/` require `Content-Type: application/json` (415 otherwise).
+- Host allow-list against DNS rebinding (421); extra names via the new `ALLOWED_HOSTS` variable. `/healthz` answers for any host. Error bodies from the guard are JSON.
+
 ### Added
 - Open-source readiness: MIT license, contributing guide, code of conduct, security policy, issue and pull request templates, CI and release workflows, Dependabot configuration.
 - A demo library (`docs/tools/demo-data`, 40 well-known games with generated covers) and a screenshot tool that uses it by default, so the documentation shows no personal data.
