@@ -122,7 +122,7 @@ func main() {
 	root.Handle("/", web.Handler())
 	hs := &http.Server{
 		Addr:              addr,
-		Handler:           root,
+		Handler:           protect(root, allowedHosts(os.Getenv("ALLOWED_HOSTS"))),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("DeltaBacklog listening on %s (data: %s)", addr, dataDir)

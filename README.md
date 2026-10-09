@@ -70,6 +70,19 @@ STEAMGRIDDB_API_KEY=...
 
 Without keys everything works except the lookups: games can still be added by hand. Real environment variables win over `.env`. To check the keys against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
 
+### Configuration
+
+Set in `.env` or the environment (the environment wins):
+
+| Variable | Meaning |
+|---|---|
+| `LISTEN_ADDR` | default `:8081` |
+| `DATA_DIR` | default `./data` |
+| `ALLOWED_HOSTS` | extra `Host` names to accept, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname are always allowed; other hosts get 421 (DNS rebinding protection) |
+| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`, `STEAMGRIDDB_API_KEY` | enable lookups and covers |
+
+There is no login; see [SECURITY.md](SECURITY.md) for what is and is not protected.
+
 ### Optional: import a NocoDB library
 
 ```sh

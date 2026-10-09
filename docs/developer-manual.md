@@ -79,6 +79,7 @@ go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 |---|---|
 | `LISTEN_ADDR` | default `:8081` |
 | `DATA_DIR` | default `./data` (holds `app.db` and `covers/`) |
+| `ALLOWED_HOSTS` | extra `Host` names, comma separated (see "Security" in section 5); empty by default |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | a Twitch developer application; enables lookups |
 | `STEAMGRIDDB_API_KEY` | enables SteamGridDB covers |
 
@@ -139,6 +140,8 @@ v_game_flat                                    flattened read view (group_concat
 ## 5. HTTP API
 
 JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodies are size-limited. There is no authentication: the app is for the home network only.
+
+**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415. Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
 
 | Method and path | Purpose |
 |---|---|
