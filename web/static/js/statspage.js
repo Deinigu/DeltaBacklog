@@ -107,8 +107,8 @@ function backlogHours(t) {
   const hours = `at least ${t.hours.toLocaleString()} hours`;
   if (t.known * 2 < t.total) { // most of the backlog has no time yet: the sum would mislead as a headline
     return h('div', {},
-      h('p.big', {}, `${t.known} of ${t.total}`, h('small', {}, ' games have a time to beat')),
-      h('p.hint', {}, `That is ${hours} for those; the other ${t.unknown} have no time to beat yet.`));
+      h('p.big', {}, `${t.known} of ${t.total}`, h('small', {}, t.known === 1 ? ' game has a time to beat' : ' games have a time to beat')),
+      h('p.hint', {}, `That is ${hours} for those; the other ${plural(t.unknown, 'has', 'have')} no time to beat yet.`));
   }
   return h('div', {},
     h('p.big', {}, hours, h('small', {}, ' to beat the backlog')),

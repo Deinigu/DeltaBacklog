@@ -1,14 +1,19 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
+	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/importer"
@@ -146,5 +151,70 @@ func TestChangingTheIGDBLinkClearsTheEnrichment(t *testing.T) {
 	d.QueryRow("SELECT igdb_id FROM game WHERE id = ?", id).Scan(&link)
 	if link.Valid {
 		t.Error("still linked")
+	}
+}
+
+type pairEnricher struct{}
+
+func (pairEnricher) GameDetails(_ context.Context, ids []int64) ([]meta.Details, error) {
+	var out []meta.Details
+	for _, id := range ids {
+		out = append(out, meta.Details{IGDBID: id, Series: "Shared Coll", Year: 2000})
+	}
+	return out, nil
+}
+func (pairEnricher) TimeToBeat(context.Context, []int64) (map[int64]meta.TimeToBeat, error) {
+	return map[int64]meta.TimeToBeat{}, nil
+}
+
+// A series the owner removed on purpose must not come back when the enrichment runs again.
+func TestOwnerClearedSeriesStaysEmptyAfterAnotherEnrichRun(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for i := 1; i <= 4; i++ {
+		d.Exec("INSERT INTO game (title, title_sort, status_id, igdb_id) VALUES (?, ?, 4, ?)", fmt.Sprintf("G%d", i), fmt.Sprintf("g%d", i), i)
+	}
+	d.Exec("UPDATE game SET igdb_id = NULL WHERE id > 2") // only the first pair is linked at first
+	run := func(refresh bool) *igdblink.EnrichReport {
+		t.Helper()
+		rep, err := igdblink.Enrich(context.Background(), d, pairEnricher{}, igdblink.EnrichOptions{Refresh: refresh, Sleep: func(context.Context, time.Duration) error { return nil }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+	seriesOf := func(id int) string {
+		var s sql.NullString
+		d.QueryRow("SELECT (SELECT name FROM series WHERE id = series_id) FROM game WHERE id = ?", id).Scan(&s)
+		return s.String
+	}
+	if rep := run(false); rep.FilledSeries != 2 || seriesOf(1) != "Shared Coll" || seriesOf(2) != "Shared Coll" {
+		t.Fatalf("pair not filled: %+v %q %q", rep, seriesOf(1), seriesOf(2))
+	}
+	srv := newServerFrom(t, d)
+	req, _ := http.NewRequest("PATCH", srv+"/api/games/1", strings.NewReader(`{"series":""}`))
+	if res, err := http.DefaultClient.Do(req); err != nil || res.StatusCode != 200 {
+		t.Fatalf("patch: %v %v", res, err)
+	}
+	// two more games of the collection arrive; the run reads only them
+	d.Exec("UPDATE game SET igdb_id = id WHERE id > 2")
+	rep := run(false)
+	if seriesOf(1) != "" {
+		t.Error("the series the owner cleared came back")
+	}
+	if seriesOf(3) != "Shared Coll" || seriesOf(4) != "Shared Coll" || rep.FilledSeries != 2 || rep.SeriesCompleted != 0 {
+		t.Errorf("new pair: %q %q %+v", seriesOf(3), seriesOf(4), rep)
+	}
+	// --refresh must not bring it back either, nor touch anything the owner emptied
+	d.Exec("DELETE FROM game_genre")
+	run(true)
+	if seriesOf(1) != "" {
+		t.Error("refresh refilled the cleared series")
+	}
+	if n := 0; d.QueryRow("SELECT count(*) FROM game_genre").Scan(&n) != nil || n != 0 {
+		t.Errorf("refresh refilled genres: %d", n)
 	}
 }

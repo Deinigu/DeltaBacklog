@@ -535,7 +535,7 @@ type igdbDetail struct {
 }
 
 const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.name,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
 func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {

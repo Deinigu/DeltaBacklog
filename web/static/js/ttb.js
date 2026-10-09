@@ -25,7 +25,7 @@ export function formatTime(minutes) {
   return h < 10 ? `${Math.floor(h * 10) / 10} h` : `${Math.floor(h)} h`;
 }
 
-/** "Quick 8 h, usual 12 h, complete 40 h" for the drawer; parts IGDB does not know are left out. */
+/** [{label: "Quick", text: "8 h"}, {label: "Usual", ...}, ...] for the drawer; parts IGDB does not know are left out. */
 export function ttbParts(g) {
   return [['Quick', g.ttb_hastily], ['Usual', g.ttb_normally], ['Complete', g.ttb_completely]]
     .filter(([, v]) => has(v)).map(([label, v]) => ({ label, text: formatTime(v) }));

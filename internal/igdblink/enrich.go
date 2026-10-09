@@ -21,7 +21,7 @@ type Enricher interface {
 // EnrichOptions tune an enrichment run. The zero value is a real run at about four requests per second at most.
 type EnrichOptions struct {
 	DryRun     bool
-	Refresh    bool                                       // read games again that were enriched before (time to beat changes over time)
+	Refresh    bool                                       // read games again that were enriched before and rewrite only IGDB's own data (times, modes, perspectives, links)
 	BatchSize  int                                        // games per request; default 20
 	Interval   time.Duration                              // pause between requests; default 250ms (4 requests/s)
 	Backoff    time.Duration                              // first wait after a 429, doubling each time; default 2s
@@ -46,7 +46,8 @@ type EnrichReport struct {
 	FilledGenres      int
 	FilledThemes      int
 	FilledDeveloper   int
-	FilledSeries      int
+	FilledSeries      int // series set on games read in this run
+	SeriesCompleted   int // series set on games of earlier runs, because a game read now completed their shared collection
 	FilledPlatforms   int
 	PlatformsSkip     int      // games with no platform where IGDB lists several, so none was guessed
 	PlatformsUnmapped int      // games with no platform whose single IGDB platform is not one the library has (never created)
@@ -154,6 +155,7 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 		}
 		defer dryTx.Rollback()
 	}
+	readNow := map[int64]bool{} // games read from IGDB in this run
 	consecutiveErrors := 0
 	first := true
 	// pace waits between requests, not before the first one.
@@ -216,11 +218,12 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 		}
 		for _, l := range batch {
 			det, ok := byID[l.igdbID]
-			if err := enrichGame(tx, l.id, det, ok, ttb[l.igdbID], rep); err != nil {
+			if err := enrichGame(tx, l.id, det, ok, o.Refresh, ttb[l.igdbID], rep); err != nil {
 				tx.Rollback()
 				return rep, err
 			}
 			if ok {
+				readNow[l.id] = true
 				rep.Enriched++
 			} else {
 				rep.Missing++
@@ -242,7 +245,7 @@ func Enrich(ctx context.Context, d *sql.DB, e Enricher, o EnrichOptions) (*Enric
 			return rep, err
 		}
 	}
-	if err := applySeriesProposals(tx, rep); err != nil {
+	if err := applySeriesProposals(tx, rep, readNow); err != nil {
 		tx.Rollback()
 		return rep, err
 	}
@@ -343,8 +346,11 @@ func fillColumn(tx *sql.Tx, gameID int64, table, column, name string) (bool, err
 	return n > 0, nil
 }
 
-func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found bool, ttb meta.TimeToBeat, rep *EnrichReport) error {
-	if found {
+// enrichGame stores one game. With refresh only IGDB's own data is rewritten (times, modes, perspectives, links):
+// the fill-only-empty fields are left alone, because a field the owner emptied on purpose looks the same as one
+// that was never set.
+func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool, ttb meta.TimeToBeat, rep *EnrichReport) error {
+	if found && !refresh {
 		// ---- fill only empty fields ----
 		if det.Year >= 1950 && det.Year <= 2100 {
 			res, err := tx.Exec("UPDATE game SET release_year = ? WHERE id = ? AND release_year IS NULL", det.Year, gameID)
@@ -408,7 +414,8 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found bool, ttb meta
 				rep.PlatformsSkip++
 			}
 		}
-
+	}
+	if found {
 		// ---- data that is new in the app: IGDB's values replace what an earlier run stored ----
 		if len(det.Modes) > 0 {
 			if err := replaceLinks(tx, gameID, "game_mode", "game_game_mode", "game_mode_id", det.Modes); err != nil {
@@ -463,6 +470,9 @@ func PrintEnrichReport(w io.Writer, r *EnrichReport) {
 		r.FilledYear, r.FilledGenres, r.FilledThemes, r.FilledDeveloper, r.FilledSeries, r.FilledPlatforms)
 	if r.PlatformsSkip > 0 {
 		fmt.Fprintf(w, "  %d games have no platform and IGDB lists several: left empty\n", r.PlatformsSkip)
+	}
+	if r.SeriesCompleted > 0 {
+		fmt.Fprintf(w, "  %d games read in earlier runs got a series because a game read now shares their IGDB collection\n", r.SeriesCompleted)
 	}
 	if r.PlatformsUnmapped > 0 {
 		fmt.Fprintf(w, "  %d games have no platform and IGDB's one is not a platform of your library: left empty (none is created)\n", r.PlatformsUnmapped)

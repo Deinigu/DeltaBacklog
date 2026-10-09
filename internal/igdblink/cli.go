@@ -60,7 +60,7 @@ func run(args []string, defaultDB string, s Searcher, configured bool, out io.Wr
 	dbPath := fs.String("db", defaultDB, "database file")
 	limit := fs.Int("limit", 0, "stop after this many games (0 = all)")
 	enrich := fs.Bool("enrich", false, "phase 2: read the linked games from IGDB and fill empty fields, time to beat, modes, perspectives and store links")
-	refresh := fs.Bool("refresh", false, "with --enrich: read games again that were enriched before")
+	refresh := fs.Bool("refresh", false, "with --enrich: read games again that were enriched before and update only IGDB's own data (times, modes, perspectives, store links); nothing you or an earlier run filled in is touched")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

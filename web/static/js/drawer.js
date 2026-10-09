@@ -37,7 +37,7 @@ function quickActions(game) {
 
 const STORE_LABELS = { steam: 'Steam', gog: 'GOG', epic: 'Epic Games', official: 'Official site' };
 
-/** "Quick 8 h, Usual 12 h, Complete 40 h" from IGDB, or null when IGDB has no time. */
+/** "Quick 8 h · Usual 12 h · Complete 40 h" from IGDB, or null when IGDB has no time. */
 const ttbText = (game) => ttbParts(game).map((p) => `${p.label} ${p.text}`).join(' · ') || null;
 
 /** Buttons to the game's store pages and official site (links come from IGDB; only http(s) is ever opened). */

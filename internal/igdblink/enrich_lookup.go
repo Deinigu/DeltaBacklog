@@ -66,7 +66,7 @@ func fillSeriesFromLibrary(tx *sql.Tx, gameID int64, name string) (bool, error) 
 // applySeriesProposals is rule (b), run after the batches over every enriched game that still has no series: a
 // collection shared by two or more of them becomes a series (named as the first game spells it). The others are
 // counted in the report.
-func applySeriesProposals(tx *sql.Tx, rep *EnrichReport) error {
+func applySeriesProposals(tx *sql.Tx, rep *EnrichReport, readNow map[int64]bool) error {
 	rows, err := tx.Query(`SELECT id, title, igdb_series FROM game
 		WHERE series_id IS NULL AND igdb_series IS NOT NULL AND igdb_series <> '' ORDER BY id`)
 	if err != nil {
@@ -120,7 +120,11 @@ func applySeriesProposals(tx *sql.Tx, rep *EnrichReport) error {
 			if ok, err := setSeries(tx, m.id, id); err != nil {
 				return err
 			} else if ok {
-				rep.FilledSeries++
+				if readNow[m.id] {
+					rep.FilledSeries++
+				} else {
+					rep.SeriesCompleted++
+				}
 			}
 		}
 	}

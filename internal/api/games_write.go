@@ -338,6 +338,12 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			return err
 		}
 	}
+	if in.Series != nil {
+		// Whatever the owner sets (or clears) is their decision: the enrichment must never fill this series again.
+		if _, err := tx.Exec("UPDATE game SET igdb_series = NULL WHERE id = ?", id); err != nil {
+			return err
+		}
+	}
 	if in.IGDBID != nil {
 		var current sql.NullInt64
 		if err := tx.QueryRow("SELECT igdb_id FROM game WHERE id = ?", id).Scan(&current); err != nil {

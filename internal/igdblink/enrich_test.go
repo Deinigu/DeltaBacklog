@@ -530,7 +530,7 @@ func TestEnrichSharedCollectionBecomesASeriesAcrossRuns(t *testing.T) {
 	// the second game is linked later; the next run completes the pair, including the first game
 	link(t, d, b, 2)
 	rep, _ := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
-	if g := names(t, d, "SELECT s.name || ':' || count(*) FROM game g JOIN series s ON s.id = g.series_id GROUP BY s.id"); g != "Big Saga:2" || rep.FilledSeries != 2 {
+	if g := names(t, d, "SELECT s.name || ':' || count(*) FROM game g JOIN series s ON s.id = g.series_id GROUP BY s.id"); g != "Big Saga:2" || rep.FilledSeries != 1 || rep.SeriesCompleted != 1 {
 		t.Errorf("series %q, report %+v", g, rep)
 	}
 }
@@ -640,5 +640,45 @@ func TestEnrichDryRunReportsLikeARealRunAndWritesNothing(t *testing.T) {
 	}
 	if n := names(t, d, "SELECT (SELECT count(*) FROM series) || (SELECT count(*) FROM game WHERE igdb_enriched_at IS NOT NULL OR igdb_series IS NOT NULL)"); n != "00" {
 		t.Errorf("a dry run wrote something: %s", n)
+	}
+}
+
+func TestRefreshRewritesOnlyIGDBsOwnData(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades", "Switch")
+	link(t, d, id, 1)
+	f := &fakeEnricher{details: map[int64]meta.Details{1: hades()}, ttb: map[int64]meta.TimeToBeat{1: {Normally: 3600}}}
+	Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
+	// the owner empties things afterwards; IGDB now has newer data
+	d.Exec("UPDATE game SET release_year = NULL, developer_id = NULL WHERE id = ?", id)
+	d.Exec("DELETE FROM game_genre")
+	d.Exec("DELETE FROM game_theme")
+	det := hades()
+	det.Modes, det.Perspectives = []string{"Co-operative"}, []string{"Text"}
+	det.Links = []meta.StoreLink{{Kind: "gog", URL: "https://www.gog.com/game/hades"}}
+	f.details[1], f.ttb[1] = det, meta.TimeToBeat{Normally: 7200}
+	rep, _ := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: true})
+	if rep.FilledYear+rep.FilledGenres+rep.FilledThemes+rep.FilledDeveloper+rep.FilledSeries+rep.FilledPlatforms != 0 {
+		t.Errorf("refresh filled owner fields: %+v", rep)
+	}
+	if g := names(t, d, "SELECT (SELECT count(*) FROM game_genre) || (SELECT count(*) FROM game_theme) || coalesce(release_year, '-') || coalesce(developer_id, '-') FROM game"); g != "00--" {
+		t.Errorf("owner-emptied fields were refilled: %s", g)
+	}
+	if g := names(t, d, "SELECT p.name FROM game_game_mode x JOIN game_mode p ON p.id = x.game_mode_id"); g != "Co-operative" {
+		t.Errorf("modes = %s", g)
+	}
+	if g := names(t, d, "SELECT kind FROM game_link"); g != "gog" {
+		t.Errorf("links = %s", g)
+	}
+	if g := names(t, d, "SELECT time_to_beat_normally FROM game"); g != "120" {
+		t.Errorf("time = %s", g)
+	}
+}
+
+func TestReportKeepsCompletedSeriesOnItsOwnLine(t *testing.T) {
+	var out bytes.Buffer
+	PrintEnrichReport(&out, &EnrichReport{SeriesCompleted: 2})
+	if !strings.Contains(out.String(), "2 games read in earlier runs got a series") {
+		t.Errorf("report:\n%s", out.String())
 	}
 }
