@@ -171,6 +171,8 @@ Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Ca
 
 Tap **+**.
 
+![Searching for a game to add](img/add-search-phone.jpg)
+
 1. **Type the title.** After a moment you see matching games from IGDB, with cover, year, developer and genres. A match that is already in your library has an orange **Already in your library** label.
 2. **Tap the right one.**
 3. **Check the form.** Genres, themes, developer, series and release year are filled in for you. You choose the **status** (Backlog by default), the **platforms** and the **ownership** (Owned by default).
@@ -183,6 +185,8 @@ If the game is not found, tap **Add "..." without a lookup** to type everything 
 ## 10. Covers
 
 Open a game and tap **Change cover**.
+
+![Choosing a cover](img/cover-picker-phone.jpg)
 
 - Two tabs: **SteamGridDB** (community covers; wide pictures match your library) and **IGDB** (official artwork, screenshots and the box cover, each labelled). The tab you used last is remembered.
 - The search box starts with the game's title. Type another title and tap **Search** when the automatic match is the wrong game.
