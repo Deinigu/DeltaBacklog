@@ -2,15 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `modernc.org/sqlite`, no CGO) with a vanilla-JS PWA embedded via `go:embed`. It replaces the user's NocoDB videogame table and must run on a Raspberry Pi 3B+ (armv7, ~900MB RAM shared with other containers), so keep it light: no frontend build step, no heavy dependencies.
+DeltaBacklog is a self-hosted videogame tracker: one Go binary (SQLite via `modernc.org/sqlite`, no CGO) with a vanilla-JS PWA embedded via `go:embed`. It replaced the maintainer's NocoDB videogame table and must run on a Raspberry Pi 3B+ (armv7, ~900MB RAM shared with other containers), so keep it light: no frontend build step, no heavy dependencies.
 
 ## Commands
-- Go is not on PATH on the dev machine: `export PATH="$PATH:$HOME/sdk/go/bin"` (Git Bash) or `$env:Path += ";$env:USERPROFILE\sdk\go\bin"` (PowerShell).
+- If Go is not on PATH, add its `bin` directory (Git Bash: `export PATH="$PATH:$HOME/sdk/go/bin"`; PowerShell: `$env:Path += ";$env:USERPROFILEsdkgoin"`; adjust to where Go is installed).
 - `go vet ./... && go test ./...` for the backend; `node --test web/test/*.test.mjs` for frontend logic (the pure modules, see developer manual section 9). Tests live in `web/test/`, outside the embedded `web/static/`.
-- **Port 8081 is the user's own live server** (their real data). Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`, check it is free with `netstat`) and be addressed as `127.0.0.1:<port>`, never `localhost` (it can resolve to the user's server). Never send POST/PATCH/DELETE to a port you did not start yourself.
+- **A running instance on :8081 may be someone's real data** (it is the default port). Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`, check it is free with `netstat`) and be addressed as `127.0.0.1:<port>`, never `localhost` (it can resolve to a real server). Never send POST/PATCH/DELETE to a port you did not start yourself.
 - `go run ./cmd/deltabacklog` serves on `:8081` with data in `./data`. Subcommands: `deltabacklog check <file>`, `backup <file>`, `sync-igdb [--dry-run]` (link games to IGDB; see the developer manual, section 8). `web/static` is compiled into the binary, so restart after any frontend edit.
 - IGDB / SteamGridDB keys live in `.env` (loaded from the working directory; real environment variables win). Live check against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
-- Deploy to the Raspberry Pi (the owner's, `ssh raspberry`, systemd, port 8081): `bash deploy/deploy.sh` (cross-compiled on the PC, data and settings are kept). See the developer manual, section 11. Never run experiments against the Pi's real database: copy `app.db` to /tmp and run a second instance on another port.
+- Deploy to the Raspberry Pi (systemd, port 8081): `DEPLOY_HOST=user@host bash deploy/deploy.sh` (`DEPLOY_HOST` defaults to the ssh alias `raspberry`, set in `deploy/deploy.sh`) (cross-compiled on the PC, data and settings are kept). See the developer manual, section 11. Never run experiments against the Pi's real database: copy `app.db` to /tmp and run a second instance on another port.
 - Import from NocoDB: see README ("Import from NocoDB"); `cmd/import` is idempotent.
 - Cross-build for the Pi: `GOOS=linux GOARCH=arm GOARM=7`.
 
