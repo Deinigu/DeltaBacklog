@@ -13,6 +13,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 - Quick add maps the IGDB platform names `NSW` and `PS` the way the IGDB sync does.
 
 ### Changed
+- The repository is now a public showcase, not a community project: README status note and "How this was built" section, CONTRIBUTING explains that contributions are not accepted, and the code of conduct, issue forms and pull request template were removed. Dependabot runs monthly with grouped updates.
 - Deploys are stamped with a version from `git describe`; idle connections are closed after 2 minutes; CI fails on unformatted Go code.
 
 ## 2026-10-09 (pre-release)

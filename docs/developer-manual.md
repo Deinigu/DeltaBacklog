@@ -66,12 +66,20 @@ docs/               these manuals; docs/img screenshots; docs/tools/screenshots.
 Go 1.27 and Node 20+ must be on your PATH (Node is only for the frontend tests and the screenshot tool).
 
 ```sh
+gofmt -l .                         # must print nothing (CI fails otherwise)
 go vet ./... && go test ./...
 node --test web/test/*.test.mjs
 go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 ```
 
 `web/static` is compiled into the binary: **restart after any frontend change**.
+
+**Demo library** (to try the app or take screenshots without your own data; 40 well-known games with generated placeholder covers, add `-env <your .env>` to download real ones):
+
+```sh
+go run ./docs/tools/demo-data -data /tmp/demo
+LISTEN_ADDR=127.0.0.1:18090 DATA_DIR=/tmp/demo go run ./cmd/deltabacklog
+```
 
 **Configuration** (`.env` in the working directory, or real environment variables, which win; `.env` is git-ignored, `.env.example` is committed):
 
@@ -260,7 +268,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | Real services | `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v` |
 | In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images). By default it builds and serves the demo library from `docs/tools/demo-data` (40 well-known games, no personal data; generated placeholder covers, or the real covers downloaded into a throwaway folder when IGDB / SteamGridDB keys are in `.env` or `ENV_FILE`), so the images never show anyone's real collection. The images contain cover art that belongs to IGDB / SteamGridDB and the game publishers, shown for illustration; no cover files are committed |
 
-Before opening a PR: all of the above pass; changes that touch the UI were looked at in a browser at 390px and 1280px (light and dark where it matters), with no horizontal page scroll. Every bug fix comes with a test that fails without it.
+Before merging a PR: all of the above pass; changes that touch the UI were looked at in a browser at 390px and 1280px (light and dark where it matters), with no horizontal page scroll. Every bug fix comes with a test that fails without it.
 
 ## 10. Workflow
 

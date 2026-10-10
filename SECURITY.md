@@ -23,7 +23,7 @@ This does not replace authentication: anyone who can reach the port directly (cu
 
 ## Supported versions
 
-Only the latest release (and `main`) receives security fixes. The project is young; please update before reporting.
+This is a personal project shared as-is (see [CONTRIBUTING.md](CONTRIBUTING.md)). Only the latest release (and `main`) can receive security fixes, with no guarantee. Please check against the latest version before reporting.
 
 | Version | Supported |
 |---|---|
@@ -35,7 +35,6 @@ Only the latest release (and `main`) receives security fixes. The project is you
 
 Please report it **privately** with GitHub's *private vulnerability reporting*: on the repository page open **Security → Report a vulnerability**. Please do not open a public issue or pull request for it.
 
-Include what you found, how to reproduce it, and the version or commit. You can expect an acknowledgement within about a week; this is a one-person, spare-time project, so please be patient. Once a fix is released the report is disclosed, and you are credited if you wish.
-
+Include what you found, how to reproduce it, and the version or commit. Reports are welcome, but there is no guaranteed response time and no SLA: this is a one-person, spare-time project. If a fix is released, you are credited if you wish.
 
 Out of scope: the missing authentication and TLS described above.
