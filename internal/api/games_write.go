@@ -147,7 +147,7 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	var in gamePatch
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.validate() != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "invalid body", nil)
 		return
 	}
 	tx, err := s.DB.Begin()
@@ -159,7 +159,7 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 
 	var curStatus int64
 	if err := tx.QueryRow("SELECT status_id FROM game WHERE id = ?", id).Scan(&curStatus); errors.Is(err, sql.ErrNoRows) {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
 		fail(w, err)
@@ -183,7 +183,7 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	if in.Status != nil {
 		var sid int64
 		if err := tx.QueryRow("SELECT id FROM status WHERE code = ?", *in.Status).Scan(&sid); err != nil {
-			http.Error(w, "unknown status", http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "unknown status", nil)
 			return
 		}
 		if sid != curStatus {
@@ -259,7 +259,7 @@ func (s *Server) reorderGames(w http.ResponseWriter, r *http.Request) {
 	var ids []int64
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil || len(ids) == 0 {
-		http.Error(w, "expected a non-empty list of game ids", http.StatusBadRequest)
+		writeErr(w, http.StatusBadRequest, "expected a non-empty list of game ids", nil)
 		return
 	}
 	tx, err := s.DB.Begin()
@@ -273,13 +273,13 @@ func (s *Server) reorderGames(w http.ResponseWriter, r *http.Request) {
 	seen := map[int64]bool{}
 	for _, id := range ids {
 		if seen[id] {
-			http.Error(w, "duplicate id", http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "duplicate id", nil)
 			return
 		}
 		seen[id] = true
 		var pos sql.NullInt64
 		if err := tx.QueryRow("SELECT queue_pos FROM game WHERE id = ?", id).Scan(&pos); errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "unknown game id", http.StatusBadRequest)
+			writeErr(w, http.StatusBadRequest, "unknown game id", nil)
 			return
 		} else if err != nil {
 			fail(w, err)

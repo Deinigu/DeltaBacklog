@@ -37,3 +37,8 @@ test('default: ties keep IGDB order, unknown platforms rank last, nothing gives 
   assert.deepEqual(defaultPlatforms(['PS5', 'Switch'], new Map([['Switch', 1]])), ['Switch']);
   assert.deepEqual(defaultPlatforms([]), []);
 });
+
+test('the short IGDB names the Go sync folds (NSW, PS) map the same way here', () => {
+  assert.deepEqual(mapPlatforms(['NSW'], LIB), ['Switch']);
+  assert.deepEqual(mapPlatforms(['PS'], [...LIB, 'PS1']), ['PS1']);
+});

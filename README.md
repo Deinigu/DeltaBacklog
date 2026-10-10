@@ -85,7 +85,7 @@ cp .env.example .env                                     # optional: add your IG
 DEPLOY_HOST=pi@raspberrypi.local bash deploy/deploy.sh --env .env
 ```
 
-Run it again to update: data and settings are kept. To start from an existing library, add `--seed <dir>` (a folder with `app.db` and `covers/`). Open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot). Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
+Run it again to update: data and settings are kept, and the database is backed up before a new version starts. To start from an existing library, add `--seed <dir>` (a folder with `app.db` and `covers/`). Open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot). Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
 
 ## Configuration
 
@@ -111,7 +111,7 @@ Without keys the app still works; games are added by hand. To check keys against
 
 ```sh
 deltabacklog                       # serve the app
-deltabacklog backup <file>         # write a consistent copy of the database (safe while it runs)
+deltabacklog backup <file>         # write a consistent copy of the database (safe while it runs; never migrates it)
 deltabacklog check <file>          # verify a database or backup (read-only)
 deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys)
 ```

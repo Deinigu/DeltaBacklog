@@ -334,3 +334,40 @@ func TestStatusYearSurvivesExplicitYears(t *testing.T) {
 		t.Errorf("years = %v, want [2020 %d]", g.Years, year)
 	}
 }
+
+func TestErrorsAreJSONAndCoversAreNotListed(t *testing.T) {
+	srv := newServer(t)
+	for _, c := range []struct {
+		method, path, body string
+		code               int
+	}{
+		{"PATCH", "/api/games/1", `{"title": ""}`, http.StatusBadRequest},
+		{"PATCH", "/api/games/999", `{}`, http.StatusNotFound},
+		{"PATCH", "/api/games/x", `{}`, http.StatusNotFound},
+		{"PUT", "/api/tierlist/1800", `{"entries": []}`, http.StatusBadRequest},
+		{"DELETE", "/api/views/999", ``, http.StatusNotFound},
+		{"POST", "/api/games/reorder", `[1, 1]`, http.StatusBadRequest},
+	} {
+		req, _ := http.NewRequest(c.method, srv.URL+c.path, strings.NewReader(c.body))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out struct{ Error string }
+		err = json.NewDecoder(res.Body).Decode(&out)
+		res.Body.Close()
+		if res.StatusCode != c.code || res.Header.Get("Content-Type") != "application/json" || err != nil || out.Error == "" {
+			t.Errorf("%s %s: %d %q, decode %v, error %q; want %d with a JSON error", c.method, c.path, res.StatusCode, res.Header.Get("Content-Type"), err, out.Error, c.code)
+		}
+	}
+
+	res, err := http.Get(srv.URL + "/covers/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("GET /covers/ = %d, want 404 (no folder listing)", res.StatusCode)
+	}
+}

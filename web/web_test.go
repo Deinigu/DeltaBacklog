@@ -114,3 +114,31 @@ func TestContentTypesAndRouting(t *testing.T) {
 		t.Errorf("POST: %d", res.StatusCode)
 	}
 }
+
+// The service worker precaches the shell for offline use: a module missing from SHELL_FILES breaks the app offline.
+func TestServiceWorkerCachesTheWholeShell(t *testing.T) {
+	sw, err := fs.ReadFile(files, "static/sw.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(sw)
+	start := strings.Index(src, "const SHELL_FILES = [")
+	if start < 0 {
+		t.Fatal("SHELL_FILES not found in sw.js")
+	}
+	list := src[start:]
+	list = list[:strings.Index(list, "];")]
+	want := []string{"'/'", "'/styles.css'", "'/icon.svg'"}
+	sub, _ := fs.Sub(files, "static")
+	entries, _ := fs.ReadDir(sub, "js")
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".js") {
+			want = append(want, "'/js/"+e.Name()+"'")
+		}
+	}
+	for _, w := range want {
+		if !strings.Contains(list, w) {
+			t.Errorf("sw.js SHELL_FILES is missing %s", w)
+		}
+	}
+}

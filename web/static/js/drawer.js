@@ -51,10 +51,14 @@ function storeLinks(game) {
 
 export function closeDrawer() {
   if (!open) return;
+  const { opener } = open;
+  const hadFocus = open.drawer.contains(document.activeElement);
   open.drawer.remove();
   open.scrim.remove();
   document.removeEventListener('keydown', open.onKey);
   open = null;
+  // Back to what opened it (a card, a table row), unless the page under it was replaced meanwhile
+  if (hadFocus && opener?.isConnected && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
 }
 
 /** Close because the user asked to: when there are unsaved edits, ask first. */
@@ -67,6 +71,8 @@ async function requestClose() {
 }
 
 export function openDrawer(game) {
+  // Redrawing an open drawer (after a save) keeps the element that opened the first one
+  const opener = open ? open.opener : document.activeElement;
   closeDrawer();
   const st = store.statusByCode.get(game.status);
   const url = coverURL(game);
@@ -104,7 +110,7 @@ export function openDrawer(game) {
   const scrim = h('div.scrim.show', { onclick: requestClose });
   scrim.style.zIndex = 55;
   const quick = quickActions(game);
-  const drawer = h('div.drawer', { role: 'dialog', 'aria-modal': 'true', 'aria-label': game.title },
+  const drawer = h('div.drawer', { role: 'dialog', 'aria-modal': 'true', 'aria-label': game.title, tabindex: '-1' },
     h('button.close', { onclick: requestClose, 'aria-label': 'Close' }, '✕'),
     h('div.cover', {},
       url ? h('img', { src: url, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)),
@@ -216,5 +222,6 @@ export function openDrawer(game) {
   };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, drawer);
-  open = { drawer, scrim, onKey, isDirty: null };
+  open = { drawer, scrim, onKey, isDirty: null, opener };
+  drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
 }

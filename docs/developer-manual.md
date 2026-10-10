@@ -89,7 +89,7 @@ The version printed at start-up and in the usage text is `main.version` (`dev` b
 
 **Port 8081 may be a real, live server (it is the default port).** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
 
-**Other commands:** `deltabacklog` with any other first argument than `backup`, `check` or `sync-igdb` prints usage and exits 2 (a typo never starts the server); `deltabacklog backup <file>` writes a consistent copy of the database; `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty).
+**Other commands:** `deltabacklog` with any other first argument than `backup`, `check` or `sync-igdb` prints usage and exits 2 (a typo never starts the server); `deltabacklog backup <file>` writes a consistent copy of `$DATA_DIR/app.db` exactly as it is (it never migrates it, so a newer binary can back up an older database before upgrading it, and a missing database is an error, never a new empty one); `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty).
 
 **Importing from NocoDB:** see the README ("Import from NocoDB"). `cmd/import` is idempotent (keyed by the old row id, stored in `game.source_id`) and re-running it retries failed cover downloads.
 
@@ -147,7 +147,7 @@ v_game_flat                                    flattened read view (group_concat
 
 ## 5. HTTP API
 
-JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodies are size-limited. There is no authentication: the app is for the home network only.
+JSON in and out. Errors are `{"error": "..."}` with a status code (every handler and the guard; only a path or method no route knows gets Go's plain-text 404/405). Request bodies are size-limited. There is no authentication: the app is for the home network only.
 
 **Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415. Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
 
@@ -182,7 +182,8 @@ JSON in and out. Errors are `{"error": "..."}` with a status code. Request bodie
 **Safety limits** (enforced server-side, covered by tests)
 - A client-supplied cover URL must be on `cdn2.steamgriddb.com`, `cdn.steamgriddb.com` or `images.igdb.com`; redirects are never followed; images larger than 16 megapixels are rejected (computed in `int64` because the Pi is 32-bit).
 - A pasted link is only fetched from Steam, GOG, Epic or IGDB, every redirect is re-checked against that list, and the page must answer 200. (The UI no longer advertises links; the resolver remains in `internal/meta`.)
-- Request body limits: 64KB for games and views, 256KB for reorder, 4KB for a cover URL.
+- Request body limits: 64KB for games and views, 256KB for reorder, 128KB for a tier list, 4KB for a cover URL and for the link calls.
+- `GET /covers/` and any other folder path answer 404: the cover folder is never listed.
 
 ## 6. Backend packages
 
@@ -236,7 +237,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 
 **Table.** Rows have a fixed height; only the visible ones exist in the DOM (`paint`). Each row remembers a signature of what it shows, so a refresh rebuilds only rows whose data changed (a click that started on an unchanged row still completes). The row being edited is never destroyed by a refresh. Column widths and visibility are kept in `localStorage` (a per-device convenience).
 
-**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page. The server sends `Cache-Control: no-cache` for the shell.
+**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page; `TestServiceWorkerCachesTheWholeShell` (`web/web_test.go`) fails when a module is missing from `SHELL_FILES` (the `VERSION` bump is still on you). The server sends `Cache-Control: no-cache` for the shell.
 
 **Style.** `styles.css` uses CSS variables for light and dark (`prefers-color-scheme`, with a `data-theme` override). Breakpoints: below 600px phone layout, from 900px sidebar plus filter panel.
 
@@ -280,7 +281,7 @@ bash deploy/deploy.sh                       # build + upload + install; data and
 bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.db and covers/; --env installs the keys
 ```
 
-`deploy.sh` builds `GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0`, uploads to `/tmp/deltabacklog-deploy`, runs `install.sh` with sudo and deletes the upload. `install.sh` is idempotent: it never overwrites an existing database, restarts the service only when the program (or settings) changed, and waits until `/healthz` answers.
+`deploy.sh` builds `GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0` (version stamped from `git describe`), uploads to `/tmp/deltabacklog-deploy`, runs `install.sh` with sudo and deletes the upload. `install.sh` is idempotent: it never overwrites an existing database, restarts the service only when the program (or settings) changed, and waits until `/healthz` answers. When the program changed and a database exists, it first writes `/var/backups/deltabacklog/app-before-upgrade-<time>.db` (with the new binary, as the service user; `backup` never migrates, so this is the database as the old version left it), because the new version may migrate the database when it starts; if that backup fails, the program is not replaced. These copies are pruned with the nightly ones after 14 days.
 
 **What is on the Pi**
 

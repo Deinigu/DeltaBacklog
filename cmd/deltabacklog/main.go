@@ -117,6 +117,19 @@ func main() {
 		os.Exit(igdblink.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), mc, os.Stdout))
 	}
 
+	// `deltabacklog backup <file>`: write a consistent copy of the database and exit (used by the nightly timer and
+	// before an upgrade). The database is copied as it is: never migrated, never created when it is missing.
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if len(os.Args) != 3 {
+			log.Fatal("usage: deltabacklog backup <destination-file>")
+		}
+		if err := db.BackupFile(filepath.Join(dataDir, "app.db"), os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("backup written to %s", os.Args[2])
+		return
+	}
+
 	if err := os.MkdirAll(filepath.Join(dataDir, "covers"), 0o755); err != nil {
 		log.Fatal(err)
 	}
@@ -125,18 +138,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer d.Close()
-
-	// `deltabacklog backup <file>`: write a consistent copy of the database and exit (used by the nightly timer).
-	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		if len(os.Args) != 3 {
-			log.Fatal("usage: deltabacklog backup <destination-file>")
-		}
-		if err := db.Backup(d, os.Args[2]); err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("backup written to %s", os.Args[2])
-		return
-	}
 
 	mc := meta.New(meta.Config{
 		IGDBClientID:     os.Getenv("IGDB_CLIENT_ID"),
@@ -153,6 +154,7 @@ func main() {
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute, // a phone that sleeps with a keep-alive connection open must not hold it forever
 	}
 	log.Printf("DeltaBacklog %s listening on %s (data: %s)", version, addr, dataDir)
 	log.Fatal(hs.ListenAndServe())
