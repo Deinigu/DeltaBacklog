@@ -257,3 +257,28 @@ func TestRealHandlerChain(t *testing.T) {
 		t.Errorf("GET /: %v %v", res, err)
 	}
 }
+
+// The screenshot upload is the one API route that takes multipart/form-data; it still passes the cross-origin check,
+// and no other route accepts that Content-Type.
+func TestMultipartOnlyForScreenshotUpload(t *testing.T) {
+	h, hits := guarded("")
+	ct := "multipart/form-data; boundary=x"
+	same := map[string]string{"Sec-Fetch-Site": "same-origin"}
+	if got := do(h, "POST", "/api/games/12/screenshots", "127.0.0.1:8081", ct, same); got != 204 {
+		t.Errorf("upload: %d", got)
+	}
+	if got := do(h, "POST", "/api/games/12/screenshots", "127.0.0.1:8081", ct, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "http://evil.example"}); got != 403 {
+		t.Errorf("cross-site upload: %d", got)
+	}
+	for _, p := range []string{"/api/games", "/api/games/12", "/api/games/12/cover", "/api/games/12/screenshots/order", "/api/games/1/2/screenshots", "/api/views"} {
+		if got := do(h, "POST", p, "127.0.0.1:8081", ct, same); got != 415 {
+			t.Errorf("multipart to %s: %d, want 415", p, got)
+		}
+	}
+	if got := do(h, "PATCH", "/api/games/12/screenshots", "127.0.0.1:8081", ct, same); got != 415 {
+		t.Errorf("PATCH multipart: %d", got)
+	}
+	if *hits != 1 {
+		t.Errorf("%d requests reached the handler, want 1", *hits)
+	}
+}

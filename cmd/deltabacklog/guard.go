@@ -44,6 +44,13 @@ func isIP(h string) bool {
 	return err == nil
 }
 
+// isShotUpload is the one route that takes a multipart body: POST /api/games/<id>/screenshots.
+func isShotUpload(r *http.Request) bool {
+	p := r.URL.Path
+	return r.Method == http.MethodPost && strings.HasPrefix(p, "/api/games/") && strings.HasSuffix(p, "/screenshots") &&
+		strings.Count(p, "/") == 4
+}
+
 // jsonErr answers in the API's error shape, {"error": "..."}.
 func jsonErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -61,7 +68,7 @@ func hostAllowed(allowed map[string]bool, hostHeader string) bool {
 //   - http.CrossOriginProtection rejects cross-origin unsafe requests (403) via Sec-Fetch-Site / Origin,
 //     while same-origin browsers and non-browser clients (curl, backups) pass;
 //   - GET under /api/ with Sec-Fetch-Site cross-site or same-site is rejected (403): other sites cannot trigger lookups;
-//   - POST, PUT and PATCH under /api/ must be application/json (415), so a simple cross-site form or
+//   - POST, PUT and PATCH under /api/ must be application/json (415; the screenshot upload may be multipart/form-data), so a simple cross-site form or
 //     text/plain request can never be accepted as a JSON body.
 func protect(next http.Handler, allowed map[string]bool) http.Handler {
 	cop := http.NewCrossOriginProtection()
@@ -79,7 +86,9 @@ func protect(next http.Handler, allowed map[string]bool) http.Handler {
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-				if err != nil || mt != "application/json" {
+				if err == nil && mt == "multipart/form-data" && isShotUpload(r) {
+					// the screenshot upload; the cross-origin check above already refused other sites
+				} else if err != nil || mt != "application/json" {
 					jsonErr(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 					return
 				}

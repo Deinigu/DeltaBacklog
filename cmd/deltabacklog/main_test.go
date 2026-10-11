@@ -34,3 +34,23 @@ func TestDotEnvAppliesGOMEMLIMIT(t *testing.T) {
 		t.Errorf("memory limit = %d, want %d", got, 96<<20)
 	}
 }
+
+func TestScreenshotsDir(t *testing.T) {
+	t.Setenv("SCREENSHOTS_DIR", "")
+	if d, explicit := screenshotsDir("/data"); d != filepath.Join("/data", "screenshots") || explicit {
+		t.Errorf("default: %q %v", d, explicit)
+	}
+	t.Setenv("SCREENSHOTS_DIR", "/mnt/drive/shots")
+	if d, explicit := screenshotsDir("/data"); d != "/mnt/drive/shots" || !explicit {
+		t.Errorf("explicit: %q %v", d, explicit)
+	}
+}
+
+func TestEnvMB(t *testing.T) {
+	for in, want := range map[string]int64{"": 25 << 20, "abc": 25 << 20, "-3": 25 << 20, "0": 25 << 20, "50": 50 << 20} {
+		t.Setenv("T_MB", in)
+		if got := envMB("T_MB", 25); got != want {
+			t.Errorf("%q: %d, want %d", in, got, want)
+		}
+	}
+}
