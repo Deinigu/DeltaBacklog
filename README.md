@@ -1,9 +1,9 @@
 # DeltaBacklog
 
 [![CI](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml/badge.svg)](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Deinigu/DeltaBacklog?include_prereleases)](https://github.com/Deinigu/DeltaBacklog/releases)
 [![License: MIT](https://img.shields.io/github/license/Deinigu/DeltaBacklog)](LICENSE)
-[![Go version](https://img.shields.io/github/go-mod/go-version/Deinigu/DeltaBacklog)](go.mod)
+
+> **Personal project, shared as-is.** Not accepting pull requests or feature requests. Fork it freely ([MIT](LICENSE)). No support, no guarantees: see [How this was built](#how-this-was-built) and [Support](#support).
 
 **A self-hosted videogame backlog tracker: one small binary, one SQLite file, no cloud, no login.** Browse and filter every game you own, keep lists like *Playing now* and *Up next*, remember which years you played what, and add new games with their cover and details filled in for you. Built for the phone first, just as comfortable on a PC, and light enough for a Raspberry Pi 3B+.
 
@@ -44,7 +44,7 @@
   <img src="docs/img/tierlist-phone.jpg" alt="A tier list" width="180">
 </p>
 
-> **Status:** used daily by its author, but young. Use a [release](https://github.com/Deinigu/DeltaBacklog/releases) rather than `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
+> **Status:** used daily by its author, but young. Prefer a [release](https://github.com/Deinigu/DeltaBacklog/releases) over `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
 
 ## Quick start
 
@@ -141,9 +141,9 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Is there a login or multiple users?** No. It is a single-user app for a trusted network. See [SECURITY.md](SECURITY.md).
 
-**Why no ratings?** By design: this is a backlog tracker, not a review site. Pull requests that add ratings or a "number in the series" will be declined.
+**Why no ratings?** By design: this is a backlog tracker, not a review site. Ratings and a "number in the series" were removed on purpose.
 
-**Can I run it in Docker?** There is no official image yet, but it is a single static binary with one data folder, so a `FROM scratch` image is trivial. Contributions welcome.
+**Can I run it in Docker?** There is no official image yet, but it is a single static binary with one data folder, so a `FROM scratch` image is trivial to build yourself.
 
 **Does it work offline?** The app and your covers are served from your own machine. Lookups need internet. The offline cache of the installed PWA needs HTTPS (browsers do not allow service workers on plain `http://` outside `localhost`).
 
@@ -151,9 +151,24 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above.
 
-## Roadmap
+## Ideas
 
-Ideas, in no particular order (see the [open issues](https://github.com/Deinigu/DeltaBacklog/issues) for what is being discussed): more IGDB data (time to beat, filling empty fields), an official container image, optional HTTPS/authentication helpers, and import from other trackers. The known gaps are listed in the [developer manual](docs/developer-manual.md#12-known-gaps).
+No commitment and no schedule, just things the author may or may not get to: more IGDB data (time to beat, filling empty fields), an official container image, optional HTTPS/authentication helpers, and import from other trackers. The known gaps are listed in the [developer manual](docs/developer-manual.md#12-known-gaps).
+
+## How this was built
+
+DeltaBacklog was built by its owner with [Claude Code](https://claude.com/claude-code) (Anthropic) agents, as an experiment in what that workflow can produce. The process:
+
+- **Design decisions stayed with the owner:** no ratings, LAN-only with no login, light enough for a Raspberry Pi 3B+.
+- **One agent per feature.** Sonnet agents implemented each feature on its own `features/<name>` branch and pull request.
+- **Read-only review.** An Opus agent reviewed each PR without editing it; the owner triaged the findings and they were fixed before merging.
+- **A final review.** At the end an Opus agent reviewed the whole codebase, and its findings were triaged and fixed the same way.
+
+For scale, as of this writing: 36 merged pull requests (a few of them Dependabot updates), 8 database migrations, 19 Go test files and 18 frontend test files. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
+
+## Support
+
+None. It is shared as-is, with no support and no SLA; use it at your own risk. It is designed for a trusted home network, has no login and no HTTPS, and must not be exposed to the internet ([SECURITY.md](SECURITY.md)). Security reports are the one inbound channel, privately (see SECURITY.md); other issues and pull requests may be closed without comment ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Documentation
 
@@ -163,10 +178,7 @@ Ideas, in no particular order (see the [open issues](https://github.com/Deinigu/
 | [Developer manual](docs/developer-manual.md) | Architecture, data model, every API call, frontend modules, testing, deployment |
 | [Changelog](CHANGELOG.md) | What changed in each release |
 | [Security policy](SECURITY.md) | Design limits and how to report a vulnerability |
-
-## Contributing
-
-Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first (short version: open an issue before a big feature; no frontend build step, no heavy dependencies; update the manual in the same PR). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+| [Contributing](CONTRIBUTING.md) | Why contributions are not accepted, and forking |
 
 ## License
 
