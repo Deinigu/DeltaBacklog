@@ -270,7 +270,7 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 		os.Remove(tmpName)
 		switch {
 		case errors.Is(err, shots.ErrTooLarge):
-			return fail("too many pixels (limit 40 megapixels for JPEG, 16 for PNG and WebP)")
+			return fail("too many pixels (limit 40 megapixels for JPEG, 12 for PNG and WebP)")
 		case errors.Is(err, shots.ErrUnsupported):
 			return fail(err.Error())
 		}

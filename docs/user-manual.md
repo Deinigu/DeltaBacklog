@@ -23,6 +23,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 16. [Link your games with IGDB](#16-link-your-games-with-igdb)
 17. [If something looks wrong](#17-if-something-looks-wrong)
 18. [Backups and what is still missing](#18-backups-and-what-is-still-missing)
+19. [Screenshots](#19-screenshots)
 
 ---
 
@@ -140,7 +141,7 @@ Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, d
 - **Save** keeps your changes. **Cancel** or the ✕ asks before throwing away unsaved edits.
 - **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match).
 
-**Change cover** is explained in [section 10](#10-covers). **Delete game** removes the game for good, after a confirmation: its years and cover go with it and it cannot be undone.
+**Change cover** is explained in [section 10](#10-covers). **Delete game** removes the game for good, after a confirmation: its years, cover and screenshots go with it (the picture files are deleted too) and it cannot be undone.
 
 ## 7. Putting games in your own order
 
@@ -313,4 +314,33 @@ If IGDB's game is already linked to another game in your library you are told wh
 
 **Backups happen by themselves.** Every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
 
+**Screenshots are backed up too.** Each night the new pictures are copied to a second place, so the originals and the copy are on different disks (if the pictures live on the external drive, the copy goes to the SD card, as long as the SD card keeps 5 GB free). Pictures you delete in the app stay in that copy until you clear it by hand. When the pictures are on the external drive, each night's library copy is also saved on that drive. Details and restore steps are in the developer manual.
+
 **Not built yet:** a full export of everything (the **Export CSV** button of the table, [section 8](#8-the-table-spreadsheet-layout), already saves the games you see).
+
+
+## 19. Screenshots
+
+Every game can keep its own pictures, for example your best moments or where you stopped.
+
+![Screenshots in a game's details](img/screenshots-phone.jpg)
+
+**Add pictures.** Open a game and scroll to **Screenshots**. Tap **＋ Add screenshots** and pick one or several pictures (on a phone, from the photo library or the files; on a computer you can also **drag image files onto the section**). JPEG, PNG and WebP are accepted, up to 25 MB each. You see the progress of every file; if one fails (wrong type, too big, too many pixels) the reason stays next to its name and the others still go in. The original file is kept exactly as it was, with full quality; a small copy is made for the grid.
+
+**Look at them.** Tap a picture to open it full screen. Swipe or use the arrow keys (or the ‹ › buttons) to move between pictures, and pinch to zoom. The date shown is when the picture was taken, when the file knows it.
+
+![The full-screen viewer](img/screenshot-viewer-phone.jpg)
+
+**In the viewer**
+- **Caption:** type under the picture; it saves when you leave the box.
+- **⬇** downloads the original file.
+- **◀ Move earlier / Move later ▶** changes the order of the pictures.
+- **Delete** removes the picture. For a few seconds a message offers **Undo**.
+
+**Where the files live.** On the Raspberry Pi, in the screenshots folder (on the external drive when it is set up that way); the app only stores the picture list in its database. If the drive is not connected, you see "Screenshot storage is not available", adding pictures does not work, and the rest of the app keeps working; connect the drive and restart the service. Deleting a game deletes its pictures.
+
+**Copy them off the Pi** (optional), from a computer on your network, replacing the address:
+
+```sh
+rsync -a pi@deltabacklog.local:/mnt/ventodrive/deltabacklog/screenshots/ ./my-screenshots/
+```

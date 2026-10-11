@@ -72,6 +72,15 @@ export function toast(msg, ms = 2600) {
   setTimeout(() => t.remove(), ms);
 }
 
+/** A toast with one action button (for example Undo). onAction runs when it is tapped; the toast then closes. */
+export function toastAction(msg, label, onAction, ms = 6000) {
+  const box = document.getElementById('toasts');
+  const t = h('div.toast', {}, msg, ' ', h('button.toast-action', { type: 'button', onclick: () => { t.remove(); onAction(); } }, label));
+  box.append(t);
+  setTimeout(() => t.remove(), ms);
+  return t;
+}
+
 /** Modal asking for a name (and an emoji icon). Resolves to {name, icon} or null when cancelled. */
 export function askNameDialog({ title, name = '', icon: ic = '⭐', confirm = 'Save' }) {
   return new Promise((resolve) => {

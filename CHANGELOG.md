@@ -4,6 +4,11 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- **Screenshots** for every game: upload several pictures from a phone or computer in the game's details (drag and drop on desktop), thumbnail grid, full-screen viewer with swipe, captions, reordering, download of the original and delete with undo. Originals are stored untouched (JPEG, PNG, WebP, content-checked) next to a generated thumbnail; migration 009.
+- `SCREENSHOTS_DIR` (and `SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB`): screenshots can live on an external drive. The app never creates that folder, so an unmounted drive cannot fill the SD card; uploads then say "screenshot storage not available".
+- Nightly backup also copies new screenshots incrementally (`deltabacklog backup-screenshots`), only while the backup disk keeps `SHOTS_MIN_FREE_GB` free, and saves the database copy on the external drive too. `install.sh` writes the systemd drop-ins for the drive.
+
 ### Fixed
 - `deltabacklog backup` no longer migrates the database before copying it, and fails instead of creating and backing up an empty database when `DATA_DIR` is wrong.
 - The Raspberry Pi install writes `app-before-upgrade-<time>.db` before a new version replaces the program (a new version may migrate the database when it starts).

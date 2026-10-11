@@ -46,7 +46,7 @@ Principles that shape every decision:
 ## 2. Repository layout
 
 ```
-cmd/deltabacklog/   the server and its subcommands (main.go: .env loading, wiring; `check`, `backup`, `sync-igdb`)
+cmd/deltabacklog/   the server and its subcommands (main.go: .env loading, wiring; `check`, `backup`, `backup-screenshots`, `sync-igdb`)
 cmd/import/         one-off importer from a NocoDB CSV export (also downloads covers)
 internal/db/        open, migrate (embedded migrations/*.sql), GetOrCreate, FTS index, TitleSort, NormalizeTheme
 internal/importer/  CSV → normalized schema (idempotent)
@@ -54,6 +54,7 @@ internal/api/       HTTP handlers: games, games_write, add (create/delete/cover/
 internal/meta/      IGDB, SteamGridDB and link resolution clients; TitleScore (fuzzy title match)
 internal/igdblink/  the IGDB sync: matching buckets, resumable runner, review queue, `sync-igdb` command
 internal/covers/    cover download (strict: no redirects) + resize + size guard
+internal/shots/     screenshot files: content sniffing, bounded decode + thumbnail, EXIF, incremental backup copy
 web/web.go          go:embed of web/static
 web/static/         index.html, styles.css, sw.js, manifest, icon, js/*.js
 web/test/           Node unit tests for the pure frontend modules (outside the embedded folder)
@@ -79,6 +80,8 @@ go run ./cmd/deltabacklog          # :8081, data in ./data, keys from ./.env
 |---|---|
 | `LISTEN_ADDR` | default `:8081` |
 | `DATA_DIR` | default `./data` (holds `app.db` and `covers/`) |
+| `SCREENSHOTS_DIR` | where screenshots are stored; default `$DATA_DIR/screenshots` (created at start-up). **When set, the program never creates this folder**, only the per-game subfolders inside it: see "Screenshots" in section 5 and the external drive in section 11 |
+| `SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB` | largest accepted screenshot (default 25) and largest upload request (default 200) |
 | `ALLOWED_HOSTS` | extra `Host` names, comma separated (see "Security" in section 5); empty by default |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | a Twitch developer application; enables lookups |
 | `STEAMGRIDDB_API_KEY` | enables SteamGridDB covers |
@@ -89,7 +92,7 @@ The version printed at start-up and in the usage text is `main.version` (`dev` b
 
 **Port 8081 may be a real, live server (it is the default port).** Test servers must use another port (for example `LISTEN_ADDR=127.0.0.1:18090`), be addressed as `127.0.0.1:<port>` (never `localhost`) and never receive writes aimed at 8081. See `CLAUDE.md`.
 
-**Other commands:** `deltabacklog` with any other first argument than `backup`, `check` or `sync-igdb` prints usage and exits 2 (a typo never starts the server); `deltabacklog backup <file>` writes a consistent copy of `$DATA_DIR/app.db` exactly as it is (it never migrates it, so a newer binary can back up an older database before upgrading it, and a missing database is an error, never a new empty one); `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty).
+**Other commands:** `deltabacklog` with any other first argument than `backup`, `backup-screenshots`, `check` or `sync-igdb` prints usage and exits 2 (a typo never starts the server); `deltabacklog backup <file>` writes a consistent copy of `$DATA_DIR/app.db` exactly as it is (it never migrates it, so a newer binary can back up an older database before upgrading it, and a missing database is an error, never a new empty one); `deltabacklog check <file>` verifies a database or backup read-only (exit code 1 when it is damaged or empty); `deltabacklog backup-screenshots <dir>` copies the files of `SCREENSHOTS_DIR` that `<dir>` does not have yet (same relative paths, through a temporary name; it never overwrites or deletes anything in `<dir>`, and a missing screenshot folder is not an error).
 
 **Importing from NocoDB:** see the README ("Import from NocoDB"). `cmd/import` is idempotent (keyed by the old row id, stored in `game.source_id`) and re-running it retries failed cover downloads.
 
@@ -109,6 +112,7 @@ SQLite, `STRICT` tables, `PRAGMA foreign_keys=ON`, WAL, one connection (`SetMaxO
 | 006 | IGDB link: `game.igdb_synced_at`, `igdb_checked_at`, `igdb_not_found`, and the `sync_candidate` table |
 | 007 | IGDB enrichment: `game.time_to_beat_hastily/normally/completely` (minutes), `game.igdb_enriched_at`, lookup tables `game_mode` and `perspective` with their junctions, and `game_link` (store links) |
 | 008 | `game.igdb_series`: IGDB's collection name for a linked game (never shown; the series rule below uses it) |
+| 009 | `screenshot`: the per-game gallery (metadata only; the files are on disk, see "Screenshots" in section 5) |
 
 (`tier` and `tierlist_entry` are part of 001.)
 
@@ -125,6 +129,7 @@ game(id, title, title_sort, status_id, ownership_id, series_id, developer_id, re
 sync_candidate(id, game_id, igdb_id, name, year, score, platforms, slug, status pending/accepted/rejected)   proposals waiting in the review queue; UNIQUE(game_id, igdb_id)
 game_platform / game_genre / game_theme / game_player / game_game_mode / game_perspective (game_id, x_id)   many-to-many, indexed both ways
 game_link(game_id, kind steam/gog/epic/official, url http(s))   store links from IGDB, at most one per kind; PK (game_id, kind); cascades with the game
+screenshot(id, game_id, file, thumb, width, height, bytes, taken_at NULL, caption NULL, pos, added_at)   index (game_id, pos); cascades with the game
 play(id, game_id, year NULL, period NULL)      one row per year played, or period 'childhood' / 'always'
 saved_view(id, name, icon, filter_json, sort_json, group_by, layout, pinned, pos, ...)
 game_fts                                       FTS5 (title, series, notes), kept by db.IndexGame (the UI searches client-side; not used by it yet)
@@ -149,7 +154,7 @@ v_game_flat                                    flattened read view (group_concat
 
 JSON in and out. Errors are `{"error": "..."}` with a status code (every handler and the guard; only a path or method no route knows gets Go's plain-text 404/405). Request bodies are size-limited. There is no authentication: the app is for the home network only.
 
-**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415. Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
+**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415, **except** `POST /api/games/<id>/screenshots`, the one route that takes `multipart/form-data` (`isShotUpload`; every other route still answers 415 to it, and step 2 already refused other sites). Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
 
 | Method and path | Purpose |
 |---|---|
@@ -168,6 +173,12 @@ JSON in and out. Errors are `{"error": "..."}` with a status code (every handler
 | `GET /api/tierlist/{year}` | `{year, tiers:[{id,name,color}], entries:[{game_id,tier_id}]}`, entries ordered by tier then position |
 | `PUT /api/tierlist/{year}` | body `{"entries":[{game_id,tier_id}]}` (the `entries` key is required: 400 when missing or null, `[]` clears) replaces the whole list of that year (position = order inside each tier); answers the saved list |
 | `GET/POST /api/views`, `PATCH/DELETE /api/views/{id}`, `PUT /api/views/order` | saved views |
+| `GET /api/games/{id}/screenshots` | `{screenshots:[{id, game_id, src, thumb, width, height, bytes, taken_at, caption, pos, added_at}], available}`; `available` is false while the storage folder is missing or not writable |
+| `POST /api/games/{id}/screenshots` | multipart upload, one or more `file` parts (an optional `modified` part before a file carries `File.lastModified` in ms). Answers `{results:[{name, screenshot | error}]}` (one bad file does not stop the others); `503 {"error":"screenshot storage not available"}`, `404`, `413` when the whole request is over the limit |
+| `PUT /api/games/{id}/screenshots/order` | body `[id, ...]` naming every screenshot of the game once; answers the fresh list |
+| `PATCH /api/screenshots/{id}` | body `{"caption": "..."}` (at most 500 characters, `""` clears) |
+| `DELETE /api/screenshots/{id}` | deletes the row and both files (204) |
+| `GET /screenshots/<game id>/<file>` | the original or the thumbnail; `?download=1` adds `Content-Disposition: attachment` |
 | `GET /covers/<file>` | cover images (cached for 30 days; the URL carries `?v=cover_v`) |
 | `GET /healthz` | `ok` when the database answers |
 
@@ -177,11 +188,14 @@ JSON in and out. Errors are `{"error": "..."}` with a status code (every handler
 
 **`POST /api/games`** takes the same fields plus `cover_url` (and requires `title`; `status` defaults to `backlog`). Answers `201 {"game": {...}, "cover_error": ""}`; a cover that fails to download does **not** fail the creation (the message is in `cover_error`). `409 {"id": <existing>}` when the `igdb_id` already exists.
 
+**Screenshots** (`internal/api/screenshots.go`, `internal/shots`). The original is stored byte for byte (nothing stripped) as `<SCREENSHOTS_DIR>/<game id>/<32 hex>.<jpg|png|webp>` next to a 480px JPEG thumbnail `<32 hex>_t.jpg`; the name is random, never the client's. Upload: `MultipartReader` streams each part to a temporary file (no buffering in memory; `MaxBytesReader` caps the request), the type is decided by sniffing the first bytes (JPEG, PNG, WebP; SVG, HTML, GIF and the rest are refused whatever the name or `Content-Type` says), `image.DecodeConfig` reads the size and refuses too many pixels (JPEG 40 MP, PNG/WebP 12 MP, computed in `int64`; the decoded bitmap is about 1.5 and 4 bytes per pixel, which is what the Pi's 160 MB allows), then **one image at a time** (`decodeMu`) is decoded and scaled for the thumbnail. EXIF (JPEG only, `exif.go`): orientation (applied to the thumbnail; the browser applies it to the original) and `DateTimeOriginal` (`taken_at`, no zone); without EXIF `taken_at` is the file's last-modified time sent by the client. Serving accepts only names matching `shots.NameRE`, so no path trick reaches another file; both kinds get `X-Content-Type-Options: nosniff` and a one-year immutable cache (names never change content). Deleting a game removes `<SCREENSHOTS_DIR>/<id>/` after the transaction committed; deleting one screenshot removes its two files. **Storage rule:** `shotStorageOK` needs `SCREENSHOTS_DIR` to exist as a folder and be writable (a probe file) at every upload. The server never creates `SCREENSHOTS_DIR` itself, only the per-game subfolders; `main` creates it only for the default `$DATA_DIR/screenshots`. So an external drive that is not mounted (an empty mount point on the SD card, or a path that does not exist) can never fill the SD card: uploads answer 503 "screenshot storage not available", the list says `available: false` (the drawer shows a notice and missing thumbnails show "Missing"), and everything else keeps working. At start-up a warning is logged.
+
 **Tier lists** (`internal/api/tierlist.go`). Year must be 1970 to 2100 (400 otherwise). A `PUT` is one transaction and is rejected with 400 (nothing changes) when a game has no `play` row for that year, a tier does not exist, a game is listed twice, or there are more than 1000 entries. `GET` returns only entries whose game still has a play in that year, so removing a year from a game hides its entry without a trigger, and a `PUT` only replaces the entries of games that still have a play in that year (hidden entries survive it and return with the year) (the patch of `years` deletes and re-inserts rows, which a trigger would misread). No migration was needed: `tier` and `tierlist_entry` already come from 001. Tier lists do not touch the games cache.
 
 **Safety limits** (enforced server-side, covered by tests)
 - A client-supplied cover URL must be on `cdn2.steamgriddb.com`, `cdn.steamgriddb.com` or `images.igdb.com`; redirects are never followed; images larger than 16 megapixels are rejected (computed in `int64` because the Pi is 32-bit).
 - A pasted link is only fetched from Steam, GOG, Epic or IGDB, every redirect is re-checked against that list, and the page must answer 200. (The UI no longer advertises links; the resolver remains in `internal/meta`.)
+- Screenshots: 25 MB per file and 200 MB per request by default (`SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB`), caption 500 characters, order list 64KB.
 - Request body limits: 64KB for games and views, 256KB for reorder, 128KB for a tier list, 4KB for a cover URL and for the link calls.
 - `GET /covers/` and any other folder path answer 404: the cover folder is never listed.
 
@@ -192,6 +206,7 @@ JSON in and out. Errors are `{"error": "..."}` with a status code (every handler
 - **`internal/api`**: handlers use a small `pathID`, `writeJSON`/`writeJSONStatus` (content type is set **before** the status) and `writeErr`. `LoadGames` builds the whole read model with one query per link table. `applyFieldEdits` is the single place that writes editable fields (used by patch and create), inside the caller's transaction, and re-indexes the FTS row.
 - **`internal/meta`**: `Client` with overridable base URLs (so tests use local fakes). IGDB access tokens are cached until just before they expire. `SearchIGDB` (up to 8 candidates; when IGDB's title search finds nothing it retries with a `where alternative_names.name ~ *"title"*` query, then the part before `:` or `-`, then the title without spaces, which rescues localized titles and spacing differences), `IGDBImages` (artworks and screenshots with their real sizes, then the box cover), `SearchCovers` (SteamGridDB, wide shapes first), `ResolveLink`. A non-200 answer is a `*meta.HTTPError` (the sync reads its `Status` to back off on 429). `TitleScore(a, b)` rates two titles 0 to 100 ignoring case, accents, punctuation, a leading "the" and roman numerals; titles with different numbers ("Resident Evil 2" and "3") are capped at 59, and a title that starts the other ("Dark Souls III" and "... The Ringed City") scores at least 75.
 - **`internal/igdblink`**: the IGDB sync (see section 8). Phase 2 is `enrich.go`: `Enrich` reads the linked games from IGDB in batches (`meta.Details`, `meta.TimeToBeat`) and `enrichGame` stores one game inside the batch's transaction. Phase 1: `Classify` sorts one game's IGDB results into *confident* (exactly one candidate with `meta.TitleScore` >= 90 **and** a shared platform), *uncertain* (best score 60 to 89, no shared platform, or several equally good candidates; at most five stored) or *not found*. A candidate is scored against its name and its IGDB alternative names (localized titles), whichever is best. When several candidates are strong, a single one whose name equals the title exactly (`meta.SameName`: case and accents folded, "the" kept) wins. Uncertain and not-found games also keep IGDB's first three results as weak proposals (score under 60 is greyed in the UI), because they cost nothing and save a manual search. `db.FileURI` escapes `%`, `#` and `?` in database paths (they would otherwise be read as URI query or fragment). `Run` is the resumable runner (single goroutine, a 250 ms pause plus the request itself so about 1.4 searches/s, doubling backoff on 429), `Queue`/`Accept`/`NotOnIGDB` are the review queue, `Main` is the `sync-igdb` command (`--enrich` runs phase 2). Only the link is stored: no IGDB scores or ratings.
+- **`internal/shots`**: `Sniff` (magic bytes), `Inspect` (type, size, pixel cap, EXIF), `WriteThumb`, `NameRE`, `SyncNew` (the incremental copy behind `backup-screenshots`: copies files missing from the destination through a temporary name, never overwrites or deletes). `exif.go` reads only the APP1 segment and returns defaults on anything odd.
 - **`internal/covers`**: `Fetch` (importer) and `FetchStrict` (client URLs, no redirects), `Save` (decode, size guard, scale to at most 480px wide, write `<id>.jpg` atomically).
 
 ## 7. Frontend
@@ -203,13 +218,14 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | Module | Role |
 |---|---|
 | `main.js`, `more.js` | router, navigation (sidebar on desktop; on phones the bottom bar holds Library, the first two pinned views and **More**, a sheet from `more.js` listing Series, Stats, Year in review and Views; the same links stay in the sidebar and are hidden on phones with CSS), theme, "+" button, service worker |
-| `api.js` | the `store` (games, statuses, views), `load()`, edits (`patchGame`, `reorderGames`, `createGame`, `deleteGame`, `setCover`), view calls, lookups |
+| `api.js` | the `store` (games, statuses, views), `load()`, edits (`patchGame`, `reorderGames`, `createGame`, `deleteGame`, `setCover`), view calls, lookups, screenshot calls (`uploadShot` is XHR for progress) |
 | `library.js` | the Library and saved-view page: toolbar, filter panel, cards, reorder mode, table mounting |
 | `filters.js` | **pure**: filter state, `matches`, include/exclude cycling, (de)serialisation to URL and view JSON, `facetSignature` |
 | `sort.js` | **pure**: sort fields, comparator, group-by, and the sort sheet |
 | `order.js`, `reorder.js` | slot reuse maths (pure) and the drag list |
 | `table.js` | windowed table with inline editing, column picker, CSV export; `csv.js` is the pure CSV writer |
 | `drawer.js` | game details, quick changes, edit mode, delete |
+| `shots.js`, `shotsview.js` | the drawer's Screenshots section. `shots.js` is **pure** (move earlier/later, viewer stepping, byte and date formatting, picking JPEG/PNG/WebP files, the upload summary). `shotsview.js` draws the lazy thumbnail grid, uploads one file at a time with `XMLHttpRequest` (progress per file, the error per file stays visible), accepts drops on desktop, and the full-screen viewer (arrow keys, swipe at normal zoom, native pinch zoom, caption, download of the original, move, delete). Delete is hidden at once and sent after 6 seconds, so the toast's Undo is a local cancel |
 | `editpatch.js` | **pure**: form state from a game, validation, and the minimal patch of what changed |
 | `form.js`, `picker.js` | shared form controls and the multi-select sheet |
 | `add.js` | add sheet, IGDB match picker, cover picker, and `makeSheet`, the shared scrim + sheet. `makeSheet` focuses the sheet on open and returns focus to the opener on close (not to a text field). Re-render with `sheet.render(fn)`, which keeps focus on the control with the same `data-fk` (else the primary footer button, else the sheet); announce with `sheet.say(text)`, one persistent `role=status` region. New sheets should use both instead of `replaceChildren` alone |
@@ -237,7 +253,7 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 
 **Table.** Rows have a fixed height; only the visible ones exist in the DOM (`paint`). Each row remembers a signature of what it shows, so a refresh rebuilds only rows whose data changed (a click that started on an unchanged row still completes). The row being edited is never destroyed by a refresh. Column widths and visibility are kept in `localStorage` (a per-device convenience).
 
-**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page; `TestServiceWorkerCachesTheWholeShell` (`web/web_test.go`) fails when a module is missing from `SHELL_FILES` (the `VERSION` bump is still on you). The server sends `Cache-Control: no-cache` for the shell.
+**Service worker (`sw.js`).** Network first for the app shell and the API (the cache is only an offline fallback), cache first for `/covers/*` (their URLs carry the cover version), cache first for screenshot **thumbnails** only (`*_t.jpg`, newest 400 kept); an original under `/screenshots/` is never cached (the worker does not answer it). **Rule: bump `VERSION` whenever any shell file changes (HTML, CSS or a module), and add every new module to `SHELL_FILES`**; a stale `VERSION` leaves old clients on the old cache. Both are easy to forget when adding a page; `TestServiceWorkerCachesTheWholeShell` (`web/web_test.go`) fails when a module is missing from `SHELL_FILES` (the `VERSION` bump is still on you). The server sends `Cache-Control: no-cache` for the shell.
 
 **Style.** `styles.css` uses CSS variables for light and dark (`prefers-color-scheme`, with a `data-theme` override). Breakpoints: below 600px phone layout, from 900px sidebar plus filter panel.
 
@@ -254,8 +270,8 @@ Plain ES modules loaded from `index.html`; hash routing (`#/library`, `#/view/<i
 | What | How |
 |---|---|
 | Backend | `go vet ./... && go test ./...` (in-memory databases, `httptest` fake IGDB/SteamGridDB/Steam/image servers) |
-| Pure frontend modules | `node --test web/test/*.test.mjs`: one file per pure module (`filters`, `sort`, `reorder` (also covers `order.js`), `editpatch`, `csv`, `colors`, `ownership`, `platforms`, `years`, `api`, `more`, `pick`, `series`, `stats`, `yearreview`, `savequeue`, `linkqueue`, `ttb`). Pages that draw the DOM (`*page.js`, `seriesview.js`, `surprise.js`, `link.js`) are checked in a browser |
-| Backend, by area | `internal/api` (games, views, tier lists, link endpoints), `internal/db` (migrations, backup/check), `internal/meta`, `internal/igdblink`, `internal/importer`, `internal/covers` |
+| Pure frontend modules | `node --test web/test/*.test.mjs`: one file per pure module (`filters`, `sort`, `reorder` (also covers `order.js`), `editpatch`, `csv`, `colors`, `ownership`, `platforms`, `years`, `api`, `more`, `pick`, `series`, `stats`, `yearreview`, `savequeue`, `linkqueue`, `ttb`, `shots`). Pages that draw the DOM (`*page.js`, `seriesview.js`, `surprise.js`, `link.js`) are checked in a browser |
+| Backend, by area | `internal/api` (games, views, tier lists, link endpoints), `internal/db` (migrations, backup/check), `internal/meta`, `internal/igdblink`, `internal/importer`, `internal/covers`, `internal/shots` (sniffing, EXIF, rotation, incremental copy), `internal/api/screenshots_test.go` (streaming upload, size limits, content sniffing, traversal names, decompression bomb, cascade delete removes files, missing storage never created), `deploy/scripts_test.go` (`sh -n`, the free-space guard, the drop-in generation, the database copy to the drive; skipped where there is no `sh`) |
 | IGDB sync | `internal/igdblink` tests use an offline fake IGDB (buckets, dry run writes nothing, backup, resume, 429 backoff, review queue, migration 006; `enrich_test.go`: fill-only-empty (also no new lookup rows), series rules, platform mapping and Go/JS alias parity, outlier times, Retry-After, batching, resume after throttling, backoff doubling, refresh, dry run, migration 007 on a populated database); `internal/meta/enrich_test.go` (query shape, no scores, store-link classification); `internal/api/enrich_test.go` (read model and facets); `internal/api/link_test.go` covers the three endpoints |
 | Real services | `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v` |
 | In a browser | headless Chromium driven by puppeteer against a **test server with a copy of the data** on a spare port; `docs/tools/screenshots.mjs` is a working example (it opens the main screens and saves the manual's images). By default it builds and serves the demo library from `docs/tools/demo-data` (40 well-known games, no personal data; generated placeholder covers, or the real covers downloaded into a throwaway folder when IGDB / SteamGridDB keys are in `.env` or `ENV_FILE`), so the images never show anyone's real collection. The images contain cover art that belongs to IGDB / SteamGridDB and the game publishers, shown for illustration; no cover files are committed |
@@ -289,7 +305,8 @@ bash deploy/deploy.sh --seed <dir> --env .env   # first install: <dir> has app.d
 |---|---|
 | `/opt/deltabacklog/deltabacklog` | the program; `backup.sh` next to it |
 | `/var/lib/deltabacklog/` | the data: `app.db`, `covers/` (owner `deltabacklog`, mode 750) |
-| `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days |
+| `/var/backups/deltabacklog/` | nightly backups `app-YYYY-MM-DD.db`, last 14 days; `screenshots/` is the incremental copy of the screenshots (never pruned) |
+| `$SCREENSHOTS_DIR` (default `/var/lib/deltabacklog/screenshots`) | the screenshots; on the Pi's external drive: `/mnt/ventodrive/deltabacklog/screenshots` (next to a `backups/` folder) |
 | `/etc/deltabacklog.env` | settings and the IGDB / SteamGridDB keys (root only, mode 600); `ALLOWED_HOSTS=name1,name2` goes here when the app is reached by a name other than `deltabacklog.local`, an IP address or the Pi's hostname (otherwise 421 "unknown host"); restart the service after editing |
 | `/etc/systemd/system/deltabacklog.service`, `deltabacklog-backup.service`, `deltabacklog-backup.timer`, `deltabacklog-name.service` | the units (sources in `deploy/`) |
 
@@ -312,6 +329,10 @@ sudo rm -f /var/lib/deltabacklog/app.db-wal /var/lib/deltabacklog/app.db-shm
 sudo chown deltabacklog:deltabacklog /var/lib/deltabacklog/app.db
 sudo systemctl start deltabacklog
 ```
+
+**Screenshots on the external drive.** The SD card is small; screenshots live on the hard drive. Put `SCREENSHOTS_DIR=/mnt/ventodrive/deltabacklog/screenshots` in `/etc/deltabacklog.env` and run `deploy.sh` (or `install.sh`) again; a later `deploy.sh --env` keeps that line. `install.sh` is idempotent and does this: (1) writes the drop-ins `/etc/systemd/system/deltabacklog.service.d/screenshots.conf` (`ReadWritePaths=-<screenshots dir>`) and `deltabacklog-backup.service.d/screenshots.conf` (`ReadWritePaths=-<its parent>`, because the backup also writes `<parent>/backups`), because `ProtectSystem=strict` leaves everything but the data folder read-only; the leading `-` makes a missing path harmless, and there is **no** `RequiresMountsFor`/`After=` on the mount, so the service starts without the drive and answers "screenshot storage not available" until it is back (restart the service after mounting if it still says so: a mount that appeared later may not be visible inside the unit's file system view); drop-ins are removed again when the folder is inside the data folder; (2) creates `<screenshots dir>` and `<parent>/backups` owned by `deltabacklog` **only when the folder is really on another mounted drive** (`on_other_mount`: `findmnt` must report a target other than `/`), so an unmounted drive's empty mount point on the SD card is never filled; it prints a warning instead. The app itself never creates `SCREENSHOTS_DIR` (see section 5). Move existing screenshots (none on the first install) with `rsync -a /var/lib/deltabacklog/screenshots/ /mnt/ventodrive/deltabacklog/screenshots/` while the service is stopped.
+
+**Backups with the drive.** Every night `backup.sh` does three things, and the last two never fail the database backup (a problem is logged and skipped): (1) the database copy in `/var/backups/deltabacklog` (SD card, 14 days); (2) when `SCREENSHOTS_DIR` is set and `<parent>/backups` exists, the same file there too, on the drive, 14 days, so a dead SD card does not take the database with it (the folder is never created by the script; `install.sh` makes it); (3) the screenshots: `deltabacklog backup-screenshots /var/backups/deltabacklog/screenshots` copies the files missing there, so the originals (drive) and the copy (SD card) are on **different devices**. Copies are never deleted, even for screenshots deleted in the app (retention is "forever"; disk use grows with the library: about the size of `<screenshots dir>`; clear `/var/backups/deltabacklog/screenshots` by hand if you do not want deleted pictures kept). The copy is skipped, with a log line, when it would leave less than `SHOTS_MIN_FREE_GB` (default 5, set it in `/etc/deltabacklog.env`) free on the SD card; the check is `room_for`, with the size of the new files estimated as the size of the source minus the size of the copy. Restore after a lost SD card or a new install: install the program, put the database back (from the drive's `backups/` or the SD one) as in the steps above, set `SCREENSHOTS_DIR` to the drive's folder (the originals and thumbnails are intact there). Lost the drive instead: stop the service, `cp -a /var/backups/deltabacklog/screenshots/. <new screenshots dir>/` (owner `deltabacklog`) and start it. To copy the pictures off the Pi: `rsync -a <pi>:/mnt/ventodrive/deltabacklog/screenshots/ ./screenshots-backup/`.
 
 **Day to day:** `journalctl -u deltabacklog -f` (log), `systemctl status deltabacklog`, `systemctl list-timers deltabacklog-backup.timer`.
 

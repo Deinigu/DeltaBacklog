@@ -21,6 +21,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { deflateSync, crc32 } from 'node:zlib';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -57,6 +58,38 @@ if (!BASE) {
   let up = false;
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/healthz`)).ok) { up = true; break; } } catch {} await new Promise((r) => setTimeout(r, 500)); }
   if (!up) { console.error(`the demo server did not answer at ${BASE}/healthz within 30 s`); process.exit(1); }
+}
+// Placeholder pictures (generated here, nothing copyrighted) for the screenshot gallery of the demo's Outer Wilds.
+function placeholderPNG(w, h, c1, c2) {
+  const rows = [];
+  for (let y = 0; y < h; y++) {
+    const row = Buffer.alloc(1 + w * 3);
+    for (let x = 0; x < w; x++) {
+      const t = (x / w + y / h) / 2;
+      const ring = Math.abs(Math.hypot(x - w * 0.62, y - h * 0.5) - h * 0.28) < 5; // a ring: a planet from far away
+      for (let k = 0; k < 3; k++) row[1 + x * 3 + k] = ring ? 240 : Math.round(c1[k] + (c2[k] - c1[k]) * t);
+    }
+    rows.push(row);
+  }
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(8 + data.length + 4);
+    out.writeUInt32BE(data.length, 0); body.copy(out, 4); out.writeUInt32BE(crc32(body) >>> 0, 8 + data.length);
+    return out;
+  };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.concat(rows))), chunk('IEND', Buffer.alloc(0))]);
+}
+if (!process.env.BASE_URL) {
+  const games = await (await fetch(`${BASE}/api/games`)).json();
+  const g = games.find((x) => x.title === 'Outer Wilds') || games[0];
+  const palettes = [[[16, 24, 64], [220, 120, 60]], [[10, 40, 50], [90, 170, 160]], [[40, 16, 60], [200, 90, 140]], [[20, 20, 30], [120, 130, 200]]];
+  for (const [i, [a, b]] of palettes.entries()) {
+    const fd = new FormData();
+    fd.append('file', new Blob([placeholderPNG(640, 360, a, b)], { type: 'image/png' }), `demo-${i + 1}.png`);
+    const r = await fetch(`${BASE}/api/games/${g.id}/screenshots`, { method: 'POST', body: fd });
+    if (!r.ok) console.error('demo screenshot upload failed', r.status);
+  }
 }
 process.on('exit', () => { if (server) server.kill(); if (tmp) { try { rmSync(tmp, { recursive: true, force: true }); } catch {} } });
 
@@ -124,6 +157,11 @@ await shot(p, 'more-phone');
 await go(p, '#/library?q=outer+wilds');
 await p.click('.card'); await wait(700);
 await shot(p, 'game-phone');
+await p.$eval('.shots', (e) => e.scrollIntoView()); await wait(900);
+await shot(p, 'screenshots-phone');
+await p.click('.shot-thumb'); await wait(900);
+await shot(p, 'screenshot-viewer-phone');
+await p.keyboard.press('Escape'); await wait(300);
 await clickText(p, '.drawer-actions .btn', 'Edit'); await wait(700);
 await shot(p, 'edit-phone');
 await clickText(p, '.editbar .btn', 'Cancel'); await wait(400);

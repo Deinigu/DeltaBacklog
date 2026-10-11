@@ -7,6 +7,7 @@ import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
 import { seriesPosition } from './series.js';
 import { ttbParts } from './ttb.js';
+import { screenshotsSection } from './shotsview.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
@@ -101,6 +102,7 @@ export function openDrawer(game) {
       fact('100% completed', game.completed ? 'Yes' : null)),
     game.notes && h('div.notes', {}, game.notes),
     storeLinks(game),
+    screenshotsSection(game),
     h('div.drawer-actions', {},
       h('button.btn.primary', { type: 'button', onclick: startEdit }, '✎ Edit'),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
@@ -118,7 +120,7 @@ export function openDrawer(game) {
     h('div.drawer-body', {}, title, quick, readView, editView));
 
   async function remove() {
-    const ok = await confirmDialog({ title: `Delete “${game.title}”?`, message: 'This removes the game, its years played and its cover. It cannot be undone.', confirm: 'Delete' });
+    const ok = await confirmDialog({ title: `Delete “${game.title}”?`, message: 'This removes the game, its years played, its cover and all its screenshots (the picture files are deleted too). It cannot be undone.', confirm: 'Delete' });
     if (!ok) return;
     try {
       await deleteGame(game.id);
@@ -218,7 +220,7 @@ export function openDrawer(game) {
   }
 
   const onKey = (e) => {
-    if (e.key === 'Escape' && !document.querySelector('.dialog, .sheet.open')) requestClose();
+    if (e.key === 'Escape' && !document.querySelector('.dialog, .sheet.open, .shot-viewer')) requestClose();
   };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, drawer);

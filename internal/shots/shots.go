@@ -26,7 +26,7 @@ const (
 	ThumbWidth     = 480
 	thumbQuality   = 80
 	MaxPixelsJPEG  = 40_000_000 // a JPEG decodes to about 1.5 bytes per pixel (YCbCr)
-	MaxPixelsOther = 16_000_000 // PNG and WebP decode to 4 bytes per pixel
+	MaxPixelsOther = 12_000_000 // PNG and WebP decode to 4 bytes per pixel
 )
 
 var (

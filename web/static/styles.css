@@ -671,3 +671,40 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Phone width without a touch screen (a narrow window): the same 44px hit area for chips, so the filter flags
    (Short game...) and the Surprise me mood chips meet the tap-target minimum at 390px. */
 @media (max-width: 599px) { .chip { min-height: 44px; } }
+
+/* ---- screenshots (drawer section + viewer) ---- */
+.shots { margin: 18px 0 6px; padding: 10px; border-radius: 12px; border: 1px dashed transparent; }
+.shots.drop { border-color: var(--accent); background: var(--surface-2); }
+.shots-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 8px; }
+.shots-head h3 { margin: 0; font-size: 16px; }
+.shots-head .btn { min-height: 44px; }
+.shots-notice { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 14px; }
+.shots-up { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.shots-row { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; }
+.shots-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shots-row progress { width: 40%; max-width: 200px; }
+.shots-row .err { color: #d6453b; flex: 2; min-width: 0; }
+.shots-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 480px) { .shots-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.shot-thumb { padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 16 / 9; min-height: 44px; }
+.shot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot-thumb.missing img { visibility: hidden; }
+.shot-thumb.missing::after { content: "Missing"; color: var(--muted); font-size: 12px; }
+.no-scroll { overflow: hidden; }
+.shot-viewer { position: fixed; inset: 0; z-index: 80; background: #000; color: #fff; display: flex; flex-direction: column; padding-top: var(--safe-t); outline: none; }
+.shot-viewer .btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); color: #fff; min-width: 44px; min-height: 44px; }
+.shot-viewer .btn:disabled { opacity: .35; }
+.shot-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.shot-bar .spacer { flex: 1; }
+.shot-counter { font-size: 14px; opacity: .85; }
+.shot-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: pan-x pan-y pinch-zoom; }
+.shot-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.shot-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 56px; font-size: 28px; padding: 0; }
+.shot-nav.prev { left: 8px; }
+.shot-nav.next { right: 8px; }
+.shot-foot { padding: 10px 12px calc(10px + var(--safe-b)); display: flex; flex-direction: column; gap: 8px; }
+.shot-caption { height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 0 12px; font-size: 16px; }
+.shot-meta { margin: 0; font-size: 13px; opacity: .75; }
+.shot-move { display: flex; gap: 8px; }
+.shot-move .btn { flex: 1; }
+.toast-action { margin-left: 8px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: inherit; font-weight: 700; text-decoration: underline; }
