@@ -63,7 +63,7 @@ func exifJPEG(t *testing.T, w, h, orientation int, bigEndian bool, date string) 
 	}
 	ent(0x0112, 3, 1, func(b []byte) []byte { b = bo.AppendUint16(b, uint16(orientation)); return append(b, 0, 0) })
 	ent(0x8769, 4, 1, func(b []byte) []byte { return bo.AppendUint32(b, 38) }) // the Exif IFD starts right after IFD0
-	tiff = bo.AppendUint32(tiff, 0) // next IFD
+	tiff = bo.AppendUint32(tiff, 0)                                            // next IFD
 	// Exif IFD at that offset
 	tiff = bo.AppendUint16(tiff, 1)
 	ent(0x9003, 2, 20, func(b []byte) []byte { return bo.AppendUint32(b, 56) }) // the date follows the IFD (2 + 12 + 4 bytes)
