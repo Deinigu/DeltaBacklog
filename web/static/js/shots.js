@@ -89,3 +89,6 @@ export function thumbPlan(w, h) {
   }
   return { cw, ch, tw, th };
 }
+
+/** Files above this size (bytes) get their preview made in the browser before the upload, so a big photo goes up once. */
+export const BIG_UPLOAD = 8 * 1024 * 1024;

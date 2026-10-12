@@ -1,7 +1,7 @@
 // The "Screenshots" section of the game drawer: thumbnail grid, upload with progress, and the full-screen viewer.
 import { h, toast, toastAction } from './util.js';
 import { listShots, uploadShot, setShotCaption, deleteShot, deleteShotKeepalive, orderShots } from './api.js';
-import { moveShot, stepIndex, formatBytes, formatTaken, countLabel, pickImages, uploadSummary, thumbPlan, pendingIds, withoutPending, clampIndex } from './shots.js';
+import { moveShot, stepIndex, formatBytes, formatTaken, countLabel, pickImages, uploadSummary, thumbPlan, BIG_UPLOAD, pendingIds, withoutPending, clampIndex } from './shots.js';
 
 const UNDO_MS = 6000;
 const STORAGE_DOWN = 'Screenshot storage is not available (is the drive connected?). Uploads will fail until it is back.';
@@ -55,6 +55,18 @@ async function makeThumb(file, width, height) {
   } finally {
     bmp?.close?.();
   }
+}
+
+/** The size of a picture as shown (EXIF applied), read from its header by the browser; null when it cannot. */
+function imageSize(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    const done = (v) => { URL.revokeObjectURL(url); img.src = ''; resolve(v); };
+    img.onload = () => done(img.naturalWidth > 0 ? { width: img.naturalWidth, height: img.naturalHeight } : null);
+    img.onerror = () => done(null);
+    img.src = url;
+  });
 }
 
 const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg>';
@@ -115,12 +127,18 @@ export function screenshotsSection(game) {
       try {
         const onProgress = (p) => { bar.value = p; };
         let s;
+        // A big photo is very likely too much for the server to decode: make the preview first, so it goes up once.
+        let thumb = null;
+        if (f.size > BIG_UPLOAD) {
+          const size = await imageSize(f);
+          if (size) thumb = await makeThumb(f, size.width, size.height);
+        }
         try {
-          s = await uploadShot(game.id, f, onProgress);
+          s = await uploadShot(game.id, f, onProgress, thumb);
         } catch (e) {
-          if (!e.needsThumb) throw e;
-          // too big for the server to decode: it keeps the original untouched if we send a preview made here
-          const thumb = await makeThumb(f, e.width, e.height);
+          if (!e.needsThumb || thumb) throw e;
+          // too big for the server to decode after all: it keeps the original untouched if we send a preview made here
+          thumb = await makeThumb(f, e.width, e.height);
           if (!thumb) throw new Error('too big to make a preview, and this browser could not make one either');
           s = await uploadShot(game.id, f, onProgress, thumb);
         }

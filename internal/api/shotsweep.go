@@ -18,6 +18,9 @@ import (
 // and, for a moment, a stored file without its row.
 const shotGrace = time.Hour
 
+// adoptTolerance is how much older than its game a file may be and still be adopted (clock differences, imports).
+const adoptTolerance = 10 * time.Minute
+
 // orphanDir is where originals of games this database does not know are moved (never deleted).
 const orphanDir = ".orphans"
 
@@ -36,7 +39,7 @@ func (r SweepResult) String() string {
 // original: after a database restore (an older app.db next to a drive that is newer) the files on the drive are the
 // only copy of pictures the database no longer lists. In each numeric game folder it
 //   - removes *.tmp files and thumbnails whose original is gone, when older than an hour;
-//   - re-adopts an original that has no row when the game exists (size and EXIF are read again, the thumbnail is made
+//   - re-adopts an original that has no row when the game exists and is not older than the game (size and EXIF are read again, the thumbnail is made
 //     again if missing and the picture fits the decoding budget; otherwise the row is added and the thumbnail shows as
 //     "missing");
 //   - moves an original of an unknown game (and its thumbnail) to .orphans/<game id>/.
@@ -66,13 +69,16 @@ func (s *Server) SweepShots() (SweepResult, error) {
 }
 
 func (s *Server) sweepGame(gid int64, dir string, cutoff time.Time, res *SweepResult) error {
-	var one int
+	var addedRaw string
 	exists := true
-	if err := s.DB.QueryRow("SELECT 1 FROM game WHERE id = ?", gid).Scan(&one); err == sql.ErrNoRows {
+	if err := s.DB.QueryRow("SELECT added_at FROM game WHERE id = ?", gid).Scan(&addedRaw); err == sql.ErrNoRows {
 		exists = false
 	} else if err != nil {
 		return err
 	}
+	// Game ids are reused (INTEGER PRIMARY KEY without AUTOINCREMENT): a picture cannot have been uploaded before its
+	// game existed, so an older file belongs to an earlier game with the same id and is not adopted.
+	addedAt, _ := time.Parse(time.RFC3339, addedRaw) // zero (no limit) if unreadable
 	known := map[string]bool{}
 	rows, err := s.DB.Query("SELECT file, thumb FROM screenshot WHERE game_id = ?", gid)
 	if err != nil {
@@ -128,7 +134,7 @@ func (s *Server) sweepGame(gid int64, dir string, cutoff time.Time, res *SweepRe
 	}
 	sort.Slice(originals, func(i, j int) bool { return originals[i].mod.Before(originals[j].mod) }) // keep the upload order
 	for _, o := range originals {
-		if exists && s.adoptShot(gid, dir, o.name, o.size, o.mod) {
+		if exists && !o.mod.Before(addedAt.Add(-adoptTolerance)) && s.adoptShot(gid, dir, o.name, o.size, o.mod) {
 			res.Adopted++
 			continue
 		}

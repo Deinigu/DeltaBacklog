@@ -543,6 +543,7 @@ func TestDeleteNeedsTheStorage(t *testing.T) {
 
 func TestSweepNeverDeletesAnOriginal(t *testing.T) {
 	e := newShotEnv(t, nil)
+	e.s.DB.Exec("UPDATE game SET added_at = '2020-01-01T00:00:00Z'") // the games existed long before these files
 	old := time.Now().Add(-2 * time.Hour)
 	age := func(p string, at time.Time) { os.Chtimes(p, at, at) }
 	_, res := e.upload(t, "1", upFile{name: "a.png", data: pngBytes(t, 40, 40)})
@@ -624,6 +625,7 @@ func TestSweepNeverDeletesAnOriginal(t *testing.T) {
 // The documented restore: an older database next to a drive that holds newer pictures must not lose them.
 func TestRestoredOlderDatabaseKeepsAndReadoptsNewerPictures(t *testing.T) {
 	e := newShotEnv(t, nil)
+	e.s.DB.Exec("UPDATE game SET added_at = '2020-01-01T00:00:00Z'")
 	_, res := e.upload(t, "1", upFile{name: "after-backup.png", data: pngBytes(t, 80, 40)})
 	sc := res[0].Screenshot
 	// the database goes back to a state without that row
@@ -732,5 +734,42 @@ func TestWithinBudgetPicturesStayUnderTheBudgetInHeap(t *testing.T) {
 		if grew > 72<<20 { // the 48 MB budget plus the request and encoder
 			t.Errorf("%s: the heap grew by %d MB", name, grew>>20)
 		}
+	}
+}
+
+// Game ids are reused after the newest game goes away. Pictures left on the drive by the earlier game with that id must
+// not turn up on the new one: they are older than it, so they are moved away instead of adopted.
+func TestSweepDoesNotAttachAnEarlierGamesPicturesToAReusedID(t *testing.T) {
+	e := newShotEnv(t, nil)
+	var maxID int64
+	e.s.DB.QueryRow("SELECT max(id) FROM game").Scan(&maxID)
+	newID := maxID + 1
+	// backup, then a game and a picture, then a restore that forgets both: the files stay on the drive
+	if _, err := e.s.DB.Exec("INSERT INTO game(id, title, title_sort, status_id) VALUES (?, 'Old new game', 'old new game', (SELECT min(id) FROM status))", newID); err != nil {
+		t.Fatal(err)
+	}
+	_, res := e.upload(t, itoa(newID), upFile{name: "a.png", data: pngBytes(t, 40, 40)})
+	if res[0].Screenshot == nil {
+		t.Fatalf("%+v", res)
+	}
+	e.s.DB.Exec("DELETE FROM game WHERE id = ?", newID) // the restore (cascade removes the row)
+	// a different game is added right away and gets the same id
+	if _, err := e.s.DB.Exec("INSERT INTO game(id, title, title_sort, status_id) VALUES (?, 'A different new game', 'a different new game', (SELECT min(id) FROM status))", newID); err != nil {
+		t.Fatal(err)
+	}
+	// the files, uploaded before that game existed, are older than it by more than the tolerance (a restart later)
+	old := time.Now().Add(-2 * time.Hour)
+	for _, p := range files(t, e.root) {
+		os.Chtimes(p, old, old)
+	}
+	r, err := e.s.SweepShots()
+	if err != nil || r.Adopted != 0 || r.Quarantined != 1 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if list, _ := e.s.loadShots(newID); len(list) != 0 {
+		t.Errorf("the new game shows the old game's picture: %+v", list)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, ".orphans", itoa(newID))); err != nil {
+		t.Errorf("the picture was not kept in .orphans: %v", err)
 	}
 }

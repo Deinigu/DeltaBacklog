@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -279,6 +280,8 @@ func thumbPlan(w, h int, rotated bool) (cw, ch, tw, th int) {
 func WriteThumb(src, dst string, orientation int) error {
 	decodeMu.Lock()
 	defer decodeMu.Unlock()
+	// The next decode must not start while this bitmap is still uncollected garbage: two at once would double the peak.
+	defer runtime.GC()
 	f, err := os.Open(src)
 	if err != nil {
 		return err
