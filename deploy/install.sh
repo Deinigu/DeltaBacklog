@@ -9,10 +9,45 @@
 # It is safe to run again: data is never overwritten, the service is restarted only if the program changed.
 set -eu
 
-STAGE=${1:?usage: install.sh <stage-dir>}
 APP=/opt/deltabacklog
 DATA=/var/lib/deltabacklog
 BACKUPS=/var/backups/deltabacklog
+
+# env_value <file> <KEY>: the last value of KEY in a settings file (quotes removed), or nothing
+env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | tr -d "\"'"; }
+
+# on_other_mount <path>: true when the part of path that exists lives on a mount other than /. An unmounted drive
+# leaves only an empty mount point on the SD card, which is on /: nothing may be created there.
+on_other_mount() {
+  p=$1
+  while [ ! -d "$p" ] && [ "$p" != / ]; do p=$(dirname "$p"); done
+  t=$(findmnt -n -o TARGET -T "$p" 2>/dev/null) || return 1
+  [ -n "$t" ] && [ "$t" != / ]
+}
+
+# shots_dropin <screenshots-dir> <data-dir> <unit-dir>: let the hardened units write to a screenshots folder outside the
+# data folder. The leading "-" makes a missing path (drive absent) harmless: the units still start. No dependency on the
+# mount is added on purpose: the app must run, and show its message, without the drive. Writes nothing and removes old
+# drop-ins when the folder is empty or inside the data folder.
+shots_dropin() {
+  dir=$1 data=$2 units=$3
+  case "$dir" in "$data"|"$data"/*) dir= ;; esac
+  for u in deltabacklog deltabacklog-backup; do
+    f=$units/$u.service.d/screenshots.conf
+    if [ -z "$dir" ]; then rm -f "$f"; rmdir "$units/$u.service.d" 2>/dev/null || true; continue; fi
+    rw=$dir
+    [ "$u" = deltabacklog-backup ] && rw=$(dirname "$dir")   # the backup also writes <parent>/backups
+    mkdir -p "$units/$u.service.d"
+    printf '[Service]
+ReadWritePaths=-%s
+' "$rw" > "$f"
+  done
+}
+
+# Sourced by the tests (INSTALL_LIB=1): define the functions and stop.
+if [ "${INSTALL_LIB:-}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
+
+STAGE=${1:?usage: install.sh <stage-dir>}
 
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 
@@ -28,12 +63,35 @@ install -d -m 750 -o deltabacklog -g deltabacklog "$DATA" "$DATA/covers" "$BACKU
 
 # 3. settings (secrets: readable by root only; systemd reads it before dropping privileges)
 if [ -f "$STAGE/env" ]; then
+  OLD_SHOTS=$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)
   install -m 600 -o root -g root "$STAGE/env" /etc/deltabacklog.env
+  # the deploy's settings file does not carry the Pi-only drive setting: keep it
+  if [ -n "$OLD_SHOTS" ] && [ -z "$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)" ]; then
+    echo "SCREENSHOTS_DIR=$OLD_SHOTS" >> /etc/deltabacklog.env
+  fi
   echo "settings installed to /etc/deltabacklog.env"
 elif [ ! -f /etc/deltabacklog.env ]; then
   printf 'LISTEN_ADDR=:8081\nDATA_DIR=%s\nGOMEMLIMIT=96MiB\n#ALLOWED_HOSTS=\n' "$DATA" > /etc/deltabacklog.env
   chmod 600 /etc/deltabacklog.env
   echo "created a default /etc/deltabacklog.env (add the IGDB / SteamGridDB keys to enable lookups)"
+fi
+
+# 3b. screenshots on another drive (SCREENSHOTS_DIR in the settings). The folders are created, owned by the service
+#     user, only when the drive is really mounted; otherwise nothing is created and the app says "screenshot storage
+#     not available" until it is.
+SHOTS=$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)
+shots_dropin "$SHOTS" "$DATA" /etc/systemd/system
+if [ -n "$SHOTS" ]; then
+  case "$SHOTS" in
+    "$DATA"|"$DATA"/*) ;;
+    *)
+      if on_other_mount "$SHOTS"; then
+        install -d -m 750 -o deltabacklog -g deltabacklog "$SHOTS" "$(dirname "$SHOTS")/backups"
+        echo "screenshot folders ready: $SHOTS"
+      else
+        echo "warning: $SHOTS is not on a separate mounted drive; nothing created (mount the drive, then run the install again)"
+      fi ;;
+  esac
 fi
 
 # 4. first-install data; never overwrite an existing database

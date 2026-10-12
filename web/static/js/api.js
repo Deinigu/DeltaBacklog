@@ -237,3 +237,35 @@ export async function loadLinkPending() {
 export const getTierlist = (year) => getJSON(`/api/tierlist/${year}`);
 /** Replace a year's tier list; `entries` is [{game_id, tier_id}] (see yearreview.toEntries). */
 export const saveTierlist = (year, entries) => send('PUT', `/api/tierlist/${year}`, { entries });
+
+// ---- screenshots ----
+/** A game's screenshots. Resolves {screenshots, available}; available is false while the storage (a drive) is missing. */
+export const listShots = (gameId) => request('GET', `/api/games/${gameId}/screenshots`);
+export const setShotCaption = (id, caption) => request('PATCH', `/api/screenshots/${id}`, { caption });
+export const deleteShot = (id) => request('DELETE', `/api/screenshots/${id}`);
+/** Save a new order; `ids` names every screenshot of the game. Resolves the fresh list. */
+export const orderShots = async (gameId, ids) => (await request('PUT', `/api/games/${gameId}/screenshots/order`, ids)).screenshots;
+
+/**
+ * Upload one file. XMLHttpRequest, because fetch cannot report upload progress. onProgress gets 0..1.
+ * Resolves the stored screenshot; rejects with an Error whose message is the server's reason.
+ */
+export function uploadShot(gameId, file, onProgress = () => {}) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    if (file.lastModified) fd.append('modified', String(file.lastModified)); // before the file: the server reads parts in order
+    fd.append('file', file, file.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/games/${gameId}/screenshots`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onerror = () => reject(new Error('network error'));
+    xhr.onload = () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+      const r = body.results?.[0];
+      if (xhr.status === 200 && r?.screenshot) resolve(r.screenshot);
+      else reject(new Error(r?.error || body.error || (xhr.status === 413 ? 'the upload is too large' : `upload failed (${xhr.status})`)));
+    };
+    xhr.send(fd);
+  });
+}

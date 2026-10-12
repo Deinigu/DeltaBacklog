@@ -13,10 +13,13 @@ import (
 
 // Server holds the dependencies of the HTTP handlers.
 type Server struct {
-	DB         *sql.DB
-	CoverDir   string
-	Meta       Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
-	CoverHosts []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
+	DB             *sql.DB
+	CoverDir       string
+	Meta           Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
+	ShotDir        string   // screenshot originals and thumbnails; the server never creates this folder itself (see shotStorageOK)
+	ShotMaxFile    int64    // largest accepted screenshot, bytes (default 25 MB)
+	ShotMaxRequest int64    // largest upload request, bytes (default 200 MB)
+	CoverHosts     []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -53,6 +56,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/games", s.createGame)
 	mux.HandleFunc("DELETE /api/games/{id}", s.deleteGame)
 	mux.HandleFunc("POST /api/games/{id}/cover", s.setCover)
+	mux.HandleFunc("GET /api/games/{id}/screenshots", s.listShots)
+	mux.HandleFunc("POST /api/games/{id}/screenshots", s.uploadShots)
+	mux.HandleFunc("PUT /api/games/{id}/screenshots/order", s.orderShots)
+	mux.HandleFunc("PATCH /api/screenshots/{id}", s.patchShot)
+	mux.HandleFunc("DELETE /api/screenshots/{id}", s.deleteShot)
+	mux.HandleFunc("GET /screenshots/{gid}/{name}", s.serveShot)
 	mux.HandleFunc("GET /api/lookup", s.lookup)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/facets", s.facets)

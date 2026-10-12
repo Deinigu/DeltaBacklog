@@ -27,6 +27,7 @@
 - Your own **queue order** (drag to rank), ownership badges (🏴‍☠️ 🆓 🤝), platforms, VR, favorites and notes.
 - **Series progress**, a **year in review** with an S-to-F **tier list** you can export as a picture, and **stats** (backlog by platform, finished per year, how long games have waited).
 - **Surprise me** picks a random game from what you are looking at, with filters, and never repeats.
+- **Screenshots** per game: upload from your phone or computer, view full screen, caption, reorder, download the original. Originals are kept untouched, with a small thumbnail for the grid; they can live on an external drive and are backed up nightly.
 
 **Add games quickly (optional lookups)**
 - Type a title and genres, themes, developer, series, release year and a cover come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/). Needs free API keys; everything else works without them.
@@ -95,6 +96,8 @@ Settings are environment variables. A `.env` file in the working directory is lo
 |---|---|---|
 | `LISTEN_ADDR` | `:8081` | Address and port to serve on. Use `127.0.0.1:8081` to keep it on this machine only. |
 | `DATA_DIR` | `./data` | Where `app.db` and the `covers/` folder live. |
+| `SCREENSHOTS_DIR` | `DATA_DIR/screenshots` | Where screenshots are stored, for example a folder on an external drive. When you set it, the folder must already exist: the app never creates it, so an unmounted drive cannot silently fill the system disk (uploads say "screenshot storage not available" instead). |
+| `SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB` | `25`, `200` | Largest screenshot, and largest upload request, in megabytes. |
 | `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
@@ -112,13 +115,14 @@ Without keys the app still works; games are added by hand. To check keys against
 ```sh
 deltabacklog                       # serve the app
 deltabacklog backup <file>         # write a consistent copy of the database (safe while it runs; never migrates it)
+deltabacklog backup-screenshots <dir>  # copy the screenshot files <dir> does not have yet (never deletes)
 deltabacklog check <file>          # verify a database or backup (read-only)
 deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys)
 ```
 
 ## Backup and restore
 
-Everything lives in `DATA_DIR`: `app.db` (the library) and `covers/` (images, which can be downloaded again).
+Everything lives in `DATA_DIR`: `app.db` (the library) and `covers/` (images, which can be downloaded again), plus `screenshots/` unless `SCREENSHOTS_DIR` puts them elsewhere. Screenshots are your own files and cannot be downloaded again: back that folder up too (`deltabacklog backup-screenshots <dir>` copies only what is missing; on the Raspberry Pi install the nightly job does it).
 
 ```sh
 deltabacklog backup backup-2026-01-01.db      # a consistent copy, even while the server runs

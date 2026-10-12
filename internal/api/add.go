@@ -313,5 +313,8 @@ func (s *Server) deleteGame(w http.ResponseWriter, r *http.Request) {
 	if cover.Valid && cover.String != "" {
 		os.Remove(filepath.Join(s.CoverDir, filepath.Base(cover.String)))
 	}
+	if s.ShotDir != "" { // the screenshot rows went with the game (cascade); now their files
+		os.RemoveAll(s.gameShotDir(id))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
