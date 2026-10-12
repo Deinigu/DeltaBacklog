@@ -243,18 +243,21 @@ export const saveTierlist = (year, entries) => send('PUT', `/api/tierlist/${year
 export const listShots = (gameId) => request('GET', `/api/games/${gameId}/screenshots`);
 export const setShotCaption = (id, caption) => request('PATCH', `/api/screenshots/${id}`, { caption });
 export const deleteShot = (id) => request('DELETE', `/api/screenshots/${id}`);
+/** Delete when the page is going away (keepalive lets the request outlive it). Fire and forget. */
+export const deleteShotKeepalive = (id) => { fetch(`/api/screenshots/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {}); };
 /** Save a new order; `ids` names every screenshot of the game. Resolves the fresh list. */
 export const orderShots = async (gameId, ids) => (await request('PUT', `/api/games/${gameId}/screenshots/order`, ids)).screenshots;
 
 /**
  * Upload one file. XMLHttpRequest, because fetch cannot report upload progress. onProgress gets 0..1.
- * Resolves the stored screenshot; rejects with an Error whose message is the server's reason.
+ * `thumb` is an optional small JPEG made by the browser (see makeThumb). Resolves the stored screenshot; rejects with an Error whose message is the server's reason.
  */
-export function uploadShot(gameId, file, onProgress = () => {}) {
+export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     if (file.lastModified) fd.append('modified', String(file.lastModified)); // before the file: the server reads parts in order
     fd.append('file', file, file.name);
+    if (thumb) fd.append('thumb', thumb, 'thumb.jpg'); // right after the file; only used when the server cannot decode the original
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/games/${gameId}/screenshots`);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };

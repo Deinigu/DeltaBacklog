@@ -53,3 +53,25 @@ export function uploadSummary(added, failed) {
   if (!failed) return a;
   return added ? `${a}, ${failed} failed` : `${failed} failed`;
 }
+
+/** Size of the preview the browser makes for a picture it sends (same box as the server's: 480x960, never enlarged). */
+export function thumbFit(w, h, maxW = 480, maxH = 960) {
+  if (!(w > 0) || !(h > 0)) return { w: 0, h: 0 };
+  const f = Math.min(1, maxW / w, maxH / h);
+  return { w: Math.max(1, Math.round(w * f)), h: Math.max(1, Math.round(h * f)) };
+}
+
+/** The ids of a game's screenshots deleted in the UI whose DELETE has not been answered yet, newest last. */
+export function pendingIds(pending, gameId) {
+  return [...pending.values()].filter((p) => p.gameId === gameId).map((p) => p.s.id);
+}
+
+/** A list without the screenshots whose deletion is pending. */
+export function withoutPending(list, pending) {
+  return list.filter((s) => !pending.has(s.id));
+}
+
+/** The index to focus after the list changed: the same place, clamped; -1 when empty. */
+export function clampIndex(i, len) {
+  return len <= 0 ? -1 : Math.max(0, Math.min(i, len - 1));
+}

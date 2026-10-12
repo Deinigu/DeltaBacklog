@@ -98,6 +98,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `DATA_DIR` | `./data` | Where `app.db` and the `covers/` folder live. |
 | `SCREENSHOTS_DIR` | `DATA_DIR/screenshots` | Where screenshots are stored, for example a folder on an external drive. When you set it, the folder must already exist: the app never creates it, so an unmounted drive cannot silently fill the system disk (uploads say "screenshot storage not available" instead). |
 | `SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB` | `25`, `200` | Largest screenshot, and largest upload request, in megabytes. |
+| `SCREENSHOTS_DECODE_BUDGET_MB` | `48` | Most memory the server may use to decode one screenshot for its thumbnail; bigger pictures are stored untouched with a thumbnail made by the browser. |
 | `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |

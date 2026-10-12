@@ -22,6 +22,9 @@ const (
 	defaultShotMaxFile    = 25 << 20
 	defaultShotMaxRequest = 200 << 20
 	maxCaption            = 500
+	maxShotFiles          = 50  // "file" parts in one request (the app sends one)
+	maxShotParts          = 200 // all parts in one request
+	defaultDecodeBudget   = 48 << 20
 )
 
 // errStorage is what an upload says when the screenshot folder is missing or not writable (for example the
@@ -88,6 +91,16 @@ func (s *Server) shotStorageOK() bool {
 	return true
 }
 
+// shotStorageReadable is the check for a read request: the folder exists and the kernel says it is writable, without
+// writing a probe file (which would spin up an idle drive every time a drawer opens).
+func (s *Server) shotStorageReadable() bool {
+	if s.ShotDir == "" {
+		return false
+	}
+	fi, err := os.Stat(s.ShotDir)
+	return err == nil && fi.IsDir() && shots.Writable(s.ShotDir)
+}
+
 func (s *Server) gameShotDir(gameID int64) string {
 	return filepath.Join(s.ShotDir, strconv.FormatInt(gameID, 10))
 }
@@ -114,7 +127,7 @@ func (s *Server) listShots(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"screenshots": list, "available": s.shotStorageOK()})
+	writeJSON(w, map[string]any{"screenshots": list, "available": s.shotStorageReadable()})
 }
 
 func (s *Server) loadShots(gameID int64) ([]Screenshot, error) {
@@ -139,12 +152,29 @@ type shotResult struct {
 	Name       string      `json:"name"`
 	Screenshot *Screenshot `json:"screenshot,omitempty"`
 	Error      string      `json:"error,omitempty"`
+	cut        bool        // the request limit was hit while reading this file
+}
+
+// pendingShot is a file that is stored but too big to decode here: it waits for the "thumb" part the browser sends
+// right after it. Without a valid one it is removed and results[idx] keeps its refusal.
+type pendingShot struct {
+	idx      int
+	dir      string
+	tmpName  string
+	base     string
+	info     shots.Info
+	size     int64
+	modified string
 }
 
 // uploadShots takes a multipart body with one or more "file" parts. Each part is streamed to disk (never held in
 // memory), checked by content, thumbnailed and recorded; a bad file does not stop the others. An optional
 // "modified" part (milliseconds since 1970, the file's last-modified time) before a file is used as its date
-// when the picture has no EXIF date.
+// when the picture has no EXIF date. A picture whose decoding would not fit the memory budget is kept untouched
+// when the next part is a "thumb" (a small JPEG the browser made); otherwise it is refused.
+//
+// The answer is 200 with one result per file, also when the request limit cut the upload short (the last result then
+// says so); only a request with too many parts is answered 413 (the results of what was stored before it come with it).
 func (s *Server) uploadShots(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok || !s.gameExists(w, id) {
@@ -162,14 +192,18 @@ func (s *Server) uploadShots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := s.gameShotDir(id)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		log.Printf("screenshots: %v", err)
-		writeErr(w, http.StatusServiceUnavailable, errStorage, nil)
-		return
-	}
 	results := []shotResult{}
 	modified := ""
 	status := http.StatusOK
+	var pend *pendingShot
+	dropPending := func() {
+		if pend != nil {
+			os.Remove(pend.tmpName)
+			pend = nil
+		}
+	}
+	defer dropPending()
+	parts, fileParts := 0, 0
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -178,21 +212,47 @@ func (s *Server) uploadShots(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			var tooBig *http.MaxBytesError
 			if errors.As(err, &tooBig) {
-				status = http.StatusRequestEntityTooLarge
-				results = append(results, shotResult{Error: fmt.Sprintf("the upload is larger than %d MB", perRequest>>20)})
+				if len(results) == 0 || !results[len(results)-1].cut {
+					results = append(results, shotResult{Error: "the upload is larger than " + sizeLabel(perRequest)})
+				}
 			} else {
 				status = http.StatusBadRequest
 			}
 			break
 		}
+		parts++
+		if part.FormName() == "file" {
+			fileParts++
+		}
+		if parts > maxShotParts || fileParts > maxShotFiles {
+			dropPending()
+			writeErr(w, http.StatusRequestEntityTooLarge, "too many files in one request", map[string]any{"results": results})
+			return
+		}
 		switch part.FormName() {
 		case "modified":
 			b, _ := io.ReadAll(io.LimitReader(part, 32))
 			modified = modifiedToTime(string(b))
+		case "thumb":
+			if pend != nil {
+				p := pend
+				pend = nil
+				name := results[p.idx].Name
+				results[p.idx] = s.finishShot(id, p, part)
+				results[p.idx].Name = name
+			}
 		case "file":
-			res := s.storeShot(id, dir, part, perFile, modified)
+			dropPending()
+			res, p := s.receiveShot(id, dir, part, perFile, modified)
 			modified = ""
 			results = append(results, res)
+			if p != nil {
+				p.idx = len(results) - 1
+				pend = p
+			}
+		}
+		if len(results) > 0 && results[len(results)-1].cut {
+			break
 		}
 	}
 	writeJSONStatus(w, status, map[string]any{"results": results})
@@ -216,9 +276,19 @@ func cleanName(n string) string {
 	return n
 }
 
-func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFile int64, modified string) shotResult {
+func (s *Server) decodeBudget() int64 {
+	if s.ShotDecodeBudget > 0 {
+		return s.ShotDecodeBudget
+	}
+	return defaultDecodeBudget
+}
+
+// receiveShot streams one "file" part to a temporary file in the game's folder and checks it. A file within the
+// decoding budget is thumbnailed and recorded at once; a bigger one comes back as a pending shot (with its refusal as
+// the result, to be replaced when a valid "thumb" part follows).
+func (s *Server) receiveShot(gameID int64, dir string, part *multipart.Part, maxFile int64, modified string) (shotResult, *pendingShot) {
 	res := shotResult{Name: cleanName(part.FileName())}
-	fail := func(msg string) shotResult { res.Error = msg; return res }
+	fail := func(msg string) (shotResult, *pendingShot) { res.Error = msg; return res, nil }
 
 	head := make([]byte, shots.SniffLen)
 	if _, err := io.ReadFull(part, head); err != nil {
@@ -227,13 +297,15 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 		}
 		return fail("the upload was interrupted")
 	}
-	ext, ok := shots.Sniff(head)
+	_, ok := shots.Sniff(head)
 	if !ok {
 		return fail(shots.ErrUnsupported.Error())
 	}
-	base := shots.NewName()
-	final := filepath.Join(dir, base+"."+ext)
-	thumbFinal := filepath.Join(dir, shots.ThumbName(base))
+	// the game's folder is made only now that the content looks like an image (never the screenshot folder itself)
+	if err := os.Mkdir(dir, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+		log.Printf("screenshots: %v", err)
+		return fail(errStorage)
+	}
 	tmp, err := os.CreateTemp(dir, "up-*.tmp")
 	if err != nil {
 		log.Printf("screenshots: %v", err)
@@ -252,6 +324,7 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 		cleanup()
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
+			res.cut = true
 			return fail("the upload is larger than the request limit")
 		}
 		return fail("the upload was interrupted")
@@ -259,7 +332,7 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 	if n > maxFile {
 		cleanup()
 		// the rest of this part is skipped by the multipart reader when it moves on
-		return fail(fmt.Sprintf("larger than %d MB", maxFile>>20))
+		return fail("larger than " + sizeLabel(maxFile))
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpName)
@@ -270,24 +343,54 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 		os.Remove(tmpName)
 		switch {
 		case errors.Is(err, shots.ErrTooLarge):
-			return fail("too many pixels (limit 40 megapixels for JPEG, 12 for PNG and WebP)")
+			return fail("the picture has too many pixels")
 		case errors.Is(err, shots.ErrUnsupported):
 			return fail(err.Error())
 		}
 		return fail("could not read that image")
 	}
-	if err := shots.WriteThumb(tmpName, thumbFinal, info.Orientation); err != nil {
+	p := &pendingShot{dir: dir, tmpName: tmpName, base: shots.NewName(), info: info, size: n, modified: modified}
+	if budget := s.decodeBudget(); info.DecodeBytes > budget {
+		res.Error = fmt.Sprintf("too big to make a preview here (decoding needs about %d MB, the limit is %d MB); the app sends its own preview, retry from the app", info.DecodeBytes>>20, budget>>20)
+		return res, p
+	}
+	if err := shots.WriteThumb(tmpName, filepath.Join(dir, shots.ThumbName(p.base)), info.Orientation); err != nil {
 		os.Remove(tmpName)
 		return fail("could not read that image")
 	}
-	if err := os.Rename(tmpName, final); err != nil {
-		os.Remove(tmpName)
+	return s.commitShot(gameID, p, res), nil
+}
+
+// finishShot completes a pending shot with the browser's "thumb" part.
+func (s *Server) finishShot(gameID int64, p *pendingShot, thumb io.Reader) shotResult {
+	res := shotResult{}
+	thumbFinal := filepath.Join(p.dir, shots.ThumbName(p.base))
+	if err := shots.WriteClientThumb(thumb, thumbFinal); err != nil {
+		os.Remove(p.tmpName)
 		os.Remove(thumbFinal)
-		return fail(errStorage)
+		if errors.Is(err, shots.ErrBadThumb) {
+			res.Error = "the preview image sent with it was not accepted"
+		} else {
+			res.Error = errStorage
+		}
+		return res
 	}
-	taken := info.Taken
+	return s.commitShot(gameID, p, res)
+}
+
+// commitShot moves the temporary original into place and records it. The thumbnail is already written.
+func (s *Server) commitShot(gameID int64, p *pendingShot, res shotResult) shotResult {
+	thumbFinal := filepath.Join(p.dir, shots.ThumbName(p.base))
+	final := filepath.Join(p.dir, p.base+"."+p.info.Ext)
+	if err := os.Rename(p.tmpName, final); err != nil {
+		os.Remove(p.tmpName)
+		os.Remove(thumbFinal)
+		res.Error = errStorage
+		return res
+	}
+	taken := p.info.Taken
 	if taken == "" {
-		taken = modified
+		taken = p.modified
 	}
 	var takenArg any
 	if taken != "" {
@@ -295,15 +398,17 @@ func (s *Server) storeShot(gameID int64, dir string, part *multipart.Part, maxFi
 	}
 	row := s.DB.QueryRow(`INSERT INTO screenshot(game_id, file, thumb, width, height, bytes, taken_at, pos)
 		VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(pos), 0) + 1 FROM screenshot WHERE game_id = ?))
-		RETURNING `+shotCols, gameID, base+"."+ext, shots.ThumbName(base), info.Width, info.Height, n, takenArg, gameID)
+		RETURNING `+shotCols, gameID, p.base+"."+p.info.Ext, shots.ThumbName(p.base), p.info.Width, p.info.Height, p.size, takenArg, gameID)
 	sc, err := scanShot(row)
 	if err != nil { // for example the game was deleted meanwhile
 		os.Remove(final)
 		os.Remove(thumbFinal)
 		log.Printf("screenshots: insert: %v", err)
-		return fail("could not save the screenshot")
+		res.Error = "could not save the screenshot"
+		return res
 	}
 	res.Screenshot = &sc
+	res.Error = ""
 	return res
 }
 
@@ -363,8 +468,17 @@ func (s *Server) orderShots(w http.ResponseWriter, r *http.Request) {
 	}
 	for rows.Next() {
 		var id int64
-		rows.Scan(&id)
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			fail(w, err)
+			return
+		}
 		have[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		fail(w, err)
+		return
 	}
 	rows.Close()
 	if len(ids) != len(have) {
@@ -400,6 +514,11 @@ func (s *Server) orderShots(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteShot(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
+		return
+	}
+	// Without the drive the files could not be removed and would stay orphaned: refuse before touching the row.
+	if !s.shotStorageOK() {
+		writeErr(w, http.StatusServiceUnavailable, errStorage, nil)
 		return
 	}
 	var gid int64
@@ -450,4 +569,12 @@ func (s *Server) serveShot(w http.ResponseWriter, r *http.Request) {
 		h.Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	}
 	http.ServeContent(w, r, name, fi.ModTime(), f)
+}
+
+// sizeLabel writes a limit for a message: "25 MB", or "20 KB" for the small limits tests use.
+func sizeLabel(n int64) string {
+	if n >= 1<<20 {
+		return fmt.Sprintf("%d MB", n>>20)
+	}
+	return fmt.Sprintf("%d KB", n>>10)
 }

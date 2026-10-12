@@ -54,3 +54,24 @@ test('uploadSummary', () => {
   assert.equal(uploadSummary(2, 1), 'Added 2 screenshots, 1 failed');
   assert.equal(uploadSummary(0, 2), '2 failed');
 });
+
+import { thumbFit, pendingIds, withoutPending, clampIndex } from '../static/js/shots.js';
+
+test('thumbFit keeps the picture inside 480x960 and never enlarges', () => {
+  assert.deepEqual(thumbFit(4000, 3000), { w: 480, h: 360 });
+  assert.deepEqual(thumbFit(400, 20000), { w: 19, h: 960 });
+  assert.deepEqual(thumbFit(100, 50), { w: 100, h: 50 });
+  assert.deepEqual(thumbFit(0, 10), { w: 0, h: 0 });
+});
+
+test('pending deletes are filtered out and per game', () => {
+  const pending = new Map([[2, { gameId: 1, s: { id: 2 } }], [5, { gameId: 9, s: { id: 5 } }]]);
+  assert.deepEqual(pendingIds(pending, 1), [2]);
+  assert.deepEqual(withoutPending([{ id: 1 }, { id: 2 }], pending).map((s) => s.id), [1]);
+});
+
+test('clampIndex', () => {
+  assert.equal(clampIndex(5, 3), 2);
+  assert.equal(clampIndex(-1, 3), 0);
+  assert.equal(clampIndex(0, 0), -1);
+});

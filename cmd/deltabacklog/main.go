@@ -117,7 +117,7 @@ func main() {
 		fmt.Fprint(os.Stderr, "deltabacklog "+version+"\n\n"+
 			"usage: deltabacklog                      serve the app\n"+
 			"       deltabacklog backup <file>         write a copy of the database\n"+
-			"       deltabacklog backup-screenshots <dir>  copy screenshots missing from <dir> (never deletes)\n"+
+			"       deltabacklog backup-screenshots [--min-free-gb N] <dir>  copy screenshots missing from <dir> (never deletes)\n"+
 			"       deltabacklog check <file>          verify a database or backup\n"+
 			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n")
 		if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
@@ -154,14 +154,26 @@ func main() {
 	// `deltabacklog backup-screenshots <dir>`: copy the screenshot files that <dir> does not have yet (used by the nightly
 	// timer). Nothing already in <dir> is changed or removed, so the copy keeps pictures deleted in the app since.
 	if len(os.Args) > 1 && os.Args[1] == "backup-screenshots" {
-		if len(os.Args) != 3 {
-			log.Fatal("usage: deltabacklog backup-screenshots <destination-dir>")
+		args := os.Args[2:]
+		var minFree int64
+		if len(args) >= 2 && args[0] == "--min-free-gb" {
+			gb, err := strconv.ParseFloat(args[1], 64)
+			if err != nil || gb < 0 {
+				log.Fatal("--min-free-gb needs a number of gigabytes")
+			}
+			minFree, args = int64(gb*(1<<30)), args[2:]
 		}
-		n, err := shots.SyncNew(shotDir, os.Args[2])
+		if len(args) != 1 {
+			log.Fatal("usage: deltabacklog backup-screenshots [--min-free-gb N] <destination-dir>")
+		}
+		res, err := shots.SyncNew(shotDir, args[0], minFree)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("%d screenshot files copied to %s", n, os.Args[2])
+		log.Printf("%d screenshot files copied to %s (%d MB)", res.Copied, args[0], res.Bytes>>20)
+		if res.Skipped > 0 {
+			log.Printf("screenshots: %d files not copied: they would leave less than %.1f GB free on the backup disk", res.Skipped, float64(minFree)/(1<<30))
+		}
 		return
 	}
 
@@ -190,9 +202,17 @@ func main() {
 	log.Printf("metadata: IGDB %s, SteamGridDB %s", onOff(igdb), onOff(sgdb))
 
 	srv := &api.Server{DB: d, CoverDir: filepath.Join(dataDir, "covers"), Meta: mc, ShotDir: shotDir,
-		ShotMaxFile: envMB("SCREENSHOT_MAX_MB", 25), ShotMaxRequest: envMB("SCREENSHOT_REQUEST_MAX_MB", 200)}
+		ShotMaxFile: envMB("SCREENSHOT_MAX_MB", 25), ShotMaxRequest: envMB("SCREENSHOT_REQUEST_MAX_MB", 200),
+		ShotDecodeBudget: envMB("SCREENSHOTS_DECODE_BUDGET_MB", 48)}
 	if !srv.ShotStorageOK() {
 		log.Printf("warning: screenshot storage %s is not available (not mounted or not writable); uploads fail until it is", shotDir)
+	}
+	if srv.ShotStorageOK() {
+		go func() { // leftovers of crashes and of deletes made while the drive was away; never delays the start
+			if n := srv.SweepShots(); n > 0 {
+				log.Printf("screenshots: removed %d leftover files", n)
+			}
+		}()
 	}
 	srv.Warm()
 	handler := newHandler(srv, allowedHosts(os.Getenv("ALLOWED_HOSTS")))

@@ -333,7 +333,7 @@ Every game can keep its own pictures, for example your best moments or where you
 
 **In the viewer**
 - **Caption:** type under the picture; it saves when you leave the box.
-- **⬇** downloads the original file.
+- **The download icon** (arrow pointing down) saves the original file.
 - **◀ Move earlier / Move later ▶** changes the order of the pictures.
 - **Delete** removes the picture. For a few seconds a message offers **Undo**.
 

@@ -705,6 +705,7 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .shot-foot { padding: 10px 12px calc(10px + var(--safe-b)); display: flex; flex-direction: column; gap: 8px; }
 .shot-caption { height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 0 12px; font-size: 16px; }
 .shot-meta { margin: 0; font-size: 13px; opacity: .75; }
-.shot-move { display: flex; gap: 8px; }
+.shot-move { display: flex; gap: 8px; max-width: 480px; }
+.shot-bar a.btn { display: inline-flex; align-items: center; justify-content: center; }
 .shot-move .btn { flex: 1; }
 .toast-action { margin-left: 8px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: inherit; font-weight: 700; text-decoration: underline; }
