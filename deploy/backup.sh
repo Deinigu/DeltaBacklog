@@ -4,9 +4,10 @@
 #   1. the database: one consistent copy per day in /var/backups/deltabacklog, the last 14 days kept;
 #   2. when SCREENSHOTS_DIR is set and its drive is there: the same copy again in <SCREENSHOTS_DIR>/../backups,
 #      so a dead SD card does not take the database with it (same 14 days);
-#   3. screenshots: files missing from /var/backups/deltabacklog/screenshots are copied there, never deleted, but only
-#      while the SD card keeps SHOTS_MIN_FREE_GB (default 5) free after the copy. The originals live on the drive and
-#      this copy on the SD card: two devices. Covers are not backed up: they can be downloaded again.
+#   3. screenshots: files missing from /var/backups/deltabacklog/screenshots are copied there, never deleted, and the
+#      copy stops before the SD card drops under SHOTS_MIN_FREE_GB (default 5) free (checked per file by the program).
+#      The originals live on the drive and this copy on the SD card: two devices. Covers are not backed up: they can be
+#      downloaded again.
 #
 # Steps 2 and 3 never fail the database backup: a missing drive or a full SD card is logged and skipped.
 # Restore: stop the service, copy a backup over /var/lib/deltabacklog/app.db (owner deltabacklog), start it.
@@ -17,27 +18,13 @@ KEEP_DAYS=14
 APP=${APP_DIR:-/opt/deltabacklog}
 MIN_FREE_GB=${SHOTS_MIN_FREE_GB:-5}
 
-# free_kb <path>: free space (KiB) on the filesystem that holds path
-free_kb() { df -Pk "$1" | awk 'NR==2 {print $4}'; }
-
-# dir_kb <dir>: size of a folder in KiB (0 when it does not exist)
-dir_kb() { du -sk "$1" 2>/dev/null | awk '{print $1}' | grep . || echo 0; }
-
-# room_for <path> <need_kb> <min_free_gb>: true when copying need_kb to path still leaves min_free_gb free
-room_for() { [ $(($(free_kb "$1") - $2)) -ge $(($3 * 1048576)) ]; }
-
-# backup_shots <src> <dst>: copy new screenshot files, unless the SD card would drop below the free-space margin
+# backup_shots <src> <dst>: copy new screenshot files. The binary checks the free space of the backup disk before every
+# file and stops copying when the next one would leave less than MIN_FREE_GB free there.
 backup_shots() {
   src=$1 dst=$2
   [ -d "$src" ] || { echo "screenshots: $src not available (drive not mounted?), skipped"; return 0; }
   mkdir -p "$dst"
-  need=$(($(dir_kb "$src") - $(dir_kb "$dst")))
-  [ "$need" -gt 0 ] || need=0
-  if ! room_for "$dst" "$need" "$MIN_FREE_GB"; then
-    echo "screenshots: skipped, copying about $((need / 1024)) MB would leave less than $MIN_FREE_GB GB free on the backup disk"
-    return 0
-  fi
-  SCREENSHOTS_DIR=$src "$APP/deltabacklog" backup-screenshots "$dst"
+  SCREENSHOTS_DIR=$src "$APP/deltabacklog" backup-screenshots --min-free-gb "$MIN_FREE_GB" "$dst"
 }
 
 # keep_copy <file> <dir>: copy a database backup into dir (an existing folder on the other drive) and prune old ones

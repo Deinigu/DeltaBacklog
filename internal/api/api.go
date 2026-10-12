@@ -13,13 +13,14 @@ import (
 
 // Server holds the dependencies of the HTTP handlers.
 type Server struct {
-	DB             *sql.DB
-	CoverDir       string
-	Meta           Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
-	ShotDir        string   // screenshot originals and thumbnails; the server never creates this folder itself (see shotStorageOK)
-	ShotMaxFile    int64    // largest accepted screenshot, bytes (default 25 MB)
-	ShotMaxRequest int64    // largest upload request, bytes (default 200 MB)
-	CoverHosts     []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
+	DB               *sql.DB
+	CoverDir         string
+	Meta             Meta     // IGDB / SteamGridDB lookups; nil disables quick add's metadata
+	ShotDir          string   // screenshot originals and thumbnails; the server never creates this folder itself (see shotStorageOK)
+	ShotMaxFile      int64    // largest accepted screenshot, bytes (default 25 MB)
+	ShotMaxRequest   int64    // largest upload request, bytes (default 200 MB)
+	ShotDecodeBudget int64    // most memory one screenshot may need to be decoded for its thumbnail, bytes (default 48 MB)
+	CoverHosts       []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }

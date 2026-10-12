@@ -54,3 +54,28 @@ test('uploadSummary', () => {
   assert.equal(uploadSummary(2, 1), 'Added 2 screenshots, 1 failed');
   assert.equal(uploadSummary(0, 2), '2 failed');
 });
+
+import { pendingIds, withoutPending, clampIndex } from '../static/js/shots.js';
+
+test('pending deletes are filtered out and per game', () => {
+  const pending = new Map([[2, { gameId: 1, s: { id: 2 } }], [5, { gameId: 9, s: { id: 5 } }]]);
+  assert.deepEqual(pendingIds(pending, 1), [2]);
+  assert.deepEqual(withoutPending([{ id: 1 }, { id: 2 }], pending).map((s) => s.id), [1]);
+});
+
+test('clampIndex', () => {
+  assert.equal(clampIndex(5, 3), 2);
+  assert.equal(clampIndex(-1, 3), 0);
+  assert.equal(clampIndex(0, 0), -1);
+});
+
+import { thumbPlan } from '../static/js/shots.js';
+
+test('thumbPlan crops extreme ratios like the server', () => {
+  assert.deepEqual(thumbPlan(1080, 40000), { cw: 1080, ch: 2160, tw: 480, th: 960 });
+  assert.deepEqual(thumbPlan(400, 20000), { cw: 400, ch: 800, tw: 400, th: 800 });
+  assert.deepEqual(thumbPlan(20000, 100), { cw: 400, ch: 100, tw: 400, th: 100 });
+  assert.deepEqual(thumbPlan(7000, 5700), { cw: 7000, ch: 5700, tw: 480, th: 390 });
+  assert.deepEqual(thumbPlan(100, 50), { cw: 100, ch: 50, tw: 100, th: 50 });
+  assert.equal(thumbPlan(0, 5).tw, 0);
+});

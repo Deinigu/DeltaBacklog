@@ -53,3 +53,42 @@ export function uploadSummary(added, failed) {
   if (!failed) return a;
   return added ? `${a}, ${failed} failed` : `${failed} failed`;
 }
+
+/** The ids of a game's screenshots deleted in the UI whose DELETE has not been answered yet, newest last. */
+export function pendingIds(pending, gameId) {
+  return [...pending.values()].filter((p) => p.gameId === gameId).map((p) => p.s.id);
+}
+
+/** A list without the screenshots whose deletion is pending. */
+export function withoutPending(list, pending) {
+  return list.filter((s) => !pending.has(s.id));
+}
+
+/** The index to focus after the list changed: the same place, clamped; -1 when empty. */
+export function clampIndex(i, len) {
+  return len <= 0 ? -1 : Math.max(0, Math.min(i, len - 1));
+}
+
+/**
+ * How the browser makes the preview for a picture the server cannot decode: the same rule as the server's thumbPlan
+ * (internal/shots): keep the centre part with a ratio between 1:2 and 4:1 (cw x ch, of w x h as shown), and draw it at
+ * tw x th, inside 480x960 and never enlarged. Keep the two in sync.
+ */
+export function thumbPlan(w, h) {
+  if (!(w > 0) || !(h > 0)) return { cw: 0, ch: 0, tw: 0, th: 0 };
+  let cw = w;
+  let ch = h;
+  if (ch > 2 * cw) ch = 2 * cw;
+  if (cw > 4 * ch) cw = 4 * ch;
+  let tw = cw;
+  let th = ch;
+  if (tw > 480 || th > 960) {
+    const f = Math.min(480 / cw, 960 / ch);
+    tw = Math.max(1, Math.floor(cw * f));
+    th = Math.max(1, Math.floor(ch * f));
+  }
+  return { cw, ch, tw, th };
+}
+
+/** Files above this size (bytes) get their preview made in the browser before the upload, so a big photo goes up once. */
+export const BIG_UPLOAD = 8 * 1024 * 1024;

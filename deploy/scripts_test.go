@@ -38,53 +38,30 @@ func TestScriptsParse(t *testing.T) {
 	}
 }
 
-// The SD card keeps a free-space margin: room_for says no when the copy would leave less than the minimum.
-func TestFreeSpaceGuard(t *testing.T) {
-	// 10 GiB free
-	pre := "free_kb() { echo 10485760; }\n"
-	for _, c := range []struct {
-		needKB, minGB string
-		want          bool
-	}{
-		{"1048576", "5", true},  // 1 GiB copy leaves 9
-		{"5242880", "5", true},  // leaves exactly 5
-		{"5242881", "5", false}, // one KiB too many
-		{"0", "11", false},      // margin larger than the disk
-		{"0", "5", true},
-	} {
-		_, err := run(t, "backup.sh", "BACKUP_LIB", pre+"room_for /x "+c.needKB+" "+c.minGB)
-		if got := err == nil; got != c.want {
-			t.Errorf("need %s KiB, margin %s GB: %v, want %v", c.needKB, c.minGB, got, c.want)
-		}
-	}
-}
-
-// With no room, backup_shots logs and copies nothing; the binary is never called.
-func TestBackupShotsSkipsWhenFullOrAbsent(t *testing.T) {
+// backup_shots hands the free-space margin to the program (it checks it file by file) and never calls it without the
+// source folder.
+func TestBackupShotsPassesTheMargin(t *testing.T) {
 	src, dst := t.TempDir(), filepath.Join(t.TempDir(), "copy")
 	os.WriteFile(filepath.Join(src, "a.png"), []byte("x"), 0o644)
-	marker := filepath.Join(t.TempDir(), "called")
+	args := filepath.Join(t.TempDir(), "args")
 	fake := t.TempDir()
-	os.WriteFile(filepath.Join(fake, "deltabacklog"), []byte("#!/bin/sh\ntouch '"+filepath.ToSlash(marker)+"'\n"), 0o755)
+	os.WriteFile(filepath.Join(fake, "deltabacklog"), []byte("#!/bin/sh\necho \"$@\" > '"+filepath.ToSlash(args)+"'\n"), 0o755)
 	app := "APP_DIR=" + filepath.ToSlash(fake)
 
-	out, err := run(t, "backup.sh", "BACKUP_LIB", "free_kb() { echo 1000; }\nbackup_shots '"+filepath.ToSlash(src)+"' '"+filepath.ToSlash(dst)+"'", app)
-	if err != nil || !strings.Contains(out, "skipped") {
-		t.Errorf("full disk: %v %q", err, out)
+	if _, err := run(t, "backup.sh", "BACKUP_LIB", "backup_shots '"+filepath.ToSlash(src)+"' '"+filepath.ToSlash(dst)+"'", app, "SHOTS_MIN_FREE_GB=7"); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(marker); err == nil {
-		t.Error("the binary ran although there was no room")
+	got, _ := os.ReadFile(args)
+	if strings.TrimSpace(string(got)) != "backup-screenshots --min-free-gb 7 "+filepath.ToSlash(dst) {
+		t.Errorf("arguments: %q", got)
 	}
-	out, err = run(t, "backup.sh", "BACKUP_LIB", "backup_shots '"+filepath.ToSlash(filepath.Join(src, "nope"))+"' '"+filepath.ToSlash(dst)+"'", app)
+	os.Remove(args)
+	out, err := run(t, "backup.sh", "BACKUP_LIB", "backup_shots '"+filepath.ToSlash(filepath.Join(src, "nope"))+"' '"+filepath.ToSlash(dst)+"'", app)
 	if err != nil || !strings.Contains(out, "not available") {
 		t.Errorf("absent drive: %v %q", err, out)
 	}
-	// plenty of room: the binary is called
-	if _, err := run(t, "backup.sh", "BACKUP_LIB", "free_kb() { echo 99999999; }\nbackup_shots '"+filepath.ToSlash(src)+"' '"+filepath.ToSlash(dst)+"'", app); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(marker); err != nil {
-		t.Error("the binary was not called although there was room")
+	if _, err := os.Stat(args); err == nil {
+		t.Error("the binary ran although the drive is absent")
 	}
 }
 
@@ -124,38 +101,67 @@ func TestEnvValue(t *testing.T) {
 	}
 }
 
-// The systemd drop-ins: only for a folder outside the data folder, with the "-" prefix and no mount dependency.
+// The systemd drop-ins: only for a folder outside the data folder, writable parent with the "-" prefix, ordering after
+// the mount unit but no dependency on it; DROPIN_CHANGED tells install.sh to restart.
 func TestShotsDropIn(t *testing.T) {
 	units := t.TempDir()
 	data := "/var/lib/deltabacklog"
-	call := "shots_dropin '/mnt/ventodrive/deltabacklog/screenshots' " + data + " '" + filepath.ToSlash(units) + "'"
-	if _, err := run(t, "install.sh", "INSTALL_LIB", call); err != nil {
-		t.Fatal(err)
+	stub := "mount_unit() { echo mnt-ventodrive.mount; }\n"
+	call := stub + "shots_dropin '/mnt/ventodrive/deltabacklog/screenshots' " + data + " '" + filepath.ToSlash(units) + "'\necho changed=$DROPIN_CHANGED"
+	out, err := run(t, "install.sh", "INSTALL_LIB", call)
+	if err != nil || !strings.Contains(out, "changed=1") {
+		t.Fatalf("%v %q", err, out)
 	}
-	main, _ := os.ReadFile(filepath.Join(units, "deltabacklog.service.d", "screenshots.conf"))
-	bk, _ := os.ReadFile(filepath.Join(units, "deltabacklog-backup.service.d", "screenshots.conf"))
-	if string(main) != "[Service]\nReadWritePaths=-/mnt/ventodrive/deltabacklog/screenshots\n" {
-		t.Errorf("main drop-in: %q", main)
+	want := "[Unit]\nAfter=mnt-ventodrive.mount\n\n[Service]\nReadWritePaths=-/mnt/ventodrive/deltabacklog\n"
+	for _, u := range []string{"deltabacklog", "deltabacklog-backup"} {
+		got, _ := os.ReadFile(filepath.Join(units, u+".service.d", "screenshots.conf"))
+		if string(got) != want {
+			t.Errorf("%s drop-in: %q", u, got)
+		}
+		if strings.Contains(string(got), "RequiresMountsFor") || strings.Contains(string(got), "Requires=") || strings.Contains(string(got), "Wants=") {
+			t.Error("the units must not depend on the mount")
+		}
 	}
-	if string(bk) != "[Service]\nReadWritePaths=-/mnt/ventodrive/deltabacklog\n" { // also writes <parent>/backups
-		t.Errorf("backup drop-in: %q", bk)
+	// running it again changes nothing, so no restart is asked for
+	out, err = run(t, "install.sh", "INSTALL_LIB", call)
+	if err != nil || !strings.Contains(out, "changed=0") {
+		t.Errorf("second run: %v %q", err, out)
 	}
-	if strings.Contains(string(main)+string(bk), "RequiresMountsFor") {
-		t.Error("the units must not depend on the mount")
+	// another drive: changed again
+	out, _ = run(t, "install.sh", "INSTALL_LIB", "mount_unit() { echo mnt-other.mount; }\nshots_dropin '/mnt/ventodrive/deltabacklog/screenshots' "+data+" '"+filepath.ToSlash(units)+"'\necho changed=$DROPIN_CHANGED")
+	if !strings.Contains(out, "changed=1") {
+		t.Errorf("a new mount unit should count as a change: %q", out)
 	}
-	// idempotent
-	if _, err := run(t, "install.sh", "INSTALL_LIB", call); err != nil {
-		t.Fatal(err)
+	// no known mount unit: no [Unit] section
+	os.RemoveAll(units)
+	run(t, "install.sh", "INSTALL_LIB", "mount_unit() { return 1; }\nshots_dropin '/mnt/ventodrive/deltabacklog/screenshots' "+data+" '"+filepath.ToSlash(units)+"'")
+	if got, _ := os.ReadFile(filepath.Join(units, "deltabacklog.service.d", "screenshots.conf")); string(got) != "[Service]\nReadWritePaths=-/mnt/ventodrive/deltabacklog\n" {
+		t.Errorf("without a mount unit: %q", got)
 	}
-	// back inside the data folder (or unset): the drop-ins go away
+	// back inside the data folder (or unset): the drop-ins go away, and that is a change
 	for _, dir := range []string{"/var/lib/deltabacklog/screenshots", ""} {
 		run(t, "install.sh", "INSTALL_LIB", call)
-		if _, err := run(t, "install.sh", "INSTALL_LIB", "shots_dropin '"+dir+"' "+data+" '"+filepath.ToSlash(units)+"'"); err != nil {
-			t.Fatal(err)
+		out, err := run(t, "install.sh", "INSTALL_LIB", "shots_dropin '"+dir+"' "+data+" '"+filepath.ToSlash(units)+"'\necho changed=$DROPIN_CHANGED")
+		if err != nil || !strings.Contains(out, "changed=1") {
+			t.Fatalf("%v %q", err, out)
 		}
 		if _, err := os.Stat(filepath.Join(units, "deltabacklog.service.d")); err == nil {
 			t.Errorf("drop-in kept for %q", dir)
 		}
+	}
+}
+
+// SCREENSHOTS_DIR equal to a mount point is refused: the backups folder would land on the SD card.
+func TestMountPointAsScreenshotsDirIsRefused(t *testing.T) {
+	stub := "mount_point_of() { case \"$1\" in /mnt/ventodrive|/mnt/ventodrive/*) echo /mnt/ventodrive ;; *) return 1 ;; esac; }\n"
+	if _, err := run(t, "install.sh", "INSTALL_LIB", stub+"shots_is_mount /mnt/ventodrive"); err != nil {
+		t.Error("the mount point itself should be refused")
+	}
+	if _, err := run(t, "install.sh", "INSTALL_LIB", stub+"shots_is_mount /mnt/ventodrive/deltabacklog/screenshots"); err == nil {
+		t.Error("a folder inside the drive should be accepted")
+	}
+	if _, err := run(t, "install.sh", "INSTALL_LIB", stub+"shots_is_mount /somewhere/else"); err == nil {
+		t.Error("a folder outside any drive is not a mount point")
 	}
 }
 
