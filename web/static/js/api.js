@@ -267,7 +267,11 @@ export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
       try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
       const r = body.results?.[0];
       if (xhr.status === 200 && r?.screenshot) resolve(r.screenshot);
-      else reject(new Error(r?.error || body.error || (xhr.status === 413 ? 'the upload is too large' : `upload failed (${xhr.status})`)));
+      else {
+        const err = new Error(r?.error || body.error || (xhr.status === 413 ? 'the upload is too large' : `upload failed (${xhr.status})`));
+        if (r?.needs_thumb) Object.assign(err, { needsThumb: true, width: r.width, height: r.height }); // see makeThumb
+        reject(err);
+      }
     };
     xhr.send(fd);
   });

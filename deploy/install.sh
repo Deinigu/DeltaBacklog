@@ -86,6 +86,21 @@ STAGE=${1:?usage: install.sh <stage-dir>}
 
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 
+# 0. refuse a SCREENSHOTS_DIR that is a mount point before anything is changed (the settings about to be installed
+#    count: the staged file wins, then the installed one). It must be a folder inside the drive: the backups folder is
+#    created beside it, and beside a mount point that is on the SD card.
+WANT_SHOTS=$(env_value "$STAGE/env" SCREENSHOTS_DIR)
+[ -n "$WANT_SHOTS" ] || WANT_SHOTS=$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)
+case "$WANT_SHOTS" in /?*/) WANT_SHOTS=${WANT_SHOTS%/} ;; esac
+case "$WANT_SHOTS" in
+  ""|"$DATA"|"$DATA"/*) ;;
+  *) if shots_is_mount "$WANT_SHOTS"; then
+       echo "SCREENSHOTS_DIR=$WANT_SHOTS is a mount point itself: use a folder inside the drive (for example $WANT_SHOTS/deltabacklog/screenshots)."
+       echo "Otherwise the backups folder would be created beside it, on the SD card. Nothing was installed or changed."
+       exit 1
+     fi ;;
+esac
+
 # 1. a dedicated account with no login and no shell
 if ! id deltabacklog >/dev/null 2>&1; then
   useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin deltabacklog
@@ -116,14 +131,6 @@ fi
 #     not available" until it is.
 SHOTS=$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)
 case "$SHOTS" in /?*/) SHOTS=${SHOTS%/} ;; esac
-case "$SHOTS" in
-  ""|"$DATA"|"$DATA"/*) ;;
-  *) if shots_is_mount "$SHOTS"; then
-       echo "SCREENSHOTS_DIR=$SHOTS is a mount point itself: use a folder inside the drive (for example $SHOTS/deltabacklog/screenshots)."
-       echo "Otherwise the backups folder would be created beside it, on the SD card. Nothing was changed for screenshots."
-       exit 1
-     fi ;;
-esac
 shots_dropin "$SHOTS" "$DATA" /etc/systemd/system
 if [ -n "$SHOTS" ]; then
   case "$SHOTS" in

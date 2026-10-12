@@ -1,14 +1,14 @@
 // The "Screenshots" section of the game drawer: thumbnail grid, upload with progress, and the full-screen viewer.
 import { h, toast, toastAction } from './util.js';
 import { listShots, uploadShot, setShotCaption, deleteShot, deleteShotKeepalive, orderShots } from './api.js';
-import { moveShot, stepIndex, formatBytes, formatTaken, countLabel, pickImages, uploadSummary, thumbFit, pendingIds, withoutPending, clampIndex } from './shots.js';
+import { moveShot, stepIndex, formatBytes, formatTaken, countLabel, pickImages, uploadSummary, thumbPlan, pendingIds, withoutPending, clampIndex } from './shots.js';
 
 const UNDO_MS = 6000;
 const STORAGE_DOWN = 'Screenshot storage is not available (is the drive connected?). Uploads will fail until it is back.';
 
 // Screenshots deleted in the UI whose DELETE is still waiting out the undo time, by id. Module level on purpose: a
 // drawer that is closed and reopened (a new section) must still hide them, and leaving the page must still delete them.
-const pending = new Map(); // id -> { s, gameId, at, timer }
+const pending = new Map(); // id -> { s, gameId, at, timer, toast }
 const THUMB_CACHE = 'screenshot-thumbs';
 
 /** Drop a deleted picture's thumbnail from the service worker's cache so it cannot show as a ghost. */
@@ -19,6 +19,7 @@ function forgetThumb(url) {
 function flushPending() {
   for (const [id, e] of pending) {
     clearTimeout(e.timer);
+    e.toast?.remove(); // the delete is sent now: an Undo button would do nothing
     deleteShotKeepalive(id);
     forgetThumb(e.s.thumb);
   }
@@ -27,21 +28,27 @@ function flushPending() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPending(); });
 window.addEventListener('pagehide', flushPending);
 
-/** A small JPEG of the picture (at most 480x960), made in the browser from a downscaled decode. null when it cannot. */
-async function makeThumb(file) {
-  if (typeof createImageBitmap !== 'function') return null;
+/**
+ * A small JPEG of the picture for the server, which cannot decode it (it needs too much memory). It uses the server's
+ * own crop rule (thumbPlan) on the size the server reported, and lets the browser crop and shrink while decoding
+ * (createImageBitmap with a source rectangle and a target size), so no big bitmap is made here either. null when the
+ * browser cannot.
+ */
+async function makeThumb(file, width, height) {
+  const p = thumbPlan(width, height);
+  if (typeof createImageBitmap !== 'function' || !p.tw) return null;
   let bmp;
   try {
-    bmp = await createImageBitmap(file, { resizeWidth: 480, resizeQuality: 'medium' });
-    const { w, h } = thumbFit(bmp.width, bmp.height);
-    if (!w) return null;
+    const sx = Math.floor((width - p.cw) / 2);
+    const sy = Math.floor((height - p.ch) / 2);
+    bmp = await createImageBitmap(file, sx, sy, p.cw, p.ch, { resizeWidth: p.tw, resizeHeight: p.th, resizeQuality: 'medium' });
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = p.tw;
+    canvas.height = p.th;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bmp, 0, 0, w, h);
+    ctx.fillRect(0, 0, p.tw, p.th);
+    ctx.drawImage(bmp, 0, 0, p.tw, p.th);
     return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
   } catch {
     return null;
@@ -106,7 +113,17 @@ export function screenshotsSection(game) {
       const row = h('div.shots-row', {}, h('span.name', {}, f.name), bar);
       progress.append(row);
       try {
-        const s = await uploadShot(game.id, f, (p) => { bar.value = p; }, await makeThumb(f));
+        const onProgress = (p) => { bar.value = p; };
+        let s;
+        try {
+          s = await uploadShot(game.id, f, onProgress);
+        } catch (e) {
+          if (!e.needsThumb) throw e;
+          // too big for the server to decode: it keeps the original untouched if we send a preview made here
+          const thumb = await makeThumb(f, e.width, e.height);
+          if (!thumb) throw new Error('too big to make a preview, and this browser could not make one either');
+          s = await uploadShot(game.id, f, onProgress, thumb);
+        }
         shots.push(s);
         added++;
         row.remove();
@@ -228,7 +245,7 @@ export function screenshotsSection(game) {
           toast(e.status === 503 ? STORAGE_DOWN : 'Could not delete the screenshot');
         }
       }, UNDO_MS);
-      toastAction('Screenshot deleted', 'Undo', () => {
+      entry.toast = toastAction('Screenshot deleted', 'Undo', () => {
         if (pending.get(s.id) !== entry) return;
         clearTimeout(entry.timer);
         pending.delete(s.id);

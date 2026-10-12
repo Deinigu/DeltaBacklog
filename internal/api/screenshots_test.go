@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
@@ -422,7 +423,7 @@ func TestOverBudgetNeedsTheBrowsersThumbnail(t *testing.T) {
 	}()
 
 	code, res := e.upload(t, "1", upFile{name: "huge.jpg", data: big})
-	if code != 200 || len(res) != 1 || res[0].Screenshot != nil || !strings.Contains(res[0].Error, "too big") {
+	if code != 200 || len(res) != 1 || res[0].Screenshot != nil || !strings.Contains(res[0].Error, "too big") || !res[0].NeedsThumb || res[0].Width != 7000 || res[0].Height != 5700 {
 		t.Errorf("without a thumbnail: %d %+v", code, res)
 	}
 	if n := len(files(t, e.root)); n != 0 {
@@ -540,43 +541,196 @@ func TestDeleteNeedsTheStorage(t *testing.T) {
 	}
 }
 
-func TestSweepRemovesOnlyOldOrphans(t *testing.T) {
+func TestSweepNeverDeletesAnOriginal(t *testing.T) {
 	e := newShotEnv(t, nil)
-	_, res := e.upload(t, "1", upFile{name: "a.png", data: pngBytes(t, 40, 40)})
-	keep := files(t, e.root)
-	hex := strings.Repeat("a", 32)
 	old := time.Now().Add(-2 * time.Hour)
-	mk := func(rel string, age time.Time) string {
+	age := func(p string, at time.Time) { os.Chtimes(p, at, at) }
+	_, res := e.upload(t, "1", upFile{name: "a.png", data: pngBytes(t, 40, 40)})
+	keepOrig := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Src, "/screenshots/1/"))
+	keepThumb := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Thumb, "/screenshots/1/"))
+	hex := strings.Repeat("a", 32)
+	mk := func(rel string, data []byte, at time.Time) string {
 		p := filepath.Join(e.root, rel)
 		os.MkdirAll(filepath.Dir(p), 0o755)
-		os.WriteFile(p, []byte("x"), 0o644)
-		os.Chtimes(p, age, age)
+		os.WriteFile(p, data, 0o644)
+		age(p, at)
 		return p
 	}
-	oldTmp := mk("1/up-1.tmp", old)
-	newTmp := mk("1/up-2.tmp", time.Now())
-	oldOrphan := mk("1/"+hex+".png", old)
-	newOrphan := mk("1/"+strings.Repeat("b", 32)+".png", time.Now()) // an upload between rename and insert
-	goneGame := mk("9999/"+hex+".png", old)
-	foreign := mk("notes.txt", old)
-	foreignInGame := mk("1/readme.txt", old)
-	if n := e.s.SweepShots(); n != 3 {
-		t.Errorf("removed %d files", n)
+	oldTmp := mk("1/up-1.tmp", []byte("x"), old)
+	newTmp := mk("1/up-2.tmp", []byte("x"), time.Now())
+	loneThumb := mk("1/"+hex+"_t.jpg", []byte("x"), old) // its original is gone
+	// an original (and its thumbnail) the database lost, of a game that exists: re-adopted
+	lostName := strings.Repeat("b", 32)
+	lostOrig := mk("1/"+lostName+".png", pngBytes(t, 60, 30), old)
+	lostThumb := mk("1/"+lostName+"_t.jpg", jpegBytes(t, 20, 10), old)
+	// one still being uploaded (rename done, row not yet inserted)
+	fresh := mk("1/"+strings.Repeat("c", 32)+".png", pngBytes(t, 10, 10), time.Now())
+	// an original of a game this database does not know: moved, never deleted
+	goneName := strings.Repeat("d", 32)
+	goneOrig := mk("9999/"+goneName+".png", pngBytes(t, 10, 10), old)
+	mk("9999/"+goneName+"_t.jpg", []byte("t"), old)
+	// a file that is no image, in a game folder with a name that looks generated
+	junk := mk("1/"+strings.Repeat("e", 32)+".jpg", []byte("not an image"), old)
+	foreign := mk("notes.txt", []byte("x"), old)
+	foreignInGame := mk("1/readme.txt", []byte("x"), old)
+
+	r, err := e.s.SweepShots()
+	if err != nil || r.Removed != 2 || r.Adopted != 1 || r.Quarantined != 2 {
+		t.Fatalf("%+v %v", r, err)
 	}
-	for _, p := range append(keep, newTmp, newOrphan, foreign, foreignInGame) {
+	for _, p := range []string{keepOrig, keepThumb, newTmp, fresh, foreign, foreignInGame, lostOrig, lostThumb} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("%s should stay: %v", p, err)
 		}
 	}
-	for _, p := range []string{oldTmp, oldOrphan, goneGame, filepath.Dir(goneGame)} {
+	for _, p := range []string{oldTmp, loneThumb} {
 		if _, err := os.Stat(p); err == nil {
 			t.Errorf("%s should be gone", p)
 		}
 	}
-	_ = res
-	// no storage: the sweep does nothing (and cannot be fooled by an unmounted drive)
+	for _, p := range []string{goneOrig, junk} { // nothing is deleted: moved to .orphans
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s should have been moved", p)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(e.root, ".orphans", "9999", goneName+".png")); err != nil || len(b) == 0 {
+		t.Errorf("the original of the unknown game was not kept: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, ".orphans", "9999", goneName+"_t.jpg")); err != nil {
+		t.Error("its thumbnail was not kept")
+	}
+	if _, err := os.Stat(filepath.Join(e.root, ".orphans", "1", filepath.Base(junk))); err != nil {
+		t.Error("the unreadable file was not kept")
+	}
+	if _, err := os.Stat(filepath.Join(e.root, "9999")); err == nil {
+		t.Error("the empty folder of the unknown game should be removed")
+	}
+	// the adopted picture is listed again with its real size
+	list, _ := e.s.loadShots(1)
+	if len(list) != 2 || list[1].Width != 60 || list[1].Height != 30 || !strings.Contains(list[1].Src, lostName) {
+		t.Errorf("after adopting: %+v", list)
+	}
+	// running it again changes nothing
+	if r, _ := e.s.SweepShots(); r != (SweepResult{}) {
+		t.Errorf("second sweep: %+v", r)
+	}
+	// no storage: the sweep does nothing
 	e2 := newShotEnv(t, func(s *Server) { s.ShotDir = filepath.Join(t.TempDir(), "absent") })
-	if e2.s.SweepShots() != 0 {
+	if r, err := e2.s.SweepShots(); r != (SweepResult{}) || err != nil {
 		t.Error("swept without storage")
+	}
+}
+
+// The documented restore: an older database next to a drive that holds newer pictures must not lose them.
+func TestRestoredOlderDatabaseKeepsAndReadoptsNewerPictures(t *testing.T) {
+	e := newShotEnv(t, nil)
+	_, res := e.upload(t, "1", upFile{name: "after-backup.png", data: pngBytes(t, 80, 40)})
+	sc := res[0].Screenshot
+	// the database goes back to a state without that row
+	if _, err := e.s.DB.Exec("DELETE FROM screenshot WHERE id = ?", sc.ID); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-48 * time.Hour)
+	for _, p := range files(t, e.root) {
+		os.Chtimes(p, old, old)
+	}
+	r, err := e.s.SweepShots()
+	if err != nil || r.Adopted != 1 || r.Removed != 0 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	list, _ := e.s.loadShots(1)
+	if len(list) != 1 || list[0].Src != sc.Src || list[0].Width != 80 {
+		t.Fatalf("not back: %+v", list)
+	}
+	for _, u := range []string{list[0].Src, list[0].Thumb} {
+		if r, err := http.Get(e.srv.URL + u); err != nil || r.StatusCode != 200 {
+			t.Errorf("%s: %v %v", u, r, err)
+		}
+	}
+	// a thumbnail that is missing is made again
+	os.Remove(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "/screenshots/1/")))
+	e.s.DB.Exec("DELETE FROM screenshot")
+	for _, p := range files(t, e.root) {
+		os.Chtimes(p, old, old)
+	}
+	if r, _ := e.s.SweepShots(); r.Adopted != 1 {
+		t.Errorf("second restore: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "/screenshots/1/"))); err != nil {
+		t.Error("the thumbnail was not made again")
+	}
+}
+
+func TestSweepStopsOnADatabaseError(t *testing.T) {
+	e := newShotEnv(t, nil)
+	_, res := e.upload(t, "1", upFile{name: "a.png", data: pngBytes(t, 40, 40)})
+	old := time.Now().Add(-2 * time.Hour)
+	for _, p := range files(t, e.root) {
+		os.Chtimes(p, old, old)
+	}
+	e.s.DB.Close() // every query now fails
+	r, err := e.s.SweepShots()
+	if err == nil || r != (SweepResult{}) {
+		t.Errorf("%+v %v", r, err)
+	}
+	if len(files(t, e.root)) != 2 || res[0].Screenshot == nil {
+		t.Errorf("files touched after a database error: %v", files(t, e.root))
+	}
+}
+
+// trackHeap samples the heap while a request runs; stop returns how far above the starting heap it went.
+func trackHeap() (stop func() uint64) {
+	runtime.GC()
+	var base runtime.MemStats
+	runtime.ReadMemStats(&base)
+	var peak uint64
+	quit, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		var m runtime.MemStats
+		for {
+			select {
+			case <-quit:
+				return
+			default:
+			}
+			runtime.ReadMemStats(&m)
+			peak = max(peak, m.HeapAlloc)
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	return func() uint64 {
+		close(quit)
+		<-done
+		return peak - min(peak, base.HeapAlloc)
+	}
+}
+
+// Pictures that fit the budget are decoded, and must not need much more than the budget: the thumbnail scaler must not
+// add a big scratch buffer of its own (a kernel scaler did: 148 MB for a 47 MP grayscale JPEG).
+func TestWithinBudgetPicturesStayUnderTheBudgetInHeap(t *testing.T) {
+	old := debug.SetGCPercent(20)
+	defer debug.SetGCPercent(old)
+	e := newShotEnv(t, nil)
+	mk := func(img image.Image) []byte {
+		var b bytes.Buffer
+		if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: 50}); err != nil {
+			t.Fatal(err)
+		}
+		return b.Bytes()
+	}
+	gray := mk(image.NewGray(image.Rect(0, 0, 7000, 6700)))                                // 47 MP, 47 MB decoded
+	edge := mk(image.NewYCbCr(image.Rect(0, 0, 7000, 4500), image.YCbCrSubsampleRatio420)) // 32 MP 4:2:0, 47 MB decoded
+	runtime.GC()
+	for name, data := range map[string][]byte{"47 MP grayscale": gray, "32 MP 4:2:0": edge} {
+		stop := trackHeap()
+		code, res := e.upload(t, "1", upFile{name: "big.jpg", data: data})
+		grew := stop()
+		if code != 200 || res[0].Screenshot == nil {
+			t.Fatalf("%s: %d %+v", name, code, res)
+		}
+		if grew > 72<<20 { // the 48 MB budget plus the request and encoder
+			t.Errorf("%s: the heap grew by %d MB", name, grew>>20)
+		}
 	}
 }

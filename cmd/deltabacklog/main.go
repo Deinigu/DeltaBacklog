@@ -208,9 +208,13 @@ func main() {
 		log.Printf("warning: screenshot storage %s is not available (not mounted or not writable); uploads fail until it is", shotDir)
 	}
 	if srv.ShotStorageOK() {
-		go func() { // leftovers of crashes and of deletes made while the drive was away; never delays the start
-			if n := srv.SweepShots(); n > 0 {
-				log.Printf("screenshots: removed %d leftover files", n)
+		go func() { // leftovers of crashes and of database restores; never deletes an original, never delays the start
+			res, err := srv.SweepShots()
+			if err != nil {
+				log.Printf("screenshots: sweep stopped: %v", err)
+			}
+			if res != (api.SweepResult{}) {
+				log.Printf("screenshots: %s", res)
 			}
 		}()
 	}

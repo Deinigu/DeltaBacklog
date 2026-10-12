@@ -131,7 +131,7 @@ func DecodeCost(ext string, cfg image.Config, r io.Reader) int64 {
 	px := int64(cfg.Width) * int64(cfg.Height)
 	switch ext {
 	case "jpg":
-		progressive, comps := jpegLayout(r)
+		progressive, rgb, comps := jpegLayout(r)
 		if len(comps) == 0 {
 			return px * 12 // unknown layout: assume the worst realistic case
 		}
@@ -144,7 +144,7 @@ func DecodeCost(ext string, cfg image.Config, r io.Reader) int64 {
 			samples += px * int64(c[0]*c[1]) / int64(maxH*maxV)
 		}
 		cost := samples
-		if len(comps) >= 4 {
+		if len(comps) >= 4 || rgb { // the decoder builds a separate RGBA (or CMYK) image
 			cost += 4 * px
 		}
 		if progressive {
@@ -168,18 +168,20 @@ func DecodeCost(ext string, cfg image.Config, r io.Reader) int64 {
 	return px * 4 // WebP: YCbCr or NRGBA, plus alpha
 }
 
-// jpegLayout reads the markers up to the frame header: whether the JPEG is progressive and the (horizontal, vertical)
-// sampling factor of each component. It returns no components when it cannot tell.
-func jpegLayout(r io.Reader) (progressive bool, comps [][2]int) {
+// jpegLayout reads the markers up to the frame header: whether the JPEG is progressive, whether its three components
+// are stored as RGB (Adobe transform 0, or the ids R, G, B: the decoder then converts to a new RGBA image) and the
+// (horizontal, vertical) sampling factor of each component. It returns no components when it cannot tell.
+func jpegLayout(r io.Reader) (progressive, rgb bool, comps [][2]int) {
+	adobe := -1 // the Adobe APP14 transform byte, when present
 	br := bufio.NewReader(r)
 	var soi [2]byte
 	if _, err := io.ReadFull(br, soi[:]); err != nil || soi != [2]byte{0xFF, 0xD8} {
-		return false, nil
+		return false, false, nil
 	}
 	for i := 0; i < 1000; i++ {
 		b, err := br.ReadByte()
 		if err != nil {
-			return false, nil
+			return false, false, nil
 		}
 		if b != 0xFF {
 			continue
@@ -189,46 +191,57 @@ func jpegLayout(r io.Reader) (progressive bool, comps [][2]int) {
 			m, err = br.ReadByte()
 		}
 		if err != nil {
-			return false, nil
+			return false, false, nil
 		}
 		if m == 0 || m == 0x01 || (m >= 0xD0 && m <= 0xD8) {
 			continue
 		}
 		var l [2]byte
 		if _, err := io.ReadFull(br, l[:]); err != nil {
-			return false, nil
+			return false, false, nil
 		}
 		n := int(l[0])<<8 | int(l[1]) - 2
 		if n < 0 {
-			return false, nil
+			return false, false, nil
 		}
 		if m >= 0xC0 && m <= 0xCF && m != 0xC4 && m != 0xC8 && m != 0xCC {
 			buf := make([]byte, n)
 			if _, err := io.ReadFull(br, buf); err != nil || n < 6 {
-				return false, nil
+				return false, false, nil
 			}
 			nc := int(buf[5])
 			if nc < 1 || nc > 4 || n < 6+3*nc {
-				return false, nil
+				return false, false, nil
 			}
 			for c := 0; c < nc; c++ {
 				hv := buf[7+3*c]
 				hs, vs := int(hv>>4), int(hv&15)
 				if hs < 1 || vs < 1 {
-					return false, nil
+					return false, false, nil
 				}
 				comps = append(comps, [2]int{hs, vs})
 			}
-			return m == 0xC2 || m == 0xC6 || m == 0xCA || m == 0xCE, comps
+			rgb = nc == 3 && ((adobe == 0) || (adobe < 0 && buf[6] == 'R' && buf[9] == 'G' && buf[12] == 'B'))
+			return m == 0xC2 || m == 0xC6 || m == 0xCA || m == 0xCE, rgb, comps
+		}
+		if m == 0xEE && n >= 12 && n <= 64 { // APP14 "Adobe": the colour transform byte tells RGB from YCbCr
+			buf := make([]byte, n)
+			if _, err := io.ReadFull(br, buf); err != nil {
+				return false, false, nil
+			}
+			if string(buf[:5]) == "Adobe" {
+				adobe = int(buf[11])
+			}
+			continue
 		}
 		if m == 0xDA { // start of scan before any frame header: give up
-			return false, nil
+			return false, false, nil
 		}
 		if _, err := br.Discard(n); err != nil {
-			return false, nil
+			return false, false, nil
 		}
 	}
-	return false, nil
+	return false, false, nil
 }
 
 // decodeMu lets one image be decoded at a time: concurrent uploads must not add up to several decoded bitmaps
@@ -280,7 +293,7 @@ func WriteThumb(src, dst string, orientation int) error {
 	x0, y0 := b.Min.X+(b.Dx()-cw)/2, b.Min.Y+(b.Dy()-ch)/2
 	small := image.NewRGBA(image.Rect(0, 0, tw, th))
 	draw.Draw(small, small.Bounds(), image.NewUniform(color.Black), image.Point{}, draw.Src) // transparent pixels go on black: JPEG has no alpha
-	draw.BiLinear.Scale(small, small.Bounds(), img, image.Rect(x0, y0, x0+cw, y0+ch), draw.Over, nil)
+	draw.ApproxBiLinear.Scale(small, small.Bounds(), img, image.Rect(x0, y0, x0+cw, y0+ch), draw.Over, nil)
 	img = nil // the full-size bitmap is garbage from here on
 	return writeJPEG(orient(small, orientation), dst)
 }

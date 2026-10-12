@@ -152,6 +152,9 @@ type shotResult struct {
 	Name       string      `json:"name"`
 	Screenshot *Screenshot `json:"screenshot,omitempty"`
 	Error      string      `json:"error,omitempty"`
+	NeedsThumb bool        `json:"needs_thumb,omitempty"` // too big to decode here: send it again with a "thumb" part of the size below
+	Width      int         `json:"width,omitempty"`       // the picture's size as shown (EXIF rotation applied), with needs_thumb
+	Height     int         `json:"height,omitempty"`
 	cut        bool        // the request limit was hit while reading this file
 }
 
@@ -351,7 +354,8 @@ func (s *Server) receiveShot(gameID int64, dir string, part *multipart.Part, max
 	}
 	p := &pendingShot{dir: dir, tmpName: tmpName, base: shots.NewName(), info: info, size: n, modified: modified}
 	if budget := s.decodeBudget(); info.DecodeBytes > budget {
-		res.Error = fmt.Sprintf("too big to make a preview here (decoding needs about %d MB, the limit is %d MB); the app sends its own preview, retry from the app", info.DecodeBytes>>20, budget>>20)
+		res.Error = fmt.Sprintf("too big to make a preview here (decoding needs about %d MB, the limit is %d MB) and no preview came with it", info.DecodeBytes>>20, budget>>20)
+		res.NeedsThumb, res.Width, res.Height = true, info.Width, info.Height
 		return res, p
 	}
 	if err := shots.WriteThumb(tmpName, filepath.Join(dir, shots.ThumbName(p.base)), info.Orientation); err != nil {

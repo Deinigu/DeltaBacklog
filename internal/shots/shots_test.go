@@ -309,3 +309,39 @@ func TestSyncNewKeepsFreeSpaceMargin(t *testing.T) {
 		t.Errorf("without a free-space reading: %+v", r)
 	}
 }
+
+// An RGB JPEG (Adobe transform 0) is converted to a separate RGBA image by the decoder: 4 more bytes per pixel.
+func TestDecodeCostCountsTheRGBConversion(t *testing.T) {
+	yuv444 := [][2]int{{1, 1}, {1, 1}, {1, 1}}
+	plain := craftedJPEG(4000, 4000, 0xC0, yuv444)
+	// the same file with an Adobe APP14 segment before the frame header (transform byte 0: RGB, 1: YCbCr)
+	adobe := func(transform byte) []byte {
+		seg := []byte{0xFF, 0xEE, 0, 14, 'A', 'd', 'o', 'b', 'e', 0, 100, 0, 0, 0, 0, transform}
+		return append(append(append([]byte{}, plain[:20]...), seg...), plain[20:]...)
+	}
+	cost := func(b []byte) int64 {
+		cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return DecodeCost("jpg", cfg, bytes.NewReader(b))
+	}
+	px := int64(4000 * 4000)
+	if got := cost(plain); got != 3*px {
+		t.Errorf("YCbCr: %d", got)
+	}
+	if got := cost(adobe(1)); got != 3*px {
+		t.Errorf("Adobe YCbCr: %d", got)
+	}
+	if got := cost(adobe(0)); got != 7*px {
+		t.Errorf("Adobe RGB: %d, want %d", got, 7*px)
+	}
+	// component ids R, G, B without an Adobe segment
+	rgbIDs := append([]byte{}, plain...)
+	for i, c := range []byte{'R', 'G', 'B'} {
+		rgbIDs[len(rgbIDs)-4-9+3*i] = c
+	}
+	if got := cost(rgbIDs); got != 7*px {
+		t.Errorf("RGB ids: %d", got)
+	}
+}

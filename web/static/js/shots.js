@@ -54,13 +54,6 @@ export function uploadSummary(added, failed) {
   return added ? `${a}, ${failed} failed` : `${failed} failed`;
 }
 
-/** Size of the preview the browser makes for a picture it sends (same box as the server's: 480x960, never enlarged). */
-export function thumbFit(w, h, maxW = 480, maxH = 960) {
-  if (!(w > 0) || !(h > 0)) return { w: 0, h: 0 };
-  const f = Math.min(1, maxW / w, maxH / h);
-  return { w: Math.max(1, Math.round(w * f)), h: Math.max(1, Math.round(h * f)) };
-}
-
 /** The ids of a game's screenshots deleted in the UI whose DELETE has not been answered yet, newest last. */
 export function pendingIds(pending, gameId) {
   return [...pending.values()].filter((p) => p.gameId === gameId).map((p) => p.s.id);
@@ -74,4 +67,25 @@ export function withoutPending(list, pending) {
 /** The index to focus after the list changed: the same place, clamped; -1 when empty. */
 export function clampIndex(i, len) {
   return len <= 0 ? -1 : Math.max(0, Math.min(i, len - 1));
+}
+
+/**
+ * How the browser makes the preview for a picture the server cannot decode: the same rule as the server's thumbPlan
+ * (internal/shots): keep the centre part with a ratio between 1:2 and 4:1 (cw x ch, of w x h as shown), and draw it at
+ * tw x th, inside 480x960 and never enlarged. Keep the two in sync.
+ */
+export function thumbPlan(w, h) {
+  if (!(w > 0) || !(h > 0)) return { cw: 0, ch: 0, tw: 0, th: 0 };
+  let cw = w;
+  let ch = h;
+  if (ch > 2 * cw) ch = 2 * cw;
+  if (cw > 4 * ch) cw = 4 * ch;
+  let tw = cw;
+  let th = ch;
+  if (tw > 480 || th > 960) {
+    const f = Math.min(480 / cw, 960 / ch);
+    tw = Math.max(1, Math.floor(cw * f));
+    th = Math.max(1, Math.floor(ch * f));
+  }
+  return { cw, ch, tw, th };
 }
