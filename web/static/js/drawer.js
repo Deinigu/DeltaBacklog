@@ -57,6 +57,7 @@ export function closeDrawer() {
   open.drawer.remove();
   open.scrim.remove();
   document.removeEventListener('keydown', open.onKey);
+  window.removeEventListener('games-changed', open.onGames);
   open = null;
   // Back to what opened it (a card, a table row), unless the page under it was replaced meanwhile
   if (hadFocus && opener?.isConnected && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
@@ -223,7 +224,19 @@ export function openDrawer(game) {
     if (e.key === 'Escape' && !document.querySelector('.dialog, .sheet.open, .shot-viewer')) requestClose();
   };
   document.addEventListener('keydown', onKey);
+  // The cover can change while the drawer is open (Change cover): show the new picture at once.
+  const onGames = (e) => {
+    if (e.detail?.id && e.detail.id !== game.id) return;
+    const next = coverURL(game);
+    const box = drawer.querySelector('.cover');
+    const img = box.querySelector('img');
+    if (next && img) { if (img.getAttribute('src') !== next) img.src = next; return; }
+    if (!next && !img) return;
+    const fresh = next ? h('img', { src: next, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title));
+    (img || box.querySelector('.ph'))?.replaceWith(fresh);
+  };
+  window.addEventListener('games-changed', onGames);
   document.body.append(scrim, drawer);
-  open = { drawer, scrim, onKey, isDirty: null, opener };
+  open = { drawer, scrim, onKey, onGames, isDirty: null, opener };
   drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
 }

@@ -1,5 +1,5 @@
 // Year in review page (#/years/<year>): what was played, a breakdown, and that year's tier list.
-import { h, toast, gradientFor, initials, lazyImg } from './util.js';
+import { h, toast, gradientFor, initials, lazyImg, retargetImg } from './util.js';
 import { store, coverURL, getTierlist, saveTierlist, load } from './api.js';
 import { openDrawer } from './drawer.js';
 import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, tierState, tierOf, unranked, place, toEntries, remember, restored } from './yearreview.js';
@@ -76,7 +76,9 @@ export function renderYear(root, year) {
   let byId = new Map(pool.map((g) => [g.id, g]));
 
   /** A game was edited (its years may have changed): follow the store so a stale id is never saved. */
-  function syncPool() {
+  function syncPool(e) {
+    const changed = e?.detail?.id && store.byId.get(e.detail.id);
+    if (changed) for (const img of body.querySelectorAll(`[data-id="${changed.id}"] img`)) retargetImg(img, coverURL(changed)); // a new cover
     const next = gamesOfYear(store.games, year);
     const ids = next.map((g) => g.id);
     if (ids.length === poolIds.length && ids.every((id, i) => id === poolIds[i])) return;
@@ -278,7 +280,7 @@ export function renderYear(root, year) {
   const gameRow = (g) => {
     const st = store.statusByCode.get(g.status);
     const url = coverURL(g);
-    return h('button.yrow', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
+    return h('button.yrow', { type: 'button', 'data-id': g.id, onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('span.ythumb', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title))),
       h('span.yinfo', {}, h('span.yname', {}, g.title), h('span.ysub', {}, [st?.label, g.platforms.slice(0, 2).join(', ')].filter(Boolean).join(' · '))));
   };
