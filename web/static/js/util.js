@@ -132,6 +132,14 @@ const coverObserver = typeof IntersectionObserver === 'function'
   }, { rootMargin: '600px 0px' })
   : null;
 
+/** Point a (lazy) cover <img> at a new URL; a picture not requested yet just gets its new src. Returns true when it changed. */
+export function retargetImg(img, next) {
+  if (!next || img.dataset.src === next) return false;
+  img.dataset.src = next;
+  if (img.hasAttribute('src')) img.src = next;
+  return true;
+}
+
 /** An <img> whose picture is requested only once it is near the viewport. */
 export function lazyImg(src, attrs = {}) {
   const img = h('img', { alt: '', decoding: 'async', ...attrs });

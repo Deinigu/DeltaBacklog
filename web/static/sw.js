@@ -1,7 +1,7 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v30';
+const VERSION = 'v31';
 const SHELL = `shell-${VERSION}`;
-const COVERS = 'covers';
+const COVERS = 'covers-v2'; // keyed by path (one entry per cover file); the old 'covers' cache was keyed by URL with ?v=
 const THUMBS = 'screenshot-thumbs';
 const MAX_THUMBS = 400; // thumbnails are ~30 KB each; originals are never cached
 const API = 'api';
@@ -14,7 +14,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('shell-') && k !== SHELL).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => (k.startsWith('shell-') && k !== SHELL) || k === 'covers').map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (e) => {
     // Only the small thumbnails (<hex>_t.jpg) are cached; an original goes straight to the network.
     if (/_t\.jpg$/.test(url.pathname)) e.respondWith(cacheFirst(req, THUMBS, MAX_THUMBS));
   } else if (url.pathname.startsWith('/covers/')) {
-    e.respondWith(cacheFirst(req, COVERS));
+    e.respondWith(coverFirst(req));
   } else if (url.pathname.startsWith('/api/')) {
     e.respondWith(networkFirst(req, API));
   } else {
@@ -44,18 +44,26 @@ async function cacheFirst(req, name, max = 0) {
   if (hit) return hit;
   const res = await fetch(req);
   if (res.ok) {
-    if (name === COVERS) await dropOtherVersions(cache, req);
     cache.put(req, res.clone());
     if (max) trim(cache, max);
   }
   return res;
 }
 
-// A cover is /covers/<file>?v=<version>: when a new version is cached, the older ones of the same file are dead weight.
-async function dropOtherVersions(cache, req) {
-  const path = new URL(req.url).pathname;
-  for (const k of await cache.keys()) {
-    if (k.url !== req.url && new URL(k.url).pathname === path) await cache.delete(k);
+// A cover is /covers/<file>?v=<version>. One cache entry per file (keyed by path, so a new version replaces the old
+// one without scanning the cache); the entry is used only when its own URL carries the requested version.
+async function coverFirst(req) {
+  const cache = await caches.open(COVERS);
+  const key = new URL(req.url).pathname;
+  const hit = await cache.match(key);
+  if (hit && hit.url === req.url) return hit;
+  try {
+    const res = await fetch(req);
+    if (res.ok) await cache.put(key, res.clone());
+    return res;
+  } catch (err) {
+    if (hit) return hit; // offline: an older cover beats a broken image
+    throw err;
   }
 }
 

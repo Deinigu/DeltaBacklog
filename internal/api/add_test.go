@@ -411,6 +411,7 @@ func TestCoverVersionOnlyChangesWithTheImage(t *testing.T) {
 	}
 
 	// Two covers in the same second must still differ, or the browser keeps showing the first one.
+	// (With second resolution this only fails when both requests land in the same second, which is likely, not certain.)
 	v1 := g.CoverV
 	_, body = do(t, "POST", url+"/cover", `{"url":"`+e.images.URL+`/ok.png"}`)
 	json.Unmarshal(body, &g)

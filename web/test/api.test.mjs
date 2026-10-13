@@ -21,3 +21,15 @@ test('coverURL changes with the cover version so a new cover is never served fro
   assert.match(a, /^\/covers\/7\.jpg\?v=/);
   assert.equal(coverURL({ cover: null }), null);
 });
+
+test('retargetImg points a cover image at its new version, lazy or loaded', async () => {
+  const { retargetImg } = await import('../static/js/util.js');
+  const lazy = { dataset: { src: '/covers/1.jpg?v=a' }, hasAttribute: () => false };
+  assert.equal(retargetImg(lazy, '/covers/1.jpg?v=b'), true);
+  assert.equal(lazy.dataset.src, '/covers/1.jpg?v=b');
+  assert.equal(lazy.src, undefined); // not requested yet: the observer will use data-src
+  const loaded = { dataset: { src: '/covers/1.jpg?v=a' }, src: '/covers/1.jpg?v=a', hasAttribute: () => true };
+  retargetImg(loaded, '/covers/1.jpg?v=b');
+  assert.equal(loaded.src, '/covers/1.jpg?v=b');
+  assert.equal(retargetImg(loaded, '/covers/1.jpg?v=b'), false); // unchanged
+});
