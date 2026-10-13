@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/covers"
+	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
 // Source finds poster URLs. *meta.Client implements it; an unconfigured service returns an error.
@@ -36,6 +37,11 @@ type Maker struct {
 
 // ErrNoSource means the game has no image to make a poster from.
 var ErrNoSource = errors.New("no poster source")
+
+// ErrTemporary means a source failed in a way that may pass (a network error, a rate limit, a server error): no poster is
+// made, not even the crop, so a later try can still find the real one. A crop is a permanent poster only when the
+// sources really have nothing.
+var ErrTemporary = errors.New("a poster source failed for now")
 
 type gameRow struct {
 	title      string
@@ -63,6 +69,7 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 	if fetch == nil {
 		fetch = covers.FetchPosterStrict
 	}
+	temporary := false
 	try := func(src, url string) (string, bool) {
 		if url == "" || m.Allowed == nil || !m.Allowed(url) {
 			return "", false
@@ -70,14 +77,22 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 		name, err := fetch(url, m.Dir, id)
 		if err != nil {
 			log.Printf("posters: game %d: %s: %v", id, src, err)
+			temporary = true
 			return "", false
 		}
 		return name, true
 	}
 	var name, src string
+	// A lookup error other than "not configured" is temporary; so is a failed download.
+	lookupFailed := func(err error) {
+		if !errors.Is(err, meta.ErrNotConfigured) {
+			temporary = true
+		}
+	}
 	if m.Src != nil && g.igdbID.Valid && g.igdbID.Int64 > 0 {
 		if u, err := m.Src.IGDBCoverURL(ctx, g.igdbID.Int64); err != nil {
 			log.Printf("posters: game %d: igdb: %v", id, err)
+			lookupFailed(err)
 		} else if n, ok := try("igdb", u); ok {
 			name, src = n, "igdb"
 		}
@@ -85,9 +100,13 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 	if name == "" && ctx.Err() == nil && m.Src != nil {
 		if u, err := m.Src.SteamGridPortrait(ctx, g.title); err != nil {
 			log.Printf("posters: game %d: steamgriddb: %v", id, err)
+			lookupFailed(err)
 		} else if n, ok := try("sgdb", u); ok {
 			name, src = n, "sgdb"
 		}
+	}
+	if name == "" && temporary {
+		return "", ErrTemporary
 	}
 	if name == "" && g.coverFile.Valid && g.coverFile.String != "" {
 		n, err := covers.CropPoster(filepath.Join(m.Dir, filepath.Base(g.coverFile.String)), m.Dir, id)
@@ -185,9 +204,12 @@ func (q *Queue) run() {
 		q.mu.Lock()
 		delete(q.pending, id)
 		if err != nil {
-			q.failed[id] = true
+			q.failed[id] = true // not tried again until the program restarts
 		}
 		q.mu.Unlock()
+		if errors.Is(err, ErrTemporary) {
+			time.Sleep(10 * pause) // something is wrong or busy over there: slow down
+		}
 		time.Sleep(pause)
 	}
 }

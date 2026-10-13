@@ -228,3 +228,16 @@ export function exportLayout({ counts, perRow, tileW, tileH, gap, labelW, pad, h
   });
   return { width, height: y + pad - gap, rows };
 }
+
+/**
+ * exportLayout, with more tiles per row until the picture fits what mobile browsers can draw (iOS Safari: about 16.7
+ * million pixels, and a side of at most 16384 px). Returns { layout, perRow }; `layout` is null when even 60 per row do
+ * not fit (the caller should say so).
+ */
+export function fitExportLayout(opts, { maxSide = 14000, maxArea = 16_000_000 } = {}) {
+  for (let perRow = opts.perRow; perRow <= 60; perRow += 2) {
+    const layout = exportLayout({ ...opts, perRow });
+    if (layout.height <= maxSide && layout.width <= maxSide && layout.width * layout.height <= maxArea) return { layout, perRow };
+  }
+  return { layout: null, perRow: 60 };
+}

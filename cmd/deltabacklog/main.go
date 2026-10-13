@@ -120,7 +120,8 @@ func main() {
 			"       deltabacklog backup <file>         write a copy of the database\n"+
 			"       deltabacklog backup-screenshots [--min-free-gb N] <dir>  copy screenshots missing from <dir> (never deletes)\n"+
 			"       deltabacklog check <file>          verify a database or backup\n"+
-			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n")
+			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n"+
+			"       deltabacklog fetch-posters [--dry-run] [--limit N] [--upgrade]  make the portrait posters of the rankings\n")
 		if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
 			return
 		}

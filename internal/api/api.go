@@ -53,6 +53,13 @@ func (s *Server) Warm() {
 
 // Handler returns the router for /api, /covers and /healthz.
 func (s *Server) Handler() http.Handler {
+	s.cache.mu.Lock()
+	s.cache.version = func() (int64, error) {
+		var v int64
+		err := s.DB.QueryRow(`PRAGMA data_version`).Scan(&v)
+		return v, err
+	}
+	s.cache.mu.Unlock()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.DB.PingContext(r.Context()); err != nil {

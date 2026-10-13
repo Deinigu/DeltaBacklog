@@ -4,7 +4,7 @@
 import { h, toast, toastAction, gradientFor, initials, icon, promptDialog, confirmDialog } from './util.js';
 import {
   store, coverURL, posterURL, getRanking, patchRanking, deleteRanking, duplicateRanking, addRankingTier, deleteRankingTier,
-  addRankingGames, removeRankingGame, saveBoard, saveBoardKeepalive, refreshPosters,
+  addRankingGames, removeRankingGame, saveBoard, saveBoardKeepalive, applyPosters,
 } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openGamePicker } from './gamepicker.js';
@@ -45,6 +45,7 @@ export function renderRanking(root, id) {
       const r = await getRanking(id);
       if (!alive) return;
       ranking = { name: r.name, description: r.description };
+      applyPosters(r.entries); // posters made since the game list was loaded (also by fetch-posters)
       board = boardFrom(r);
       selected = null;
       drawAll();
@@ -65,7 +66,7 @@ export function renderRanking(root, id) {
         await new Promise((r) => setTimeout(r, 2500));
         if (!alive) return;
         const r = await getRanking(id);
-        if (await refreshPosters() && alive) drawBoard();
+        if (applyPosters(r.entries) && alive) drawBoard();
         if (r.posters_pending === 0) return;
       }
     } catch { /* offline: the posters show up on the next visit */ } finally { polling = false; }
@@ -197,11 +198,17 @@ export function renderRanking(root, id) {
   async function removeSelected(g) {
     const gid = g.id;
     select(null);
+    const was = locate(board, gid); // where it was, for Undo
     board = removeGame(board, gid);
     drawBoard();
     try { await removeRankingGame(id, gid); } catch { toast('Could not remove the game. Reloading.'); load(); return; }
     toastAction(`Removed “${g.title}” from the ranking`, 'Undo', async () => {
-      try { await addRankingGames(id, [gid]); board = addGames(board, [gid]); drawBoard(); queue.change(); } catch { toast('Could not bring it back'); }
+      try {
+        await addRankingGames(id, [gid]);
+        const tier = was && board.tiers.some((t) => t.id === was.tier) ? was.tier : null; // its tier may be gone since
+        board = place(addGames(board, [gid]), gid, tier, was && tier === was.tier ? was.index : Infinity);
+        drawBoard(); queue.change();
+      } catch { toast('Could not bring it back'); }
     });
   }
 
@@ -412,7 +419,7 @@ export function renderRanking(root, id) {
   }
   async function exportClicked(btn) {
     btn.disabled = true;
-    try { await exportRankingPNG({ name: ranking.name, board, byId: store.byId }); } catch { toast('Could not make the image'); } finally { btn.disabled = false; }
+    try { await exportRankingPNG({ name: ranking.name, board, byId: store.byId }); } catch (e) { toast(/too many/.test(e?.message) ? 'Too many ranked games for one picture' : 'Could not make the image'); } finally { btn.disabled = false; }
   }
 
   // ---------- page chrome ----------

@@ -259,7 +259,20 @@ export const saveBoard = (id, body) => send('PUT', `/api/rankings/${id}/board`, 
 /** Save when the page is going away (keepalive lets the request outlive it). Fire and forget. */
 export const saveBoardKeepalive = (id, body) => { fetch(`/api/rankings/${id}/board`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); };
 
-/** Posters are made in the background after games join a ranking: copy the new ones into the games already loaded. */
+/**
+ * Posters are made in the background: copy the ones the server reports (the entries of GET /api/rankings/<id>) into the
+ * games already loaded. Returns true when one changed.
+ */
+export function applyPosters(entries) {
+  let changed = false;
+  for (const e of entries) {
+    const g = store.byId.get(e.game_id);
+    if (g && (g.poster !== e.poster || g.poster_v !== e.poster_v)) { g.poster = e.poster; g.poster_v = e.poster_v; changed = true; }
+  }
+  return changed;
+}
+
+/** The same for every game (the list page has no entries to read from). */
 export async function refreshPosters() {
   const fresh = await getJSON('/api/games');
   let changed = false;

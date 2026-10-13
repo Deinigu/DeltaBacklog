@@ -46,12 +46,16 @@ type RankingEntry struct {
 	GameID int64  `json:"game_id"`
 	TierID *int64 `json:"tier_id"`
 	Pos    int    `json:"pos"`
+	// The poster of the game, so the editor can follow the background worker without reloading every game.
+	Poster  *string `json:"poster"`
+	PosterV string  `json:"poster_v"`
 }
 
 type Ranking struct {
 	ID          int64          `json:"id"`
 	Name        string         `json:"name"`
 	Description *string        `json:"description"`
+	Year        *int           `json:"year"` // the calendar year this is the ranking of (Year in review opens it), or null
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
 	Tiers       []RankingTier  `json:"tiers"`
@@ -65,6 +69,7 @@ type RankingSummary struct {
 	ID          int64      `json:"id"`
 	Name        string     `json:"name"`
 	Description *string    `json:"description"`
+	Year        *int       `json:"year"`
 	Pos         int        `json:"pos"`
 	UpdatedAt   string     `json:"updated_at"`
 	Games       int        `json:"games"`
@@ -129,8 +134,8 @@ func (s *Server) posterQ() *posters.Queue {
 
 func loadRanking(d *sql.DB, id int64) (Ranking, error) {
 	rk := Ranking{ID: id, Tiers: []RankingTier{}, Entries: []RankingEntry{}}
-	err := d.QueryRow(`SELECT name, description, created_at, updated_at FROM ranking WHERE id = ?`, id).
-		Scan(&rk.Name, &rk.Description, &rk.CreatedAt, &rk.UpdatedAt)
+	err := d.QueryRow(`SELECT name, description, year, created_at, updated_at FROM ranking WHERE id = ?`, id).
+		Scan(&rk.Name, &rk.Description, &rk.Year, &rk.CreatedAt, &rk.UpdatedAt)
 	if err != nil {
 		return rk, err
 	}
@@ -150,7 +155,8 @@ func loadRanking(d *sql.DB, id int64) (Ranking, error) {
 	if err := rows.Err(); err != nil {
 		return rk, err
 	}
-	erows, err := d.Query(`SELECT e.game_id, e.tier_id, e.pos FROM ranking_entry e
+	erows, err := d.Query(`SELECT e.game_id, e.tier_id, e.pos, g.poster_file, g.poster_updated_at FROM ranking_entry e
+		JOIN game g ON g.id = e.game_id
 		LEFT JOIN ranking_tier t ON t.id = e.tier_id
 		WHERE e.ranking_id = ?
 		ORDER BY e.tier_id IS NULL, t.pos, e.pos, e.game_id`, id)
@@ -160,7 +166,7 @@ func loadRanking(d *sql.DB, id int64) (Ranking, error) {
 	defer erows.Close()
 	for erows.Next() {
 		var e RankingEntry
-		if err := erows.Scan(&e.GameID, &e.TierID, &e.Pos); err != nil {
+		if err := erows.Scan(&e.GameID, &e.TierID, &e.Pos, &e.Poster, &e.PosterV); err != nil {
 			return rk, err
 		}
 		rk.Entries = append(rk.Entries, e)
@@ -210,7 +216,7 @@ func (s *Server) listRankings(w http.ResponseWriter, r *http.Request) {
 }
 
 func loadRankingList(d *sql.DB) ([]RankingSummary, error) {
-	rows, err := d.Query(`SELECT r.id, r.name, r.description, r.pos, r.updated_at,
+	rows, err := d.Query(`SELECT r.id, r.name, r.description, r.year, r.pos, r.updated_at,
 			(SELECT count(*) FROM ranking_entry e WHERE e.ranking_id = r.id),
 			(SELECT count(*) FROM ranking_entry e WHERE e.ranking_id = r.id AND e.tier_id IS NOT NULL)
 		FROM ranking r ORDER BY r.pos, r.id`)
@@ -220,7 +226,7 @@ func loadRankingList(d *sql.DB) ([]RankingSummary, error) {
 	out := []RankingSummary{}
 	for rows.Next() {
 		var s RankingSummary
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Pos, &s.UpdatedAt, &s.Games, &s.Ranked); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Year, &s.Pos, &s.UpdatedAt, &s.Games, &s.Ranked); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -272,7 +278,6 @@ func loadRankingList(d *sql.DB) ([]RankingSummary, error) {
 func (s *Server) getRanking(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	s.respondRanking(w, http.StatusOK, id)
@@ -283,6 +288,7 @@ func (s *Server) getRanking(w http.ResponseWriter, r *http.Request) {
 type rankingInput struct {
 	Name        *string `json:"name"`
 	Description *string `json:"description"`
+	Year        *int    `json:"year"`     // create and patch: the year this ranking is "the ranking of" (0 clears)
 	Preset      string  `json:"preset"`   // create: "sabcdf" (default) or "empty"
 	GameIDs     []int64 `json:"game_ids"` // create: games to put in the pool
 }
@@ -295,6 +301,9 @@ func (in *rankingInput) validate(creating bool) error {
 		if _, ok := cleanText(in.Name, maxNameLen); !ok {
 			return errBadRanking
 		}
+	}
+	if in.Year != nil && *in.Year != 0 && (*in.Year < 1970 || *in.Year > 2100) {
+		return errBadRanking
 	}
 	if in.Description != nil && utf8.RuneCountInString(*in.Description) > maxDescLen {
 		return errBadRanking
@@ -346,7 +355,7 @@ func (s *Server) createRanking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name, _ := cleanText(in.Name, maxNameLen)
-	res, err := tx.Exec(`INSERT INTO ranking(name, description, pos) VALUES (?, ?, (SELECT coalesce(max(pos), 0) + 1 FROM ranking))`, name, nullDesc(in.Description))
+	res, err := tx.Exec(`INSERT INTO ranking(name, description, year, pos) VALUES (?, ?, ?, (SELECT coalesce(max(pos), 0) + 1 FROM ranking))`, name, nullDesc(in.Description), nullYear(in.Year))
 	if err != nil {
 		fail(w, err)
 		return
@@ -374,14 +383,13 @@ func (s *Server) createRanking(w http.ResponseWriter, r *http.Request) {
 func (s *Server) patchRanking(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in rankingInput
 	if !readJSON(w, r, &in, 64<<10) {
 		return
 	}
-	if in.validate(false) != nil || (in.Name == nil && in.Description == nil) {
+	if in.validate(false) != nil || (in.Name == nil && in.Description == nil && in.Year == nil) {
 		bad(w, "invalid ranking")
 		return
 	}
@@ -406,8 +414,21 @@ func (s *Server) patchRanking(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if in.Year != nil {
+		if _, err := s.DB.Exec(`UPDATE ranking SET year = ? WHERE id = ?`, nullYear(in.Year), id); err != nil {
+			fail(w, err)
+			return
+		}
+	}
 	touch(s.DB, id)
 	s.respondRanking(w, http.StatusOK, id)
+}
+
+func nullYear(p *int) any {
+	if p == nil || *p == 0 {
+		return nil
+	}
+	return *p
 }
 
 func touch(x interface {
@@ -419,7 +440,6 @@ func touch(x interface {
 func (s *Server) deleteRanking(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	res, err := s.DB.Exec(`DELETE FROM ranking WHERE id = ?`, id)
@@ -437,7 +457,6 @@ func (s *Server) deleteRanking(w http.ResponseWriter, r *http.Request) {
 func (s *Server) duplicateRanking(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in rankingInput
@@ -651,7 +670,6 @@ func tierIDs(tx *sql.Tx, rid int64) ([]int64, error) {
 func (s *Server) addTier(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in tierInput
@@ -713,7 +731,10 @@ func (s *Server) addTier(w http.ResponseWriter, r *http.Request) {
 func (s *Server) patchTier(w http.ResponseWriter, r *http.Request) {
 	rid, ok1 := pathID(w, r)
 	tid, ok2 := pathInt(r, "tid")
-	if !ok1 || !ok2 {
+	if !ok1 {
+		return // pathID answered 404
+	}
+	if !ok2 {
 		notFound(w)
 		return
 	}
@@ -755,7 +776,10 @@ func (s *Server) patchTier(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteTier(w http.ResponseWriter, r *http.Request) {
 	rid, ok1 := pathID(w, r)
 	tid, ok2 := pathInt(r, "tid")
-	if !ok1 || !ok2 {
+	if !ok1 {
+		return // pathID answered 404
+	}
+	if !ok2 {
 		notFound(w)
 		return
 	}
@@ -797,7 +821,6 @@ func (s *Server) deleteTier(w http.ResponseWriter, r *http.Request) {
 func (s *Server) reorderTiers(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var ids []int64
@@ -907,7 +930,6 @@ func addEntries(tx *sql.Tx, rid int64, gameIDs []int64, tier *int64) (added []in
 func (s *Server) addRankingEntries(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in struct {
@@ -959,7 +981,10 @@ func (s *Server) addRankingEntries(w http.ResponseWriter, r *http.Request) {
 func (s *Server) removeRankingEntry(w http.ResponseWriter, r *http.Request) {
 	rid, ok1 := pathID(w, r)
 	gid, ok2 := pathInt(r, "gid")
-	if !ok1 || !ok2 {
+	if !ok1 {
+		return // pathID answered 404
+	}
+	if !ok2 {
 		notFound(w)
 		return
 	}
@@ -981,7 +1006,6 @@ func (s *Server) removeRankingEntry(w http.ResponseWriter, r *http.Request) {
 func (s *Server) moveRankingEntries(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in struct {
@@ -1090,7 +1114,6 @@ type boardTier struct {
 func (s *Server) putBoard(w http.ResponseWriter, r *http.Request) {
 	rid, ok := pathID(w, r)
 	if !ok {
-		notFound(w)
 		return
 	}
 	var in struct {
@@ -1124,9 +1147,17 @@ func (s *Server) putBoard(w http.ResponseWriter, r *http.Request) {
 	tierSeen := map[int64]bool{}
 	var order []int64
 	for _, t := range *in.Tiers {
-		if tierSeen[t.ID] || !tierOf(tx, rid, t.ID) {
-			bad(w, "unknown tier")
+		if tierSeen[t.ID] {
+			bad(w, "a tier appears twice")
 			return
+		}
+		if !tierOf(tx, rid, t.ID) {
+			var any int
+			if tx.QueryRow(`SELECT 1 FROM ranking_tier WHERE id = ?`, t.ID).Scan(&any) == nil {
+				bad(w, "unknown tier") // a tier of another ranking
+				return
+			}
+			continue // deleted meanwhile (a delete overtook this save): its games are in the pool, leave them there
 		}
 		tierSeen[t.ID] = true
 		order = append(order, t.ID)
@@ -1178,6 +1209,9 @@ func (s *Server) putBoard(w http.ResponseWriter, r *http.Request) {
 		return setList(tx, rid, tier, final)
 	}
 	for _, t := range *in.Tiers {
+		if !tierSeen[t.ID] {
+			continue // deleted meanwhile
+		}
 		tid := t.ID
 		if _, err := tx.Exec(`UPDATE ranking_tier SET label = ?, color = ? WHERE id = ?`, strings.TrimSpace(t.Label), strings.ToLower(t.Color), tid); err != nil {
 			fail(w, err)

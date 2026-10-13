@@ -113,6 +113,12 @@ func TestRankingsMigrationKeepsTierLists(t *testing.T) {
 	if first != "Me ha cambiado la vida" || color != "#ff7f7f" {
 		t.Errorf("first tier %q %q", first, color)
 	}
+	// The conversion records the year, so renaming a ranking does not lose the link with Year in review.
+	var years string
+	d.QueryRow(`SELECT group_concat(year) FROM (SELECT year FROM ranking ORDER BY pos)`).Scan(&years)
+	if years != "2025,2024,2023" {
+		t.Errorf("years = %q", years)
+	}
 	// The old tables are untouched.
 	var old int
 	d.QueryRow(`SELECT count(*) FROM tierlist_entry`).Scan(&old)

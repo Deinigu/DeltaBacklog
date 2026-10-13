@@ -2,7 +2,7 @@
 // per tier with wrapping text, big poster tiles. Posters are same-origin, so the canvas stays clean.
 import { posterURL, coverURL } from './api.js';
 import { gradientFor, initials } from './util.js';
-import { wrapText, exportLayout, tileHeight, textOn } from './rankboard.js';
+import { wrapText, fitExportLayout, tileHeight, textOn } from './rankboard.js';
 
 const TILE_W = 90, GAP = 6, LABEL_W = 150, PAD = 16, HEAD = 64, PER_ROW = 10;
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -42,7 +42,8 @@ function drawTile(c, g, img, x, y, w, h) {
  */
 export async function exportRankingPNG({ name, board, byId }) {
   const tileH = tileHeight(TILE_W);
-  const layout = exportLayout({ counts: board.tiers.map((t) => t.games.length), perRow: PER_ROW, tileW: TILE_W, tileH, gap: GAP, labelW: LABEL_W, pad: PAD, headH: HEAD });
+  const { layout } = fitExportLayout({ counts: board.tiers.map((t) => t.games.length), perRow: PER_ROW, tileW: TILE_W, tileH, gap: GAP, labelW: LABEL_W, pad: PAD, headH: HEAD });
+  if (!layout) throw new Error('too many games for one picture');
 
   const ids = [...new Set(board.tiers.flatMap((t) => t.games))];
   const images = new Map();

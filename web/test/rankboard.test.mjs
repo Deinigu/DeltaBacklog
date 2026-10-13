@@ -151,3 +151,13 @@ test('textOn picks a readable text colour', async () => {
   assert.equal(textOn('#000000'), '#ffffff');
   assert.equal(textOn('#6e6e6e'), '#ffffff');
 });
+
+test('fitExportLayout adds tiles per row until the picture fits a phone canvas', async () => {
+  const { fitExportLayout } = await import('../static/js/rankboard.js');
+  const o = { perRow: 10, tileW: 90, tileH: 135, gap: 6, labelW: 150, pad: 16, headH: 64 };
+  const small = fitExportLayout({ counts: [3, 8, 20], ...o });
+  assert.equal(small.perRow, 10); // fits as asked
+  const big = fitExportLayout({ counts: [1000], ...o });
+  assert.ok(big.perRow > 10 && big.layout.width * big.layout.height <= 16_000_000 && big.layout.height <= 14000, `perRow ${big.perRow}`);
+  assert.equal(fitExportLayout({ counts: [50000], ...o }).layout, null);
+});

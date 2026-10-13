@@ -31,6 +31,12 @@ type respCache struct {
 	// warm, when set, rebuilds the entries in the background warmDelay after the last invalidate(), so the next
 	// reader finds them ready instead of paying for the build (a burst of writes, such as dragging a game
 	// up a list, triggers one rebuild, not one per write).
+	// version, when set, returns PRAGMA data_version of the database: it changes when ANOTHER connection or process
+	// commits (fetch-posters, sync-igdb run next to the server), so the entries built before that are dropped.
+	version     func() (int64, error)
+	seenVersion int64
+	seen        bool
+
 	warm      func()
 	warmDelay time.Duration
 	timer     *time.Timer
@@ -42,6 +48,14 @@ type respCache struct {
 func (c *respCache) get(key string, build func() (any, error)) (*cachedResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.version != nil {
+		if v, err := c.version(); err == nil {
+			if c.seen && v != c.seenVersion {
+				c.entries = nil // somebody else wrote to the database
+			}
+			c.seenVersion, c.seen = v, true
+		}
+	}
 	if e, ok := c.entries[key]; ok {
 		return e, nil
 	}

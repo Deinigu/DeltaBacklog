@@ -1,14 +1,19 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
 
 // rkEnv is a server with a fake metadata service and four games (ids 1 and 2 from the CSV, 3 and 4 added here).
@@ -129,6 +134,31 @@ func TestRankingsCRUD(t *testing.T) {
 	call(t, e, "PATCH", fmt.Sprintf("/api/rankings/%d", a.ID), `{"name":""}`, 400)
 	call(t, e, "PATCH", fmt.Sprintf("/api/rankings/%d", a.ID), `{}`, 400)
 	call(t, e, "PATCH", "/api/rankings/999", `{"name":"x"}`, 404)
+
+	// the year a ranking is "the ranking of"
+	for _, body := range []string{`{"name":"x","year":1800}`, `{"name":"x","year":2200}`} {
+		call(t, e, "POST", "/api/rankings", body, 400)
+	}
+	y := create(t, e, `{"name":"Best of 2025","year":2025}`)
+	if y.Year == nil || *y.Year != 2025 {
+		t.Fatalf("year = %v", y.Year)
+	}
+	var yd Ranking
+	json.Unmarshal(call(t, e, "POST", fmt.Sprintf("/api/rankings/%d/duplicate", y.ID), ``, 201), &yd)
+	if yd.Year != nil {
+		t.Fatalf("a copy must not claim the year: %v", *yd.Year)
+	}
+	call(t, e, "PATCH", fmt.Sprintf("/api/rankings/%d", y.ID), `{"year":2024}`, 200)
+	if got := getRk(t, e, y.ID); got.Year == nil || *got.Year != 2024 || got.Name != "Best of 2025" {
+		t.Fatalf("year patch = %+v", got)
+	}
+	call(t, e, "PATCH", fmt.Sprintf("/api/rankings/%d", y.ID), `{"year":0}`, 200)
+	if got := getRk(t, e, y.ID); got.Year != nil {
+		t.Fatalf("year not cleared: %v", *got.Year)
+	}
+	call(t, e, "PATCH", fmt.Sprintf("/api/rankings/%d", y.ID), `{"year":1800}`, 400)
+	call(t, e, "DELETE", fmt.Sprintf("/api/rankings/%d", y.ID), ``, 204)
+	call(t, e, "DELETE", fmt.Sprintf("/api/rankings/%d", yd.ID), ``, 204)
 
 	// duplicate: same tiers and placements, independent afterwards
 	a1 := a.Tiers[0].ID
@@ -354,7 +384,6 @@ func TestRankingBoardSave(t *testing.T) {
 		"missing pool":   `{"tiers":[]}`,
 		"missing tiers":  `{"pool":[]}`,
 		"foreign tier":   board(tier(other.Tiers[0].ID, "S", "#ff7f7f", ""), ""),
-		"unknown tier":   board(tier(99999, "S", "#ff7f7f", ""), ""),
 		"duplicate tier": board(tier(s, "S", "#ff7f7f", "")+","+tier(s, "S", "#ff7f7f", ""), ""),
 		"game twice":     board(tier(s, "S", "#ff7f7f", "1")+","+tier(a, "A", "#ff7f7f", "1"), ""),
 		"game and pool":  board(tier(s, "S", "#ff7f7f", "1"), "1"),
@@ -365,6 +394,8 @@ func TestRankingBoardSave(t *testing.T) {
 		call(t, e, "PUT", base+"/board", body, 400)
 		_ = name
 	}
+	// a tier that no longer exists (a delete overtook this save) is skipped; its games stay where they are
+	save(board(tier(a, "Me ha gustado mucho", "#00aa00", "2,4")+","+tier(99999, "Gone", "#ff7f7f", "3")+","+tier(s, "S", "#ff7f7f", "1"), ""))
 	call(t, e, "PUT", "/api/rankings/999/board", board("", ""), 404)
 	if l := layout(getRk(t, e, rk.ID)); l != "Me ha gustado mucho:2,4 | S:1 | B: | C: | D: | F: | -:3" {
 		t.Fatalf("rejected saves changed the board: %s", l)
@@ -512,5 +543,64 @@ func TestPosterDownloadLimits(t *testing.T) {
 		if f, src := posterOf(e, c.game); f != "" {
 			t.Errorf("%s: a poster was stored (%s from %s)", c.name, f, src)
 		}
+	}
+}
+
+// fetch-posters and sync-igdb write to the database from another process while the server runs: the cached
+// /api/games must notice (PRAGMA data_version) instead of serving the old list until the next write of its own.
+func TestGamesCacheSeesWritesFromAnotherConnection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.db")
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.Exec(`INSERT INTO game(title, title_sort, status_id) VALUES ('A', 'a', 7)`); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer((&Server{DB: d, CoverDir: t.TempDir()}).Handler())
+	defer srv.Close()
+	poster := func() *string {
+		var games []Game
+		if err := json.Unmarshal(call2(t, srv.URL+"/api/games"), &games); err != nil || len(games) != 1 {
+			t.Fatalf("games: %v %v", err, games)
+		}
+		return games[0].Poster
+	}
+	if poster() != nil {
+		t.Fatal("no poster yet")
+	}
+	other, err := sql.Open("sqlite", db.FileURI(path)+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if _, err := other.Exec(`UPDATE game SET poster_file = 'p1.jpg', poster_updated_at = 'x'`); err != nil {
+		t.Fatal(err)
+	}
+	if p := poster(); p == nil || *p != "p1.jpg" {
+		t.Fatalf("the server kept serving the cached list: %v", p)
+	}
+}
+
+func call2(t *testing.T, url string) []byte {
+	t.Helper()
+	res, b := do(t, "GET", url, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("GET %s = %d", url, res.StatusCode)
+	}
+	return b
+}
+
+// A source that fails for now (rate limit, network) must not turn into a permanent crop of the wide cover.
+func TestTemporaryPosterErrorLeavesNoCrop(t *testing.T) {
+	e := rkEnv(t)
+	e.db.Exec(`UPDATE game SET igdb_id = 77 WHERE id = 2`)
+	do(t, "POST", e.srv.URL+"/api/games/2/cover", `{"url":"`+e.images.URL+`/ok.png"}`)
+	e.meta.posterErr = errors.New("429 Too Many Requests")
+	rk := create(t, e, `{"name":"R","game_ids":[2]}`)
+	waitFor(t, "the attempt", func() bool { return getRk(t, e, rk.ID).PostersPending == 0 })
+	if f, src := posterOf(e, 2); f != "" {
+		t.Fatalf("a poster was stored (%s from %s) although both sources failed for now", f, src)
 	}
 }

@@ -1,6 +1,6 @@
 // Year in review page (#/years/<year>): what was played, a breakdown, and a way into that year's ranking.
 import { h, toast, gradientFor, initials, lazyImg, retargetImg } from './util.js';
-import { store, coverURL, listRankings, createRanking } from './api.js';
+import { store, coverURL, listRankings, createRanking, addRankingGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking } from './yearreview.js';
 
@@ -62,7 +62,12 @@ export function renderYear(root, year) {
     rankBtn.disabled = true;
     try {
       const existing = findYearRanking(await listRankings(), year);
-      const r = existing || await createRanking({ name: yearRankingName(year), preset: 'sabcdf', game_ids: pool.map((g) => g.id) });
+      let r = existing;
+      if (existing) { // games that got the year since are added to the pool (the ones already in are skipped)
+        await addRankingGames(existing.id, pool.map((g) => g.id)).catch(() => {});
+      } else {
+        r = await createRanking({ name: yearRankingName(year), year, preset: 'sabcdf', game_ids: pool.map((g) => g.id) });
+      }
       if (alive) location.hash = `#/rankings/${r.id}`;
     } catch { toast('Could not open the ranking'); rankBtn.disabled = false; }
   }

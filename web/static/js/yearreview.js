@@ -60,10 +60,10 @@ export function parseYearPath(path) {
 }
 
 // ---- ranking of a year ----
-// "Rank this year" opens the ranking named like this (the one the old per-year tier list became in the migration) or
-// makes it, pre-filled with the year's games.
+// "Rank this year" opens the ranking whose `year` is that year (the old per-year tier lists were converted with it), or
+// makes one named like this, pre-filled with the year's games. Renaming a ranking does not break the link.
 
 export const yearRankingName = (year) => `Tier list ${year}`;
 
-/** The existing ranking of a year among the list from GET /api/rankings, or undefined. */
-export const findYearRanking = (rankings, year) => rankings.find((r) => r.name === yearRankingName(year));
+/** The ranking of a year among the list from GET /api/rankings (the first in list order), or undefined. */
+export const findYearRanking = (rankings, year) => rankings.find((r) => r.year === year);

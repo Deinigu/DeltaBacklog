@@ -49,9 +49,9 @@ test('year route parsing', () => {
   assert.equal(parseYearPath('library'), undefined);
 });
 
-test('the ranking of a year is found by its name', () => {
+test('the ranking of a year is found by its year, not its name', () => {
   assert.equal(yearRankingName(2025), 'Tier list 2025');
-  const list = [{ id: 1, name: 'Best of 2025' }, { id: 2, name: 'Tier list 2025' }, { id: 3, name: 'Tier list 2024' }];
-  assert.equal(findYearRanking(list, 2025).id, 2);
+  const list = [{ id: 1, name: 'Best of 2025', year: null }, { id: 2, name: 'My own name', year: 2025 }, { id: 3, name: 'Tier list 2025', year: null }, { id: 4, name: 'x', year: 2025 }];
+  assert.equal(findYearRanking(list, 2025).id, 2); // renamed: still found; the first one in list order
   assert.equal(findYearRanking(list, 2023), undefined);
 });

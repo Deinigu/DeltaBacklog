@@ -710,7 +710,7 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .rk-head { display: flex; flex-direction: column; gap: 8px; }
 .rk-back { color: var(--muted); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; align-self: flex-start; }
-.rk-title { background: none; border: 0; padding: 0; font: inherit; font-size: 26px; font-weight: 700; text-align: left; color: inherit; line-height: 1.15; overflow-wrap: anywhere; }
+.rk-title { background: none; border: 0; padding: 0; min-height: 44px; font: inherit; font-size: 26px; font-weight: 700; text-align: left; color: inherit; line-height: 1.15; overflow-wrap: anywhere; }
 .rk-desc { margin: 4px 0 0; }
 .rk-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .rk-tools .btn { height: 44px; min-width: 44px; }
@@ -724,24 +724,24 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .rk-board { background: #14161a; border-radius: 10px; padding: 4px; display: flex; flex-direction: column; gap: 4px; color: #eceef2; }
 .rk-row { display: flex; background: #232730; border-radius: 6px; overflow: hidden; min-height: calc(var(--th) + 8px); }
-.rk-label { flex: none; width: var(--label-w); border: 0; padding: 6px; display: grid; place-items: center; text-align: center; font-weight: 700; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; hyphens: auto; cursor: pointer; border-radius: 0; }
+.rk-label { flex: none; width: var(--label-w); border: 0; padding: 6px; display: grid; place-items: center; text-align: center; font-weight: 700; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; hyphens: manual; cursor: pointer; border-radius: 0; }
 .rk-label:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-.rk-cell { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; align-content: flex-start; min-height: calc(var(--th) + 8px); }
+.rk-cell { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tw), 1fr)); gap: 3px; padding: 3px; align-content: start; min-height: calc(var(--th) + 8px); } /* as many columns as fit, and the tiles stretch to fill the row */
 .rk-cell.hot { outline: 2px dashed var(--accent); outline-offset: -3px; background: rgba(124, 127, 245, .12); }
 .rk-notiers { padding: 28px 12px; color: #9aa3b0; }
-.rk-tile { position: relative; width: var(--tw); height: var(--th); flex: none; border-radius: 3px; overflow: hidden; cursor: grab; background: #2b303a; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.rk-tile { position: relative; width: auto; aspect-ratio: 2 / 3; border-radius: 3px; overflow: hidden; cursor: grab; background: #2b303a; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
 .rk-tile img, .rk-tile .ph { width: 100%; height: 100%; object-fit: cover; display: grid; place-items: center; color: #fff; font-weight: 700; pointer-events: none; }
 .rk-tile .rk-tname { position: absolute; inset: auto 0 0 0; padding: 14px 3px 3px; font-size: 11px; line-height: 1.15; color: #fff; text-align: center; background: linear-gradient(transparent, rgba(0,0,0,.85)); max-height: 50%; overflow: hidden; pointer-events: none; }
 .rk-tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; z-index: 1; }
 .rk-tile.selected { outline: 3px solid #fff; outline-offset: -1px; box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
 .rk-tile.dragging { opacity: .3; }
-.rk-tile.ghost { position: fixed; left: 0; top: 0; z-index: 120; pointer-events: none; opacity: .92; box-shadow: 0 8px 24px rgba(0,0,0,.5); cursor: grabbing; }
+.rk-tile.ghost { position: fixed; aspect-ratio: auto; left: 0; top: 0; z-index: 120; pointer-events: none; opacity: .92; box-shadow: 0 8px 24px rgba(0,0,0,.5); cursor: grabbing; }
 .rk-addtier { display: flex; gap: 8px; flex-wrap: wrap; }
 .rk-addtier .btn { height: 44px; }
 .rk-poolbox { background: #14161a; border-radius: 10px; padding: 8px 6px 6px; color: #eceef2; }
 .rk-poolbox h2 { margin: 0 4px 6px; font-size: 15px; color: #c5cad3; }
 .rk-pool { background: #232730; border-radius: 6px; min-height: calc(var(--th) + 8px); }
-.rk-empty { margin: 8px; color: #9aa3b0; font-size: 13px; align-self: center; }
+.rk-empty { grid-column: 1 / -1; margin: 8px; color: #9aa3b0; font-size: 13px; align-self: center; }
 
 .rk-selbar { position: fixed; z-index: 60; left: 8px; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; max-width: 760px; margin: 0 auto; }
 .rk-sel-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
