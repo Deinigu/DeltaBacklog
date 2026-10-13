@@ -112,8 +112,9 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 
 // Queue is the background worker: one goroutine, one game at a time, a pause after each game.
 type Queue struct {
-	M     *Maker
-	Pause time.Duration // default 800 ms (IGDB allows 4 requests a second)
+	M      *Maker
+	Pause  time.Duration // default 800 ms (IGDB allows 4 requests a second)
+	OnMade func()        // called after a poster was stored (the server drops its cached game list)
 
 	mu      sync.Mutex
 	pending map[int64]bool
@@ -178,6 +179,9 @@ func (q *Queue) run() {
 	}
 	for id := range q.ch {
 		_, err := q.M.Make(context.Background(), id)
+		if err == nil && q.OnMade != nil {
+			q.OnMade()
+		}
 		q.mu.Lock()
 		delete(q.pending, id)
 		if err != nil {

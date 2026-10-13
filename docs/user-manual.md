@@ -17,7 +17,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 10. [Covers](#10-covers)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [Series progress](#12-series-progress)
-13. [Year in review and tier lists](#13-year-in-review-and-tier-lists)
+13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
 16. [Link your games with IGDB](#16-link-your-games-with-igdb)
@@ -45,7 +45,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-tier-lists)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -229,20 +229,37 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 
 ![The Series page with a series open](img/series-phone.jpg)
 
-## 13. Year in review and tier lists
+## 13. Year in review and rankings
 
 **Year in review** (under **More** on a phone) opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
 
 - **The page.** The big **‹** and **›** buttons go to the previous and next year (one calendar year at a time, so a year with no games is reachable too; it says nothing was recorded). The strip under the title jumps to any year, with the number of games.
 - **Counts.** Games are grouped by their *current* status: **Finished**, **Dropped**, **Still playing** (Playing and Playing - Evergreen) and **Played** (everything else, for example Evergreen or Backlog). Next to them are the platforms and genres you played that year. Tap any game to open its details.
-- **Tier list.** Every game of that year starts in *Not ranked*. Put it in a tier **S, A, B, C, D or F**: on a PC drag it with the mouse; on a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). The easiest way on a phone: **tap a game** and choose the tier from the list that opens (**Not ranked** takes it out again). Dropping between games sets their order inside the tier. Every change is saved automatically, and each year has its own list.
-- **Export PNG** saves the tier list as a picture to share.
+- **Rank this year** opens the ranking of that year, or makes it with that year's games waiting to be ranked (see Rankings below).
 
 ![A year in review](img/year-phone.jpg)
 
-![A tier list](img/tierlist-phone.jpg)
+### Rankings
 
-If you remove a year from a game, the game leaves that year's tier list (and comes back to its tier if you add the year again).
+**Rankings** (under **More** on a phone, in the sidebar on a PC) are lists like the ones you make on TierMaker: as many as you want, each with its **own tiers**, **your own labels** ("Me ha cambiado la vida", "Vaya mierda"...) and colours, and big **poster** pictures of the games. A ranking can hold any set of games: everything you played in 2025, all your RPGs, a hand-picked handful.
+
+![The rankings list](img/rankings-phone.jpg)
+
+- **The list.** **New ranking** asks for a name and the starting tiers: **S to F** or **Empty** (you make the tiers). Each ranking shows its best games, how many games it has and its tier colours. Under it: move it up or down, rename, duplicate and delete (the games stay in your library). The old per-year tier lists became rankings called *Tier list 2025*, *Tier list 2024*... with the same tiers and games.
+- **Add games.** The button opens your whole library with search and the same filters as the Library page. Tick games one by one, or filter (for example *Year played: 2025*) and tap **Select these** to take every match at once, then **Add**. New games wait in **Not ranked**, below the board. The first time a game joins a ranking its poster is fetched in the background (a few seconds each; the page fills them in by itself). Until then the wide cover is shown.
+- **Move a game.** On a PC drag it with the mouse. On a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). Or **tap a game** to select it: the bar at the bottom has **◀ ▶** (earlier or later in its tier), **▲ ▼** (one tier up or down), *Not ranked*, *Details* and *Remove from this ranking*, and with a game selected you can also **tap a tier** to put it there. With the keyboard: Tab to a game, **Enter** selects it, the **arrow keys** move it (left and right inside the tier, up and down between tiers), **Esc** lets go. Without a selection the arrows just move between games.
+- **Tiers.** **Tap a tier's name** (with nothing selected) to change its **label** (up to 80 characters, it wraps), its **colour** (a palette or any custom colour), move it up or down, **duplicate** it or **delete** it (its games go back to *Not ranked*; **Undo** in the message at the bottom brings it back). **Add tier** adds a new one at the end; the menu **⋯** can add the classic S to F tiers.
+- **Look.** **S / M / L** change the size of the posters and **Titles** writes the game name on each poster (hover or long-press shows it anyway). Both are remembered on this device. The title and the **⋯** menu (rename, description, duplicate, delete) are at the top.
+- **Export PNG** saves the board as a picture (dark background, tier labels, full-size posters; the *Not ranked* games are left out), named after the ranking.
+- Everything is saved automatically.
+
+![A ranking](img/ranking-phone.jpg)
+
+On a PC the same board has room for many posters per row:
+
+![A ranking on a PC](img/ranking-desktop.jpg)
+
+If you delete a game from the library it leaves every ranking.
 
 ## 14. Stats
 

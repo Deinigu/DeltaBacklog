@@ -23,7 +23,7 @@ type Game struct {
 	IGDBID      *int64   `json:"igdb_id"`
 	AddedAt     string   `json:"added_at"`
 	UpdatedAt   string   `json:"updated_at"`
-	CoverV      string   `json:"cover_v"` // changes only when the cover image does: the browser cache key for /covers/
+	CoverV      string   `json:"cover_v"`  // changes only when the cover image does: the browser cache key for /covers/
 	Poster      *string  `json:"poster"`   // portrait box art for the rankings, a file name under /covers/ (null until made)
 	PosterV     string   `json:"poster_v"` // the browser cache key of the poster
 	Platforms   []string `json:"platforms"`

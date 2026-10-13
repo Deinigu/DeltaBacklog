@@ -1,4 +1,4 @@
-// Year in review: which games belong to a year, how they group, and the tier list arithmetic.
+// Year in review: which games belong to a year, how they group, and the name of the year's ranking.
 // Pure (no DOM): unit-tested. A game belongs to a year only through its `play` rows (game.years).
 
 export const GROUPS = [
@@ -59,54 +59,11 @@ export function parseYearPath(path) {
   return y >= 1970 && y <= 2100 ? y : undefined;
 }
 
-// ---- tier list ----
-// State: { tiers: [{id, name, color}], rows: {tierId: [gameId...]} }. Games in no row are unranked.
+// ---- ranking of a year ----
+// "Rank this year" opens the ranking named like this (the one the old per-year tier list became in the migration) or
+// makes it, pre-filled with the year's games.
 
-/** Build the state from the server's tiers and entries, ignoring games that are not in the year's pool. */
-export function tierState(tiers, entries, poolIds) {
-  const pool = new Set(poolIds);
-  const rows = Object.fromEntries(tiers.map((t) => [t.id, []]));
-  const seen = new Set();
-  for (const e of entries) {
-    if (!pool.has(e.game_id) || !rows[e.tier_id] || seen.has(e.game_id)) continue;
-    seen.add(e.game_id);
-    rows[e.tier_id].push(e.game_id);
-  }
-  return { tiers, rows };
-}
+export const yearRankingName = (year) => `Tier list ${year}`;
 
-/**
- * Remember where each game of the pool is ranked (`known`: game id -> tier id). Games outside the pool keep their
- * last placement, so a year removed from a game and added back returns it to its tier.
- */
-export function remember(known, state, poolIds) {
-  const ranked = new Map(Object.entries(state.rows).flatMap(([tier, ids]) => ids.map((id) => [id, Number(tier)])));
-  for (const id of poolIds) { if (ranked.has(id)) known.set(id, ranked.get(id)); else known.delete(id); }
-}
-
-/** Entries to put back for games that joined the pool again: their remembered placement, if any. */
-export const restored = (known, ids) => ids.filter((id) => known.has(id)).map((id) => ({ game_id: id, tier_id: known.get(id) }));
-
-export const tierOf = (state, gameId) => {
-  for (const t of state.tiers) if (state.rows[t.id].includes(gameId)) return t.id;
-  return null;
-};
-
-/** Games of the pool that are in no tier, in pool order. */
-export const unranked = (state, poolIds) => {
-  const ranked = new Set(Object.values(state.rows).flat());
-  return poolIds.filter((id) => !ranked.has(id));
-};
-
-/**
- * Put a game in a tier (null = back to unranked) at `index` (default: the end). Returns a new state;
- * the input is not changed.
- */
-export function place(state, gameId, tierId, index = Infinity) {
-  const rows = Object.fromEntries(state.tiers.map((t) => [t.id, state.rows[t.id].filter((id) => id !== gameId)]));
-  if (tierId != null && rows[tierId]) rows[tierId].splice(Math.max(0, Math.min(index, rows[tierId].length)), 0, gameId);
-  return { tiers: state.tiers, rows };
-}
-
-/** The body of PUT /api/tierlist/<year>. */
-export const toEntries = (state) => state.tiers.flatMap((t) => state.rows[t.id].map((game_id) => ({ game_id, tier_id: t.id })));
+/** The existing ranking of a year among the list from GET /api/rankings, or undefined. */
+export const findYearRanking = (rankings, year) => rankings.find((r) => r.name === yearRankingName(year));

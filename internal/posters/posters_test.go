@@ -17,7 +17,7 @@ import (
 
 type fakeSource struct{ igdb, sgdb string }
 
-func (f fakeSource) IGDBCoverURL(context.Context, int64) (string, error)      { return f.igdb, nil }
+func (f fakeSource) IGDBCoverURL(context.Context, int64) (string, error)       { return f.igdb, nil }
 func (f fakeSource) SteamGridPortrait(context.Context, string) (string, error) { return f.sgdb, nil }
 
 func TestFetchPostersCommand(t *testing.T) {

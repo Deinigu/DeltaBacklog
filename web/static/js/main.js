@@ -10,6 +10,8 @@ import { openAdd } from './add.js';
 import { renderLink } from './link.js';
 import { renderYear, defaultYear } from './yearpage.js';
 import { parseYearPath } from './yearreview.js';
+import { renderRankings } from './rankingspage.js';
+import { renderRanking } from './rankingedit.js';
 import { MORE_PAGES, isMorePath, openMore, closeMore } from './more.js';
 
 const nav = document.getElementById('nav');
@@ -24,6 +26,8 @@ function resolve(path) {
   if (path === 'link') return { path, render: renderLink };
   const year = parseYearPath(path);
   if (year !== undefined) return { path: 'years', render: (root) => renderYear(root, year ?? defaultYear()) };
+  const rk = /^rankings(?:\/(\d+))?$/.exec(path);
+  if (rk) return { path: 'rankings', render: rk[1] ? (root) => renderRanking(root, Number(rk[1])) : renderRankings };
   if (path === 'stats') return { path, render: renderStats };
   if (path === 'series') return { path, render: renderSeries };
   const m = /^view\/(\d+)$/.exec(path);
@@ -34,7 +38,7 @@ function resolve(path) {
   return { path: 'library', render: renderLibrary };
 }
 
-const SIDEBAR_ORDER = ['years', 'series', 'stats', 'views', 'link']; // the insight pages together, then Views
+const SIDEBAR_ORDER = ['years', 'rankings', 'series', 'stats', 'views', 'link']; // the insight pages together, then Views
 
 // The sheet / sidebar pages; "Link IGDB" joins them only while the IGDB review queue is not empty.
 const morePages = () => (store.linkPending > 0 ? [...MORE_PAGES, { path: 'link', label: 'Link IGDB', icon: 'link' }] : MORE_PAGES);
@@ -112,7 +116,7 @@ window.addEventListener('games-reloaded', () => route());
 // "+" button: always reachable, above the bottom bar on phones.
 document.body.append(h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add')));
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open, .tier-menu-wrap, .more-wrap')) {
+  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open, .more-wrap')) {
     e.preventDefault();
     openAdd();
   }

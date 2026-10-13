@@ -25,13 +25,14 @@
 **Track what you play**
 - **Years played** on every card, plus 🧒 childhood and ♾️ always; starting or finishing a game records the year for you.
 - Your own **queue order** (drag to rank), ownership badges (🏴‍☠️ 🆓 🤝), platforms, VR, favorites and notes.
-- **Series progress**, a **year in review** with an S-to-F **tier list** you can export as a picture, and **stats** (backlog by platform, finished per year, how long games have waited).
+- **Series progress**, a **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform, finished per year, how long games have waited).
 - **Surprise me** picks a random game from what you are looking at, with filters, and never repeats.
 - **Screenshots** per game: upload from your phone or computer, view full screen, caption, reorder, download the original. Originals are kept untouched, with a small thumbnail for the grid; they can live on an external drive and are backed up nightly.
 
 **Add games quickly (optional lookups)**
 - Type a title and genres, themes, developer, series, release year and a cover come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/). Needs free API keys; everything else works without them.
 - `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen.
+- `deltabacklog fetch-posters` makes the portrait posters of the rankings for the whole library in one go (they are otherwise made in the background when a game joins a ranking).
 
 **Yours to keep**
 - Covers are stored next to the database, so the app keeps working when those websites do not.
@@ -42,7 +43,7 @@
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
   <img src="docs/img/views-phone.jpg" alt="Saved views" width="180">
   <img src="docs/img/game-phone.jpg" alt="A game" width="180">
-  <img src="docs/img/tierlist-phone.jpg" alt="A tier list" width="180">
+  <img src="docs/img/ranking-phone.jpg" alt="A ranking" width="180">
 </p>
 
 > **Status:** used daily by its author, but young. Prefer a [release](https://github.com/Deinigu/DeltaBacklog/releases) over `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
@@ -119,6 +120,7 @@ deltabacklog backup <file>         # write a consistent copy of the database (sa
 deltabacklog backup-screenshots <dir>  # copy the screenshot files <dir> does not have yet (never deletes)
 deltabacklog check <file>          # verify a database or backup (read-only)
 deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys)
+deltabacklog fetch-posters [--dry-run] [--limit N] # make the ranking posters for every game (IGDB / SteamGridDB keys help)
 ```
 
 ## Backup and restore

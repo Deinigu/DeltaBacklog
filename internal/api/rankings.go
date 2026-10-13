@@ -120,7 +120,7 @@ func (s *Server) posterQ() *posters.Queue {
 		if s.Meta != nil {
 			m.Src = s.Meta
 		}
-		s.posters = &posters.Queue{M: m, Pause: s.PosterPause}
+		s.posters = &posters.Queue{M: m, Pause: s.PosterPause, OnMade: s.cache.invalidate}
 	})
 	return s.posters
 }

@@ -47,6 +47,7 @@ const SVG = {
   sort: '<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/>',
   library: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   shelves: '<path d="M4 20V6M10 20V4M16 20V8M21 20l-3-12"/>',
+  rankings: '<path d="M3 4h4v4H3zM10 6h11M3 10h4v4H3zM10 12h11M3 16h4v4H3zM10 18h11"/>',
   years: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
   views: '<path d="M4 6h16M4 12h16M4 18h10"/><path d="m18 16 2 2 2-2" transform="translate(-2 -1)"/>',
@@ -98,6 +99,32 @@ export function askNameDialog({ title, name = '', icon: ic = '⭐', confirm = 'S
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, box);
     nameIn.focus(); nameIn.select();
+  });
+}
+
+/**
+ * Modal asking for a text (one line, or several with `multiline`). Resolves to the trimmed text, or null when cancelled.
+ * `allowEmpty` lets an empty text through (to clear a description). `extra` is an optional element shown under the field.
+ */
+export function promptDialog({ title, value = '', placeholder = '', confirm = 'Save', maxlength = 80, multiline = false, allowEmpty = false, extra = null }) {
+  return new Promise((resolve) => {
+    const input = multiline
+      ? h('textarea', { maxlength: String(maxlength), placeholder, rows: '3', 'aria-label': title })
+      : h('input', { type: 'text', maxlength: String(maxlength), placeholder, 'aria-label': title });
+    input.value = value;
+    input.classList.add('prompt-in');
+    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const submit = () => { const t = input.value.trim(); if (t || allowEmpty) done(t); };
+    const form = h('form', { onsubmit: (e) => { e.preventDefault(); submit(); } },
+      h('h2', {}, title), input, extra,
+      h('div.dialog-actions', {}, h('button.btn', { type: 'button', onclick: () => done(null) }, 'Cancel'), h('button.btn.primary', { type: 'submit' }, confirm)));
+    const scrim = h('div.scrim.show', { onclick: () => done(null) });
+    scrim.style.zIndex = 95;
+    const box = h('div.dialog', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, form);
+    const onKey = (e) => { if (e.key === 'Escape') done(null); };
+    document.addEventListener('keydown', onKey);
+    document.body.append(scrim, box);
+    input.focus(); input.select();
   });
 }
 
