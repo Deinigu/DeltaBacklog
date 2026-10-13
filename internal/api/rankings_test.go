@@ -522,7 +522,7 @@ func TestPosterSourcesFallBackInOrder(t *testing.T) {
 
 func TestPosterDownloadLimits(t *testing.T) {
 	e := rkEnv(t)
-	e.db.Exec(`UPDATE game SET igdb_id = 77`)
+	e.db.Exec(`UPDATE game SET igdb_id = 100 + id`)
 
 	// A host outside the allow-list is never contacted, a redirect is not followed and a huge image is refused. The
 	// server remembers a game that failed, so every case uses its own game.
@@ -602,5 +602,30 @@ func TestTemporaryPosterErrorLeavesNoCrop(t *testing.T) {
 	waitFor(t, "the attempt", func() bool { return getRk(t, e, rk.ID).PostersPending == 0 })
 	if f, src := posterOf(e, 2); f != "" {
 		t.Fatalf("a poster was stored (%s from %s) although both sources failed for now", f, src)
+	}
+}
+
+// A download that can never work (404, not an image, far too large) falls back to the crop of the wide cover; one that
+// may work later (a 500) leaves the poster empty.
+func TestPermanentlyBadPosterDownloadsFallBackToTheCrop(t *testing.T) {
+	e := rkEnv(t)
+	e.db.Exec(`UPDATE game SET igdb_id = 100 + id`) // igdb_id is unique
+	cases := []struct {
+		url  string
+		want string // poster_src
+	}{
+		{"/missing.png", "crop"}, // 404
+		{"/huge.png", "crop"},    // over the pixel cap
+		{"/boom.png", ""},        // 500: try again later
+	}
+	for i, c := range cases {
+		id := int64(i + 1)
+		do(t, "POST", e.srv.URL+fmt.Sprintf("/api/games/%d/cover", id), `{"url":"`+e.images.URL+`/ok.png"}`)
+		e.meta.igdbCover, e.meta.portrait = e.images.URL+c.url, ""
+		rk := create(t, e, fmt.Sprintf(`{"name":"R%d","game_ids":[%d]}`, i, id))
+		waitFor(t, c.url, func() bool { return getRk(t, e, rk.ID).PostersPending == 0 })
+		if _, src := posterOf(e, id); src != c.want {
+			t.Errorf("%s: poster source %q, want %q", c.url, src, c.want)
+		}
 	}
 }

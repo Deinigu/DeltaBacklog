@@ -2,6 +2,7 @@ package covers
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -19,6 +20,23 @@ const (
 	posterQ     = 80
 )
 
+// ErrBadImage marks an image that will never make a poster (not an image, too large, too small): retrying cannot help.
+var ErrBadImage = errors.New("bad image")
+
+// StatusError is a download that did not answer 200.
+type StatusError struct {
+	URL  string
+	Code int
+	Text string
+}
+
+func (e *StatusError) Error() string { return fmt.Sprintf("GET %s: %s", e.URL, e.Text) }
+
+// Permanent reports whether asking again will not help: a client error, except "request timeout" and "too many requests".
+func (e *StatusError) Permanent() bool {
+	return e.Code >= 400 && e.Code < 500 && e.Code != 408 && e.Code != 429
+}
+
 // PosterName is the file name of a game's poster.
 func PosterName(gameID int64) string { return fmt.Sprintf("p%d.jpg", gameID) }
 
@@ -30,7 +48,7 @@ func FetchPosterStrict(url, dir string, gameID int64) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
+		return "", &StatusError{URL: url, Code: resp.StatusCode, Text: resp.Status}
 	}
 	return SavePoster(io.LimitReader(resp.Body, maxDownload), dir, gameID)
 }
@@ -54,19 +72,19 @@ func SavePoster(r io.Reader, dir string, gameID int64) (string, error) {
 	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("decode: %w", err)
+		return "", fmt.Errorf("%w: decode: %v", ErrBadImage, err)
 	}
 	if tooLarge(cfg.Width, cfg.Height) {
-		return "", fmt.Errorf("image too large (%dx%d)", cfg.Width, cfg.Height)
+		return "", fmt.Errorf("%w: too large (%dx%d)", ErrBadImage, cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
 	raw = nil
 	if err != nil {
-		return "", fmt.Errorf("decode: %w", err)
+		return "", fmt.Errorf("%w: decode: %v", ErrBadImage, err)
 	}
 	src := posterCrop(img.Bounds())
 	if src.Dx() < 16 || src.Dy() < 16 {
-		return "", fmt.Errorf("image too small")
+		return "", fmt.Errorf("%w: too small", ErrBadImage)
 	}
 	w := src.Dx()
 	if w > PosterWidth {

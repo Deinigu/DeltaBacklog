@@ -77,7 +77,11 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 		name, err := fetch(url, m.Dir, id)
 		if err != nil {
 			log.Printf("posters: game %d: %s: %v", id, src, err)
-			temporary = true
+			var se *covers.StatusError
+			permanent := errors.Is(err, covers.ErrBadImage) || (errors.As(err, &se) && se.Permanent())
+			if !permanent { // a bad image or a 404 will not get better: go on to the next source, then the crop
+				temporary = true
+			}
 			return "", false
 		}
 		return name, true

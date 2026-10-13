@@ -89,6 +89,8 @@ func newAddEnv(t *testing.T) *addEnv {
 			png.Encode(w, img)
 		case "/portrait.png":
 			png.Encode(w, image.NewRGBA(image.Rect(0, 0, 600, 900)))
+		case "/boom.png":
+			http.Error(w, "down", http.StatusInternalServerError)
 		case "/redirect.png":
 			http.Redirect(w, r, "/ok.png", http.StatusFound)
 		case "/huge.png":
