@@ -208,6 +208,7 @@ export async function setCover(id, url) {
   Object.assign(g, fresh);
   indexGame(g);
   gamesChanged(id);
+  fetch('/api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new cover
   return g;
 }
 
