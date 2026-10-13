@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v29';
+const VERSION = 'v32';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const THUMBS = 'screenshot-thumbs';

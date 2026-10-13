@@ -68,7 +68,8 @@ export function renderLibrary(root, opts = {}) {
   const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, manageBtn);
   // Below 600px Save / Save as… sit in the meta row (next to Revert), so the head stays one row while typing in a view
   const narrow = window.matchMedia('(max-width: 599px)');
-  narrow.addEventListener('change', () => update());
+  const onNarrow = () => update();
+  narrow.addEventListener('change', onNarrow);
 
   const toolbar = h('div.toolbar', {}, head,
     h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
@@ -305,5 +306,5 @@ export function renderLibrary(root, opts = {}) {
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {
-    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); ro.disconnect(); };
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); ro.disconnect(); };
 }
