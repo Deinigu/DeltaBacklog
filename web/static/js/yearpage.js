@@ -1,5 +1,5 @@
 // Year in review page (#/years/<year>): what was played, a breakdown, and a way into that year's ranking.
-import { h, toast, gradientFor, initials, lazyImg } from './util.js';
+import { h, toast, gradientFor, initials, lazyImg, retargetImg } from './util.js';
 import { store, coverURL, listRankings, createRanking } from './api.js';
 import { openDrawer } from './drawer.js';
 import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking } from './yearreview.js';
@@ -71,12 +71,19 @@ export function renderYear(root, year) {
   const gameRow = (g) => {
     const st = store.statusByCode.get(g.status);
     const url = coverURL(g);
-    return h('button.yrow', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
+    return h('button.yrow', { type: 'button', 'data-id': g.id, onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('span.ythumb', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title))),
       h('span.yinfo', {}, h('span.yname', {}, g.title), h('span.ysub', {}, [st?.label, g.platforms.slice(0, 2).join(', ')].filter(Boolean).join(' · '))));
   };
   body.append(h('div.ygroups', {}, ...groups.filter((g) => g.games.length).map((grp) =>
     h('section.year-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
 
-  return () => { alive = false; };
+  // A game got a new cover: its row follows (see retargetImg).
+  const onGameChanged = (e) => {
+    const g = e?.detail?.id && store.byId.get(e.detail.id);
+    if (g) for (const img of body.querySelectorAll(`[data-id="${g.id}"] img`)) retargetImg(img, coverURL(g));
+  };
+  window.addEventListener('games-changed', onGameChanged);
+
+  return () => { alive = false; window.removeEventListener('games-changed', onGameChanged); };
 }

@@ -248,7 +248,7 @@ func (s *Server) storeCover(id int64, url string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.Exec(`UPDATE game SET cover_url = ?, cover_file = ?, cover_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, url, name, id)
+	_, err = s.DB.Exec(`UPDATE game SET cover_url = ?, cover_file = ?, cover_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, url, name, id)
 	return err
 }
 

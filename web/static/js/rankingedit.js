@@ -443,6 +443,9 @@ export function renderRanking(root, id) {
 
   const onKeyGlobal = (e) => { if (e.key === 'Escape' && selected != null && !sheet && !document.querySelector('.dialog')) select(null); };
   document.addEventListener('keydown', onKeyGlobal);
+  // A game got a new cover or poster: the tiles that show it follow.
+  const onGameChanged = () => { if (board) drawBoard(); };
+  window.addEventListener('games-changed', onGameChanged);
   load();
 
   return () => {
@@ -454,5 +457,6 @@ export function renderRanking(root, id) {
     window.removeEventListener('pagehide', onHide);
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKeyGlobal);
+    window.removeEventListener('games-changed', onGameChanged);
   };
 }

@@ -100,7 +100,7 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 	if name == "" {
 		return "", ErrNoSource
 	}
-	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, name, src, id)
+	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`, name, src, id)
 	if err == nil {
 		if n, _ := res.RowsAffected(); n == 0 { // the game was deleted meanwhile
 			os.Remove(filepath.Join(m.Dir, name))
