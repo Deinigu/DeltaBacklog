@@ -409,6 +409,14 @@ func TestCoverVersionOnlyChangesWithTheImage(t *testing.T) {
 	if g.CoverV == v0 || g.CoverV == "" {
 		t.Errorf("a new cover must get a new version: %q -> %q", v0, g.CoverV)
 	}
+
+	// Two covers in the same second must still differ, or the browser keeps showing the first one.
+	v1 := g.CoverV
+	_, body = do(t, "POST", url+"/cover", `{"url":"`+e.images.URL+`/ok.png"}`)
+	json.Unmarshal(body, &g)
+	if g.CoverV == v1 {
+		t.Errorf("a cover changed within the same second kept its version %q", v1)
+	}
 }
 
 func TestCreateReturnsJSONContentType(t *testing.T) {

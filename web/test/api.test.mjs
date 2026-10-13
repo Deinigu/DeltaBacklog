@@ -12,3 +12,12 @@ test('localPatch leaves real values and other fields alone', () => {
   assert.deepEqual(localPatch(p), p);
   assert.notEqual(localPatch(p), p); // returns a copy
 });
+
+test('coverURL changes with the cover version so a new cover is never served from the old cache entry', async () => {
+  const { coverURL } = await import('../static/js/api.js');
+  const a = coverURL({ cover: '7.jpg', cover_v: '2026-10-13T10:00:00.100Z' });
+  const b = coverURL({ cover: '7.jpg', cover_v: '2026-10-13T10:00:00.200Z' });
+  assert.notEqual(a, b);
+  assert.match(a, /^\/covers\/7\.jpg\?v=/);
+  assert.equal(coverURL({ cover: null }), null);
+});

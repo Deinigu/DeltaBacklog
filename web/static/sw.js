@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v29';
+const VERSION = 'v30';
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers';
 const THUMBS = 'screenshot-thumbs';
@@ -44,10 +44,19 @@ async function cacheFirst(req, name, max = 0) {
   if (hit) return hit;
   const res = await fetch(req);
   if (res.ok) {
+    if (name === COVERS) await dropOtherVersions(cache, req);
     cache.put(req, res.clone());
     if (max) trim(cache, max);
   }
   return res;
+}
+
+// A cover is /covers/<file>?v=<version>: when a new version is cached, the older ones of the same file are dead weight.
+async function dropOtherVersions(cache, req) {
+  const path = new URL(req.url).pathname;
+  for (const k of await cache.keys()) {
+    if (k.url !== req.url && new URL(k.url).pathname === path) await cache.delete(k);
+  }
 }
 
 // Keep a cache to its newest `max` entries (keys come back oldest first).
