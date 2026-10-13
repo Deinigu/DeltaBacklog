@@ -17,6 +17,7 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
+	"github.com/Deinigu/DeltaBacklog/internal/posters"
 	"github.com/Deinigu/DeltaBacklog/internal/shots"
 	"github.com/Deinigu/DeltaBacklog/web"
 )
@@ -113,7 +114,7 @@ func main() {
 		return
 	}
 
-	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "backup" && os.Args[1] != "backup-screenshots" { // a typo must not start the server
+	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "fetch-posters" && os.Args[1] != "backup" && os.Args[1] != "backup-screenshots" { // a typo must not start the server
 		fmt.Fprint(os.Stderr, "deltabacklog "+version+"\n\n"+
 			"usage: deltabacklog                      serve the app\n"+
 			"       deltabacklog backup <file>         write a copy of the database\n"+
@@ -136,6 +137,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "sync-igdb" {
 		mc := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
 		os.Exit(igdblink.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), mc, os.Stdout))
+	}
+
+	// `deltabacklog fetch-posters [--dry-run] [--limit N] [--upgrade] [--db path]`: make the portrait posters of every game
+	// that has none (see docs/developer-manual.md).
+	if len(os.Args) > 1 && os.Args[1] == "fetch-posters" {
+		mc := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET"), SteamGridDBKey: os.Getenv("STEAMGRIDDB_API_KEY")})
+		srv := &api.Server{Meta: mc}
+		os.Exit(posters.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), filepath.Join(dataDir, "covers"), mc, srv.PosterHostAllowed, os.Stdout))
 	}
 
 	// `deltabacklog backup <file>`: write a consistent copy of the database and exit (used by the nightly timer and

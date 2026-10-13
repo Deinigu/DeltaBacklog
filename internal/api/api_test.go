@@ -344,7 +344,8 @@ func TestErrorsAreJSONAndCoversAreNotListed(t *testing.T) {
 		{"PATCH", "/api/games/1", `{"title": ""}`, http.StatusBadRequest},
 		{"PATCH", "/api/games/999", `{}`, http.StatusNotFound},
 		{"PATCH", "/api/games/x", `{}`, http.StatusNotFound},
-		{"PUT", "/api/tierlist/1800", `{"entries": []}`, http.StatusBadRequest},
+		{"PUT", "/api/rankings/1/board", `{"tiers": [], "pool": []}`, http.StatusNotFound},
+		{"POST", "/api/rankings", `{"name": ""}`, http.StatusBadRequest},
 		{"DELETE", "/api/views/999", ``, http.StatusNotFound},
 		{"POST", "/api/games/reorder", `[1, 1]`, http.StatusBadRequest},
 	} {

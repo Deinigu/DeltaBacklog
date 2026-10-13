@@ -24,6 +24,8 @@ type Game struct {
 	AddedAt     string   `json:"added_at"`
 	UpdatedAt   string   `json:"updated_at"`
 	CoverV      string   `json:"cover_v"` // changes only when the cover image does: the browser cache key for /covers/
+	Poster      *string  `json:"poster"`   // portrait box art for the rankings, a file name under /covers/ (null until made)
+	PosterV     string   `json:"poster_v"` // the browser cache key of the poster
 	Platforms   []string `json:"platforms"`
 	Genres      []string `json:"genres"`
 	Themes      []string `json:"themes"`
@@ -93,7 +95,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		where, linkWhere, playAnd = " WHERE g.id = ?", " WHERE x.game_id = ?", " AND game_id = ?"
 	}
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
-			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at,
+			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at, g.poster_file, g.poster_updated_at,
 			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely
 		FROM game g
 		JOIN status s ON s.id = g.status_id
@@ -108,7 +110,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	for rows.Next() {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV,
+			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV, &g.Poster, &g.PosterV,
 			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely); err != nil {
 			rows.Close()
 			return nil, err
