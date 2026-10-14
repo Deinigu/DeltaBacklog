@@ -261,7 +261,7 @@ export const saveBoardKeepalive = (id, body) => { fetch(`/api/rankings/${id}/boa
 
 /**
  * Posters are made in the background: copy the ones the server reports (the entries of GET /api/rankings/<id>) into the
- * games already loaded. Returns true when one changed.
+ * games already loaded. Returns the ids of the games whose poster changed (empty when none; an empty array is truthy).
  */
 export function applyPosters(entries) {
   const changed = [];

@@ -31,6 +31,7 @@ export function renderRanking(root, id) {
   let titles = read('rk-titles', '0') === '1';
   let sheet = null;       // the open tier sheet or menu, if any
   let polling = false;
+  let errorShown = false; // the page currently shows the load error panel
 
   const page = h('div.rk-page');
   root.replaceChildren(page);
@@ -40,7 +41,9 @@ export function renderRanking(root, id) {
 
   // ---------- loading ----------
   async function load() {
-    if (!board) page.replaceChildren(h('p.hint', {}, 'Loading…')); // only on the first load: a reload keeps the page in place
+    // First load, or Retry on the error panel: show "Loading…". A reload keeps the board in place but not editable until the fresh one is drawn.
+    if (!board || errorShown) page.replaceChildren(h('p.hint', {}, 'Loading…')); else page.inert = true;
+    errorShown = false;
     try {
       const r = await getRanking(id);
       if (!alive) return;
@@ -52,6 +55,7 @@ export function renderRanking(root, id) {
       if (r.posters_pending > 0) pollPosters();
     } catch (e) {
       if (!alive) return;
+      page.inert = false; errorShown = true;
       if (e.status === 404) { page.replaceChildren(h('div.empty', {}, 'This ranking does not exist (any more). ', h('a.btn', { href: '#/rankings' }, 'Back to the rankings'))); return; }
       page.replaceChildren(h('div.empty', {}, 'Could not load the ranking. ', h('button.btn', { type: 'button', onclick: load }, 'Retry')));
     }
@@ -150,6 +154,7 @@ export function renderRanking(root, id) {
 
   function drawBoard() {
     if (!board) return;
+    staleBoard = false;
     if (focusId != null && !locate(board, focusId)) focusId = null;
     boardBox.replaceChildren(...(board.tiers.length
       ? board.tiers.map((t) => h('div.rk-row', {},
@@ -457,6 +462,7 @@ export function renderRanking(root, id) {
   }
 
   function drawAll() {
+    page.inert = false; errorShown = false;
     applySize();
     drawHead();
     page.replaceChildren(head,
@@ -471,6 +477,11 @@ export function renderRanking(root, id) {
   const onGameChanged = () => {
     if (!board) return;
     if (sheet) { staleBoard = true; return; } // do not rebuild under an open sheet
+    if (page.querySelector('.rk-tile.dragging')) { // nor under a drag: redraw when it ends
+      staleBoard = true;
+      document.addEventListener('pointerup', () => setTimeout(() => { if (alive && staleBoard && !sheet) drawBoard(); }, 0), { once: true });
+      return;
+    }
     drawBoard();
   };
   window.addEventListener('games-changed', onGameChanged);
