@@ -264,10 +264,10 @@ export const saveBoardKeepalive = (id, body) => { fetch(`/api/rankings/${id}/boa
  * games already loaded. Returns true when one changed.
  */
 export function applyPosters(entries) {
-  let changed = false;
+  const changed = [];
   for (const e of entries) {
     const g = store.byId.get(e.game_id);
-    if (g && (g.poster !== e.poster || g.poster_v !== e.poster_v)) { g.poster = e.poster; g.poster_v = e.poster_v; changed = true; }
+    if (g && (g.poster !== e.poster || g.poster_v !== e.poster_v)) { g.poster = e.poster; g.poster_v = e.poster_v; changed.push(g.id); }
   }
   return changed;
 }

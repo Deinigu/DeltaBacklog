@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localPatch } from '../static/js/api.js';
+import { localPatch, applyPosters, store } from '../static/js/api.js';
 
 test('localPatch turns cleared text and zero numbers into null, like the server', () => {
   assert.deepEqual(localPatch({ series: '', developer: '', ownership: '' }), { series: null, developer: null, ownership: null });
@@ -32,4 +32,12 @@ test('retargetImg points a cover image at its new version, lazy or loaded', asyn
   retargetImg(loaded, '/covers/1.jpg?v=b');
   assert.equal(loaded.src, '/covers/1.jpg?v=b');
   assert.equal(retargetImg(loaded, '/covers/1.jpg?v=b'), false); // unchanged
+});
+
+test('applyPosters returns the ids of the games whose poster changed', () => {
+  store.byId.set(1, { id: 1, poster: null, poster_v: 0 });
+  store.byId.set(2, { id: 2, poster: 'p', poster_v: 3 });
+  const ids = applyPosters([{ game_id: 1, poster: 'p', poster_v: 1 }, { game_id: 2, poster: 'p', poster_v: 3 }, { game_id: 9, poster: 'p', poster_v: 1 }]);
+  assert.deepEqual(ids, [1]);
+  assert.deepEqual(applyPosters([{ game_id: 1, poster: 'p', poster_v: 1 }]), []);
 });

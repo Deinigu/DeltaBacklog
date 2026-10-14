@@ -40,7 +40,7 @@ export function renderRanking(root, id) {
 
   // ---------- loading ----------
   async function load() {
-    page.replaceChildren(h('p.hint', {}, 'Loading…'));
+    if (!board) page.replaceChildren(h('p.hint', {}, 'Loading…')); // only on the first load: a reload keeps the page in place
     try {
       const r = await getRanking(id);
       if (!alive) return;
@@ -66,7 +66,8 @@ export function renderRanking(root, id) {
         await new Promise((r) => setTimeout(r, 2500));
         if (!alive) return;
         const r = await getRanking(id);
-        if (applyPosters(r.entries) && alive) drawBoard();
+        const ids = applyPosters(r.entries);
+        if (ids.length && alive) refreshTiles(ids);
         if (r.posters_pending === 0) return;
       }
     } catch { /* offline: the posters show up on the next visit */ } finally { polling = false; }
@@ -124,6 +125,20 @@ export function renderRanking(root, id) {
     el.addEventListener('keydown', (e) => tileKey(e, g));
     attachDrag(el, { onDrop: (tierId, index) => changed(place(board, g.id, tierId, index), () => `${g.title}: ${tierLabelOf(g.id)}, position ${locate(board, g.id).index + 1}`) });
     return el;
+  }
+
+  /** New posters: swap the picture inside the tiles that show them, without rebuilding the board. */
+  function refreshTiles(ids) {
+    for (const gid of ids) {
+      const g = byId(gid);
+      const el = page.querySelector(`.rk-tile[data-id="${gid}"]`);
+      if (!g || !el) continue;
+      const url = posterURL(g) || coverURL(g);
+      const img = el.querySelector('img');
+      if (img && url) { if (img.getAttribute('src') !== url) img.src = url; continue; }
+      if (!url) continue;
+      el.querySelector('.ph')?.replaceWith(h('img', { src: url, alt: g.title, loading: 'lazy', decoding: 'async', draggable: 'false' }));
+    }
   }
 
   const tiles = (ids) => ids.map(byId).filter(Boolean).map(tileEl);
@@ -300,6 +315,7 @@ export function renderRanking(root, id) {
 
   // ---------- sheets (tier settings, ranking menu) ----------
   let paintSheet = null;
+  let staleBoard = false; // a redraw was held back while a sheet was open
   function closeSheet() {
     if (!sheet) return;
     sheet.scrim.remove(); sheet.el.remove();
@@ -307,6 +323,7 @@ export function renderRanking(root, id) {
     const back = sheet.opener;
     sheet = null; paintSheet = null;
     if (back?.isConnected) back.focus();
+    if (staleBoard) { staleBoard = false; drawBoard(); }
   }
   function showSheet(el, { opener = document.activeElement } = {}) {
     closeSheet();
@@ -451,7 +468,11 @@ export function renderRanking(root, id) {
   const onKeyGlobal = (e) => { if (e.key === 'Escape' && selected != null && !sheet && !document.querySelector('.dialog')) select(null); };
   document.addEventListener('keydown', onKeyGlobal);
   // A game got a new cover or poster: the tiles that show it follow.
-  const onGameChanged = () => { if (board) drawBoard(); };
+  const onGameChanged = () => {
+    if (!board) return;
+    if (sheet) { staleBoard = true; return; } // do not rebuild under an open sheet
+    drawBoard();
+  };
   window.addEventListener('games-changed', onGameChanged);
   load();
 
