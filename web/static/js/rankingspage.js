@@ -62,7 +62,7 @@ export function renderRankings(root) {
       return h('article.rkc', {}, card,
         h('div.rkc-actions', {},
           btn('Move up', '▲', () => move(i, -1), i === 0), btn('Move down', '▼', () => move(i, 1), i === list.length - 1),
-          btn('Rename', '✎', () => rename(r)), btn('Duplicate', '⧉', () => duplicate(r)), btn('Delete', '🗑', () => remove(r))));
+          btn('Rename', 'Rename', () => rename(r)), btn('Duplicate', 'Duplicate', () => duplicate(r)), btn('Delete', 'Delete', () => remove(r))));
     }));
   }
 

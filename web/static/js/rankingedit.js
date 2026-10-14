@@ -31,6 +31,7 @@ export function renderRanking(root, id) {
   let titles = read('rk-titles', '0') === '1';
   let sheet = null;       // the open tier sheet or menu, if any
   let polling = false;
+  let errorShown = false; // the page currently shows the load error panel
 
   const page = h('div.rk-page');
   root.replaceChildren(page);
@@ -40,7 +41,9 @@ export function renderRanking(root, id) {
 
   // ---------- loading ----------
   async function load() {
-    page.replaceChildren(h('p.hint', {}, 'Loading…'));
+    // First load, or Retry on the error panel: show "Loading…". A reload keeps the board in place but not editable until the fresh one is drawn.
+    if (!board || errorShown) page.replaceChildren(h('p.hint', {}, 'Loading…')); else page.inert = true;
+    errorShown = false;
     try {
       const r = await getRanking(id);
       if (!alive) return;
@@ -52,6 +55,7 @@ export function renderRanking(root, id) {
       if (r.posters_pending > 0) pollPosters();
     } catch (e) {
       if (!alive) return;
+      page.inert = false; errorShown = true;
       if (e.status === 404) { page.replaceChildren(h('div.empty', {}, 'This ranking does not exist (any more). ', h('a.btn', { href: '#/rankings' }, 'Back to the rankings'))); return; }
       page.replaceChildren(h('div.empty', {}, 'Could not load the ranking. ', h('button.btn', { type: 'button', onclick: load }, 'Retry')));
     }
@@ -66,7 +70,8 @@ export function renderRanking(root, id) {
         await new Promise((r) => setTimeout(r, 2500));
         if (!alive) return;
         const r = await getRanking(id);
-        if (applyPosters(r.entries) && alive) drawBoard();
+        const ids = applyPosters(r.entries);
+        if (ids.length && alive) refreshTiles(ids);
         if (r.posters_pending === 0) return;
       }
     } catch { /* offline: the posters show up on the next visit */ } finally { polling = false; }
@@ -126,6 +131,20 @@ export function renderRanking(root, id) {
     return el;
   }
 
+  /** New posters: swap the picture inside the tiles that show them, without rebuilding the board. */
+  function refreshTiles(ids) {
+    for (const gid of ids) {
+      const g = byId(gid);
+      const el = page.querySelector(`.rk-tile[data-id="${gid}"]`);
+      if (!g || !el) continue;
+      const url = posterURL(g) || coverURL(g);
+      const img = el.querySelector('img');
+      if (img && url) { if (img.getAttribute('src') !== url) img.src = url; continue; }
+      if (!url) continue;
+      el.querySelector('.ph')?.replaceWith(h('img', { src: url, alt: g.title, loading: 'lazy', decoding: 'async', draggable: 'false' }));
+    }
+  }
+
   const tiles = (ids) => ids.map(byId).filter(Boolean).map(tileEl);
 
   const boardBox = h('div.rk-board');
@@ -135,6 +154,7 @@ export function renderRanking(root, id) {
 
   function drawBoard() {
     if (!board) return;
+    staleBoard = false;
     if (focusId != null && !locate(board, focusId)) focusId = null;
     boardBox.replaceChildren(...(board.tiers.length
       ? board.tiers.map((t) => h('div.rk-row', {},
@@ -300,6 +320,7 @@ export function renderRanking(root, id) {
 
   // ---------- sheets (tier settings, ranking menu) ----------
   let paintSheet = null;
+  let staleBoard = false; // a redraw was held back while a sheet was open
   function closeSheet() {
     if (!sheet) return;
     sheet.scrim.remove(); sheet.el.remove();
@@ -307,6 +328,7 @@ export function renderRanking(root, id) {
     const back = sheet.opener;
     sheet = null; paintSheet = null;
     if (back?.isConnected) back.focus();
+    if (staleBoard) { staleBoard = false; drawBoard(); }
   }
   function showSheet(el, { opener = document.activeElement } = {}) {
     closeSheet();
@@ -440,6 +462,7 @@ export function renderRanking(root, id) {
   }
 
   function drawAll() {
+    page.inert = false; errorShown = false;
     applySize();
     drawHead();
     page.replaceChildren(head,
@@ -451,7 +474,16 @@ export function renderRanking(root, id) {
   const onKeyGlobal = (e) => { if (e.key === 'Escape' && selected != null && !sheet && !document.querySelector('.dialog')) select(null); };
   document.addEventListener('keydown', onKeyGlobal);
   // A game got a new cover or poster: the tiles that show it follow.
-  const onGameChanged = () => { if (board) drawBoard(); };
+  const onGameChanged = () => {
+    if (!board) return;
+    if (sheet) { staleBoard = true; return; } // do not rebuild under an open sheet
+    if (page.querySelector('.rk-tile.dragging')) { // nor under a drag: redraw when it ends
+      staleBoard = true;
+      document.addEventListener('pointerup', () => setTimeout(() => { if (alive && staleBoard && !sheet) drawBoard(); }, 0), { once: true });
+      return;
+    }
+    drawBoard();
+  };
   window.addEventListener('games-changed', onGameChanged);
   load();
 
