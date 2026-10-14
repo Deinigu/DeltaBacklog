@@ -24,10 +24,16 @@ type Meta interface {
 	SearchIGDB(ctx context.Context, title string) ([]meta.Candidate, error)
 	SearchCovers(ctx context.Context, title string) ([]meta.CoverOption, error)
 	IGDBImages(ctx context.Context, igdbID int64, title string) ([]meta.CoverOption, error)
+	IGDBCoverURL(ctx context.Context, igdbID int64) (string, error)
+	SteamGridPortrait(ctx context.Context, title string) (string, error)
 	ResolveLink(ctx context.Context, link string) (string, error)
 }
 
 var defaultCoverHosts = []string{"cdn2.steamgriddb.com", "cdn.steamgriddb.com", "images.igdb.com"}
+
+// PosterHostAllowed is the host check the poster downloads use (the same allow-list as client-supplied covers); the
+// command line makes posters without a running server.
+func (s *Server) PosterHostAllowed(raw string) bool { return s.coverHostAllowed(raw) }
 
 func (s *Server) coverHostAllowed(raw string) bool {
 	u, err := url.Parse(raw)
@@ -290,8 +296,8 @@ func (s *Server) deleteGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	var cover sql.NullString
-	if err := tx.QueryRow("SELECT cover_file FROM game WHERE id = ?", id).Scan(&cover); errors.Is(err, sql.ErrNoRows) {
+	var cover, poster sql.NullString
+	if err := tx.QueryRow("SELECT cover_file, poster_file FROM game WHERE id = ?", id).Scan(&cover, &poster); errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
@@ -312,6 +318,9 @@ func (s *Server) deleteGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if cover.Valid && cover.String != "" {
 		os.Remove(filepath.Join(s.CoverDir, filepath.Base(cover.String)))
+	}
+	if poster.Valid && poster.String != "" {
+		os.Remove(filepath.Join(s.CoverDir, filepath.Base(poster.String)))
 	}
 	if s.ShotDir != "" { // the screenshot rows went with the game (cascade); now their files
 		os.RemoveAll(s.gameShotDir(id))

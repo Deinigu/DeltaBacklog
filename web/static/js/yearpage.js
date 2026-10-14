@@ -1,10 +1,8 @@
-// Year in review page (#/years/<year>): what was played, a breakdown, and that year's tier list.
+// Year in review page (#/years/<year>): what was played, a breakdown, and a way into that year's ranking.
 import { h, toast, gradientFor, initials, lazyImg, retargetImg } from './util.js';
-import { store, coverURL, getTierlist, saveTierlist, load } from './api.js';
+import { store, coverURL, listRankings, createRanking, addRankingGames } from './api.js';
 import { openDrawer } from './drawer.js';
-import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, tierState, tierOf, unranked, place, toEntries, remember, restored } from './yearreview.js';
-import { exportTierlistPNG } from './tierpng.js';
-import { createSaveQueue } from './savequeue.js';
+import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking } from './yearreview.js';
 
 const thisYear = () => new Date().getFullYear();
 
@@ -19,8 +17,7 @@ export function renderYear(root, year) {
   const counts = yearCounts(store.games);
   const nb = neighbours(counts, year, thisYear());
   const groups = groupYear(store.games, year);
-  let pool = gamesOfYear(store.games, year);
-  let poolIds = pool.map((g) => g.id);
+  const pool = gamesOfYear(store.games, year);
   const total = pool.length;
 
   const nav = (to, label, glyph) => to
@@ -55,225 +52,24 @@ export function renderYear(root, year) {
     h('div.year-stats', {}, ...groups.map(tile)),
     h('div.year-two', {}, bars('Platforms', breakdown(pool, (g) => g.platforms)), bars('Genres', breakdown(pool, (g) => g.genres))));
 
-  // ---- tier list ----
-  const tierBox = h('section.year-box.tiers-box');
-  body.append(tierBox);
-  let state = null;
-  const known = new Map(); // game id -> tier id, last known placement (see remember)
-  let menu = null;
-  let loadFailed = false;
-
-  const tileEl = (g) => {
-    const url = coverURL(g);
-    const el = h('div.ttile', { role: 'button', tabindex: '0', 'data-id': g.id, title: g.title, 'aria-label': `${g.title}: choose a tier` },
-      url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
-      h('span.tname', {}, g.title));
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMenu(g); } });
-    el.addEventListener('click', () => openMenu(g));
-    attachDrag(el, g);
-    return el;
-  };
-  let byId = new Map(pool.map((g) => [g.id, g]));
-
-  /** A game was edited (its years may have changed): follow the store so a stale id is never saved. */
-  function syncPool(e) {
-    const changed = e?.detail?.id && store.byId.get(e.detail.id);
-    if (changed) for (const img of body.querySelectorAll(`[data-id="${changed.id}"] img`)) retargetImg(img, coverURL(changed)); // a new cover
-    const next = gamesOfYear(store.games, year);
-    const ids = next.map((g) => g.id);
-    if (ids.length === poolIds.length && ids.every((id, i) => id === poolIds[i])) return;
-    const added = ids.filter((id) => !byId.has(id));
-    pool = next; poolIds = ids; byId = new Map(next.map((g) => [g.id, g]));
-    if (!state) return;
-    // A game that got the year back returns to its tier (the server keeps that entry while the year is missing).
-    state = tierState(state.tiers, [...toEntries(state), ...restored(known, added)], poolIds);
-    drawTiers();
-    const unknown = added.filter((id) => !known.has(id));
-    if (unknown.length) restoreFromServer(unknown);
-  }
-  /** Games never seen in this list (the page opened while they lacked the year): ask the server where they were. */
-  async function restoreFromServer(ids) {
+  // ---- ranking: opens the ranking of this year, or makes it with the year's games ----
+  const rankBtn = h('button.btn.primary', { type: 'button', onclick: rankThisYear }, 'Rank this year');
+  body.append(h('section.year-box.tiers-box', {},
+    h('h2', {}, 'Ranking'),
+    h('p.hint', {}, `Put the ${total} game${total === 1 ? '' : 's'} of ${year} in your own tiers, with big posters, and export the result as a picture.`),
+    rankBtn));
+  async function rankThisYear() {
+    rankBtn.disabled = true;
     try {
-      const tl = await getTierlist(year);
-      if (!alive || !state) return;
-      const extra = tl.entries.filter((e) => ids.includes(e.game_id) && tierOf(state, e.game_id) == null);
-      if (!extra.length) return;
-      state = tierState(state.tiers, [...toEntries(state), ...extra], poolIds);
-      remember(known, state, poolIds);
-      drawTiers();
-    } catch { /* the entry stays on the server; the next visit shows it */ }
-  }
-  window.addEventListener('games-changed', syncPool);
-
-  function drawTiers() {
-    if (loadFailed) {
-      tierBox.replaceChildren(h('h2', {}, 'Tier list'), h('div.empty', {}, 'Could not load the tier list. ', h('button.btn', { type: 'button', onclick: loadTiers }, 'Retry')));
-      return;
-    }
-    if (!state) { tierBox.replaceChildren(h('h2', {}, 'Tier list'), h('p.hint', {}, 'Loading…')); return; }
-    const rows = state.tiers.map((t) => h('div.trow', {},
-      h('div.tlabel', { style: `background:${t.color}` }, t.name),
-      h('div.tcell', { 'data-tier': t.id, role: 'group', 'aria-label': `Tier ${t.name}` }, ...state.rows[t.id].map((id) => tileEl(byId.get(id))))));
-    const free = unranked(state, poolIds);
-    tierBox.replaceChildren(
-      h('div.tiers-head', {}, h('h2', {}, 'Tier list'),
-        h('button.btn', { type: 'button', onclick: () => exportTierlistPNG({ year, state, byId }).catch(() => toast('Could not make the image')) }, 'Export PNG')),
-      h('p.hint', {}, 'Drag a game into a tier (touch: press and hold), or tap it to choose a tier. Saved automatically.'),
-      h('div.tiers', {}, ...rows),
-      h('h3', {}, `Not ranked (${free.length})`),
-      h('div.tcell.pool', { 'data-tier': '', role: 'group', 'aria-label': 'Not ranked' }, ...free.map((id) => tileEl(byId.get(id)))));
-  }
-
-  // ---- saving: debounced, one request at a time, the latest state always wins (see savequeue.js) ----
-  const sendBeacon = () => {
-    syncPool();
-    fetch(`/api/tierlist/${year}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: toEntries(state) }), keepalive: true }).catch(() => {});
-  };
-  const queue = createSaveQueue({
-    save: () => { syncPool(); return saveTierlist(year, toEntries(state)); },
-    isFatal: (e) => e.status === 400, // the server rejected this exact list: retrying it cannot help
-    onError: () => toast('Could not save the tier list. Will retry.'),
-    onFatal: async () => {
-      toast('Games changed elsewhere, so your last change could not be saved and was undone. The tier list was reloaded.');
-      try { await load(); } catch { /* offline: the list reloads from what is in memory */ }
-      if (!alive) return;
-      syncPool();
-      loadTiers();
-    },
-  });
-  function changed(next) {
-    state = next;
-    remember(known, state, poolIds);
-    drawTiers();
-    queue.change();
-  }
-  const onHide = () => queue.finish(sendBeacon);
-  window.addEventListener('pagehide', onHide);
-
-  async function loadTiers() {
-    loadFailed = false; state = null; drawTiers();
-    try {
-      const tl = await getTierlist(year);
-      if (!alive) return;
-      state = tierState(tl.tiers, tl.entries, poolIds);
-      known.clear();
-      remember(known, state, poolIds);
-    } catch { if (!alive) return; loadFailed = true; }
-    drawTiers();
-  }
-
-  // ---- the tap menu: the touch-friendly alternative to dragging ----
-  const focusTile = (id) => tierBox.querySelector(`.ttile[data-id="${id}"]`)?.focus();
-  /** Close the menu; focus goes back to the tile (found again by id, since a move redraws the tiles). */
-  function closeMenu(refocusId = null) {
-    if (!menu) return;
-    menu.remove(); menu = null;
-    if (refocusId != null) focusTile(refocusId);
-  }
-  function openMenu(g) {
-    closeMenu();
-    const cur = tierOf(state, g.id);
-    const choose = (tierId) => { closeMenu(); if (tierId !== cur) changed(place(state, g.id, tierId)); focusTile(g.id); };
-    const scrim = h('div.scrim', { onclick: () => closeMenu(g.id) });
-    const sheet = h('div.tier-menu', { role: 'dialog', 'aria-modal': 'true', 'aria-label': `Move ${g.title}` },
-      h('h3', {}, g.title),
-      h('div.tier-choices', {}, ...state.tiers.map((t) => h('button.tier-choice', { type: 'button', style: `background:${t.color}`, 'aria-pressed': String(t.id === cur), onclick: () => choose(t.id) }, t.name)),
-        h('button.btn.tier-none', { type: 'button', 'aria-pressed': String(cur == null), onclick: () => choose(null) }, 'Not ranked')),
-      h('div.dialog-actions', {}, h('button.btn', { type: 'button', onclick: () => { closeMenu(); openDrawer(g); } }, 'Details'), h('button.btn', { type: 'button', onclick: () => closeMenu(g.id) }, 'Close')));
-    sheet.addEventListener('keydown', (e) => { // keep Tab inside the sheet while it is open
-      if (e.key !== 'Tab') return;
-      const items = [...sheet.querySelectorAll('button')];
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    });
-    menu = h('div.tier-menu-wrap', { 'data-id': g.id }, scrim, sheet);
-    document.body.append(menu);
-    sheet.querySelector('button')?.focus();
-  }
-  const onKey = (e) => { if (e.key === 'Escape' && menu) { const id = menu.dataset.id; closeMenu(id ? Number(id) : null); } };
-  document.addEventListener('keydown', onKey);
-
-  // ---- dragging (pointer events: mouse drags at once, touch after a long press) ----
-  function attachDrag(el, g) {
-    el.addEventListener('pointerdown', (e) => {
-      if (e.button > 0) return;
-      const sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
-      let dragging = false, ghost = null, hot = null, pressTimer = null;
-      const onTouchMove = (ev) => { if (dragging) ev.preventDefault(); };
-      const start = () => {
-        dragging = true;
-        clearTimeout(pressTimer);
-        el.classList.add('dragging');
-        ghost = el.cloneNode(true);
-        ghost.classList.add('ghost');
-        ghost.style.width = `${el.offsetWidth}px`;
-        document.body.append(ghost);
-        navigator.vibrate?.(15);
-      };
-      let px = 0, py = 0, raf = 0;
-      // Near the top or bottom edge the page scrolls by itself, so a far-away tier can be reached mid-drag.
-      const autoScroll = () => {
-        raf = 0;
-        if (!dragging) return;
-        const edge = 70, dy = py < edge ? -(edge - py) / 4 : py > innerHeight - edge ? (py - (innerHeight - edge)) / 4 : 0;
-        if (dy) { window.scrollBy(0, dy); move(px, py); }
-      };
-      const move = (x, y) => {
-        px = x; py = y;
-        if (!raf) raf = requestAnimationFrame(autoScroll);
-        ghost.style.transform = `translate(${x - el.offsetWidth / 2}px, ${y - el.offsetHeight / 2}px)`;
-        const cell = document.elementFromPoint(x, y)?.closest('.tcell');
-        if (cell !== hot) { hot?.classList.remove('hot'); hot = cell; hot?.classList.add('hot'); }
-      };
-      const finish = (ev, cancelled) => {
-        clearTimeout(pressTimer);
-        cancelAnimationFrame(raf);
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onCancel);
-        document.removeEventListener('touchmove', onTouchMove);
-        if (!dragging) return; // a plain tap is handled by the click listener below
-        ghost.remove();
-        el.classList.remove('dragging');
-        hot?.classList.remove('hot');
-        // A drag ends with a click on the tile when the pointer is released over it: swallow that one, then stop listening.
-        const block = (c) => c.stopImmediatePropagation();
-        el.addEventListener('click', block, { once: true, capture: true });
-        setTimeout(() => el.removeEventListener('click', block, true), 100);
-        if (!cancelled && hot) {
-          const tierId = hot.dataset.tier === '' ? null : Number(hot.dataset.tier);
-          const others = [...hot.querySelectorAll('.ttile')].filter((t) => t !== el);
-          let index = 0;
-          for (const t of others) {
-            const r = t.getBoundingClientRect();
-            if (r.bottom < ev.clientY || (ev.clientY <= r.bottom && ev.clientY >= r.top && r.left + r.width / 2 < ev.clientX)) index++;
-          }
-          const same = tierId === tierOf(state, g.id) && (tierId == null || index === state.rows[tierId].indexOf(g.id));
-          if (!same) changed(place(state, g.id, tierId, index));
-        }
-      };
-      const onMove = (ev) => {
-        if (!dragging) {
-          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > (touch ? 10 : 5)) {
-            if (touch) { finish(null, true); return; } // the finger scrolls the page instead
-            start();
-          } else return;
-        }
-        ev.preventDefault();
-        move(ev.clientX, ev.clientY);
-      };
-      const onUp = (ev) => finish(ev, false);
-      const onCancel = (ev) => finish(ev, true);
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onCancel);
-      if (touch) {
-        document.addEventListener('touchmove', onTouchMove, { passive: false });
-        pressTimer = setTimeout(() => { start(); move(sx, sy); }, 380);
+      const existing = findYearRanking(await listRankings(), year);
+      let r = existing;
+      if (existing) { // games that got the year since are added to the pool (the ones already in are skipped)
+        await addRankingGames(existing.id, pool.map((g) => g.id)).catch(() => {});
+      } else {
+        r = await createRanking({ name: yearRankingName(year), year, preset: 'sabcdf', game_ids: pool.map((g) => g.id) });
       }
-    });
-    el.addEventListener('contextmenu', (e) => { if (e.pointerType === 'touch' || el.classList.contains('dragging')) e.preventDefault(); });
+      if (alive) location.hash = `#/rankings/${r.id}`;
+    } catch { toast('Could not open the ranking'); rankBtn.disabled = false; }
   }
 
   // ---- what was played, by outcome ----
@@ -287,15 +83,12 @@ export function renderYear(root, year) {
   body.append(h('div.ygroups', {}, ...groups.filter((g) => g.games.length).map((grp) =>
     h('section.year-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
 
-  loadTiers();
-
-  return () => {
-    alive = false;
-    closeMenu();
-    if (state) queue.finish(sendBeacon);
-    window.removeEventListener('pagehide', onHide);
-    window.removeEventListener('games-changed', syncPool);
-    document.removeEventListener('keydown', onKey);
+  // A game got a new cover: its row follows (see retargetImg).
+  const onGameChanged = (e) => {
+    const g = e?.detail?.id && store.byId.get(e.detail.id);
+    if (g) for (const img of body.querySelectorAll(`[data-id="${g.id}"] img`)) retargetImg(img, coverURL(g));
   };
-}
+  window.addEventListener('games-changed', onGameChanged);
 
+  return () => { alive = false; window.removeEventListener('games-changed', onGameChanged); };
+}

@@ -134,8 +134,34 @@ await shot(p, 'stats-phone');
 
 await go(p, '#/years'); // the latest year with games
 await shot(p, 'year-phone');
-await p.$eval('.tiers-box', (e) => e.scrollIntoView()); await wait(500);
-await shot(p, 'tierlist-phone');
+
+// ---- rankings: a ranking like the ones TierMaker makes, seeded through the API of the throwaway server ----
+let rankingId = null;
+if (!process.env.BASE_URL) { // never write to a server we did not start
+  rankingId = await p.evaluate(async () => {
+    const send = async (method, url, body) => (await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })).json();
+    const games = (await (await fetch('/api/games')).json()).slice(0, 30);
+    const r = await send('POST', '/api/rankings', { name: 'Mis juegos de 2025', preset: 'empty', game_ids: games.map((g) => g.id) });
+    const labels = [['Me ha cambiado la vida', '#ff7f7f'], ['Me ha gustado mucho', '#ffbf7f'], ['Muy bueno, con alguna pega', '#ffdf7f'], ['Bien, sin más', '#ffff7f'],
+      ['Mediocre, pero tiene sus cosillas', '#bfff7f'], ['No me ha convencido', '#7fffbf'], ['Lo dejé a medias', '#7fbfff'], ['Aburrido', '#bf7fff'], ['Vaya mierda', '#ff7fbf']];
+    const tiers = [];
+    for (const [label, color] of labels) tiers.push(await send('POST', `/api/rankings/${r.id}/tiers`, { label, color }));
+    const sizes = [2, 4, 4, 3, 5, 2, 1, 1, 1]; // games per tier; the rest stay in the pool
+    let k = 0;
+    const board = tiers.map((t, i) => ({ id: t.id, label: t.label, color: t.color, games: games.slice(k, (k += sizes[i])).map((g) => g.id) }));
+    await send('PUT', `/api/rankings/${r.id}/board`, { tiers: board, pool: games.slice(k).map((g) => g.id) });
+    return r.id;
+  });
+  for (let i = 0; i < 90; i++) { // the posters are made in the background, one at a time
+    const pending = await p.evaluate(async (id) => (await (await fetch(`/api/rankings/${id}`)).json()).posters_pending, rankingId);
+    if (!pending) break;
+    await wait(1000);
+  }
+  await go(p, '#/rankings');
+  await shot(p, 'rankings-phone');
+  await go(p, `#/rankings/${rankingId}`);
+  await shot(p, 'ranking-phone');
+}
 
 await go(p, '#/link'); // needs at least one game waiting in the IGDB review queue (see the note at the top)
 await shot(p, 'link-phone');
@@ -201,6 +227,10 @@ await go(p, '#/library?sort=status:asc,last_year:desc,title:asc');
 await shot(p, 'library-desktop');
 await go(p, '#/library?layout=table&sort=title:asc');
 await shot(p, 'table-desktop');
+if (rankingId) {
+  await go(p, `#/rankings/${rankingId}`);
+  await shot(p, 'ranking-desktop');
+}
 
 await browser.close();
 console.log('screenshots written to', OUT);

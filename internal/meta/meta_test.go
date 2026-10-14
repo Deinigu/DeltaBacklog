@@ -327,3 +327,29 @@ func TestSearchFallsBackWhenTheTitleSearchFindsNothing(t *testing.T) {
 		t.Errorf("nothing found must be an empty list, got %#v", got)
 	}
 }
+
+func TestPosterSources(t *testing.T) {
+	c, _ := fake(t)
+	ctx := context.Background()
+	u, err := c.IGDBCoverURL(ctx, 1)
+	if err != nil || u != "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/cover1.jpg" {
+		t.Errorf("IGDBCoverURL = %q, %v", u, err)
+	}
+	if u, err := c.IGDBCoverURL(ctx, 404); err != nil || u != "" {
+		t.Errorf("a game IGDB does not know: %q, %v", u, err)
+	}
+	u, err = c.SteamGridPortrait(ctx, "Hades") // the exact title match (game 11) wins over the first hit
+	if err != nil || u != "https://cdn2.steamgriddb.com/w.png" {
+		t.Errorf("SteamGridPortrait = %q, %v", u, err)
+	}
+	if u, err := c.SteamGridPortrait(ctx, "  "); err != nil || u != "" {
+		t.Errorf("blank title: %q, %v", u, err)
+	}
+	off := New(Config{})
+	if _, err := off.IGDBCoverURL(ctx, 1); !errors.Is(err, ErrNotConfigured) {
+		t.Errorf("unconfigured IGDB: %v", err)
+	}
+	if _, err := off.SteamGridPortrait(ctx, "Hades"); !errors.Is(err, ErrNotConfigured) {
+		t.Errorf("unconfigured SteamGridDB: %v", err)
+	}
+}

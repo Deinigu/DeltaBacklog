@@ -33,6 +33,9 @@ type fakeMeta struct {
 	resolveErr error
 	igdbErr    error
 	lastQuery  string
+	igdbCover  string // IGDBCoverURL answer
+	portrait   string // SteamGridPortrait answer
+	posterErr  error  // both poster lookups fail with it
 }
 
 func (f *fakeMeta) Configured() (bool, bool) { return f.igdb, f.sgdb }
@@ -46,6 +49,12 @@ func (f *fakeMeta) SearchCovers(_ context.Context, t string) ([]meta.CoverOption
 func (f *fakeMeta) IGDBImages(_ context.Context, id int64, title string) ([]meta.CoverOption, error) {
 	f.imgID, f.imgTitle = id, title
 	return f.images, nil
+}
+func (f *fakeMeta) IGDBCoverURL(_ context.Context, id int64) (string, error) {
+	return f.igdbCover, f.posterErr
+}
+func (f *fakeMeta) SteamGridPortrait(_ context.Context, title string) (string, error) {
+	return f.portrait, f.posterErr
 }
 func (f *fakeMeta) ResolveLink(_ context.Context, l string) (string, error) {
 	return f.resolved, f.resolveErr
@@ -78,6 +87,10 @@ func newAddEnv(t *testing.T) *addEnv {
 				img.Set(x, 10, color.RGBA{200, 30, 30, 255})
 			}
 			png.Encode(w, img)
+		case "/portrait.png":
+			png.Encode(w, image.NewRGBA(image.Rect(0, 0, 600, 900)))
+		case "/boom.png":
+			http.Error(w, "down", http.StatusInternalServerError)
 		case "/redirect.png":
 			http.Redirect(w, r, "/ok.png", http.StatusFound)
 		case "/huge.png":
@@ -89,7 +102,7 @@ func newAddEnv(t *testing.T) *addEnv {
 	t.Cleanup(images.Close)
 	coverDir := t.TempDir()
 	fm := &fakeMeta{igdb: true, sgdb: true}
-	s := &Server{DB: d, CoverDir: coverDir, Meta: fm, CoverHosts: []string{strings.TrimPrefix(images.URL, "http://")}}
+	s := &Server{DB: d, CoverDir: coverDir, Meta: fm, CoverHosts: []string{strings.TrimPrefix(images.URL, "http://")}, PosterPause: time.Millisecond}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	return &addEnv{db: d, srv: srv, meta: fm, coverDir: coverDir, images: images}

@@ -229,6 +229,32 @@ func main() {
 			real++
 		}
 	}
+	// With IGDB keys, link the games whose title IGDB knows exactly (the two games of the review queue above stay
+	// unlinked). The rankings' posters then come from the right IGDB cover instead of a fuzzy SteamGridDB match
+	// ("Baldur's Gate 3" found "Baldur's Gate Toolkit").
+	igdbName := map[string]string{"Baldur's Gate 3": "Baldur's Gate III"} // IGDB's own spelling
+	if igdb, _ := mc.Configured(); igdb {
+		for i, g := range games {
+			if g.title == "Pentiment" || g.title == "Subnautica" {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			cands, err := mc.SearchIGDB(ctx, g.title)
+			cancel()
+			if err != nil || len(cands) == 0 {
+				continue
+			}
+			same := func(a, b string) bool { // IGDB writes the typographic apostrophe
+				return strings.EqualFold(strings.ReplaceAll(a, "’", "'"), strings.ReplaceAll(b, "’", "'"))
+			}
+			for _, c := range meta.RankByTitle(cands, g.title) { // exact title AND release year: IGDB has several "Hades"
+				if (same(c.Name, g.title) || same(c.Name, igdbName[g.title])) && c.Year == g.year {
+					d.Exec("UPDATE game SET igdb_id = ? WHERE id = ? AND igdb_id IS NULL", c.IGDBID, ids[i]) // an id used twice is skipped
+					break
+				}
+			}
+		}
+	}
 	fmt.Printf("demo library with %d games written to %s (%d real covers, %d placeholders)\n", len(games), *dataDir, real, len(games)-real)
 }
 

@@ -120,3 +120,33 @@ test('flush saves immediately', async () => {
   assert.equal(r.saves.length, 1);
   await r.settle(0); await p;
 });
+
+test('flush waits for a save that is already running, then saves what changed meanwhile', async () => {
+  const r = rig();
+  r.q.change(); await r.tick(500);
+  assert.equal(r.saves.length, 1); // a save is in flight
+  r.q.change();                    // and the state changes again
+  let done = false;
+  const f = r.q.flush().then(() => { done = true; });
+  await new Promise((x) => setImmediate(x));
+  assert.equal(done, false, 'flush must not resolve while the first save is still running');
+  await r.settle(0);
+  assert.equal(r.saves.length, 2); // the change made meanwhile is saved next
+  assert.equal(done, false);
+  await r.settle(1);
+  await f;
+  assert.equal(done, true);
+  assert.equal(r.q.dirty, false);
+});
+
+test('flush with nothing to save resolves at once, and after a failed save it does not loop', async () => {
+  const r = rig();
+  await r.q.flush();
+  assert.equal(r.saves.length, 0);
+  r.q.change(); await r.tick(500);
+  const f = r.q.flush();
+  await r.settle(0, Object.assign(new Error('offline'), { status: 503 }));
+  await f; // resolved although the save failed; the retry stays scheduled
+  assert.equal(r.saves.length, 1);
+  assert.equal(r.q.dirty, true);
+});

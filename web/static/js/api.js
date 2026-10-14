@@ -234,10 +234,54 @@ export async function loadLinkPending() {
   try { store.linkPending = (await linkQueue()).length; } catch { store.linkPending = 0; }
 }
 
-// ---- tier lists ----
-export const getTierlist = (year) => getJSON(`/api/tierlist/${year}`);
-/** Replace a year's tier list; `entries` is [{game_id, tier_id}] (see yearreview.toEntries). */
-export const saveTierlist = (year, entries) => send('PUT', `/api/tierlist/${year}`, { entries });
+// ---- rankings ----
+/** Portrait box art for the rankings (null until the server has made it); poster_v is its cache key. */
+export function posterURL(g) {
+  return g.poster ? `/covers/${g.poster}?v=${encodeURIComponent(g.poster_v || '')}` : null;
+}
+/** The rankings, in order: [{id, name, description, games, ranked, tiers: [{label, color}], preview: [gameId]}]. */
+export const listRankings = () => request('GET', '/api/rankings');
+/** One ranking with its tiers and entries ({id, name, tiers: [{id, label, color, pos}], entries: [{game_id, tier_id, pos}], posters_pending}). */
+export const getRanking = (id) => request('GET', `/api/rankings/${id}`);
+/** body: {name, description?, preset: 'sabcdf' | 'empty', game_ids?}. */
+export const createRanking = (body) => request('POST', '/api/rankings', body);
+export const patchRanking = (id, patch) => request('PATCH', `/api/rankings/${id}`, patch);
+export const deleteRanking = (id) => request('DELETE', `/api/rankings/${id}`);
+export const duplicateRanking = (id) => request('POST', `/api/rankings/${id}/duplicate`, {});
+export const reorderRankings = (ids) => request('PUT', '/api/rankings/order', ids);
+export const addRankingTier = (id, tier) => request('POST', `/api/rankings/${id}/tiers`, tier);
+export const deleteRankingTier = (id, tierId) => request('DELETE', `/api/rankings/${id}/tiers/${tierId}`);
+/** Put games in a ranking's pool. Resolves {added: [gameId]}. */
+export const addRankingGames = (id, gameIds) => request('POST', `/api/rankings/${id}/entries`, { game_ids: gameIds });
+export const removeRankingGame = (id, gameId) => request('DELETE', `/api/rankings/${id}/entries/${gameId}`);
+/** Save the board (see rankboard.toBody). */
+export const saveBoard = (id, body) => send('PUT', `/api/rankings/${id}/board`, body);
+/** Save when the page is going away (keepalive lets the request outlive it). Fire and forget. */
+export const saveBoardKeepalive = (id, body) => { fetch(`/api/rankings/${id}/board`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); };
+
+/**
+ * Posters are made in the background: copy the ones the server reports (the entries of GET /api/rankings/<id>) into the
+ * games already loaded. Returns true when one changed.
+ */
+export function applyPosters(entries) {
+  let changed = false;
+  for (const e of entries) {
+    const g = store.byId.get(e.game_id);
+    if (g && (g.poster !== e.poster || g.poster_v !== e.poster_v)) { g.poster = e.poster; g.poster_v = e.poster_v; changed = true; }
+  }
+  return changed;
+}
+
+/** The same for every game (the list page has no entries to read from). */
+export async function refreshPosters() {
+  const fresh = await getJSON('/api/games');
+  let changed = false;
+  for (const f of fresh) {
+    const g = store.byId.get(f.id);
+    if (g && (g.poster !== f.poster || g.poster_v !== f.poster_v)) { g.poster = f.poster; g.poster_v = f.poster_v; changed = true; }
+  }
+  return changed;
+}
 
 // ---- screenshots ----
 /** A game's screenshots. Resolves {screenshots, available}; available is false while the storage (a drive) is missing. */

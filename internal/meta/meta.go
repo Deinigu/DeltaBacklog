@@ -639,3 +639,75 @@ func (c *Client) TimeToBeat(ctx context.Context, ids []int64) (map[int64]TimeToB
 	}
 	return out, nil
 }
+
+// ---------------- portrait posters (rankings) ----------------
+
+// IGDBCoverURL returns the portrait cover of an IGDB game at twice the "big" size (528x748), or "" when IGDB holds none.
+func (c *Client) IGDBCoverURL(ctx context.Context, igdbID int64) (string, error) {
+	if ok, _ := c.Configured(); !ok {
+		return "", ErrNotConfigured
+	}
+	token, err := c.igdbToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	query := fmt.Sprintf("fields cover.image_id; where id = %d;", igdbID)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
+	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+	req.Header.Set("Authorization", "Bearer "+token)
+	var games []struct {
+		Cover struct {
+			ImageID string `json:"image_id"`
+		} `json:"cover"`
+	}
+	if err := c.do(req, &games); err != nil {
+		return "", err
+	}
+	if len(games) == 0 || games[0].Cover.ImageID == "" {
+		return "", nil
+	}
+	return igdbImg + "t_cover_big_2x/" + games[0].Cover.ImageID + ".jpg", nil
+}
+
+// SteamGridPortrait returns the URL of a 600x900 grid of the best SteamGridDB match for title, or "" when there is none.
+func (c *Client) SteamGridPortrait(ctx context.Context, title string) (string, error) {
+	if _, ok := c.Configured(); !ok {
+		return "", ErrNotConfigured
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", nil
+	}
+	var found struct {
+		Data []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := c.sgdbGet(ctx, "/search/autocomplete/"+url.PathEscape(title), &found); err != nil {
+		return "", err
+	}
+	if len(found.Data) == 0 {
+		return "", nil
+	}
+	best := found.Data[0]
+	for _, d := range found.Data {
+		if strings.EqualFold(d.Name, title) {
+			best = d
+			break
+		}
+	}
+	var res struct {
+		Data []struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	q := url.Values{"types": {"static"}, "dimensions": {"600x900"}, "limit": {"1"}}
+	if err := c.sgdbGet(ctx, "/grids/game/"+strconv.FormatInt(best.ID, 10)+"?"+q.Encode(), &res); err != nil {
+		return "", err
+	}
+	if len(res.Data) == 0 {
+		return "", nil
+	}
+	return res.Data[0].URL, nil
+}

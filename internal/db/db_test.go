@@ -26,7 +26,7 @@ func TestMigrateIsIdempotentAndSeeds(t *testing.T) {
 	x.QueryRow("PRAGMA user_version").Scan(&v)
 	x.QueryRow("SELECT count(*) FROM status").Scan(&statuses)
 	x.QueryRow("SELECT count(*) FROM tier").Scan(&tiers)
-	if v != 9 || statuses != 9 || tiers != 6 {
+	if v != 10 || statuses != 9 || tiers != 6 {
 		t.Errorf("version=%d statuses=%d tiers=%d", v, statuses, tiers)
 	}
 }

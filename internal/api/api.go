@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/Deinigu/DeltaBacklog/internal/posters"
 )
 
 // Server holds the dependencies of the HTTP handlers.
@@ -21,6 +24,13 @@ type Server struct {
 	ShotMaxRequest   int64    // largest upload request, bytes (default 200 MB)
 	ShotDecodeBudget int64    // most memory one screenshot may need to be decoded for its thumbnail, bytes (default 48 MB)
 	CoverHosts       []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
+
+	// PosterFetch and PosterPause replace the poster download and the pause between two posters (tests).
+	PosterFetch func(url, dir string, gameID int64) (string, error)
+	PosterPause time.Duration
+
+	posterOnce sync.Once
+	posters    *posters.Queue // background poster worker, created on first use (see posterQ)
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -43,6 +53,13 @@ func (s *Server) Warm() {
 
 // Handler returns the router for /api, /covers and /healthz.
 func (s *Server) Handler() http.Handler {
+	s.cache.mu.Lock()
+	s.cache.version = func() (int64, error) {
+		var v int64
+		err := s.DB.QueryRow(`PRAGMA data_version`).Scan(&v)
+		return v, err
+	}
+	s.cache.mu.Unlock()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.DB.PingContext(r.Context()); err != nil {
@@ -74,8 +91,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/views/order", s.reorderViews)
 	mux.HandleFunc("PATCH /api/views/{id}", s.patchView)
 	mux.HandleFunc("DELETE /api/views/{id}", s.deleteView)
-	mux.HandleFunc("GET /api/tierlist/{year}", s.getTierlist)
-	mux.HandleFunc("PUT /api/tierlist/{year}", s.putTierlist)
+	mux.HandleFunc("GET /api/rankings", s.listRankings)
+	mux.HandleFunc("POST /api/rankings", s.createRanking)
+	mux.HandleFunc("PUT /api/rankings/order", s.reorderRankings)
+	mux.HandleFunc("GET /api/rankings/{id}", s.getRanking)
+	mux.HandleFunc("PATCH /api/rankings/{id}", s.patchRanking)
+	mux.HandleFunc("DELETE /api/rankings/{id}", s.deleteRanking)
+	mux.HandleFunc("POST /api/rankings/{id}/duplicate", s.duplicateRanking)
+	mux.HandleFunc("PUT /api/rankings/{id}/board", s.putBoard)
+	mux.HandleFunc("POST /api/rankings/{id}/tiers", s.addTier)
+	mux.HandleFunc("PUT /api/rankings/{id}/tiers/order", s.reorderTiers)
+	mux.HandleFunc("PATCH /api/rankings/{id}/tiers/{tid}", s.patchTier)
+	mux.HandleFunc("DELETE /api/rankings/{id}/tiers/{tid}", s.deleteTier)
+	mux.HandleFunc("POST /api/rankings/{id}/entries", s.addRankingEntries)
+	mux.HandleFunc("POST /api/rankings/{id}/move", s.moveRankingEntries)
+	mux.HandleFunc("DELETE /api/rankings/{id}/entries/{gid}", s.removeRankingEntry)
 	mux.Handle("GET /covers/", http.StripPrefix("/covers/", cacheForever(filesOnly(http.FileServer(http.Dir(filepath.Clean(s.CoverDir)))))))
 	return s.invalidating(mux)
 }
