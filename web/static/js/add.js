@@ -1,6 +1,6 @@
 // Quick add: search IGDB by title or store link, pick a match, review the pre-filled form and cover, save.
 // Also the IGDB match picker and the cover picker used by the game drawer.
-import { h, icon, toast, norm, debounce, gradientFor, initials } from './util.js';
+import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog } from './util.js';
 import { store, lookup, coverSearch, createGame, setCover } from './api.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
@@ -10,6 +10,7 @@ import { validateForm } from './editpatch.js';
 /** A scrim + sheet pair that closes together. Returns {sheet, head, body, foot, back, title, close}. */
 export function makeSheet(titleText, extraClass = '') {
   let onClose = null;
+  let guard = null; // async () => boolean: false keeps the sheet open (scrim, ✕ and Escape ask it first)
   const opener = document.activeElement;
   const close = () => {
     scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey);
@@ -17,11 +18,12 @@ export function makeSheet(titleText, extraClass = '') {
     if (opener?.isConnected && typeof opener.focus === 'function' && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
     onClose && onClose();
   };
-  const scrim = h('div.scrim.show', { onclick: close });
+  const attempt = async () => { if (guard && !(await guard())) return; close(); };
+  const scrim = h('div.scrim.show', { onclick: attempt });
   scrim.style.zIndex = 70;
   const back = h('button.btn', { type: 'button', hidden: true, 'aria-label': 'Back' }, '←');
   const title = h('span', {}, titleText);
-  const head = h('div.filters-head', {}, h('span.headl', {}, back, title), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: close }, '✕'));
+  const head = h('div.filters-head', {}, h('span.headl', {}, back, title), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: attempt }, '✕'));
   const body = h('div.filters-body');
   const foot = h('div.filters-foot', { hidden: true });
   // One persistent live region: screen readers often skip regions inserted together with their text
@@ -30,9 +32,9 @@ export function makeSheet(titleText, extraClass = '') {
   sheet.style.zIndex = 71;
   // Escape closes only the sheet on top: a picker opened over this sheet handles its own Escape.
   const onKey = (e) => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || document.querySelector('.dialog')) return;
     const open = document.querySelectorAll('.sheet.open');
-    if (open[open.length - 1] === sheet) close();
+    if (open[open.length - 1] === sheet) attempt();
   };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, sheet);
@@ -48,7 +50,7 @@ export function makeSheet(titleText, extraClass = '') {
     (again || sheet.querySelector('.filters-foot .btn.primary:not(:disabled)') || sheet).focus({ preventScroll: true });
   };
   const say = (text) => { live.textContent = text; };
-  return { sheet, head, body, foot, back, title, close, render, say, set onClose(fn) { onClose = fn; } };
+  return { sheet, head, body, foot, back, title, close, render, say, set onClose(fn) { onClose = fn; }, set guard(fn) { guard = fn; } };
 }
 
 /** The game already in the library that a lookup result is: matched by IGDB id first, then by title. */
@@ -122,6 +124,7 @@ export function openAdd({ query = '' } = {}) {
   const state = { query };
 
   function toSearch() {
+    ui.guard = null;
     ui.back.hidden = true;
     ui.foot.hidden = true;
     ui.title.textContent = 'Add a game';
@@ -131,7 +134,6 @@ export function openAdd({ query = '' } = {}) {
   // ---------- step 2: review and save ----------
   function toForm(c, typedTitle = '') {
     ui.back.hidden = false;
-    ui.back.onclick = toSearch;
     ui.title.textContent = c ? 'Review and add' : 'Add manually';
 
     const platformOptions = unique((g) => g.platforms);
@@ -152,6 +154,13 @@ export function openAdd({ query = '' } = {}) {
       years: [], players: [], notes: '', favorite: false, vr: false, completed: false,
       cover: null,
     };
+
+    // What the user typed beyond the pre-filled form: leaving would lose it, so ask first (like the drawer's edit mode).
+    const dirty = () => f.years.length || f.players.length || f.notes.trim() || f.favorite || f.vr || f.completed;
+    const confirmLeave = async () => !dirty() || confirmDialog({ title: 'Discard your changes?', message: 'You have entered details that are not saved.', confirm: 'Discard' });
+    const back = async () => { if (await confirmLeave()) toSearch(); };
+    ui.guard = confirmLeave;
+    ui.back.onclick = back;
 
     const titleIn = text(f, 'title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
     const yearIn = text(f, 'release_year', { type: 'number', inputmode: 'numeric', placeholder: 'e.g. 2025', 'aria-label': 'Release year' });
@@ -219,7 +228,7 @@ export function openAdd({ query = '' } = {}) {
     ui.body.replaceChildren(form);
 
     const saveBtn = h('button.btn.primary', { type: 'button', onclick: save }, 'Add to library');
-    ui.foot.replaceChildren(h('button.btn', { type: 'button', onclick: toSearch }, 'Back'), saveBtn);
+    ui.foot.replaceChildren(h('button.btn', { type: 'button', onclick: back }, 'Back'), saveBtn);
     ui.foot.hidden = false;
     findCovers();
     if (!f.title) titleIn.focus({ preventScroll: true });
@@ -228,7 +237,11 @@ export function openAdd({ query = '' } = {}) {
       f.title = f.title.trim();
       if (!f.title) { toast('Give the game a title'); titleIn.focus(); return; }
       const problem = validateForm({ ...f, years: f.years });
-      if (problem) { toast(problem); return; }
+      if (problem) {
+        toast(problem);
+        if (/release year/i.test(problem)) { form.querySelector('.more-details').open = true; yearIn.focus(); }
+        return;
+      }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Adding…';
       const body = {

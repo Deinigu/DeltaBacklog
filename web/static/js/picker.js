@@ -5,7 +5,7 @@ import { h, norm, icon } from './util.js';
  * opts: { title, options: string[], selected: string[], allowNew, label?: (v) => string, validate?: (text) => string|null }
  * Resolves to the new selection (array) or null when dismissed without changes.
  */
-export function pickMany({ title, options, selected, allowNew = true, label = (v) => v, validate = (t) => t, hint = '' }) {
+export function pickMany({ title, options, selected, allowNew = true, label = (v) => v, validate = (t) => t, hint = '', invalidHint = '' }) {
   return new Promise((resolve) => {
     const chosen = new Set(selected);
     const all = [...new Set([...selected, ...options])];
@@ -31,6 +31,7 @@ export function pickMany({ title, options, selected, allowNew = true, label = (v
       if (allowNew && clean && !all.some((v) => norm(v) === norm(clean))) {
         rows.unshift(h('button.pick-row.add', { type: 'button', onclick: () => { all.unshift(clean); chosen.add(clean); search.value = ''; draw(); search.focus(); } }, h('span.box', {}, '+'), `Add “${clean}”`));
       }
+      if (allowNew && typed && !clean && invalidHint && /^\d+$/.test(typed)) rows.unshift(h('div.empty', {}, invalidHint));
       list.replaceChildren(...(rows.length ? rows : [h('div.empty', {}, 'Nothing matches.')]));
     }
     search.addEventListener('input', draw);

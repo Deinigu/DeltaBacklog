@@ -151,7 +151,7 @@ export function renderTable(ctx) {
         options: c.options(),
         selected: c.values(g),
         validate: c.kind === 'years' ? normalizeYearToken : (t) => t,
-        ...(c.kind === 'years' ? { hint: 'Older year? Type it (4 digits) in the box above.' } : {}),
+        ...(c.kind === 'years' ? { hint: 'Older year? Type it (4 digits) in the box above.', invalidHint: 'Years go from 1970 to 2100.' } : {}),
       }).then((next) => next && commit(g, c, next));
       return;
     }

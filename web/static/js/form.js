@@ -33,7 +33,7 @@ export function ensureDatalist(id, options) {
  * A row showing a list-valued field (f[key]) that opens the multi-select sheet on tap.
  * opts: { suggestions: string[] one-tap chips under the row, hint, validate(text) for new values }
  */
-export function listRow(f, label, key, options, { suggestions = [], hint = 'Also on IGDB:', validate, pickerHint } = {}) {
+export function listRow(f, label, key, options, { suggestions = [], hint = 'Also on IGDB:', validate, pickerHint, invalidHint } = {}) {
   const val = h('span.fval');
   const chips = suggestions.map((name) => h('button.chip', { type: 'button', onclick: () => {
     f[key] = f[key].includes(name) ? f[key].filter((v) => v !== name) : [...f[key], name];
@@ -46,7 +46,7 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
   };
   draw();
   const edit = async () => {
-    const next = await pickMany({ title: label, options, selected: f[key], ...(validate ? { validate } : {}), ...(pickerHint ? { hint: pickerHint } : {}) });
+    const next = await pickMany({ title: label, options, selected: f[key], ...(validate ? { validate } : {}), ...(pickerHint ? { hint: pickerHint } : {}), ...(invalidHint ? { invalidHint } : {}) });
     if (next) { f[key] = next; draw(); }
   };
   const row = h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
@@ -56,7 +56,7 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
 
 /** "Played in": calendar years and the named periods. */
 export const yearsRow = (f) => listRow(f, 'Played in', 'years', yearOptions(undefined, libraryYears(store.games)), {
-  validate: normalizeYearToken, pickerHint: 'Older year? Type it (4 digits) in the box above.',
+  validate: normalizeYearToken, pickerHint: 'Older year? Type it (4 digits) in the box above.', invalidHint: 'Years go from 1970 to 2100.',
 });
 
 export function statusSelect(f) {
