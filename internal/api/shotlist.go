@@ -27,8 +27,12 @@ const galleryDate = `coalesce(screenshot.taken_at, screenshot.added_at)`
 //
 // Query: sort=newest (default; the newest date first) or sort=game (by game title, then the game's own order);
 // q (part of the game title or the caption), year (of the date), game_id, limit (default 120, at most 500), offset.
-// The answer has `total` (all matches, not just this page) and `years` (every year with a screenshot, newest first,
-// for the year filter).
+// Paging is by offset: a screenshot added or deleted between two pages (from another device) shifts the rest by
+// one, so one picture can show twice (the client drops the repeat by id) or be skipped until the page is reloaded.
+// That is fine for a personal library; keyset paging (date, id) would fix it if it ever matters.
+//
+// The answer has `total` (all matches, not just this page); the first page (offset 0) also has `years` (every year with a
+// screenshot, newest first, for the year filter) and `available`.
 func (s *Server) listAllShots(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, offset := defaultShotPage, 0
@@ -60,7 +64,7 @@ func (s *Server) listAllShots(w http.ResponseWriter, r *http.Request) {
 
 	where, args := []string{"1"}, []any{}
 	if v := strings.TrimSpace(q.Get("q")); v != "" {
-		like := "%" + strings.NewReplacer(`\`, `\`, `%`, `\%`, `_`, `\_`).Replace(v) + "%"
+		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(v) + "%"
 		where = append(where, `(game.title LIKE ? ESCAPE '\' OR screenshot.caption LIKE ? ESCAPE '\')`)
 		args = append(args, like, like)
 	}
@@ -115,26 +119,31 @@ func (s *Server) listAllShots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	years := []int{}
-	yr, err := s.DB.Query(`SELECT DISTINCT CAST(substr(` + galleryDate + `, 1, 4) AS INTEGER) y FROM screenshot ORDER BY y DESC`)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	defer yr.Close()
-	for yr.Next() {
-		var y int
-		if err := yr.Scan(&y); err != nil {
+	out := map[string]any{"screenshots": list, "total": total, "offset": offset, "limit": limit}
+	if offset == 0 { // the years and the drive do not change from page to page: only the first page pays for them
+		years := []int{}
+		yr, err := s.DB.Query(`SELECT DISTINCT CAST(substr(` + galleryDate + `, 1, 4) AS INTEGER) y FROM screenshot ORDER BY y DESC`)
+		if err != nil {
 			fail(w, err)
 			return
 		}
-		if y > 0 {
-			years = append(years, y)
+		defer yr.Close()
+		for yr.Next() {
+			var y int
+			if err := yr.Scan(&y); err != nil {
+				fail(w, err)
+				return
+			}
+			if y > 0 {
+				years = append(years, y)
+			}
 		}
+		if err := yr.Err(); err != nil {
+			fail(w, err)
+			return
+		}
+		out["years"] = years
+		out["available"] = s.shotStorageReadable()
 	}
-	if err := yr.Err(); err != nil {
-		fail(w, err)
-		return
-	}
-	writeJSON(w, map[string]any{"screenshots": list, "total": total, "offset": offset, "limit": limit, "years": years, "available": s.shotStorageReadable()})
+	writeJSON(w, out)
 }

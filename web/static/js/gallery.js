@@ -16,11 +16,12 @@ export function galleryQuery({ q = '', year = '', sort = 'game', offset = 0, lim
 
 /**
  * Runs of neighbouring screenshots of the same game, for the "by game" layout. Each item keeps its index in the
- * whole list, which is what the viewer needs. Pages that were appended join the last run when it is the same game.
+ * whole list (`base` is where `list` starts in it), which is what the viewer needs.
  */
-export function groupRuns(list) {
+export function groupRuns(list, base = 0) {
   const runs = [];
-  list.forEach((shot, index) => {
+  list.forEach((shot, i) => {
+    const index = base + i;
     const last = runs[runs.length - 1];
     if (last && last.gameId === shot.game_id) last.items.push({ shot, index });
     else runs.push({ gameId: shot.game_id, title: shot.game_title, items: [{ shot, index }] });
@@ -33,6 +34,9 @@ export const remaining = (loaded, total) => Math.max(0, total - loaded);
 
 /** "1 screenshot", "12 screenshots". */
 export const shotsLabel = (n) => `${n} screenshot${n === 1 ? '' : 's'}`;
+
+/** The count on a game's header; a run cut by the end of the loaded pictures may have more ("4+ screenshots"). */
+export const runLabel = (n, partial) => (partial ? `${n}+ screenshots` : shotsLabel(n));
 
 /**
  * The next index in the viewer. Past the last loaded picture while more exist on the server it asks for them

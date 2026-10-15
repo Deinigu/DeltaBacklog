@@ -64,7 +64,7 @@ func TestListAllScreenshots(t *testing.T) {
 
 	// pages: total stays the number of matches
 	_, p = e.listAll(t, "?limit=2&offset=3")
-	if p.Total != 4 || len(p.Screenshots) != 1 {
+	if p.Total != 4 || len(p.Screenshots) != 1 || p.Years != nil {
 		t.Errorf("page: %d of %d", len(p.Screenshots), p.Total)
 	}
 	_, p = e.listAll(t, "?limit=1")
@@ -90,12 +90,17 @@ func TestListAllScreenshots(t *testing.T) {
 	if p.Total != 0 {
 		t.Errorf("a percent sign is a literal: %d", p.Total)
 	}
-	req, _ := http.NewRequest("PATCH", e.srv.URL+"/api/screenshots/"+itoa(first), strings.NewReader(`{"caption":"Boss fight"}`))
+	req, _ := http.NewRequest("PATCH", e.srv.URL+"/api/screenshots/"+itoa(first), strings.NewReader(`{"caption":"Boss fight C:\\save"}`))
 	if r, err := http.DefaultClient.Do(req); err != nil || r.StatusCode != 200 {
 		t.Fatal("caption", err)
 	}
-	if _, p = e.listAll(t, "?q=boss"); p.Total != 1 || p.Screenshots[0].Caption != "Boss fight" {
+	if _, p = e.listAll(t, "?q=boss"); p.Total != 1 || p.Screenshots[0].Caption != `Boss fight C:\save` {
 		t.Errorf("q by caption: %+v", p)
+	}
+	for q, want := range map[string]int{"%5C": 1, "%5Csave": 1, "C:%5Cs": 1, "a%5Cb": 0, "%5C%25": 0} { // a backslash is a literal too
+		if _, p = e.listAll(t, "?q="+q); p.Total != want {
+			t.Errorf("q=%s: %d, want %d", q, p.Total, want)
+		}
 	}
 }
 
