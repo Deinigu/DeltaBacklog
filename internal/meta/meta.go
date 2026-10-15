@@ -204,10 +204,14 @@ type igdbGame struct {
 // series (God of War 2005 is 17th for "God of War"), so we fetch plenty and rank them ourselves.
 const searchLimit = 50
 
-// maxResults is how many ranked candidates SearchIGDB returns.
+// searchCap bounds the ranked list SearchIGDB returns. The IGDB sync classifies against all of it: a safe link needs
+// to see every namesake, so only quick-add shortens the list (TopResults).
+const searchCap = 30
+
+// maxResults is how many candidates quick-add shows.
 const maxResults = 12
 
-// SearchIGDB returns up to 12 candidates for a title. A year in the query ("God of War 2005", "Portal (2007)")
+// SearchIGDB returns up to 30 ranked candidates for a title. A year in the query ("God of War 2005", "Portal (2007)")
 // is a hint, not part of the search text. IGDB's own search results are merged with the games named exactly like
 // the query, then ranked by RankCandidates.
 func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, error) {
@@ -273,7 +277,8 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 		if len(all) == 0 {
 			continue
 		}
-		return limitNamesakes(RankCandidates(all, names, year), names), nil
+		all = RankCandidates(all, names, year)
+		return all[:min(len(all), searchCap)], nil
 	}
 	return []Candidate{}, nil
 }
@@ -331,8 +336,9 @@ func typeTier(t int) int {
 }
 
 // RankCandidates orders search hits: games named like one of names first, then games released in year (when
-// non-zero), then main games before remakes, ports and DLC. Among namesakes the game with the most store ids
-// (Steam, GOG, PSN...) comes first, then the older one; other hits keep IGDB's order.
+// non-zero). Among namesakes DLC, bundles and mods come last; the rest go by number of store ids (Steam, GOG, PSN...,
+// the game people mean has the most), then main game before remake, remaster and port, then older first. Other hits
+// keep IGDB's order.
 func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
 	type ranked struct {
 		c      Candidate
@@ -355,11 +361,14 @@ func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
 		}
 		ta, tb := typeTier(a.c.gameType), typeTier(b.c.gameType)
 		if a.exact < len(names) {
-			if ta != tb {
-				return ta < tb
+			if (ta == 3) != (tb == 3) {
+				return ta != 3
 			}
 			if a.c.stores != b.c.stores {
 				return a.c.stores > b.c.stores
+			}
+			if ta != tb {
+				return ta < tb
 			}
 			if a.c.released != b.c.released && a.c.released != 0 && b.c.released != 0 {
 				return a.c.released < b.c.released
@@ -390,9 +399,14 @@ func exactLevel(c Candidate, names []string) int {
 // ("Doom", "Tetris") still shows its sequels and relatives next to the many games of that name.
 const maxNamesakes = 6
 
-// limitNamesakes keeps the first maxResults of an already ranked list with at most maxNamesakes exact-name games;
-// leftover namesakes only fill slots that nothing else wants.
-func limitNamesakes(ranked []Candidate, names []string) []Candidate {
+// TopResults shortens a SearchIGDB list for display: the first maxResults, with at most maxNamesakes games named
+// exactly like title (a trailing year is ignored too); leftover namesakes only fill slots nothing else wants. Only
+// quick-add uses it: the sync needs the whole list.
+func TopResults(ranked []Candidate, title string) []Candidate {
+	names := []string{title}
+	if text, _ := SplitYear(title); text != title {
+		names = append(names, text)
+	}
 	var out, spare []Candidate
 	namesakes := 0
 	for _, c := range ranked {
@@ -644,6 +658,9 @@ func (c *Client) IGDBImages(ctx context.Context, igdbID int64, title string) ([]
 		return nil, err
 	}
 	query := fmt.Sprintf("fields name,cover.image_id,artworks.image_id,artworks.width,artworks.height,screenshots.image_id,screenshots.width,screenshots.height; where id = %d;", igdbID)
+	if err := c.pace(ctx); err != nil {
+		return nil, err
+	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
 	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -845,6 +862,9 @@ func (c *Client) IGDBCoverURL(ctx context.Context, igdbID int64) (string, error)
 		return "", err
 	}
 	query := fmt.Sprintf("fields cover.image_id; where id = %d;", igdbID)
+	if err := c.pace(ctx); err != nil {
+		return "", err
+	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(query))
 	req.Header.Set("Client-ID", c.cfg.IGDBClientID)
 	req.Header.Set("Authorization", "Bearer "+token)

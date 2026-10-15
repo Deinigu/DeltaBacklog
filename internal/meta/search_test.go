@@ -161,8 +161,8 @@ func TestSearchCapsResults(t *testing.T) {
 	b.WriteString("]")
 	c, _ := searchServer(t, b.String(), `[]`)
 	got, _ := c.SearchIGDB(context.Background(), "Doom")
-	if len(got) != maxResults {
-		t.Errorf("got %d results, want %d", len(got), maxResults)
+	if len(got) != searchCap {
+		t.Errorf("got %d results, want %d", len(got), searchCap)
 	}
 }
 
@@ -177,9 +177,14 @@ func TestLiveSearch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		got = TopResults(got, title)
 		var top []string
-		for _, g := range got[:min(5, len(got))] {
-			top = append(top, g.Name+" ("+itoa(g.Year)+")")
+		show := 5
+		if title == "Tetris" || title == "Doom" {
+			show = maxResults
+		}
+		for _, g := range got[:min(show, len(got))] {
+			top = append(top, g.Name+" ("+itoa(g.Year)+", "+strings.Join(g.Platforms, "/")+")")
 		}
 		t.Logf("%-16s -> %s", title, strings.Join(top, "; "))
 	}
@@ -204,8 +209,8 @@ func TestSearchNamesakesRankByTypeThenStoresThenAge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// main games (most store ids first, then older), remaster, port, mod last
-	wantIDs(t, got, 5, 1, 6, 3, 2, 4)
+	// most store ids first whatever the type, a mod (DLC, bundle) last
+	wantIDs(t, got, 5, 2, 3, 1, 6, 4)
 }
 
 func TestSearchKeepsFranchiseHitsNextToManyNamesakes(t *testing.T) {
@@ -221,7 +226,11 @@ func TestSearchKeepsFranchiseHitsNextToManyNamesakes(t *testing.T) {
 	c, _ := searchServer(t, `[{"id":100,"name":"Tetris 99","game_type":0},{"id":101,"name":"Tetris Effect","game_type":0},
  {"id":102,"name":"Tetris Worlds","game_type":0},{"id":103,"name":"Tetris Attack","game_type":0},
  {"id":104,"name":"Tetris DS","game_type":0},{"id":105,"name":"Tetris Plus","game_type":0},{"id":106,"name":"Tetris Party","game_type":0}]`, exact.String())
-	got, _ := c.SearchIGDB(context.Background(), "Tetris")
+	all, _ := c.SearchIGDB(context.Background(), "Tetris")
+	if len(all) != 17 {
+		t.Fatalf("SearchIGDB must keep every namesake for the sync: %v", ids(all))
+	}
+	got := TopResults(all, "Tetris")
 	if len(got) != maxResults {
 		t.Fatalf("got %d: %v", len(got), ids(got))
 	}
