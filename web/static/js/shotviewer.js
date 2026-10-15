@@ -9,6 +9,7 @@ const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="non
 /**
  * Open the viewer at `start`. Options:
  *  count()               how many pictures there are (shown as "n / count"; prev/next hide below 2)
+ *  alt(s, i)             optional, the picture's alt text (default: its caption, else "Screenshot n")
  *  get(i)                the picture {src, width, height, bytes, date | taken_at, caption} at i, or undefined (the viewer closes)
  *  step(cur, dir)        optional, resolves the next index (default: wrap around count())
  *  beforeStep()          optional, awaited before a step and before closing (the drawer saves the caption)
@@ -43,7 +44,7 @@ export function openShotViewer(opts, start) {
     if (!s) { close(); return; }
     const n = opts.count();
     img.src = s.src;
-    img.alt = s.caption || `Screenshot ${cur + 1}`;
+    img.alt = opts.alt ? opts.alt(s, cur) : s.caption || `Screenshot ${cur + 1}`;
     counter.textContent = `${cur + 1} / ${n}`;
     meta.textContent = [formatTaken(s.date || s.taken_at), `${s.width}×${s.height}`, formatBytes(s.bytes)].filter(Boolean).join(' · ');
     dl.href = `${s.src}?download=1`;

@@ -1,5 +1,5 @@
 // The Screenshots page (#/screenshots): every screenshot of the library, by game or newest first.
-import { h, debounce, icon, gradientFor, initials } from './util.js';
+import { h, toast, debounce, icon, gradientFor, initials } from './util.js';
 import { store, coverURL, listAllShots } from './api.js';
 import { openDrawer } from './drawer.js';
 import { PAGE, galleryQuery, groupRuns, remaining, shotsLabel, runLabel, stepAcross, emptyText } from './gallery.js';
@@ -104,7 +104,12 @@ export function renderGallery(root) {
     const limit = keep ? Math.min(MAX_RELOAD, Math.max(PAGE, list.length)) : PAGE;
     let r;
     try { r = await listAllShots(galleryQuery({ ...f, offset: 0, limit })); } catch {
-      if (alive && mine === ticket) { loading = false; body.replaceChildren(h('div.empty', {}, 'Could not load the screenshots. ', h('button.btn', { type: 'button', onclick: () => load() }, 'Retry'))); }
+      if (!alive || mine !== ticket) return;
+      loading = false;
+      if (keep && list.length) { toast('Could not refresh the screenshots'); } // a refresh that fails keeps what is on screen
+      else body.replaceChildren(h('div.empty', {}, 'Could not load the screenshots. ', h('button.btn', { type: 'button', onclick: () => load() }, 'Retry')));
+      updateMore();
+      if (!(keep && list.length)) more.hidden = true;
       return;
     }
     if (!alive || mine !== ticket) return;
@@ -163,6 +168,7 @@ export function renderGallery(root) {
     viewer = openShotViewer({
       count: () => total,
       get: (k) => list[k],
+      alt: (s) => `${s.game_title} screenshot`,
       step,
       barActions: orig,
       foot: (meta) => [title, cap, meta, h('div.shot-move', {}, gameBtn)],
