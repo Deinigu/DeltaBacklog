@@ -36,15 +36,23 @@ type Client struct {
 	SGDBURL  string
 	SteamURL string
 
+	// IGDBGap is the least time between two IGDB requests (IGDB allows 4 per second). The pacing is shared by
+	// everything that uses the client: quick-add, posters and the sync.
+	IGDBGap time.Duration
+
 	mu    sync.Mutex
 	token string
 	exp   time.Time
+
+	paceMu sync.Mutex
+	next   time.Time // when the next IGDB request may start
 }
 
 // New returns a client with the real service URLs.
 func New(cfg Config) *Client {
 	return &Client{
 		cfg:      cfg,
+		IGDBGap:  250 * time.Millisecond,
 		http:     &http.Client{Timeout: 12 * time.Second},
 		TokenURL: "https://id.twitch.tv/oauth2/token",
 		IGDBURL:  "https://api.igdb.com/v4",
@@ -77,6 +85,7 @@ type Candidate struct {
 
 	gameType int   // IGDB game_type: 0 main game, 1 DLC, 3 bundle, 8 remake, 9 remaster...
 	released int64 // first release, unix seconds; 0 when unknown
+	stores   int   // number of external ids (Steam, GOG, PSN...): a cheap sign of the game people mean; never shown
 }
 
 // CoverOption is one SteamGridDB image.
@@ -144,11 +153,34 @@ func (c *Client) igdbToken(ctx context.Context) (string, error) {
 	return c.token, nil
 }
 
+// pace waits for the caller's turn to send an IGDB request, at least IGDBGap after the previous one.
+func (c *Client) pace(ctx context.Context) error {
+	c.paceMu.Lock()
+	now := time.Now()
+	at := c.next
+	if at.Before(now) {
+		at = now
+	}
+	c.next = at.Add(c.IGDBGap)
+	c.paceMu.Unlock()
+	if d := at.Sub(now); d > 0 {
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
 type igdbGame struct {
 	ID               int64                   `json:"id"`
 	Name             string                  `json:"name"`
 	FirstReleaseDate int64                   `json:"first_release_date"`
 	GameType         int                     `json:"game_type"`
+	ExternalGames    []int64                 `json:"external_games"` // store ids; only their number is used, to rank namesakes
 	Genres           []struct{ Name string } `json:"genres"`
 	Themes           []struct{ Name string } `json:"themes"`
 	Platforms        []struct {
@@ -199,6 +231,9 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	// the games named exactly like the query. When it finds nothing, try the localized names, then the title
 	// before its subtitle, then the title with its spaces removed ("Little Big Planet").
 	passes := [][]string{{searchQuery(text)}}
+	if text != title { // "FIFA 2003" is a name IGDB spells "FIFA Soccer 2003": search the year too
+		passes[0] = []string{searchQuery(title), searchQuery(text)}
+	}
 	for _, n := range names {
 		passes[0] = append(passes[0], exactQuery(n))
 	}
@@ -212,12 +247,20 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	for _, pass := range passes {
 		var all []Candidate
 		seen := map[int64]bool{}
-		for _, q := range pass {
+		for qi, q := range pass {
+			if err := c.pace(ctx); err != nil {
+				return nil, err
+			}
 			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(q))
 			req.Header.Set("Client-ID", c.cfg.IGDBClientID)
 			req.Header.Set("Authorization", "Bearer "+token)
 			var games []igdbGame
 			if err := c.do(req, &games); err != nil {
+				// An extra query that fails (not 429, not a cancelled request) must not throw away good hits.
+				var he *HTTPError
+				if qi > 0 && len(all) > 0 && ctx.Err() == nil && !(errors.As(err, &he) && he.Status == 429) {
+					continue
+				}
 				return nil, err
 			}
 			for _, g := range games {
@@ -230,17 +273,13 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 		if len(all) == 0 {
 			continue
 		}
-		all = RankCandidates(all, names, year)
-		if len(all) > maxResults {
-			all = all[:maxResults]
-		}
-		return all, nil
+		return limitNamesakes(RankCandidates(all, names, year), names), nil
 	}
 	return []Candidate{}, nil
 }
 
 const searchFields = `fields name,first_release_date,game_type,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 50;`
+	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name,external_games; limit 50;`
 
 var igdbEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 
@@ -277,26 +316,33 @@ func SplitYear(title string) (string, int) {
 // season, pack, update.
 var demotedTypes = map[int]bool{1: true, 2: true, 3: true, 5: true, 6: true, 7: true, 12: true, 13: true, 14: true}
 
+// typeTier orders IGDB game types for games with the same name: main games, standalone expansions and expanded
+// games (0), remakes and remasters (1), ports (2), then DLC, bundles, mods, episodes, packs and updates (3).
+func typeTier(t int) int {
+	switch {
+	case demotedTypes[t]:
+		return 3
+	case t == 11:
+		return 2
+	case t == 8 || t == 9:
+		return 1
+	}
+	return 0
+}
+
 // RankCandidates orders search hits: games named like one of names first, then games released in year (when
-// non-zero), main games before DLC, bundles and mods, and finally IGDB's own order. Among exact name matches the
-// older game comes first, so the original shows before its remakes and namesakes.
+// non-zero), then main games before remakes, ports and DLC. Among namesakes the game with the most store ids
+// (Steam, GOG, PSN...) comes first, then the older one; other hits keep IGDB's order.
 func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
 	type ranked struct {
-		c       Candidate
-		exact   int // 0 when the name is the first of names, 1 the second, len(names) when no name matches
-		yearOK  bool
-		demoted bool
-		order   int
+		c      Candidate
+		exact  int // 0 when the name is the first of names, 1 the second, len(names) when no name matches
+		yearOK bool
+		order  int
 	}
 	rs := make([]ranked, len(cands))
 	for i, c := range cands {
-		r := ranked{c: c, demoted: demotedTypes[c.gameType], order: i, yearOK: year != 0 && c.Year == year}
-		r.exact = len(names)
-		for k := len(names) - 1; k >= 0; k-- {
-			if SameName(c.Name, names[k]) || TitleScore(c.Name, names[k]) == 100 {
-				r.exact = k
-			}
-		}
+		r := ranked{c: c, order: i, yearOK: year != 0 && c.Year == year, exact: exactLevel(c, names)}
 		rs[i] = r
 	}
 	sort.SliceStable(rs, func(i, j int) bool {
@@ -307,11 +353,19 @@ func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
 		if a.yearOK != b.yearOK {
 			return a.yearOK
 		}
-		if a.demoted != b.demoted {
-			return !a.demoted
-		}
-		if a.exact < len(names) && a.c.released != b.c.released && a.c.released != 0 && b.c.released != 0 {
-			return a.c.released < b.c.released
+		ta, tb := typeTier(a.c.gameType), typeTier(b.c.gameType)
+		if a.exact < len(names) {
+			if ta != tb {
+				return ta < tb
+			}
+			if a.c.stores != b.c.stores {
+				return a.c.stores > b.c.stores
+			}
+			if a.c.released != b.c.released && a.c.released != 0 && b.c.released != 0 {
+				return a.c.released < b.c.released
+			}
+		} else if (ta == 3) != (tb == 3) {
+			return ta != 3
 		}
 		return a.order < b.order
 	})
@@ -322,8 +376,41 @@ func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
 	return out
 }
 
+// exactLevel is the index in names of the first name the candidate is called, or len(names) when none.
+func exactLevel(c Candidate, names []string) int {
+	for k, n := range names {
+		if SameName(c.Name, n) || TitleScore(c.Name, n) == 100 {
+			return k
+		}
+	}
+	return len(names)
+}
+
+// maxNamesakes is how many of the results may be games named exactly like the query, so that a franchise name
+// ("Doom", "Tetris") still shows its sequels and relatives next to the many games of that name.
+const maxNamesakes = 6
+
+// limitNamesakes keeps the first maxResults of an already ranked list with at most maxNamesakes exact-name games;
+// leftover namesakes only fill slots that nothing else wants.
+func limitNamesakes(ranked []Candidate, names []string) []Candidate {
+	var out, spare []Candidate
+	namesakes := 0
+	for _, c := range ranked {
+		if exactLevel(c, names) < len(names) {
+			if namesakes >= maxNamesakes {
+				spare = append(spare, c)
+				continue
+			}
+			namesakes++
+		}
+		out = append(out, c)
+	}
+	out = append(out, spare...)
+	return out[:min(len(out), maxResults)]
+}
+
 func (g igdbGame) candidate() Candidate {
-	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, gameType: g.GameType, released: g.FirstReleaseDate, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
+	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, gameType: g.GameType, released: g.FirstReleaseDate, stores: len(g.ExternalGames), Platforms: []string{}, Genres: []string{}, Themes: []string{}}
 	if g.FirstReleaseDate > 0 {
 		cand.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
 	}
@@ -647,6 +734,9 @@ func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) 
 	}
 	token, err := c.igdbToken(ctx)
 	if err != nil {
+		return err
+	}
+	if err := c.pace(ctx); err != nil {
 		return err
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+endpoint, strings.NewReader(query))

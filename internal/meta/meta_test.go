@@ -31,7 +31,7 @@ func fake(t *testing.T) (*Client, *int32) {
 		}
 		body := make([]byte, 2000)
 		n, _ := r.Body.Read(body)
-		if strings.Contains(string(body[:n]), "where id = 1;") || strings.Contains(string(body[:n]), "where id = 2;") { // the images query
+		if strings.Contains(string(body[:n]), "where id = 1;") { // the images query
 			w.Write([]byte(`[{"id":1,"name":"Hades","cover":{"image_id":"cover1"},
 			 "artworks":[{"image_id":"art1","width":1920,"height":620},{"image_id":"art2"}],
 			 "screenshots":[{"image_id":"s1"},{"image_id":"s2"},{"image_id":"s3"},{"image_id":"s4"},{"image_id":"s5"},{"image_id":"s6"},{"image_id":"s7"},{"image_id":"s8"},{"image_id":"s9"},{"image_id":"s10"}]}]`))
@@ -45,7 +45,7 @@ func fake(t *testing.T) (*Client, *int32) {
 			w.Write([]byte("[]"))
 			return
 		}
-		if !strings.Contains(string(body[:n]), `search "Hades \"II\""`) {
+		if !strings.Contains(string(body[:n]), `search "Hades`) {
 			http.Error(w, "unexpected query: "+string(body[:n]), 400)
 			return
 		}
@@ -89,6 +89,7 @@ func fake(t *testing.T) (*Client, *int32) {
 	t.Cleanup(srv.Close)
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec", SteamGridDBKey: "sk"})
 	c.TokenURL, c.IGDBURL, c.SGDBURL, c.SteamURL = srv.URL+"/token", srv.URL+"/igdb", srv.URL+"/sgdb", srv.URL+"/steam"
+	c.IGDBGap = 0
 	return c, &tokenCalls
 }
 
@@ -240,7 +241,7 @@ func TestIGDBImages(t *testing.T) {
 	}
 
 	// no id: the best title match is used
-	byTitle, err := c.IGDBImages(context.Background(), 0, `Hades "II"`)
+	byTitle, err := c.IGDBImages(context.Background(), 0, "Hades")
 	if err != nil || len(byTitle) != 11 {
 		t.Errorf("by title: %d %v", len(byTitle), err)
 	}
@@ -283,6 +284,7 @@ func TestRateLimitIsATypedError(t *testing.T) {
 	defer srv.Close()
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 	_, err := c.SearchIGDB(context.Background(), "Hades")
 	var he *HTTPError
 	if !errors.As(err, &he) || he.Status != 429 {
@@ -315,6 +317,7 @@ func TestSearchFallsBackWhenTheTitleSearchFindsNothing(t *testing.T) {
 	defer srv.Close()
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 
 	got, err := c.SearchIGDB(context.Background(), "Profesor Layton y el Futuro Perdido")
 	if err != nil || len(got) != 1 || got[0].IGDBID != 9 || got[0].AltNames[0] != "Profesor Layton y el Futuro Perdido" {

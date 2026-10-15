@@ -2,12 +2,16 @@ package meta
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // searchServer answers IGDB game queries with canned JSON by query kind and records the queries.
@@ -35,6 +39,7 @@ func searchServer(t *testing.T, search, exact string) (*Client, *[]string) {
 	t.Cleanup(srv.Close)
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 	return c, &queries
 }
 
@@ -90,8 +95,8 @@ func TestSearchYearHint(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantIDs(t, got, 19560, 549) // both are named exactly, the 2018 one matches the year
-		if !strings.HasPrefix((*queries)[0], `search "God of War"`) {
-			t.Errorf("%q: the year must not reach the search text: %q", title, *queries)
+		if !strings.HasPrefix((*queries)[1], `search "God of War"`) {
+			t.Errorf("%q: the search without the year must be asked: %q", title, *queries)
 		}
 	}
 	c, _ := searchServer(t, godOfWarSearch, godOfWarExact)
@@ -167,7 +172,7 @@ func TestLiveSearch(t *testing.T) {
 		t.Skip("set DELTABACKLOG_LIVE=1 with IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to run")
 	}
 	c := New(Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
-	for _, title := range []string{"God of War", "God of War 2005", "Portal", "Portal 2007", "Doom", "Prey", "Tomb Raider", "Halo", "Hitman"} {
+	for _, title := range []string{"God of War", "God of War 2005", "Portal", "Portal 2007", "Doom", "Prey", "Tomb Raider", "Halo", "Hitman", "Tetris", "FIFA 2003", "Madden NFL 2005"} {
 		got, err := c.SearchIGDB(context.Background(), title)
 		if err != nil {
 			t.Fatal(err)
@@ -185,4 +190,131 @@ func itoa(n int) string {
 		return "?"
 	}
 	return string([]byte{byte('0' + n/1000%10), byte('0' + n/100%10), byte('0' + n/10%10), byte('0' + n%10)})
+}
+
+func TestSearchNamesakesRankByTypeThenStoresThenAge(t *testing.T) {
+	c, _ := searchServer(t, `[]`, `[
+ {"id":1,"name":"Doom","first_release_date":757382400,"game_type":0,"external_games":[1,2,3]},
+ {"id":2,"name":"Doom","first_release_date":780000000,"game_type":11,"external_games":[1,2,3,4,5,6,7,8]},
+ {"id":3,"name":"Doom","first_release_date":1100000000,"game_type":9,"external_games":[1,2,3,4]},
+ {"id":4,"name":"Doom","first_release_date":1400000000,"game_type":5,"external_games":[1,2,3,4,5,6,7,8,9]},
+ {"id":5,"name":"Doom","first_release_date":1463097600,"game_type":0,"external_games":[1,2,3,4,5,6,7,8,9,10]},
+ {"id":6,"name":"Doom","first_release_date":600000000,"game_type":0}]`)
+	got, err := c.SearchIGDB(context.Background(), "Doom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// main games (most store ids first, then older), remaster, port, mod last
+	wantIDs(t, got, 5, 1, 6, 3, 2, 4)
+}
+
+func TestSearchKeepsFranchiseHitsNextToManyNamesakes(t *testing.T) {
+	var exact strings.Builder
+	exact.WriteString("[")
+	for i := 1; i <= 10; i++ {
+		if i > 1 {
+			exact.WriteString(",")
+		}
+		fmt.Fprintf(&exact, `{"id":%d,"name":"Tetris","first_release_date":%d,"game_type":8}`, i, 500000000+i)
+	}
+	exact.WriteString("]")
+	c, _ := searchServer(t, `[{"id":100,"name":"Tetris 99","game_type":0},{"id":101,"name":"Tetris Effect","game_type":0},
+ {"id":102,"name":"Tetris Worlds","game_type":0},{"id":103,"name":"Tetris Attack","game_type":0},
+ {"id":104,"name":"Tetris DS","game_type":0},{"id":105,"name":"Tetris Plus","game_type":0},{"id":106,"name":"Tetris Party","game_type":0}]`, exact.String())
+	got, _ := c.SearchIGDB(context.Background(), "Tetris")
+	if len(got) != maxResults {
+		t.Fatalf("got %d: %v", len(got), ids(got))
+	}
+	wantIDs(t, got, 1, 2, 3, 4, 5, 6, 100, 101, 102, 103, 104, 105)
+}
+
+func TestSearchFullTitleWithYearIsSearchedToo(t *testing.T) {
+	// IGDB names it "FIFA Soccer 2003": only the search for the whole query finds it.
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/token") {
+			w.Write([]byte(`{"access_token":"tok","expires_in":3600}`))
+			return
+		}
+		body := make([]byte, 2000)
+		n, _ := r.Body.Read(body)
+		q := string(body[:n])
+		queries = append(queries, q[:strings.Index(q, ";")])
+		if strings.HasPrefix(q, `search "FIFA 2003"`) {
+			w.Write([]byte(`[{"id":7,"name":"FIFA Soccer 2003","first_release_date":1033000000}]`))
+			return
+		}
+		w.Write([]byte(`[{"id":8,"name":"FIFA 98","first_release_date":880000000}]`))
+	}))
+	defer srv.Close()
+	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
+	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
+	got, err := c.SearchIGDB(context.Background(), "FIFA 2003")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantIDs(t, got, 7, 8)
+	if len(queries) < 2 || queries[0] != `search "FIFA 2003"` || queries[1] != `search "FIFA"` {
+		t.Errorf("queries = %q", queries)
+	}
+}
+
+func TestSearchKeepsHitsWhenAnExtraQueryFails(t *testing.T) {
+	for _, status := range []int{400, 500, 429} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/token") {
+				w.Write([]byte(`{"access_token":"tok","expires_in":3600}`))
+				return
+			}
+			body := make([]byte, 2000)
+			n, _ := r.Body.Read(body)
+			if strings.HasPrefix(string(body[:n]), "where name ~ ") {
+				http.Error(w, "boom", status)
+				return
+			}
+			w.Write([]byte(`[{"id":1,"name":"Hades"}]`))
+		}))
+		c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
+		c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+		c.IGDBGap = 0
+		got, err := c.SearchIGDB(context.Background(), "Hades")
+		srv.Close()
+		if status == 429 {
+			var he *HTTPError
+			if !errors.As(err, &he) || he.Status != 429 {
+				t.Errorf("429 must be returned so the caller backs off: %v", err)
+			}
+			continue
+		}
+		if err != nil || len(got) != 1 {
+			t.Errorf("status %d: got %v, %v", status, got, err)
+		}
+	}
+}
+
+func TestIGDBRequestsArePaced(t *testing.T) {
+	var n int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/token") {
+			w.Write([]byte(`{"access_token":"tok","expires_in":3600}`))
+			return
+		}
+		atomic.AddInt32(&n, 1)
+		w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
+	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 40 * time.Millisecond
+	start := time.Now()
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); c.GameDetails(context.Background(), []int64{1}) }()
+	}
+	wg.Wait()
+	if got := time.Since(start); got < 4*40*time.Millisecond {
+		t.Errorf("5 concurrent requests took %v, want at least 160ms", got)
+	}
 }

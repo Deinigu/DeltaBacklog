@@ -43,6 +43,7 @@ func enrichFake(t *testing.T, queries *[]string) *Client {
 	t.Cleanup(srv.Close)
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 	return c
 }
 

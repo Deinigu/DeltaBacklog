@@ -242,7 +242,7 @@ func TestBackoffOn429(t *testing.T) {
 	f := &fakeIGDB{answers: map[string][]meta.Candidate{"Hades": {cand(1, "Hades", 2020, "PC")}}, throttle: 3}
 	var waits []time.Duration
 	sleep := func(_ context.Context, w time.Duration) error { waits = append(waits, w); return nil }
-	rep, err := Run(context.Background(), d, f, Options{Sleep: sleep, Interval: time.Millisecond, Backoff: time.Second})
+	rep, err := Run(context.Background(), d, f, Options{Sleep: sleep, Backoff: time.Second})
 	if err != nil || rep.Confident != 1 {
 		t.Fatalf("%+v %v", rep, err)
 	}
