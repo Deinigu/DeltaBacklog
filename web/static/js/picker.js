@@ -5,7 +5,7 @@ import { h, norm, icon } from './util.js';
  * opts: { title, options: string[], selected: string[], allowNew, label?: (v) => string, validate?: (text) => string|null }
  * Resolves to the new selection (array) or null when dismissed without changes.
  */
-export function pickMany({ title, options, selected, allowNew = true, label = (v) => v, validate = (t) => t }) {
+export function pickMany({ title, options, selected, allowNew = true, label = (v) => v, validate = (t) => t, hint = '' }) {
   return new Promise((resolve) => {
     const chosen = new Set(selected);
     const all = [...new Set([...selected, ...options])];
@@ -42,7 +42,7 @@ export function pickMany({ title, options, selected, allowNew = true, label = (v
     scrim.style.zIndex = 95;
     const sheet = h('div.sheet.open', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('div.filters-head', {}, h('span', {}, title), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: done }, '✕')),
-      h('div.filters-body', {}, h('div.search.pick-search', {}, icon('search'), search), list),
+      h('div.filters-body', {}, h('div.search.pick-search', {}, icon('search'), search), ...(hint ? [h('p.hint', {}, hint)] : []), list),
       h('div.filters-foot', {}, h('button.btn', { type: 'button', onclick: () => finish(null) }, 'Cancel'), h('button.btn.primary', { type: 'button', onclick: done }, 'Done')));
     sheet.style.zIndex = 96;
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };

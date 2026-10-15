@@ -217,6 +217,10 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if err := applyFlags(tx, id, &in.gamePatch); err != nil {
+		fail(w, err)
+		return
+	}
 	if playingStatuses[status] {
 		if err := recordCurrentYear(tx, id); err != nil {
 			fail(w, err)

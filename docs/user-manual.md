@@ -137,7 +137,7 @@ Tap a card to open the game.
 
 ![Editing a game](img/edit-phone.jpg)
 
-Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, developer, release year, ownership, the years played, who you played with, VR, 100% completed and notes. Tap a list (like *Genres*) to open a sheet where you tick values and can type a new one. For **Played in** you can add years (4 digits, from 1970 to 2100) or the periods *Childhood* and *Always*.
+Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, developer, release year, ownership, the years played, who you played with, VR, 100% completed and notes. Tap a list (like *Genres*) to open a sheet where you tick values and can type a new one. For **Played in** the list offers the years from the earliest one in your library to this year; type any other year (4 digits, from 1970 to 2100) to add it, or the periods *Childhood* and *Always*.
 - **Save** keeps your changes. **Cancel** or the ✕ asks before throwing away unsaved edits.
 - **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match).
 
@@ -181,7 +181,8 @@ Tap **+**.
 
 1. **Type the title.** After a moment you see matching games from IGDB, with cover, year, developer and genres. A match that is already in your library has an orange **Already in your library** label.
 2. **Tap the right one.**
-3. **Check the form.** Genres, themes, developer, series and release year are filled in for you. You choose the **status** (Backlog by default), the **platforms** and the **ownership** (Owned by default).
+3. **Check the form.** Genres, themes, developer, series and release year are filled in for you. You choose the **status** (Backlog by default), the **platforms**, the **years played** (*Played in*), **played with** and the **ownership** (Owned by default). Tap **More details** for genres, themes, series, developer, release year, favorite, VR, 100% completed and notes: everything the game's Edit form has.
+   - **Years played:** the list runs from the earliest year already in your library to this year, plus *Childhood* and *Always*. For an older year, type its 4 digits in the box at the top of the list and tap *Add*. A game added as Playing, Playing - Evergreen or Finished also gets the current year, once.
    - **Platforms:** the platform you play most among the ones the game is on is selected for you (for a PC game that is PC). The other platforms IGDB lists appear as chips: tap one to add or remove it.
    - **Cover:** a row of pictures from SteamGridDB appears. The first is chosen. Tap another one, or **No cover**. **Search again** looks again with the title you typed.
 4. **Add to library.** The game is added at the end of your manual order and opens so you can adjust it.

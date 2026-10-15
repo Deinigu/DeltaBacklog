@@ -4,7 +4,8 @@ import { h, icon, toast, norm, debounce, gradientFor, initials } from './util.js
 import { store, lookup, coverSearch, createGame, setCover } from './api.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
-import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSelect } from './form.js';
+import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSelect, yearsRow, notesField, toggleRow } from './form.js';
+import { validateForm } from './editpatch.js';
 
 /** A scrim + sheet pair that closes together. Returns {sheet, head, body, foot, back, title, close}. */
 export function makeSheet(titleText, extraClass = '') {
@@ -148,6 +149,7 @@ export function openAdd({ query = '' } = {}) {
       developer: c?.developer || '',
       release_year: c?.year ? String(c.year) : '',
       ownership: unique((g) => (g.ownership ? [g.ownership] : [])).includes('Owned') ? 'Owned' : '',
+      years: [], players: [], notes: '', favorite: false, vr: false, completed: false,
       cover: null,
     };
 
@@ -200,12 +202,19 @@ export function openAdd({ query = '' } = {}) {
       field('Title', titleIn),
       field('Status', statusSelect(f)),
       listRow(f, 'Platforms', 'platforms', platformOptions, { suggestions: suggested.slice(0, 10) }),
-      listRow(f, 'Genres', 'genres', unique((g) => g.genres)),
-      listRow(f, 'Themes', 'themes', unique((g) => g.themes)),
-      field('Series', seriesIn),
-      field('Developer', devIn),
-      field('Released', yearIn),
+      yearsRow(f),
+      listRow(f, 'Played with', 'players', unique((g) => g.players)),
       field('Ownership', ownershipSelect(f)),
+      h('details.more-details', {}, h('summary', {}, 'More details'),
+        listRow(f, 'Genres', 'genres', unique((g) => g.genres)),
+        listRow(f, 'Themes', 'themes', unique((g) => g.themes)),
+        field('Series', seriesIn),
+        field('Developer', devIn),
+        field('Released', yearIn),
+        toggleRow(f, 'favorite', '★ Favorite'),
+        toggleRow(f, 'vr', 'VR'),
+        toggleRow(f, 'completed', '100% completed'),
+        h('div.frow.col', {}, h('span.flabel', {}, 'Notes'), notesField(f))),
       h('div.frow.col', {}, h('span.flabel', {}, 'Cover', h('button.pill', { type: 'button', style: 'margin-left:10px', onclick: findCovers }, 'Search again')), coverHint, strip));
     ui.body.replaceChildren(form);
 
@@ -218,11 +227,16 @@ export function openAdd({ query = '' } = {}) {
     async function save() {
       f.title = f.title.trim();
       if (!f.title) { toast('Give the game a title'); titleIn.focus(); return; }
+      const problem = validateForm({ ...f, years: f.years });
+      if (problem) { toast(problem); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Adding…';
       const body = {
         title: f.title, status: f.status, platforms: f.platforms, genres: f.genres, themes: f.themes,
         series: f.series.trim(), developer: f.developer.trim(), ownership: f.ownership,
+        players: f.players, notes: f.notes, favorite: f.favorite, vr: f.vr, completed: f.completed,
+        years: f.years.filter((y) => /^\d{4}$/.test(y)).map(Number),
+        periods: f.years.filter((y) => /^(childhood|always)$/i.test(y)).map((y) => y.toLowerCase()),
       };
       if (/^\d{4}$/.test(String(f.release_year).trim())) body.release_year = Number(f.release_year);
       if (c?.igdb_id) body.igdb_id = c.igdb_id;

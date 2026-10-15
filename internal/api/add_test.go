@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"errors"
 	"image"
 	"image/color"
@@ -153,6 +154,35 @@ func createGameReq(t *testing.T, e *addEnv, body string) (int, map[string]any) {
 	var out map[string]any
 	json.Unmarshal(b, &out)
 	return res.StatusCode, out
+}
+
+func TestCreateGameWithAllFields(t *testing.T) {
+	e := newAddEnv(t)
+	now := time.Now().Year()
+	body := fmt.Sprintf(`{"title":"Full Add","status":"finished","years":[2019,%d],"periods":["childhood"],"players":["Alice","Bob"],
+		"favorite":true,"vr":true,"completed":true,"notes":"great"}`, now)
+	code, out := createGameReq(t, e, body)
+	g, _ := out["game"].(map[string]any)
+	if code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	if years := g["years"].([]any); len(years) != 2 || int(years[0].(float64)) != 2019 || int(years[1].(float64)) != now {
+		t.Errorf("years should be the chosen ones, this year once: %v", years)
+	}
+	if p := g["periods"].([]any); len(p) != 1 || p[0] != "childhood" {
+		t.Errorf("periods: %v", p)
+	}
+	if pl := g["players"].([]any); len(pl) != 2 {
+		t.Errorf("players: %v", pl)
+	}
+	if g["favorite"] != true || g["vr"] != true || g["completed"] != true || g["notes"] != "great" {
+		t.Errorf("flags/notes not stored: %v", g)
+	}
+	for _, bad := range []string{`{"title":"X","years":[1800]}`, `{"title":"X","periods":["later"]}`} {
+		if c, _ := createGameReq(t, e, bad); c != 400 {
+			t.Errorf("%s: want 400, got %d", bad, c)
+		}
+	}
 }
 
 func TestCreateGame(t *testing.T) {

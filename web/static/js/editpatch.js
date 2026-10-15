@@ -24,6 +24,7 @@ export function formFromGame(game) {
     years: yearsOf(game),
     notes: game.notes ?? '',
     vr: !!game.vr,
+    favorite: !!game.favorite,
     completed: !!game.completed,
     igdb_id: game.igdb_id ?? null,
   };
@@ -62,6 +63,7 @@ export function buildPatch(game, f) {
   if (!sameSet(periods, game.periods)) patch.periods = periods;
 
   if (f.vr !== !!game.vr) patch.vr = f.vr;
+  if (f.favorite !== !!game.favorite) patch.favorite = f.favorite;
   if (f.completed !== !!game.completed) patch.completed = f.completed;
   if ((f.igdb_id ?? null) !== (game.igdb_id ?? null)) patch.igdb_id = f.igdb_id ?? 0;
   return patch;
@@ -80,9 +82,20 @@ export function applyCandidate(f, c) {
   };
 }
 
-/** The values offered when picking years played: this year back to 1990, then the named periods. */
-export function yearOptions(now = new Date().getFullYear()) {
-  return [...Array.from({ length: now - 1990 + 1 }, (_, i) => String(now - i)), 'Childhood', 'Always'];
+/** The calendar years the library's games were played in. */
+export function libraryYears(games) {
+  return [...new Set(games.flatMap((g) => g.years))];
+}
+
+/**
+ * The values offered when picking years played: from the earliest year the library already uses up to this year
+ * (the last 10 years while the library has none), then the named periods. A year a game already has is always
+ * shown by the picker itself, and an older year can be typed in.
+ */
+export function yearOptions(now = new Date().getFullYear(), used = []) {
+  const past = used.filter((y) => y >= MIN_YEAR && y <= now);
+  const from = past.length ? Math.min(...past) : now - 9;
+  return [...Array.from({ length: now - from + 1 }, (_, i) => String(now - i)), 'Childhood', 'Always'];
 }
 
 /** A typed value for the years picker: a four-digit year or a period name, normalised; null when it is neither. */

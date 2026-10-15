@@ -375,6 +375,8 @@ a.btn.primary { color: var(--accent-text); }
 .manual { width: 100%; margin-top: 14px; }
 
 .addform { display: flex; flex-direction: column; }
+.more-details > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--muted, inherit); }
+.more-details[open] > summary { margin-bottom: 4px; }
 .frow { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--border); }
 .frow.col { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 0; border-bottom: 0; }
 .flabel { width: 96px; flex: none; color: var(--muted); font-size: 14px; }

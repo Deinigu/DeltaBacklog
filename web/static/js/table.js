@@ -5,7 +5,7 @@ import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
 import { toCSV } from './csv.js';
 import { ownershipIcon } from './ownership.js';
-import { yearOptions, normalizeYearToken } from './editpatch.js';
+import { yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 
 const ROW_H = 48; // keep in step with .tr and .thead in styles.css
 const OVERSCAN = 6;
@@ -25,7 +25,7 @@ export const COLUMNS = [
   { key: 'platforms', label: 'Platforms', w: 170, kind: 'multi', sort: 'platform', text: (g) => g.platforms.join('; '), values: (g) => g.platforms, options: uniq((g) => g.platforms), patch: (v) => ({ platforms: v }) },
   { key: 'genres', label: 'Genres', w: 220, kind: 'multi', text: (g) => g.genres.join('; '), values: (g) => g.genres, options: uniq((g) => g.genres), patch: (v) => ({ genres: v }) },
   { key: 'themes', label: 'Themes', w: 200, kind: 'multi', text: (g) => g.themes.join('; '), values: (g) => g.themes, options: uniq((g) => g.themes), patch: (v) => ({ themes: v }) },
-  { key: 'years', label: 'Years played', w: 150, kind: 'years', sort: 'last_year', text: (g) => yearsOf(g).join('; '), values: yearsOf, options: () => yearOptions(),
+  { key: 'years', label: 'Years played', w: 150, kind: 'years', sort: 'last_year', text: (g) => yearsOf(g).join('; '), values: yearsOf, options: () => yearOptions(undefined, libraryYears(store.games)),
     patch: (v) => ({ years: v.filter((x) => /^\d{4}$/.test(x)).map(Number), periods: v.filter((x) => /^(childhood|always)$/i.test(x)).map((x) => x.toLowerCase()) }) },
   { key: 'series', label: 'Series', w: 170, kind: 'lookup', sort: 'series', text: (g) => g.series ?? '', options: uniq((g) => (g.series ? [g.series] : [])), patch: (v) => ({ series: v }) },
   { key: 'developer', label: 'Developer', w: 160, kind: 'lookup', text: (g) => g.developer ?? '', options: uniq((g) => (g.developer ? [g.developer] : [])), patch: (v) => ({ developer: v }) },
@@ -151,6 +151,7 @@ export function renderTable(ctx) {
         options: c.options(),
         selected: c.values(g),
         validate: c.kind === 'years' ? normalizeYearToken : (t) => t,
+        ...(c.kind === 'years' ? { hint: 'Older year? Type it (4 digits) in the box above.' } : {}),
       }).then((next) => next && commit(g, c, next));
       return;
     }

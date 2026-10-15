@@ -3,7 +3,7 @@ import { h } from './util.js';
 import { store } from './api.js';
 import { pickMany } from './picker.js';
 import { ownershipLabel } from './ownership.js';
-import { yearOptions, normalizeYearToken } from './editpatch.js';
+import { yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 
 /** Values of a multi-valued field across the library, most used first. */
 export const unique = (get) => {
@@ -33,7 +33,7 @@ export function ensureDatalist(id, options) {
  * A row showing a list-valued field (f[key]) that opens the multi-select sheet on tap.
  * opts: { suggestions: string[] one-tap chips under the row, hint, validate(text) for new values }
  */
-export function listRow(f, label, key, options, { suggestions = [], hint = 'Also on IGDB:', validate } = {}) {
+export function listRow(f, label, key, options, { suggestions = [], hint = 'Also on IGDB:', validate, pickerHint } = {}) {
   const val = h('span.fval');
   const chips = suggestions.map((name) => h('button.chip', { type: 'button', onclick: () => {
     f[key] = f[key].includes(name) ? f[key].filter((v) => v !== name) : [...f[key], name];
@@ -46,7 +46,7 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
   };
   draw();
   const edit = async () => {
-    const next = await pickMany({ title: label, options, selected: f[key], ...(validate ? { validate } : {}) });
+    const next = await pickMany({ title: label, options, selected: f[key], ...(validate ? { validate } : {}), ...(pickerHint ? { hint: pickerHint } : {}) });
     if (next) { f[key] = next; draw(); }
   };
   const row = h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
@@ -55,7 +55,9 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
 }
 
 /** "Played in": calendar years and the named periods. */
-export const yearsRow = (f) => listRow(f, 'Played in', 'years', yearOptions(), { validate: normalizeYearToken });
+export const yearsRow = (f) => listRow(f, 'Played in', 'years', yearOptions(undefined, libraryYears(store.games)), {
+  validate: normalizeYearToken, pickerHint: 'Older year? Type it (4 digits) in the box above.',
+});
 
 export function statusSelect(f) {
   const sel = h('select', { 'aria-label': 'Status' }, store.statuses.map((s) => h('option', { value: s.key, selected: s.key === f.status }, s.label)));
