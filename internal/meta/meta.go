@@ -74,6 +74,9 @@ type Candidate struct {
 	CoverURL  string   `json:"cover_url,omitempty"`
 	Slug      string   `json:"slug,omitempty"`
 	AltNames  []string `json:"-"` // IGDB's localized and alternative names; the IGDB sync scores against them too
+
+	gameType int   // IGDB game_type: 0 main game, 1 DLC, 3 bundle, 8 remake, 9 remaster...
+	released int64 // first release, unix seconds; 0 when unknown
 }
 
 // CoverOption is one SteamGridDB image.
@@ -145,6 +148,7 @@ type igdbGame struct {
 	ID               int64                   `json:"id"`
 	Name             string                  `json:"name"`
 	FirstReleaseDate int64                   `json:"first_release_date"`
+	GameType         int                     `json:"game_type"`
 	Genres           []struct{ Name string } `json:"genres"`
 	Themes           []struct{ Name string } `json:"themes"`
 	Platforms        []struct {
@@ -164,7 +168,16 @@ type igdbGame struct {
 	} `json:"cover"`
 }
 
-// SearchIGDB returns up to 8 candidates for a title, in IGDB's relevance order.
+// searchLimit is how many hits IGDB is asked for: its relevance order buries the original of a long-running
+// series (God of War 2005 is 17th for "God of War"), so we fetch plenty and rank them ourselves.
+const searchLimit = 50
+
+// maxResults is how many ranked candidates SearchIGDB returns.
+const maxResults = 12
+
+// SearchIGDB returns up to 12 candidates for a title. A year in the query ("God of War 2005", "Portal (2007)")
+// is a hint, not part of the search text. IGDB's own search results are merged with the games named exactly like
+// the query, then ranked by RankCandidates.
 func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, error) {
 	if ok, _ := c.Configured(); !ok {
 		return nil, ErrNotConfigured
@@ -177,37 +190,57 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 	if err != nil {
 		return nil, err
 	}
-	// IGDB's search ignores alternative names and wants close spelling. When it finds nothing, try the localized
-	// names, then the title before its subtitle, then the title with its spaces removed ("Little Big Planet").
-	queries := []string{searchQuery(title), altNameQuery(title)}
-	if i := strings.IndexAny(title, ":-"); i >= 3 {
-		queries = append(queries, searchQuery(strings.TrimSpace(title[:i])))
+	text, year := SplitYear(title)
+	names := []string{title} // the whole title first: "Madden NFL 2005" may be the real name
+	if text != title {
+		names = append(names, text)
 	}
-	if joined := strings.Join(strings.Fields(title), ""); joined != title && len(joined) >= 4 {
-		queries = append(queries, searchQuery(joined))
+	// IGDB's search ignores alternative names and wants close spelling. The main pass searches and also asks for
+	// the games named exactly like the query. When it finds nothing, try the localized names, then the title
+	// before its subtitle, then the title with its spaces removed ("Little Big Planet").
+	passes := [][]string{{searchQuery(text)}}
+	for _, n := range names {
+		passes[0] = append(passes[0], exactQuery(n))
 	}
-	for _, q := range queries {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(q))
-		req.Header.Set("Client-ID", c.cfg.IGDBClientID)
-		req.Header.Set("Authorization", "Bearer "+token)
-		var games []igdbGame
-		if err := c.do(req, &games); err != nil {
-			return nil, err
+	passes = append(passes, []string{altNameQuery(text)})
+	if i := strings.IndexAny(text, ":-"); i >= 3 {
+		passes = append(passes, []string{searchQuery(strings.TrimSpace(text[:i]))})
+	}
+	if joined := strings.Join(strings.Fields(text), ""); joined != text && len(joined) >= 4 {
+		passes = append(passes, []string{searchQuery(joined)})
+	}
+	for _, pass := range passes {
+		var all []Candidate
+		seen := map[int64]bool{}
+		for _, q := range pass {
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.IGDBURL+"/games", strings.NewReader(q))
+			req.Header.Set("Client-ID", c.cfg.IGDBClientID)
+			req.Header.Set("Authorization", "Bearer "+token)
+			var games []igdbGame
+			if err := c.do(req, &games); err != nil {
+				return nil, err
+			}
+			for _, g := range games {
+				if !seen[g.ID] {
+					seen[g.ID] = true
+					all = append(all, g.candidate())
+				}
+			}
 		}
-		if len(games) == 0 {
+		if len(all) == 0 {
 			continue
 		}
-		out := make([]Candidate, 0, len(games))
-		for _, g := range games {
-			out = append(out, g.candidate())
+		all = RankCandidates(all, names, year)
+		if len(all) > maxResults {
+			all = all[:maxResults]
 		}
-		return out, nil
+		return all, nil
 	}
 	return []Candidate{}, nil
 }
 
-const searchFields = `fields name,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 8;`
+const searchFields = `fields name,first_release_date,game_type,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name; limit 50;`
 
 var igdbEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 
@@ -215,12 +248,82 @@ func searchQuery(title string) string {
 	return fmt.Sprintf(`search "%s"; `, igdbEscape.Replace(title)) + searchFields
 }
 
+// exactQuery asks for the games whose name is the title (IGDB's `~` without wildcards: case-insensitive equality).
+func exactQuery(title string) string {
+	return fmt.Sprintf(`where name ~ "%s"; `, igdbEscape.Replace(title)) + searchFields
+}
+
 func altNameQuery(title string) string {
 	return fmt.Sprintf(`where alternative_names.name ~ *"%s"*; `, igdbEscape.Replace(title)) + searchFields
 }
 
+var yearHint = regexp.MustCompile(`^(.*?\S)\s*(?:\((\d{4})\)|(\d{4}))$`)
+
+// SplitYear separates a trailing release year ("God of War 2005", "Portal (2007)") from a title. The year must be
+// plausible (1970 to next year) and something must remain of the title; otherwise the title is returned whole.
+func SplitYear(title string) (string, int) {
+	m := yearHint.FindStringSubmatch(strings.TrimSpace(title))
+	if m == nil {
+		return title, 0
+	}
+	y, _ := strconv.Atoi(m[2] + m[3])
+	if y < 1970 || y > time.Now().Year()+1 {
+		return title, 0
+	}
+	return strings.TrimRight(m[1], " ,-:"), y
+}
+
+// demotedTypes are IGDB game types that are rarely what a player means: DLC, expansion, bundle, mod, episode,
+// season, pack, update.
+var demotedTypes = map[int]bool{1: true, 2: true, 3: true, 5: true, 6: true, 7: true, 12: true, 13: true, 14: true}
+
+// RankCandidates orders search hits: games named like one of names first, then games released in year (when
+// non-zero), main games before DLC, bundles and mods, and finally IGDB's own order. Among exact name matches the
+// older game comes first, so the original shows before its remakes and namesakes.
+func RankCandidates(cands []Candidate, names []string, year int) []Candidate {
+	type ranked struct {
+		c       Candidate
+		exact   int // 0 when the name is the first of names, 1 the second, len(names) when no name matches
+		yearOK  bool
+		demoted bool
+		order   int
+	}
+	rs := make([]ranked, len(cands))
+	for i, c := range cands {
+		r := ranked{c: c, demoted: demotedTypes[c.gameType], order: i, yearOK: year != 0 && c.Year == year}
+		r.exact = len(names)
+		for k := len(names) - 1; k >= 0; k-- {
+			if SameName(c.Name, names[k]) || TitleScore(c.Name, names[k]) == 100 {
+				r.exact = k
+			}
+		}
+		rs[i] = r
+	}
+	sort.SliceStable(rs, func(i, j int) bool {
+		a, b := rs[i], rs[j]
+		if a.exact != b.exact {
+			return a.exact < b.exact
+		}
+		if a.yearOK != b.yearOK {
+			return a.yearOK
+		}
+		if a.demoted != b.demoted {
+			return !a.demoted
+		}
+		if a.exact < len(names) && a.c.released != b.c.released && a.c.released != 0 && b.c.released != 0 {
+			return a.c.released < b.c.released
+		}
+		return a.order < b.order
+	})
+	out := make([]Candidate, len(rs))
+	for i, r := range rs {
+		out[i] = r.c
+	}
+	return out
+}
+
 func (g igdbGame) candidate() Candidate {
-	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
+	cand := Candidate{IGDBID: g.ID, Name: g.Name, Slug: g.Slug, gameType: g.GameType, released: g.FirstReleaseDate, Platforms: []string{}, Genres: []string{}, Themes: []string{}}
 	if g.FirstReleaseDate > 0 {
 		cand.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
 	}
