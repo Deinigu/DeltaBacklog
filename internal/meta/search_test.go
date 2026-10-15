@@ -172,7 +172,7 @@ func TestLiveSearch(t *testing.T) {
 		t.Skip("set DELTABACKLOG_LIVE=1 with IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to run")
 	}
 	c := New(Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
-	for _, title := range []string{"God of War", "God of War 2005", "Portal", "Portal 2007", "Doom", "Prey", "Tomb Raider", "Halo", "Hitman", "Tetris", "FIFA 2003", "Madden NFL 2005"} {
+	for _, title := range []string{"God of War", "God of War 2005", "Portal", "Portal 2007", "Doom", "Prey", "Tomb Raider", "Halo", "Hitman", "Tetris", "FIFA 2003", "Madden NFL 2005", "Pac-Man"} {
 		got, err := c.SearchIGDB(context.Background(), title)
 		if err != nil {
 			t.Fatal(err)
@@ -180,7 +180,7 @@ func TestLiveSearch(t *testing.T) {
 		got = TopResults(got, title)
 		var top []string
 		show := 5
-		if title == "Tetris" || title == "Doom" {
+		if title == "Tetris" || title == "Doom" || title == "Pac-Man" {
 			show = maxResults
 		}
 		for _, g := range got[:min(show, len(got))] {
@@ -235,6 +235,38 @@ func TestSearchKeepsFranchiseHitsNextToManyNamesakes(t *testing.T) {
 		t.Fatalf("got %d: %v", len(got), ids(got))
 	}
 	wantIDs(t, got, 1, 2, 3, 4, 5, 6, 100, 101, 102, 103, 104, 105)
+}
+
+func TestSearchNeverCutsNamesakes(t *testing.T) {
+	var exact strings.Builder
+	exact.WriteString("[")
+	for i := 1; i <= 45; i++ {
+		if i > 1 {
+			exact.WriteString(",")
+		}
+		fmt.Fprintf(&exact, `{"id":%d,"name":"Tetris","first_release_date":%d,"game_type":0,"external_games":[1]}`, i, 500000000+i)
+	}
+	exact.WriteString("]")
+	c, _ := searchServer(t, `[{"id":100,"name":"Tetris 99"},{"id":101,"name":"Tetris Effect"}]`, exact.String())
+	all, err := c.SearchIGDB(context.Background(), "Tetris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 47 {
+		t.Fatalf("every namesake must reach the sync: got %d, want 47", len(all))
+	}
+	for i, c := range all[:45] {
+		if c.Name != "Tetris" {
+			t.Fatalf("result %d is %q: namesakes come first", i, c.Name)
+		}
+	}
+	top := TopResults(all, "Tetris")
+	if len(top) != maxResults || top[6].IGDBID != 100 || top[7].IGDBID != 101 {
+		t.Errorf("quick-add must show the franchise after 6 namesakes: %v", ids(top))
+	}
+	if q := exactQuery("Pac-Man"); !strings.HasSuffix(q, "limit 200;") || !strings.HasSuffix(searchQuery("Pac-Man"), "limit 50;") {
+		t.Errorf("only the exact-name query asks for more than 50: %s", q)
+	}
 }
 
 func TestSearchFullTitleWithYearIsSearchedToo(t *testing.T) {

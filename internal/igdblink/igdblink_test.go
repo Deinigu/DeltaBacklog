@@ -577,7 +577,7 @@ func TestLiveSyncBuckets(t *testing.T) {
 		t.Skip("set DELTABACKLOG_LIVE=1 with IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to run")
 	}
 	c := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
-	for _, p := range [][2]string{{"Doom", "Switch"}, {"Doom", "PC"}, {"Tetris", "NES"}, {"Tetris", "Game Boy"}, {"God of War", "PS2"},
+	for _, p := range [][2]string{{"Doom", "Switch"}, {"Doom", "PC"}, {"Tetris", "NES"}, {"Tetris", "Game Boy"}, {"Tetris", "Genesis"}, {"Pac-Man", "Arcade"}, {"God of War", "PS2"},
 		{"Portal", "PC"}, {"Hitman", "PC"}, {"Prey", "PC"}, {"FIFA 2003", "PS2"}, {"Resident Evil", "PS1"}} {
 		cands, err := c.SearchIGDB(context.Background(), p[0])
 		if err != nil {

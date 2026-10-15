@@ -204,9 +204,14 @@ type igdbGame struct {
 // series (God of War 2005 is 17th for "God of War"), so we fetch plenty and rank them ourselves.
 const searchLimit = 50
 
-// searchCap bounds the ranked list SearchIGDB returns. The IGDB sync classifies against all of it: a safe link needs
-// to see every namesake, so only quick-add shortens the list (TopResults).
+// searchCap bounds the non-exact hits SearchIGDB returns. Games named exactly like the query are never cut: the
+// IGDB sync classifies against the whole list, and a safe link needs to see every namesake. Only quick-add
+// shortens the list (TopResults).
 const searchCap = 30
+
+// exactLimit is how many games the exact-name query may return (IGDB allows 500; "Pac-Man" has over 50). The
+// response stays small: a few hundred kilobytes at most.
+const exactLimit = 200
 
 // maxResults is how many candidates quick-add shows.
 const maxResults = 12
@@ -278,27 +283,33 @@ func (c *Client) SearchIGDB(ctx context.Context, title string) ([]Candidate, err
 			continue
 		}
 		all = RankCandidates(all, names, year)
-		return all[:min(len(all), searchCap)], nil
+		namesakes := 0
+		for _, c := range all {
+			if exactLevel(c, names) < len(names) {
+				namesakes++
+			}
+		}
+		return all[:min(len(all), namesakes+searchCap)], nil
 	}
 	return []Candidate{}, nil
 }
 
 const searchFields = `fields name,first_release_date,game_type,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name,external_games; limit 50;`
+	`involved_companies.developer,involved_companies.company.name,collections.name,franchises.name,cover.image_id,slug,alternative_names.name,external_games; `
 
 var igdbEscape = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 
 func searchQuery(title string) string {
-	return fmt.Sprintf(`search "%s"; `, igdbEscape.Replace(title)) + searchFields
+	return fmt.Sprintf(`search "%s"; `, igdbEscape.Replace(title)) + searchFields + "limit 50;"
 }
 
 // exactQuery asks for the games whose name is the title (IGDB's `~` without wildcards: case-insensitive equality).
 func exactQuery(title string) string {
-	return fmt.Sprintf(`where name ~ "%s"; `, igdbEscape.Replace(title)) + searchFields
+	return fmt.Sprintf(`where name ~ "%s"; `, igdbEscape.Replace(title)) + searchFields + fmt.Sprintf("limit %d;", exactLimit)
 }
 
 func altNameQuery(title string) string {
-	return fmt.Sprintf(`where alternative_names.name ~ *"%s"*; `, igdbEscape.Replace(title)) + searchFields
+	return fmt.Sprintf(`where alternative_names.name ~ *"%s"*; `, igdbEscape.Replace(title)) + searchFields + "limit 50;"
 }
 
 var yearHint = regexp.MustCompile(`^(.*?\S)\s*(?:\((\d{4})\)|(\d{4}))$`)
