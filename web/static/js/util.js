@@ -48,6 +48,7 @@ const SVG = {
   library: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   shelves: '<path d="M4 20V6M10 20V4M16 20V8M21 20l-3-12"/>',
   rankings: '<path d="M3 4h4v4H3zM10 6h11M3 10h4v4H3zM10 12h11M3 16h4v4H3zM10 18h11"/>',
+  screenshots: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 8"/>',
   years: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
   views: '<path d="M4 6h16M4 12h16M4 18h10"/><path d="m18 16 2 2 2-2" transform="translate(-2 -1)"/>',

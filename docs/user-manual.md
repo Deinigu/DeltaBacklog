@@ -45,7 +45,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -355,6 +355,20 @@ Every game can keep its own pictures, for example your best moments or where you
 - **Delete** removes the picture. For a few seconds a message offers **Undo**.
 
 **Where the files live.** On the Raspberry Pi, in the screenshots folder (on the external drive when it is set up that way); the app only stores the picture list in its database. If the drive is not connected, you see "Screenshot storage is not available", adding pictures does not work, and the rest of the app keeps working; connect the drive and restart the service. Deleting a game deletes its pictures.
+
+### The Screenshots page
+
+**Screenshots** (under **More** on a phone, in the sidebar on a PC) shows every picture of every game in one place, so you can browse them without opening each game.
+
+![The Screenshots page on a phone](img/gallery-phone.jpg)
+
+- **By game** (the default) puts the pictures under a header with the game's cover and name; tap the header to open the game. **All, newest first** drops the headers and lists everything by date (when the picture was taken, or when you added it if the file does not know). The choice is remembered on this device.
+- **Search** finds a game by name or a picture by its caption. **Year** keeps one year only.
+- Long lists load 120 pictures at a time: tap **Show more** at the bottom (the viewer also loads the next ones by itself when you swipe to the end).
+- Tap a picture to open the full-screen viewer. Swipe or use the arrow keys to go through **all the pictures that match** (not only that game's). It shows the game's name, the caption, the date and the size, **Original** opens the file in a new tab, the download icon saves it, and **Open game** goes to the game. Captions, order and deleting are done from the game's own page.
+- With no pictures yet it says so: add some from a game's details. If the screenshot drive is not connected you get the same "Screenshot storage is not available" notice.
+
+![The viewer on the Screenshots page](img/gallery-viewer-phone.jpg)
 
 **Copy them off the Pi** (optional), from a computer on your network, replacing the address:
 

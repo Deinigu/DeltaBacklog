@@ -1,12 +1,12 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v36';
+const VERSION = 'v37';
 
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers-v2'; // keyed by path (one entry per cover file); the old 'covers' cache was keyed by URL with ?v=
 const THUMBS = 'screenshot-thumbs';
 const MAX_THUMBS = 400; // thumbnails are ~30 KB each; originals are never cached
 const API = 'api';
-const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/js/sort.js', '/js/filters.js', '/js/ttb.js', '/js/views.js', '/js/order.js', '/js/reorder.js', '/js/table.js', '/js/picker.js', '/js/csv.js', '/js/add.js', '/js/platforms.js', '/js/ownership.js', '/js/form.js', '/js/editpatch.js', '/js/years.js', '/js/yearreview.js', '/js/yearpage.js', '/js/tierpng.js', '/js/rankboard.js', '/js/rankdrag.js', '/js/rankingedit.js', '/js/rankingspage.js', '/js/gamepicker.js', '/js/savequeue.js', '/js/more.js', '/js/colors.js', '/js/pick.js', '/js/surprise.js', '/js/series.js', '/js/seriesview.js', '/js/stats.js', '/js/statspage.js', '/js/link.js', '/js/linkqueue.js', '/js/shots.js', '/js/shotsview.js', '/icon.svg'];
+const SHELL_FILES = ['/', '/styles.css', '/js/main.js', '/js/api.js', '/js/util.js', '/js/library.js', '/js/drawer.js', '/js/sort.js', '/js/filters.js', '/js/ttb.js', '/js/views.js', '/js/order.js', '/js/reorder.js', '/js/table.js', '/js/picker.js', '/js/csv.js', '/js/add.js', '/js/platforms.js', '/js/ownership.js', '/js/form.js', '/js/editpatch.js', '/js/years.js', '/js/yearreview.js', '/js/yearpage.js', '/js/tierpng.js', '/js/rankboard.js', '/js/rankdrag.js', '/js/rankingedit.js', '/js/rankingspage.js', '/js/gamepicker.js', '/js/savequeue.js', '/js/more.js', '/js/colors.js', '/js/pick.js', '/js/surprise.js', '/js/series.js', '/js/seriesview.js', '/js/stats.js', '/js/statspage.js', '/js/link.js', '/js/linkqueue.js', '/js/shots.js', '/js/shotsview.js', '/js/gallery.js', '/js/gallerypage.js', '/js/galleryviewer.js', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
