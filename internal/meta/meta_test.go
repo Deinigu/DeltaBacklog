@@ -41,7 +41,11 @@ func fake(t *testing.T) (*Client, *int32) {
 			w.Write([]byte("[]"))
 			return
 		}
-		if !strings.Contains(string(body[:n]), `search "Hades \"II\""`) {
+		if strings.HasPrefix(string(body[:n]), "where name ~ ") { // the exact-name query of every search
+			w.Write([]byte("[]"))
+			return
+		}
+		if !strings.Contains(string(body[:n]), `search "Hades`) {
 			http.Error(w, "unexpected query: "+string(body[:n]), 400)
 			return
 		}
@@ -85,6 +89,7 @@ func fake(t *testing.T) (*Client, *int32) {
 	t.Cleanup(srv.Close)
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec", SteamGridDBKey: "sk"})
 	c.TokenURL, c.IGDBURL, c.SGDBURL, c.SteamURL = srv.URL+"/token", srv.URL+"/igdb", srv.URL+"/sgdb", srv.URL+"/steam"
+	c.IGDBGap = 0
 	return c, &tokenCalls
 }
 
@@ -97,14 +102,14 @@ func TestSearchIGDB(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("candidates = %+v", got)
 	}
-	h := got[0]
+	h := got[1] // `Hades "II"` names Hades II exactly, so it ranks first
 	if h.Name != "Hades" || h.Year != 2020 || h.Developer != "Supergiant Games" || h.Series != "Hades" ||
 		strings.Join(h.Genres, ",") != "Role-playing (RPG),Indie" || strings.Join(h.Platforms, ",") != "PC,Nintendo Switch" ||
 		h.CoverURL != "https://images.igdb.com/igdb/image/upload/t_cover_big/co1abc.jpg" {
 		t.Errorf("first candidate = %+v", h)
 	}
-	if got[1].Series != "Franchise X" || got[1].Year != 0 || got[1].Genres == nil {
-		t.Errorf("second candidate = %+v", got[1])
+	if got[0].Series != "Franchise X" || got[0].Year != 0 || got[0].Genres == nil {
+		t.Errorf("second candidate = %+v", got[0])
 	}
 	c.SearchIGDB(context.Background(), `Hades "II"`)
 	if n := atomic.LoadInt32(tokens); n != 1 {
@@ -236,7 +241,7 @@ func TestIGDBImages(t *testing.T) {
 	}
 
 	// no id: the best title match is used
-	byTitle, err := c.IGDBImages(context.Background(), 0, `Hades "II"`)
+	byTitle, err := c.IGDBImages(context.Background(), 0, "Hades")
 	if err != nil || len(byTitle) != 11 {
 		t.Errorf("by title: %d %v", len(byTitle), err)
 	}
@@ -279,6 +284,7 @@ func TestRateLimitIsATypedError(t *testing.T) {
 	defer srv.Close()
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 	_, err := c.SearchIGDB(context.Background(), "Hades")
 	var he *HTTPError
 	if !errors.As(err, &he) || he.Status != 429 {
@@ -311,12 +317,13 @@ func TestSearchFallsBackWhenTheTitleSearchFindsNothing(t *testing.T) {
 	defer srv.Close()
 	c := New(Config{IGDBClientID: "cid", IGDBClientSecret: "sec"})
 	c.TokenURL, c.IGDBURL = srv.URL+"/token", srv.URL+"/igdb"
+	c.IGDBGap = 0
 
 	got, err := c.SearchIGDB(context.Background(), "Profesor Layton y el Futuro Perdido")
 	if err != nil || len(got) != 1 || got[0].IGDBID != 9 || got[0].AltNames[0] != "Profesor Layton y el Futuro Perdido" {
 		t.Fatalf("alternative-name fallback: %+v %v", got, err)
 	}
-	if len(queries) != 2 || !strings.HasPrefix(queries[0], "search ") {
+	if len(queries) != 3 || !strings.HasPrefix(queries[0], "search ") || !strings.HasPrefix(queries[1], "where name ~ ") {
 		t.Errorf("queries = %q", queries)
 	}
 	got, err = c.SearchIGDB(context.Background(), "Little Big Planet 2")

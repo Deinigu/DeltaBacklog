@@ -242,7 +242,7 @@ func TestBackoffOn429(t *testing.T) {
 	f := &fakeIGDB{answers: map[string][]meta.Candidate{"Hades": {cand(1, "Hades", 2020, "PC")}}, throttle: 3}
 	var waits []time.Duration
 	sleep := func(_ context.Context, w time.Duration) error { waits = append(waits, w); return nil }
-	rep, err := Run(context.Background(), d, f, Options{Sleep: sleep, Interval: time.Millisecond, Backoff: time.Second})
+	rep, err := Run(context.Background(), d, f, Options{Sleep: sleep, Backoff: time.Second})
 	if err != nil || rep.Confident != 1 {
 		t.Fatalf("%+v %v", rep, err)
 	}
@@ -432,6 +432,21 @@ func TestExactNameBreaksATie(t *testing.T) {
 	}
 }
 
+// The sync must see every namesake: with seven "Doom" games, two of them on Switch, it may not pick one.
+func TestManyNamesakesWithTwoOnThePlatformStayUncertain(t *testing.T) {
+	cands := []meta.Candidate{
+		cand(1, "Doom", 2016, "PC", "PS4"), cand(2, "Doom", 1993, "PC"), cand(3, "Doom", 1994, "32X"),
+		cand(4, "Doom", 1995, "SNES"), cand(5, "Doom", 1996, "3DO"), cand(6, "Doom", 2001, "GBA"),
+		cand(7, "Doom", 2016, "Switch"), cand(8, "Doom", 2019, "Switch"),
+	}
+	if res := Classify("Doom", []string{"Switch"}, cands); res.Bucket != Uncertain {
+		t.Errorf("bucket = %s, want uncertain", res.Bucket)
+	}
+	if res := Classify("Doom", []string{"Switch"}, cands[:6]); res.Bucket != Uncertain {
+		t.Errorf("no namesake on Switch: %s, want uncertain", res.Bucket)
+	}
+}
+
 func TestDryRunSeesTwoGamesCompetingForOneID(t *testing.T) {
 	for _, dry := range []bool{true, false} {
 		d := openDB(t)
@@ -552,5 +567,27 @@ func TestDryRunWithUnusualPath(t *testing.T) {
 	}
 	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "a*")); len(m) != 1 {
 		t.Errorf("stray files: %v", m)
+	}
+}
+
+// TestLiveSyncBuckets prints the sync's bucket for title/platform pairs against the real IGDB
+// (DELTABACKLOG_LIVE=1 plus the keys).
+func TestLiveSyncBuckets(t *testing.T) {
+	if os.Getenv("DELTABACKLOG_LIVE") != "1" {
+		t.Skip("set DELTABACKLOG_LIVE=1 with IGDB_CLIENT_ID and IGDB_CLIENT_SECRET to run")
+	}
+	c := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
+	for _, p := range [][2]string{{"Doom", "Switch"}, {"Doom", "PC"}, {"Tetris", "NES"}, {"Tetris", "Game Boy"}, {"Tetris", "Genesis"}, {"Pac-Man", "Arcade"}, {"God of War", "PS2"},
+		{"Portal", "PC"}, {"Hitman", "PC"}, {"Prey", "PC"}, {"FIFA 2003", "PS2"}, {"Resident Evil", "PS1"}} {
+		cands, err := c.SearchIGDB(context.Background(), p[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := Classify(p[0], []string{p[1]}, cands)
+		best := "-"
+		if res.Best != nil {
+			best = fmt.Sprintf("%s (%d) #%d", res.Best.Name, res.Best.Year, res.Best.IGDBID)
+		}
+		t.Logf("%-14s on %-9s -> %-9s %s", p[0], p[1], res.Bucket, best)
 	}
 }
