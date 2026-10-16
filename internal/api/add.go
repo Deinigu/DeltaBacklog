@@ -97,7 +97,7 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) {
 	if res == nil {
 		res = []meta.Candidate{}
 	}
-	writeJSON(w, map[string]any{"configured": true, "query": title, "results": meta.RankByTitle(res, title)})
+	writeJSON(w, map[string]any{"configured": true, "query": title, "results": meta.TopResults(meta.RankByTitle(res, title), title)})
 }
 
 // searchCovers lists cover options. ?source=steamgriddb (default) searches by title; ?source=igdb lists the pictures

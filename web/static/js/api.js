@@ -321,3 +321,9 @@ export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
     xhr.send(fd);
   });
 }
+
+/**
+ * Every screenshot of the library, one page at a time (see galleryQuery in gallery.js for the query).
+ * Resolves {screenshots, total, years, available}; each screenshot has game_id, game_title and date as well.
+ */
+export const listAllShots = (query = '') => request('GET', `/api/screenshots${query}`);

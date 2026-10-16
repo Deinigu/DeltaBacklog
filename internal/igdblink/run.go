@@ -20,7 +20,6 @@ type Searcher interface {
 // Options tune a sync run. The zero value is a real run at IGDB's limit of about four requests per second.
 type Options struct {
 	DryRun     bool
-	Interval   time.Duration                              // pause between searches; default 250ms (4 requests/s)
 	Backoff    time.Duration                              // first wait after a 429, doubling each time; default 2s
 	MaxRetries int                                        // 429s in a row before the run stops (resumable); default 6
 	Limit      int                                        // stop after this many games (0 = all)
@@ -115,9 +114,6 @@ func searchWithBackoff(ctx context.Context, s Searcher, title string, o Options)
 // as its outcome, so a stopped run (Ctrl-C, 429s, no network) continues where it left off.
 // A dry run searches IGDB but writes nothing, not even the backup.
 func Run(ctx context.Context, d *sql.DB, s Searcher, o Options) (*Report, error) {
-	if o.Interval == 0 {
-		o.Interval = 250 * time.Millisecond
-	}
 	if o.Backoff == 0 {
 		o.Backoff = 2 * time.Second
 	}
@@ -148,11 +144,9 @@ func Run(ctx context.Context, d *sql.DB, s Searcher, o Options) (*Report, error)
 	consecutiveErrors := 0
 	claimed := map[int64]int64{} // IGDB id -> the game this run linked it to (a dry run writes nothing, so the database cannot tell)
 	for i, g := range todo {
-		if i > 0 {
-			if err := o.Sleep(ctx, o.Interval); err != nil {
-				rep.Stopped = "interrupted"
-				return rep, nil
-			}
+		if ctx.Err() != nil { // the meta client paces the IGDB requests itself
+			rep.Stopped = "interrupted"
+			return rep, nil
 		}
 		if o.Progress != nil {
 			o.Progress(i, len(todo), g.title)

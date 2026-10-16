@@ -1,7 +1,8 @@
 // The "Screenshots" section of the game drawer: thumbnail grid, upload with progress, and the full-screen viewer.
 import { h, toast, toastAction } from './util.js';
 import { listShots, uploadShot, setShotCaption, deleteShot, deleteShotKeepalive, orderShots } from './api.js';
-import { moveShot, stepIndex, formatBytes, formatTaken, countLabel, pickImages, uploadSummary, thumbPlan, BIG_UPLOAD, pendingIds, withoutPending, clampIndex } from './shots.js';
+import { openShotViewer } from './shotviewer.js';
+import { moveShot, countLabel, pickImages, uploadSummary, thumbPlan, BIG_UPLOAD, pendingIds, withoutPending, clampIndex } from './shots.js';
 
 const UNDO_MS = 6000;
 const STORAGE_DOWN = 'Screenshot storage is not available (is the drive connected?). Uploads will fail until it is back.';
@@ -10,6 +11,9 @@ const STORAGE_DOWN = 'Screenshot storage is not available (is the drive connecte
 // drawer that is closed and reopened (a new section) must still hide them, and leaving the page must still delete them.
 const pending = new Map(); // id -> { s, gameId, at, timer, toast }
 const THUMB_CACHE = 'screenshot-thumbs';
+
+/** Tell the other pages (the Screenshots page) that the pictures of some game changed on the server. */
+const shotsChanged = () => window.dispatchEvent(new Event('screenshots-changed'));
 
 /** Drop a deleted picture's thumbnail from the service worker's cache so it cannot show as a ghost. */
 function forgetThumb(url) {
@@ -69,7 +73,6 @@ function imageSize(file) {
   });
 }
 
-const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg>';
 
 /** Build the section for one game; it loads its own list. */
 export function screenshotsSection(game) {
@@ -144,6 +147,7 @@ export function screenshotsSection(game) {
         }
         shots.push(s);
         added++;
+        shotsChanged();
         row.remove();
         draw();
       } catch (e) {
@@ -168,29 +172,18 @@ export function screenshotsSection(game) {
     upload([...e.dataTransfer.files]);
   });
 
-  // ---------------------------------------------------------------- viewer
+  // ---------------------------------------------------------------- viewer (the frame is shotviewer.js)
   function openViewer(start) {
     let cur = start;
-    const img = h('img.shot-img', { alt: '' });
-    const counter = h('span.shot-counter');
+    let savedCaption = '';
+    let viewer;
     const caption = h('input.shot-caption', { type: 'text', maxlength: '500', placeholder: 'Add a caption', 'aria-label': 'Caption' });
-    const meta = h('p.shot-meta');
-    const dl = h('a.btn', { 'aria-label': 'Download the original', title: 'Download the original', download: '' });
-    dl.innerHTML = DOWNLOAD_ICON;
     const earlier = h('button.btn', { type: 'button', onclick: () => move(-1) }, '◀ Move earlier');
     const later = h('button.btn', { type: 'button', onclick: () => move(1) }, 'Move later ▶');
-    const prev = h('button.btn.shot-nav.prev', { type: 'button', 'aria-label': 'Previous screenshot', onclick: () => go(-1) }, '‹');
-    const next = h('button.btn.shot-nav.next', { type: 'button', 'aria-label': 'Next screenshot', onclick: () => go(1) }, '›');
-    const stage = h('div.shot-stage', {}, prev, img, next);
-    const view = h('div.shot-viewer', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Screenshot viewer', tabindex: '-1' },
-      h('div.shot-bar', {},
-        h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: close }, '✕'), counter, h('span.spacer'),
-        dl, h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete')),
-      stage,
-      h('div.shot-foot', {}, caption, meta, h('div.shot-move', {}, earlier, later)));
+    const del = h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete');
 
-    let savedCaption = '';
     caption.addEventListener('change', saveCaption);
+    caption.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); caption.blur(); } });
     async function saveCaption() {
       const s = shots[cur];
       const v = caption.value.trim();
@@ -199,27 +192,8 @@ export function screenshotsSection(game) {
         const fresh = await setShotCaption(s.id, v);
         s.caption = fresh.caption || '';
         savedCaption = v;
+        shotsChanged();
       } catch { toast('Could not save the caption'); }
-    }
-
-    function show() {
-      const s = shots[cur];
-      if (!s) { close(); return; }
-      img.src = s.src;
-      img.alt = s.caption || `Screenshot ${cur + 1}`;
-      counter.textContent = `${cur + 1} / ${shots.length}`;
-      caption.value = savedCaption = s.caption || '';
-      meta.textContent = [formatTaken(s.taken_at), `${s.width}×${s.height}`, formatBytes(s.bytes)].filter(Boolean).join(' · ');
-      dl.href = `${s.src}?download=1`;
-      earlier.disabled = cur === 0;
-      later.disabled = cur === shots.length - 1;
-      prev.hidden = next.hidden = shots.length < 2;
-    }
-
-    async function go(dir) {
-      await saveCaption();
-      cur = stepIndex(cur, shots.length, dir);
-      show();
     }
 
     async function move(dir) {
@@ -229,15 +203,14 @@ export function screenshotsSection(game) {
       if (!ids) return;
       const before = shots.slice();
       shots = ids.map((id) => shots.find((x) => x.id === id));
-      cur += dir;
-      show();
+      viewer.show(cur + dir);
       draw();
       try {
         await orderShots(game.id, [...ids, ...pendingIds(pending, game.id)]);
+        shotsChanged();
       } catch {
         shots = before;
-        cur -= dir;
-        show();
+        viewer.show(cur - dir);
         draw();
         toast('Could not save the new order');
       }
@@ -255,9 +228,10 @@ export function screenshotsSection(game) {
           await deleteShot(s.id);
           pending.delete(s.id);
           forgetThumb(s.thumb);
+          shotsChanged();
         } catch (e) {
           pending.delete(s.id);
-          if (e.status === 404) { forgetThumb(s.thumb); return; } // already gone
+          if (e.status === 404) { forgetThumb(s.thumb); shotsChanged(); return; } // already gone
           shots.splice(Math.min(at, shots.length), 0, s); // the server still has it
           draw();
           toast(e.status === 503 ? STORAGE_DOWN : 'Could not delete the screenshot');
@@ -271,60 +245,30 @@ export function screenshotsSection(game) {
         draw();
       }, UNDO_MS);
       draw();
-      if (!shots.length) { close(); return; }
-      cur = Math.min(cur, shots.length - 1);
+      if (!shots.length) { viewer.close(); return; }
       savedCaption = '';
-      show();
+      viewer.show(Math.min(cur, shots.length - 1));
     }
 
-    async function close() {
-      await saveCaption();
-      document.removeEventListener('keydown', onKey);
-      view.remove();
-      document.body.classList.remove('no-scroll');
-      // draw() rebuilt the grid since the viewer opened, so the old thumb is gone: focus the current one
-      const i = clampIndex(cur, shots.length);
-      (i < 0 ? addBtn : grid.children[i])?.focus?.({ preventScroll: true });
-    }
-
-    const focusables = () => [...view.querySelectorAll('button, a[href], input')].filter((el) => !el.disabled && !el.hidden && el.offsetParent !== null);
-    const onKey = (e) => {
-      if (e.key === 'Tab') { // keep Tab inside the viewer: everything behind it is out of reach
-        const list = focusables();
-        if (!list.length) { e.preventDefault(); return; }
-        const first = list[0];
-        const last = list[list.length - 1];
-        if (e.shiftKey && (document.activeElement === first || document.activeElement === view)) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-        else if (!view.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
-        return;
-      }
-      if (e.target === caption) { if (e.key === 'Enter') { e.preventDefault(); caption.blur(); } else if (e.key !== 'Escape') return; }
-      if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowLeft') go(-1);
-      else if (e.key === 'ArrowRight') go(1);
-    };
-
-    // Swipe to change picture, only at normal zoom (a pinch-zoomed picture is panned instead).
-    let x0 = null;
-    let y0 = 0;
-    stage.addEventListener('touchstart', (e) => {
-      const zoomed = (window.visualViewport?.scale || 1) > 1.05;
-      if (e.touches.length === 1 && !zoomed) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; } else x0 = null;
-    }, { passive: true });
-    stage.addEventListener('touchend', (e) => {
-      if (x0 == null) return;
-      const dx = e.changedTouches[0].clientX - x0;
-      const dy = e.changedTouches[0].clientY - y0;
-      x0 = null;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? 1 : -1);
-    }, { passive: true });
-
-    document.addEventListener('keydown', onKey);
-    document.body.classList.add('no-scroll');
-    document.body.append(view);
-    show();
-    view.focus({ preventScroll: true });
+    viewer = openShotViewer({
+      count: () => shots.length,
+      get: (i) => shots[i],
+      beforeStep: saveCaption,
+      barEnd: del,
+      foot: (meta) => [caption, meta, h('div.shot-move', {}, earlier, later)],
+      ignoreKey: (e) => e.target === caption,
+      onShow: (s, i) => {
+        cur = i;
+        caption.value = savedCaption = s.caption || '';
+        earlier.disabled = i === 0;
+        later.disabled = i === shots.length - 1;
+      },
+      onClose: () => {
+        // draw() rebuilt the grid since the viewer opened, so the old thumb is gone: focus the current one
+        const i = clampIndex(cur, shots.length);
+        (i < 0 ? addBtn : grid.children[i])?.focus?.({ preventScroll: true });
+      },
+    }, start);
   }
 
   load();
