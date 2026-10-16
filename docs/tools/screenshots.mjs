@@ -82,13 +82,20 @@ function placeholderPNG(w, h, c1, c2) {
 }
 if (!process.env.BASE_URL) {
   const games = await (await fetch(`${BASE}/api/games`)).json();
-  const g = games.find((x) => x.title === 'Outer Wilds') || games[0];
   const palettes = [[[16, 24, 64], [220, 120, 60]], [[10, 40, 50], [90, 170, 160]], [[40, 16, 60], [200, 90, 140]], [[20, 20, 30], [120, 130, 200]]];
-  for (const [i, [a, b]] of palettes.entries()) {
-    const fd = new FormData();
-    fd.append('file', new Blob([placeholderPNG(640, 360, a, b)], { type: 'image/png' }), `demo-${i + 1}.png`);
-    const r = await fetch(`${BASE}/api/games/${g.id}/screenshots`, { method: 'POST', body: fd });
-    if (!r.ok) console.error('demo screenshot upload failed', r.status);
+  // Outer Wilds first (the game page shots use it), then a few more games, with dates in different years for the gallery page.
+  const plan = [['Outer Wilds', 4, 2023], ['Hades', 3, 2024], ['Celeste', 3, 2022], ['Stardew Valley', 2, 2024]];
+  for (const [title, n, yr] of plan) {
+    const g = games.find((x) => x.title === title) || games.find((x) => x.title.includes(title));
+    if (!g) continue;
+    for (let i = 0; i < n; i++) {
+      const [a, b] = palettes[(i + title.length) % palettes.length];
+      const fd = new FormData();
+      fd.append('modified', String(Date.UTC(yr, 1 + i * 3, 10 + i, 12)));
+      fd.append('file', new Blob([placeholderPNG(640, 360, a, b)], { type: 'image/png' }), `demo-${i + 1}.png`);
+      const r = await fetch(`${BASE}/api/games/${g.id}/screenshots`, { method: 'POST', body: fd });
+      if (!r.ok) console.error('demo screenshot upload failed', r.status);
+    }
   }
 }
 process.on('exit', () => { if (server) server.kill(); if (tmp) { try { rmSync(tmp, { recursive: true, force: true }); } catch {} } });
@@ -180,6 +187,12 @@ await go(p, '#/library');
 await p.click('.more-btn'); await wait(500);
 await shot(p, 'more-phone');
 
+await go(p, '#/screenshots');
+await shot(p, 'gallery-phone');
+await p.click('.shot-thumb'); await wait(900);
+await shot(p, 'gallery-viewer-phone');
+await p.keyboard.press('Escape'); await wait(300);
+
 await go(p, '#/library?q=outer+wilds');
 await p.click('.card'); await wait(700);
 await shot(p, 'game-phone');
@@ -227,6 +240,8 @@ await go(p, '#/library?sort=status:asc,last_year:desc,title:asc');
 await shot(p, 'library-desktop');
 await go(p, '#/library?layout=table&sort=title:asc');
 await shot(p, 'table-desktop');
+await go(p, '#/screenshots');
+await shot(p, 'gallery-desktop');
 if (rankingId) {
   await go(p, `#/rankings/${rankingId}`);
   await shot(p, 'ranking-desktop');

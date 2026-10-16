@@ -77,6 +77,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/games/{id}/screenshots", s.listShots)
 	mux.HandleFunc("POST /api/games/{id}/screenshots", s.uploadShots)
 	mux.HandleFunc("PUT /api/games/{id}/screenshots/order", s.orderShots)
+	mux.HandleFunc("GET /api/screenshots", s.listAllShots)
 	mux.HandleFunc("PATCH /api/screenshots/{id}", s.patchShot)
 	mux.HandleFunc("DELETE /api/screenshots/{id}", s.deleteShot)
 	mux.HandleFunc("GET /screenshots/{gid}/{name}", s.serveShot)
