@@ -200,14 +200,9 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	for col, v := range map[string]*bool{"favorite": in.Favorite, "vr": in.VR, "completed": in.Completed} {
-		if v == nil {
-			continue
-		}
-		if _, err := tx.Exec("UPDATE game SET "+col+" = ? WHERE id = ?", b2i(*v), id); err != nil { // col comes from the map above, never from input
-			fail(w, err)
-			return
-		}
+	if err := applyFlags(tx, id, &in); err != nil {
+		fail(w, err)
+		return
 	}
 	if _, err := tx.Exec(`UPDATE game SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, id); err != nil {
 		fail(w, err)
@@ -223,6 +218,19 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, g)
+}
+
+// applyFlags stores the favorite / VR / 100% switches that are present.
+func applyFlags(tx *sql.Tx, id int64, in *gamePatch) error {
+	for col, v := range map[string]*bool{"favorite": in.Favorite, "vr": in.VR, "completed": in.Completed} {
+		if v == nil {
+			continue
+		}
+		if _, err := tx.Exec("UPDATE game SET "+col+" = ? WHERE id = ?", b2i(*v), id); err != nil { // col comes from the map above, never from input
+			return err
+		}
+	}
+	return nil
 }
 
 // recordCurrentYear counts a game as played this year (starting or finishing it).

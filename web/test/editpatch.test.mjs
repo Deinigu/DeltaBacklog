@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { yearsOf, formFromGame, validateForm, buildPatch, applyCandidate, yearOptions, normalizeYearToken } from '../static/js/editpatch.js';
+import { yearsOf, formFromGame, validateForm, buildPatch, applyCandidate, yearOptions, libraryYears, normalizeYearToken } from '../static/js/editpatch.js';
 
 const game = () => ({
   id: 1, title: 'Hades II', notes: 'line one\nline two', series: 'Hades', developer: 'Supergiant', release_year: 2025,
@@ -78,12 +78,33 @@ test('filling from IGDB replaces metadata but keeps platforms, notes and ownersh
   assert.equal(f.genres.length, 2, 'the original state is not mutated');
 });
 
-test('year picker options run from this year back to 1990, then the periods', () => {
-  const o = yearOptions(2026);
+test('year picker options run from the earliest year the library uses to this year, then the periods', () => {
+  const o = yearOptions(2026, [2014, 2020, 2026]);
   assert.equal(o[0], '2026');
-  assert.equal(o[o.length - 3], '1990');
+  assert.equal(o[o.length - 3], '2014');
   assert.deepEqual(o.slice(-2), ['Childhood', 'Always']);
-  assert.equal(o.length, 2026 - 1990 + 1 + 2);
+  assert.equal(o.length, 2026 - 2014 + 1 + 2);
+});
+
+test('year picker offers the last 10 years when the library has no years', () => {
+  const o = yearOptions(2026, []);
+  assert.equal(o[o.length - 3], '2017');
+  assert.equal(o.length, 10 + 2);
+});
+
+test('year picker ignores out-of-range or future library years when picking the start', () => {
+  assert.equal(yearOptions(2026, [1900, 2030, 2022]).at(-3), '2022');
+});
+
+test('libraryYears lists each played year once', () => {
+  assert.deepEqual(libraryYears([{ years: [2020, 2021] }, { years: [2021] }, { years: [] }]).sort(), [2020, 2021]);
+});
+
+test('favorite is part of the form and the patch', () => {
+  const g = { ...game(), favorite: false };
+  const f = formFromGame(g);
+  assert.equal(f.favorite, false);
+  assert.equal(buildPatch(g, { ...f, favorite: true }).favorite, true);
 });
 
 test('typed year tokens are normalised or rejected', () => {
