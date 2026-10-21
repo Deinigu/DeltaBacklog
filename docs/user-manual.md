@@ -205,6 +205,15 @@ Open a game and tap **Change cover**.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
 
+### The poster (portrait picture)
+
+The rankings and their PNG use a **portrait poster** of each game, made for you automatically. To choose your own, open a game and tap **Change poster**, or, on a ranking board, tap a game and then the picture button in the bar at the bottom.
+
+- **IGDB** shows the official box cover and **SteamGridDB** shows several community portraits. Tap one to use it. Both lists load on their own: if SteamGridDB cannot be reached right now (some providers block it at times) its part says so and the IGDB cover is still there.
+- **Paste an image link** uses a picture from the web. Only links from the same sites as covers (IGDB and SteamGridDB images) are accepted.
+- **Crop of the wide cover** cuts the middle of the game's wide cover into a portrait (no internet needed). **Fetch automatically again** goes back to what the app chooses by itself (IGDB, then SteamGridDB, then the crop) and replaces your pick.
+- A poster you chose stays: the app never replaces it on its own, and changing the wide cover does not change it. The ranking board and the exported PNG show the new poster at once.
+
 ## 11. What the little icons mean
 
 **Ownership** (filters, the table, the game's details and a badge on cards):
@@ -255,6 +264,7 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 - **Add games.** The button opens your whole library with search and the same filters as the Library page. Tick games one by one, or filter (for example *Year played: 2025*) and tap **Select these** to take every match at once, then **Add**. New games wait in **Not ranked**, below the board. The first time a game joins a ranking its poster is fetched in the background (a few seconds each; the page fills them in by itself). Until then the wide cover is shown.
 - **Move a game.** On a PC drag it with the mouse. On a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). Or **tap a game** to select it: the bar at the bottom has **◀ ▶** (earlier or later in its tier), **▲ ▼** (one tier up or down), *Not ranked*, *Details* and *Remove from this ranking*, and with a game selected you can also **tap a tier** to put it there. With the keyboard: Tab to a game, **Enter** selects it, the **arrow keys** move it (left and right inside the tier, up and down between tiers), **Esc** lets go. Without a selection the arrows just move between games.
 - **Tiers.** **Tap a tier's name** (with nothing selected) to change its **label** (up to 80 characters, it wraps), its **colour** (a palette or any custom colour), move it up or down, **duplicate** it or **delete** it (its games go back to *Not ranked*; **Undo** in the message at the bottom brings it back). **Add tier** adds a new one at the end; the menu **⋯** can add the classic S to F tiers.
+- **Change a poster.** Tap a game and then the picture button in the bar at the bottom: see [The poster](#the-poster-portrait-picture).
 - **Look.** **S / M / L** change the size of the posters and **Titles** writes the game name on each poster (on a PC hover a game to see its name; on a phone tap it and the bar at the bottom shows it). Both are remembered on this device. The title and the **⋯** menu (rename, description, duplicate, delete) are at the top.
 - **Export PNG** saves the board as a picture (dark background, tier labels, full-size posters; the *Not ranked* games are left out), named after the ranking.
 - Everything is saved automatically. Opening a year's ranking from **Rank this year** also adds the games that got that year since (a game you removed from it comes back too); renaming the ranking does not break that link.

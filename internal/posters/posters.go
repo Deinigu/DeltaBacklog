@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,10 +34,17 @@ type Maker struct {
 	Src     Source                                              // nil: no network source, only the crop of the cover
 	Allowed func(rawURL string) bool                            // host allow-list for downloads; nil allows nothing
 	Fetch   func(url, dir string, gameID int64) (string, error) // default covers.FetchPosterStrict
+
+	// mu orders the final step of every maker (guarded UPDATE, then moving the file into place). The slow part
+	// (lookups, downloads) runs outside it, into a scratch folder per call.
+	mu sync.Mutex
 }
 
 // ErrNoSource means the game has no image to make a poster from.
 var ErrNoSource = errors.New("no poster source")
+
+// ErrUserPoster means the poster was chosen by the user: the automatic makers leave it alone.
+var ErrUserPoster = errors.New("the poster was chosen by the user")
 
 // ErrTemporary means a source failed in a way that may pass (a network error, a rate limit, a server error): no poster is
 // made, not even the crop, so a later try can still find the real one. A crop is a permanent poster only when the
@@ -49,22 +57,40 @@ type gameRow struct {
 	coverFile  sql.NullString
 	posterFile sql.NullString
 	posterSrc  sql.NullString
+	posterUser bool
 }
 
 func (m *Maker) row(id int64) (gameRow, error) {
 	var g gameRow
-	err := m.DB.QueryRow(`SELECT title, igdb_id, cover_file, poster_file, poster_src FROM game WHERE id = ?`, id).
-		Scan(&g.title, &g.igdbID, &g.coverFile, &g.posterFile, &g.posterSrc)
+	err := m.DB.QueryRow(`SELECT title, igdb_id, cover_file, poster_file, poster_src, poster_user FROM game WHERE id = ?`, id).
+		Scan(&g.title, &g.igdbID, &g.coverFile, &g.posterFile, &g.posterSrc, &g.posterUser)
 	return g, err
 }
 
 // Make creates (or replaces) the poster of a game and records it. It returns where the image came from
 // ("igdb", "sgdb" or "crop"). A failing source is skipped for the next one; ErrNoSource when none worked.
-func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
+// A poster the user chose is never replaced: ErrUserPoster.
+func (m *Maker) Make(ctx context.Context, id int64) (string, error) { return m.make(ctx, id, false) }
+
+// Remake is Make for "fetch it automatically again": it also replaces a poster the user chose, and only when a new
+// one was really found (otherwise the old poster stays). The poster is automatic from then on.
+func (m *Maker) Remake(ctx context.Context, id int64) (string, error) { return m.make(ctx, id, true) }
+
+func (m *Maker) make(ctx context.Context, id int64, force bool) (string, error) {
 	g, err := m.row(id)
 	if err != nil {
 		return "", err
 	}
+	if g.posterUser && !force {
+		return "", ErrUserPoster
+	}
+	// The slow part (lookups, downloads) runs without the lock, into a scratch folder of its own; the lock is only
+	// taken to decide whether the result may still go in (see commit).
+	scratch, err := m.scratch()
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(scratch)
 	fetch := m.Fetch
 	if fetch == nil {
 		fetch = covers.FetchPosterStrict
@@ -74,7 +100,7 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 		if url == "" || m.Allowed == nil || !m.Allowed(url) {
 			return "", false
 		}
-		name, err := fetch(url, m.Dir, id)
+		name, err := fetch(url, scratch, id)
 		if err != nil {
 			log.Printf("posters: game %d: %s: %v", id, src, err)
 			var se *covers.StatusError
@@ -113,7 +139,7 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 		return "", ErrTemporary
 	}
 	if name == "" && g.coverFile.Valid && g.coverFile.String != "" {
-		n, err := covers.CropPoster(filepath.Join(m.Dir, filepath.Base(g.coverFile.String)), m.Dir, id)
+		n, err := covers.CropPoster(filepath.Join(m.Dir, filepath.Base(g.coverFile.String)), scratch, id)
 		if err != nil {
 			log.Printf("posters: game %d: crop: %v", id, err)
 		} else {
@@ -123,14 +149,98 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) {
 	if name == "" {
 		return "", ErrNoSource
 	}
-	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`, name, src, id)
-	if err == nil {
-		if n, _ := res.RowsAffected(); n == 0 { // the game was deleted meanwhile
-			os.Remove(filepath.Join(m.Dir, name))
-			return "", sql.ErrNoRows
-		}
+	return src, m.commit(id, scratch, name, src, false, force)
+}
+
+// Choose makes the poster of a game from an image the user picked (url, checked against the allow-list and fetched
+// like every poster) and marks it as theirs. The old poster stays when the download fails.
+func (m *Maker) Choose(id int64, url string) error {
+	if url == "" || m.Allowed == nil || !m.Allowed(url) {
+		return ErrNotAllowed
 	}
-	return src, err
+	fetch := m.Fetch
+	if fetch == nil {
+		fetch = covers.FetchPosterStrict
+	}
+	scratch, err := m.scratch()
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	name, err := fetch(url, scratch, id)
+	if err != nil {
+		return err
+	}
+	return m.commit(id, scratch, name, sourceOf(url), true, true)
+}
+
+// ChooseCrop makes the poster a centre crop of the game's wide cover (no network) and marks it as the user's.
+func (m *Maker) ChooseCrop(id int64) error {
+	g, err := m.row(id)
+	if err != nil {
+		return err
+	}
+	if !g.coverFile.Valid || g.coverFile.String == "" {
+		return ErrNoSource
+	}
+	scratch, err := m.scratch()
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	name, err := covers.CropPoster(filepath.Join(m.Dir, filepath.Base(g.coverFile.String)), scratch, id)
+	if err != nil {
+		return err
+	}
+	return m.commit(id, scratch, name, "crop", true, true)
+}
+
+// ErrNotAllowed means the URL is not on the host allow-list.
+var ErrNotAllowed = errors.New("image URL not allowed")
+
+// sourceOf names where an allowed URL comes from (poster_src has no value for "somewhere else", so a host that is
+// not IGDB counts as SteamGridDB).
+func sourceOf(raw string) string {
+	if u, err := url.Parse(raw); err == nil && strings.Contains(strings.ToLower(u.Hostname()), "igdb") {
+		return "igdb"
+	}
+	return "sgdb"
+}
+
+// scratch is a private folder inside the covers folder (same file system, so the final rename is atomic) where one
+// call writes its image; two calls never share a file, so nothing needs a lock while they download.
+func (m *Maker) scratch() (string, error) {
+	if err := os.MkdirAll(m.Dir, 0o755); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(m.Dir, ".poster-")
+}
+
+// commit records the finished poster and moves its file into place. The UPDATE is guarded: an automatic poster
+// (user false) is refused while the poster is the user's, unless override is set ("fetch automatically again");
+// that also holds against another process (the fetch-posters command) that chose its game before the user's pick.
+// The file only moves after the UPDATE took, so a refused result never overwrites the user's image. mu orders the
+// UPDATE and the rename inside this process.
+func (m *Maker) commit(id int64, scratch, name, src string, user, override bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	flag := 0
+	if user {
+		flag = 1
+	}
+	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_user = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+		WHERE id = ? AND (poster_user = 0 OR ?)`, name, src, flag, id, override)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		var one int
+		if m.DB.QueryRow(`SELECT 1 FROM game WHERE id = ?`, id).Scan(&one) == nil {
+			return ErrUserPoster
+		}
+		return sql.ErrNoRows // the game was deleted meanwhile
+	}
+	return os.Rename(filepath.Join(scratch, name), filepath.Join(m.Dir, name))
 }
 
 // Queue is the background worker: one goroutine, one game at a time, a pause after each game.

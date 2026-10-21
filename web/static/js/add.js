@@ -1,7 +1,7 @@
 // Quick add: search IGDB by title or store link, pick a match, review the pre-filled form and cover, save.
-// Also the IGDB match picker and the cover picker used by the game drawer.
+// Also the IGDB match picker and the cover and poster pickers used by the game drawer and the ranking board.
 import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog } from './util.js';
-import { store, lookup, coverSearch, createGame, setCover } from './api.js';
+import { store, lookup, coverSearch, createGame, setCover, setPoster } from './api.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
 import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSelect, yearsRow, notesField, toggleRow } from './form.js';
@@ -275,60 +275,95 @@ export function openAdd({ query = '' } = {}) {
   toSearch();
 }
 
-// ---------------------------------------------------------------- change a cover
+// ---------------------------------------------------------------- change a cover or a poster
 
 const SOURCES = [
-  { key: 'steamgriddb', label: 'SteamGridDB', hint: 'Community-made covers. Wide images match your library.' },
-  { key: 'igdb', label: 'IGDB', hint: 'Official artwork, screenshots and the box cover. Wide pictures look best on the cards.' },
+  { key: 'steamgriddb', label: 'SteamGridDB', hint: 'Community-made covers. Wide images match your library.', posterHint: 'Community-made portrait box art.' },
+  { key: 'igdb', label: 'IGDB', hint: 'Official artwork, screenshots and the box cover. Wide pictures look best on the cards.', posterHint: 'The official box cover.' },
 ];
 const LAST_SOURCE = 'cover-source';
 
 /** Change a game's cover: pick the source (SteamGridDB or IGDB), optionally search another title, tap an image. */
-export function openCoverPicker(game) {
-  const ui = makeSheet(`Cover · ${game.title}`);
+export function openCoverPicker(game) { return openImagePicker(game, 'cover'); }
+
+/** Change a game's portrait poster (rankings and tier list picture): IGDB and SteamGridDB portraits, a pasted link, a crop of the wide cover, or automatic again. */
+export function openPosterPicker(game) { return openImagePicker(game, 'poster'); }
+
+/** What the sheet says when a source fails: SteamGridDB being blocked or down is a known, temporary thing. */
+function failureNote(label, e) {
+  return e?.data?.unreachable === false ? `${label} refused the request.` : `${label} can't be reached right now. Try again in a little while.`;
+}
+
+function openImagePicker(game, kind) {
+  const poster = kind === 'poster';
+  const ui = makeSheet(`${poster ? 'Poster' : 'Cover'} · ${game.title}`, poster ? 'poster-picker' : '');
   let source = 'steamgriddb';
   try { const saved = localStorage.getItem(LAST_SOURCE); if (SOURCES.some((s) => s.key === saved)) source = saved; } catch { /* private mode */ }
 
   const input = h('input', { type: 'search', value: game.title, placeholder: 'Search a different title…', 'aria-label': 'Title to search', enterkeyhint: 'search' });
   const tabs = SOURCES.map((s) => h('button', { type: 'button', onclick: () => { source = s.key; try { localStorage.setItem(LAST_SOURCE, s.key); } catch { /* ignore */ } load(); } }, s.label));
-  const mode = h('div.mode', { role: 'group', 'aria-label': 'Cover source' }, ...tabs);
   const status = h('p.hint', {});
   const grid = h('div.cover-grid');
-  ui.body.replaceChildren(
-    mode,
-    h('div.cover-tools', {}, h('div.search.pick-search', {}, icon('search'), input), h('button.btn', { type: 'button', onclick: () => load() }, 'Search')),
-    status, grid);
+  // A poster shows both sources at once, each in its own section: IGDB answers fast and is never held up by SteamGridDB.
+  const sections = [SOURCES[1], SOURCES[0]].map((s) => ({ s, head: h('h3.pp-head', {}, s.label), status: h('p.hint', {}), grid: h('div.cover-grid.poster') }));
+  const tools = h('div.cover-tools', {}, h('div.search.pick-search', {}, icon('search'), input), h('button.btn', { type: 'button', onclick: () => load() }, 'Search'));
+  if (poster) {
+    const link = h('input', { type: 'url', placeholder: 'Paste an image link…', 'aria-label': 'Image link', inputmode: 'url', autocomplete: 'off' });
+    const useLink = () => { const u = link.value.trim(); if (u) apply({ url: u }, 'Poster updated'); else link.focus(); };
+    link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); useLink(); } });
+    const hasCover = !!game.cover;
+    ui.body.replaceChildren(
+      h('div.pp-actions', {},
+        h('button.btn', { type: 'button', disabled: hasCover ? null : true, title: hasCover ? '' : 'This game has no wide cover to crop', onclick: () => apply({ crop: true }, 'Poster cropped from the cover') }, 'Crop of the wide cover'),
+        h('button.btn', { type: 'button', onclick: () => apply({ auto: true }, 'Poster fetched again') }, 'Fetch automatically again')),
+      h('div.cover-tools', {}, h('div.search.pick-search', {}, link), h('button.btn', { type: 'button', onclick: useLink }, 'Use link')),
+      tools, status,
+      ...sections.flatMap((x) => [x.head, x.status, x.grid]));
+  } else {
+    ui.body.replaceChildren(h('div.mode', { role: 'group', 'aria-label': 'Cover source' }, ...tabs), tools, status, grid);
+  }
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); load(); } });
 
   let seq = 0;
-  async function load() {
-    const mine = ++seq;
-    SOURCES.forEach((s, i) => tabs[i].setAttribute('aria-pressed', String(s.key === source)));
-    const info = SOURCES.find((s) => s.key === source);
-    status.textContent = 'Looking for images…';
-    grid.replaceChildren();
+  async function lookupInto(info, st, gr, mine) {
+    st.textContent = 'Looking for images…';
+    gr.replaceChildren();
     const q = input.value.trim();
     // The game's own IGDB link is only used while the title is unchanged: a different title means a different game.
-    const igdbId = source === 'igdb' && q === game.title ? game.igdb_id || 0 : 0;
+    const igdbId = info.key === 'igdb' && q === game.title ? game.igdb_id || 0 : 0;
     try {
-      const r = await coverSearch(q, { source, igdbId });
+      const r = await coverSearch(q, { source: info.key, igdbId, shape: poster ? 'poster' : 'cover' });
       if (mine !== seq) return;
-      if (!r.configured) { status.textContent = `${info.label} is not set up (its key is missing from .env).`; return; }
-      if (!r.covers.length) { status.textContent = `No images found on ${info.label} for this title. Try another spelling.`; return; }
-      status.textContent = info.hint;
-      grid.replaceChildren(...r.covers.map((o) => tile(o)));
-    } catch {
-      if (mine === seq) status.textContent = `Could not reach ${info.label}.`;
+      if (!r.configured) { st.textContent = `${info.label} is not set up (its key is missing from .env).`; return; }
+      if (!r.covers.length) { st.textContent = `No ${poster ? 'portrait images' : 'images'} found on ${info.label} for this title. Try another spelling.`; return; }
+      st.textContent = poster ? info.posterHint : info.hint;
+      gr.replaceChildren(...r.covers.map((o) => tile(o)));
+    } catch (e) {
+      if (mine === seq) st.textContent = failureNote(info.label, e);
     }
+  }
+  function load() {
+    const mine = ++seq;
+    if (poster) { status.textContent = ''; sections.forEach((x) => lookupInto(x.s, x.status, x.grid, mine)); return; }
+    SOURCES.forEach((s, i) => tabs[i].setAttribute('aria-pressed', String(s.key === source)));
+    return lookupInto(SOURCES.find((s) => s.key === source), status, grid, mine);
+  }
+
+  async function apply(body, done) {
+    status.textContent = 'Saving…';
+    try { await setPoster(game.id, body); toast(done); ui.close(); } catch (e) { status.textContent = e.status ? `${e.message}.` : 'Could not use that image.'; }
   }
 
   function tile(o) {
-    const shape = o.width && o.height ? `aspect-ratio:${o.width} / ${o.height}` : null;
-    return h('button.ctile.big', { type: 'button', style: shape, 'aria-label': `Use this ${(o.kind || 'cover').toLowerCase()}`, onclick: async () => {
+    const shape = poster ? null : o.width && o.height ? `aspect-ratio:${o.width} / ${o.height}` : null;
+    const what = poster ? 'poster' : (o.kind || 'cover').toLowerCase();
+    return h('button.ctile.big', { type: 'button', class: poster ? 'portrait' : '', style: shape, 'aria-label': `Use this ${what}`, onclick: async () => {
+      if (poster) { apply({ url: o.url }, 'Poster updated'); return; }
       status.textContent = 'Saving…';
       try { await setCover(game.id, o.url); toast('Cover updated'); ui.close(); } catch { status.textContent = 'Could not use that image.'; }
-    } }, h('img', { src: o.thumb || o.url, alt: '', loading: 'lazy' }), o.kind ? h('span.kind', {}, o.kind) : null);
+    } }, h('img', { src: o.thumb || o.url, alt: '', loading: 'lazy' }), o.kind && !poster ? h('span.kind', {}, o.kind) : null);
   }
 
   load();
+  return ui;
 }

@@ -21,7 +21,7 @@ func Main(args []string, defaultDB, coverDir string, src Source, allowed func(st
 	fs.SetOutput(out)
 	dry := fs.Bool("dry-run", false, "list the games that would get a poster; no network, nothing is written")
 	limit := fs.Int("limit", 0, "stop after this many games (0 = all)")
-	upgrade := fs.Bool("upgrade", false, "also redo the posters that are only a crop of the wide cover")
+	upgrade := fs.Bool("upgrade", false, "also redo the posters that are only a crop of the wide cover (never one you chose)")
 	dbPath := fs.String("db", defaultDB, "database file")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -49,7 +49,7 @@ func Main(args []string, defaultDB, coverDir string, src Source, allowed func(st
 
 	where := `poster_file IS NULL`
 	if *upgrade {
-		where = `(poster_file IS NULL OR poster_src = 'crop')`
+		where = `(poster_file IS NULL OR (poster_src = 'crop' AND poster_user = 0))`
 	}
 	rows, err := d.Query(`SELECT id, title, igdb_id, cover_file, poster_file, poster_src FROM game WHERE ` + where + ` ORDER BY id`)
 	if err != nil {
