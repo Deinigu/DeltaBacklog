@@ -26,6 +26,8 @@ type Meta interface {
 	IGDBImages(ctx context.Context, igdbID int64, title string) ([]meta.CoverOption, error)
 	IGDBCoverURL(ctx context.Context, igdbID int64) (string, error)
 	SteamGridPortrait(ctx context.Context, title string) (string, error)
+	SearchPosters(ctx context.Context, title string) ([]meta.CoverOption, error)
+	IGDBPosters(ctx context.Context, igdbID int64, title string) ([]meta.CoverOption, error)
 	ResolveLink(ctx context.Context, link string) (string, error)
 }
 
@@ -101,7 +103,9 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) {
 }
 
 // searchCovers lists cover options. ?source=steamgriddb (default) searches by title; ?source=igdb lists the pictures
-// IGDB holds for the game (igdb_id when the game is linked, otherwise the best match for the title).
+// IGDB holds for the game (igdb_id when the game is linked, otherwise the best match for the title). &shape=poster lists
+// portrait images instead (the poster picker); a lookup that fails because the service cannot be reached answers 502
+// with "unreachable": true.
 func (s *Server) searchCovers(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Query().Get("source")
 	if source == "" {
@@ -137,13 +141,19 @@ func (s *Server) searchCovers(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	var c []meta.CoverOption
 	var err error
-	if source == "igdb" {
+	portrait := r.URL.Query().Get("shape") == "poster"
+	switch {
+	case source == "igdb" && portrait:
+		c, err = s.Meta.IGDBPosters(ctx, igdbID, title)
+	case source == "igdb":
 		c, err = s.Meta.IGDBImages(ctx, igdbID, title)
-	} else {
+	case portrait:
+		c, err = s.Meta.SearchPosters(ctx, title)
+	default:
 		c, err = s.Meta.SearchCovers(ctx, title)
 	}
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "the image lookup failed", nil)
+		writeErr(w, http.StatusBadGateway, "the image lookup failed", map[string]any{"unreachable": unreachable(err)})
 		return
 	}
 	if c == nil {

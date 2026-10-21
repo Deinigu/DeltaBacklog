@@ -90,3 +90,55 @@ func TestFetchPostersCommand(t *testing.T) {
 		t.Errorf("missing database exit %d", code)
 	}
 }
+
+// A poster the user chose is never remade by the queue's Make or by fetch-posters --upgrade; Remake replaces it.
+func TestUserPosterIsNotReplaced(t *testing.T) {
+	Pause = 0
+	img := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		png.Encode(w, image.NewRGBA(image.Rect(0, 0, 528, 748)))
+	}))
+	defer img.Close()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.db")
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO game(id, title, title_sort, status_id, poster_file, poster_src, poster_user) VALUES (1, 'Mine', 'mine', 7, 'p1.jpg', 'crop', 1)`,
+		`INSERT INTO game(id, title, title_sort, status_id, poster_file, poster_src, poster_user) VALUES (2, 'Auto crop', 'auto crop', 7, 'p2.jpg', 'crop', 0)`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer d.Close()
+	covers := filepath.Join(dir, "covers")
+	allowed := func(u string) bool { return strings.HasPrefix(u, img.URL) }
+	src := fakeSource{igdb: img.URL + "/a.png", sgdb: img.URL + "/b.png"}
+	var out bytes.Buffer
+	if code := Main([]string{"--upgrade"}, path, covers, src, allowed, &out); code != 0 || !strings.Contains(out.String(), "1 from SteamGridDB") {
+		t.Fatalf("upgrade: %d\n%s", code, out.String())
+	}
+	var user int
+	var s string
+	d.QueryRow(`SELECT poster_src, poster_user FROM game WHERE id = 1`).Scan(&s, &user)
+	if s != "crop" || user != 1 {
+		t.Errorf("the user's poster changed: %s %d", s, user)
+	}
+	if _, err := os.Stat(filepath.Join(covers, "p1.jpg")); err == nil {
+		t.Error("the user's poster file was rewritten")
+	}
+
+	m := &Maker{DB: d, Dir: covers, Src: src, Allowed: allowed}
+	if _, err := m.Make(context.Background(), 1); err != ErrUserPoster {
+		t.Errorf("Make = %v, want ErrUserPoster", err)
+	}
+	if how, err := m.Remake(context.Background(), 1); err != nil || how != "sgdb" {
+		t.Fatalf("Remake = %q %v", how, err)
+	}
+	d.QueryRow(`SELECT poster_src, poster_user FROM game WHERE id = 1`).Scan(&s, &user)
+	if s != "sgdb" || user != 0 {
+		t.Errorf("after Remake: %s %d", s, user)
+	}
+}
