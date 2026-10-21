@@ -29,8 +29,12 @@ func TestEnrichNeverOverwritesOwnTimes(t *testing.T) {
 		f.details[det.IGDBID] = det
 		f.ttb[det.IGDBID] = meta.TimeToBeat{Normally: 7200} // 120 minutes
 	}
-	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep}); err != nil {
+	rep, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if rep.TimeToBeat != 2 {
+		t.Errorf("the report counts %d games with IGDB times, want 2 (the skipped ones are not IGDB's)", rep.TimeToBeat)
 	}
 	for _, r := range rows {
 		var n int

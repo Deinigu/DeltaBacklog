@@ -151,12 +151,14 @@ func (c *Client) pace(ctx context.Context) error {
 	}
 }
 
-// getToken returns the cached search token, fetching a new one when asked or when there is none.
+// getToken returns the cached search token, fetching a new one when asked or when there is none. The request runs
+// outside c.mu, so a slow token fetch never blocks (or delays the cancellation of) another search waiting in pace.
 func (c *Client) getToken(ctx context.Context, fresh bool) (string, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.token != "" && !fresh {
-		return c.token, nil
+	tok := c.token
+	c.mu.Unlock()
+	if tok != "" && !fresh {
+		return tok, nil
 	}
 	req, err := c.request(ctx, http.MethodGet, "/api/search/site/init?t="+strconv.FormatInt(time.Now().UnixMilli(), 10), nil)
 	if err != nil {
@@ -179,8 +181,10 @@ func (c *Client) getToken(ctx context.Context, fresh bool) (string, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil || out.Token == "" {
 		return "", fmt.Errorf("%w (no search token)", ErrChanged)
 	}
+	c.mu.Lock()
 	c.token = out.Token
-	return c.token, nil
+	c.mu.Unlock()
+	return out.Token, nil
 }
 
 type rawGame struct {

@@ -10,6 +10,7 @@ const SITE_DOWN = "HowLongToBeat can't be reached right now. Try again later, or
 export function ttbSection(game) {
   const root = h('section.ttb', { 'aria-label': 'Time to beat' });
   let mode = 'view'; // 'view' | 'edit' | 'hltb'
+  let dirty = null; // set while the edit boxes are open: are there typed changes?
   let search = 0; // counts HowLongToBeat searches, so an answer that arrives late is ignored
 
   const tiles = () => h('div.ttb-tiles', {}, ttbTiles(game).map((t) =>
@@ -32,7 +33,12 @@ export function ttbSection(game) {
     const inputs = TTB_KINDS.map((k, i) => {
       const input = h('input', { type: 'text', inputmode: 'text', autocomplete: 'off', value: timeInputValue(game[k.key]), id: `ttb-in-${game.id}-${i}`, placeholder: 'e.g. 7.5' });
       const err = h('span.ttb-err', { role: 'alert' });
-      return { k, input, err };
+      const unit = h('em', {}, 'h');
+      // the "h" suffix only fits a plain number of hours: "45m" or "7h30" already say their unit
+      const showUnit = () => { unit.textContent = /[a-z:]/i.test(input.value) ? '' : 'h'; };
+      input.addEventListener('input', showUnit);
+      showUnit();
+      return { k, input, err, unit };
     });
     function save() {
       const patch = {};
@@ -53,9 +59,10 @@ export function ttbSection(game) {
       patch.ttb_source = 'manual';
       commit(patch, 'Times saved');
     }
+    dirty = () => inputs.some(({ k, input }) => input.value.trim() !== timeInputValue(game[k.key]));
     return [heading(null),
       h('form.ttb-form', { onsubmit: (e) => { e.preventDefault(); save(); } },
-        inputs.map(({ k, input, err }) => h('label.ttb-field', { for: input.id }, h('span', {}, k.label), h('span.ttb-in', {}, input, h('em', {}, 'h')), err)),
+        inputs.map(({ k, input, err, unit }) => h('label.ttb-field', { for: input.id }, h('span', {}, k.label), h('span.ttb-in', {}, input, unit), err)),
         h('p.hint', {}, 'Hours (7.5, 7,5 or 7h30) or minutes (45m). Leave a field empty for no time.'),
         h('div.ttb-actions', {},
           h('button.btn', { type: 'button', onclick: () => go('view') }, 'Cancel'),
@@ -109,11 +116,18 @@ export function ttbSection(game) {
   function go(next) {
     search++;
     mode = next;
+    dirty = null;
     root.replaceChildren(...{ view: viewMode, edit: editMode, hltb: hltbMode }[mode]());
     if (mode === 'edit') root.querySelector('input')?.focus({ preventScroll: true });
+    if (mode === 'hltb') root.querySelector('.ttb-search input')?.focus({ preventScroll: true });
     if (mode === 'view' && root.dataset.touched) root.querySelector('.ttb-actions .btn')?.focus({ preventScroll: true });
     root.dataset.touched = '1';
   }
+  // Escape leaves the edit boxes or the picker; it must not also close the drawer (and lose what was typed)
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mode !== 'view') { e.stopPropagation(); go('view'); }
+  });
+  root.isDirty = () => !!dirty?.();
   go('view');
   return root;
 }

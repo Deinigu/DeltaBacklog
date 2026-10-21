@@ -75,7 +75,7 @@ export function openSurprise(state) {
           chip('VR only', counts.vr, mood.vr, () => { mood.vr = !mood.vr; }),
           hasTimes && chip('Quick game', counts.quick, mood.quick, () => { mood.quick = !mood.quick; }),
           chip('Not played recently', counts.stale, mood.stale, () => { mood.stale = !mood.stale; }))),
-      h('p.hint', {}, 'Not played recently: never played, or last played two or more years ago.' + (hasTimes ? ' Quick game: under 10 hours to beat (Main + extras, from IGDB, HowLongToBeat or you).' : ''))].filter(Boolean));
+      h('p.hint', {}, 'Not played recently: never played, or last played two or more years ago.' + (hasTimes ? ' Quick game: under 10 hours to beat (Main + extras, or the closest time known).' : ''))].filter(Boolean));
 
     const go = h('button.btn.primary', { type: 'button', 'data-fk': 'go', disabled: left.length === 0, onclick: () => deal(left) }, left.length ? `Pick one of ${left.length}` : 'Pick one');
     sheet.foot.replaceChildren(...[left.length ? null : h('span.surprise-msg', {}, 'No game fits this mood. Remove a choice.'), go].filter(Boolean));
