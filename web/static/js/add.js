@@ -349,9 +349,16 @@ function openImagePicker(game, kind) {
     return lookupInto(SOURCES.find((s) => s.key === source), status, grid, mine);
   }
 
+  // One change at a time: while a request is on its way (a slow "fetch again" can take a while) nothing else can be tapped.
   async function apply(body, done) {
+    if (ui.sheet.classList.contains('busy')) return;
+    ui.sheet.classList.add('busy');
+    ui.body.inert = true;
     status.textContent = 'Saving…';
-    try { await setPoster(game.id, body); toast(done); ui.close(); } catch (e) { status.textContent = e.status ? `${e.message}.` : 'Could not use that image.'; }
+    try { await setPoster(game.id, body); toast(done); ui.close(); } catch (e) {
+      ui.body.inert = false; ui.sheet.classList.remove('busy'); ui.sheet.focus({ preventScroll: true });
+      status.textContent = e.status ? `${e.message}.` : 'Could not use that image.';
+    }
   }
 
   function tile(o) {

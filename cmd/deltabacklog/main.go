@@ -228,6 +228,9 @@ func main() {
 			}
 		}()
 	}
+	if n := posters.SweepScratch(srv.CoverDir, 10*time.Minute); n > 0 { // download folders a crash left behind
+		log.Printf("posters: removed %d leftover download folder(s)", n)
+	}
 	srv.Warm()
 	handler := newHandler(srv, allowedHosts(os.Getenv("ALLOWED_HOSTS")))
 	hs := &http.Server{

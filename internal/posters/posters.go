@@ -58,12 +58,13 @@ type gameRow struct {
 	posterFile sql.NullString
 	posterSrc  sql.NullString
 	posterUser bool
+	posterAt   string // poster_updated_at when the row was read
 }
 
 func (m *Maker) row(id int64) (gameRow, error) {
 	var g gameRow
-	err := m.DB.QueryRow(`SELECT title, igdb_id, cover_file, poster_file, poster_src, poster_user FROM game WHERE id = ?`, id).
-		Scan(&g.title, &g.igdbID, &g.coverFile, &g.posterFile, &g.posterSrc, &g.posterUser)
+	err := m.DB.QueryRow(`SELECT title, igdb_id, cover_file, poster_file, poster_src, poster_user, poster_updated_at FROM game WHERE id = ?`, id).
+		Scan(&g.title, &g.igdbID, &g.coverFile, &g.posterFile, &g.posterSrc, &g.posterUser, &g.posterAt)
 	return g, err
 }
 
@@ -149,7 +150,11 @@ func (m *Maker) make(ctx context.Context, id int64, force bool) (string, error) 
 	if name == "" {
 		return "", ErrNoSource
 	}
-	return src, m.commit(id, scratch, name, src, false, force)
+	mode := commitAuto
+	if force {
+		mode = commitIfUnchanged
+	}
+	return src, m.commit(id, scratch, name, src, false, mode, g.posterAt)
 }
 
 // Choose makes the poster of a game from an image the user picked (url, checked against the allow-list and fetched
@@ -171,7 +176,7 @@ func (m *Maker) Choose(id int64, url string) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, sourceOf(url), true, true)
+	return m.commit(id, scratch, name, sourceOf(url), true, commitAlways, "")
 }
 
 // ChooseCrop makes the poster a centre crop of the game's wide cover (no network) and marks it as the user's.
@@ -192,7 +197,7 @@ func (m *Maker) ChooseCrop(id int64) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, "crop", true, true)
+	return m.commit(id, scratch, name, "crop", true, commitAlways, "")
 }
 
 // ErrNotAllowed means the URL is not on the host allow-list.
@@ -216,20 +221,36 @@ func (m *Maker) scratch() (string, error) {
 	return os.MkdirTemp(m.Dir, ".poster-")
 }
 
-// commit records the finished poster and moves its file into place. The UPDATE is guarded: an automatic poster
-// (user false) is refused while the poster is the user's, unless override is set ("fetch automatically again");
-// that also holds against another process (the fetch-posters command) that chose its game before the user's pick.
+// commit modes: what a finished poster may replace.
+const (
+	commitAuto        = iota // the queue and fetch-posters: never a poster the user chose
+	commitIfUnchanged        // "fetch automatically again": a user poster too, unless the poster changed since it was read (a pick made meanwhile wins)
+	commitAlways             // the user's own pick: the last pick wins
+)
+
+// commit records the finished poster and moves its file into place. The UPDATE is guarded by mode (see above), also
+// against another process (the fetch-posters command) that chose its game before the user's pick. seen is the
+// poster_updated_at the maker read first (commitIfUnchanged).
 // The file only moves after the UPDATE took, so a refused result never overwrites the user's image. mu orders the
 // UPDATE and the rename inside this process.
-func (m *Maker) commit(id int64, scratch, name, src string, user, override bool) error {
+func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int, seen string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	flag := 0
 	if user {
 		flag = 1
 	}
+	guard := `poster_user = 0`
+	args := []any{name, src, flag, id}
+	switch mode {
+	case commitAlways:
+		guard = `1`
+	case commitIfUnchanged:
+		guard = `poster_user = 0 OR poster_updated_at = ?`
+		args = append(args, seen)
+	}
 	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_user = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-		WHERE id = ? AND (poster_user = 0 OR ?)`, name, src, flag, id, override)
+		WHERE id = ? AND (`+guard+`)`, args...)
 	if err != nil {
 		return err
 	}
@@ -241,6 +262,25 @@ func (m *Maker) commit(id int64, scratch, name, src string, user, override bool)
 		return sql.ErrNoRows // the game was deleted meanwhile
 	}
 	return os.Rename(filepath.Join(scratch, name), filepath.Join(m.Dir, name))
+}
+
+// SweepScratch removes the scratch folders (.poster-*) that a crash left in the covers folder: only those older than
+// maxAge, so a download in flight is never touched. It returns how many it removed.
+func SweepScratch(dir string, maxAge time.Duration) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), ".poster-") {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > maxAge && os.RemoveAll(filepath.Join(dir, e.Name())) == nil {
+			n++
+		}
+	}
+	return n
 }
 
 // Queue is the background worker: one goroutine, one game at a time, a pause after each game.
