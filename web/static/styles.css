@@ -450,6 +450,14 @@ a.btn.primary { color: var(--accent-text); }
 .ctile.big { position: relative; width: 100%; height: auto; }
 .ctile .kind { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 600; }
 
+/* ---- poster picker: portrait tiles, both sources at once ---- */
+.pp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0; }
+.pp-actions .btn { height: 44px; flex: 1 1 160px; }
+.pp-head { margin: 14px 0 0; font-size: 15px; }
+.cover-grid.poster { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.ctile.big.portrait { aspect-ratio: 2 / 3; }
+.poster-picker .pick-search input[type="url"] { width: 100%; height: 44px; padding-left: 12px; }
+
 /* ---- UX pass: contrast, tap targets, text size (checked with a browser audit at 390px and 1280px) ---- */
 .cover .fav, .cover .own { background: rgba(0,0,0,.78); }                 /* readable over any cover art */
 .cover .st { font-size: 12px; text-shadow: none; padding: 2px 9px; }      /* text colour is set per status for contrast */
