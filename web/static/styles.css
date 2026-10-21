@@ -642,7 +642,6 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .more-close { width: 100%; min-height: 48px; margin-top: 8px; justify-content: center; }
 
 /* IGDB enrichment: time to beat chip on the cards, store buttons in the drawer */
-.pf.ttb { background: none; padding-left: 0; font-weight: 500; }
 .store-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; }
 .store-links .btn { text-decoration: none; color: inherit; font-size: 14px; }
 /* Phone width without a touch screen (a narrow window): the same 44px hit area for chips, so the filter flags
@@ -832,3 +831,43 @@ body.rk-selecting #view { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 17
 .gal-more { align-self: center; }
 .shot-game { margin: 0; font-weight: 600; }
 .shot-cap { margin: 0; font-size: 15px; }
+
+/* ---- time to beat (game drawer) ---- */
+.ttb { margin: 18px 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.ttb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ttb-head h3 { margin: 0; font-size: 15px; }
+.ttb-src { color: var(--muted); font-size: 12.5px; }
+.ttb-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ttb-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 10px 9px; border-radius: 12px; background: var(--surface-2); }
+.ttb-label { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.ttb-value { font-size: 20px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ttb-tile.none .ttb-value { color: var(--muted); font-weight: 500; }
+.ttb-bar { display: block; height: 4px; margin-top: 2px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; }
+.ttb-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.ttb-empty { margin: 0 0 4px; color: var(--muted); }
+.ttb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ttb-form { display: flex; flex-direction: column; gap: 10px; }
+.ttb-field { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 2px 12px; }
+.ttb-in { display: flex; align-items: center; gap: 6px; }
+.ttb-in input { flex: 1; min-width: 0; height: 46px; text-align: right; }
+.ttb-in em { color: var(--muted); font-style: normal; width: 12px; }
+.ttb-err { grid-column: 1 / -1; color: #dc2626; font-size: 13px; }
+.ttb-err:empty { display: none; }
+.ttb-field input[aria-invalid="true"] { border-color: #dc2626; }
+:root[data-theme="dark"] .ttb-err { color: #f87171; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ttb-err { color: #f87171; } }
+.ttb-search { display: flex; gap: 8px; }
+.ttb-search input { flex: 1; min-width: 0; height: 46px; }
+.ttb-results { margin-top: 10px; }
+.ttb-cands { display: flex; flex-direction: column; gap: 8px; }
+.ttb-cand { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 52px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.ttb-cand:hover, .ttb-cand:focus-visible { border-color: var(--accent); }
+.ttb-cand-name { font-weight: 600; overflow-wrap: anywhere; }
+.ttb-cand-name small { color: var(--muted); font-weight: 400; font-size: 13px; }
+.ttb-cand-times { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--muted); font-size: 13px; }
+.ttb-cand-times b { color: var(--text); font-weight: 600; }
+.ttb-fail { margin: 0 0 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, #f59e0b 18%, var(--surface)); }
+.ttb[aria-busy="true"] { opacity: .6; pointer-events: none; }
+.ttb-in input, .ttb-search input { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 0 12px; font-size: 16px; }
+.ttb-in input:focus, .ttb-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ttb-actions .btn { flex: 1 1 auto; }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { store } from '../static/js/api.js';
-import { SHORT_MINUTES, ttbMinutes, isShort, formatTime, ttbParts, totalTime } from '../static/js/ttb.js';
+import { SHORT_MINUTES, ttbMinutes, isShort, formatTime, ttbTiles, ttbSourceNote, parseTime, timeInputValue, hltbPatch, hasTimes, TTB_KINDS, totalTime } from '../static/js/ttb.js';
 import { emptyState, matches, cycle, GROUPS, FLAGS, stateFromView, stateFromQuery, stateToQuery, filterToJSON, activeCount, facetSignature } from '../static/js/filters.js';
 import { emptyMood, applyMood, moodCounts, moodIsEmpty } from '../static/js/pick.js';
 import { backlogTime } from '../static/js/stats.js';
@@ -29,22 +29,61 @@ test('short means under 10 hours, and a game without a time is never short', () 
   assert.equal(isShort(g()), false);
 });
 
-test('times are shown in minutes below an hour, one decimal below ten hours, whole hours above', () => {
+test('times are shown in minutes below an hour, half hours below ten hours, whole hours above', () => {
   assert.equal(formatTime(45), '45 min');
-  assert.equal(formatTime(90), '1.5 h');
+  assert.equal(formatTime(60), '1 h');
+  assert.equal(formatTime(90), '1½ h');
   assert.equal(formatTime(120), '2 h');
-  assert.equal(formatTime(450), '7.5 h');
+  assert.equal(formatTime(450), '7½ h');
+  assert.equal(formatTime(479), '7½ h');
+  assert.equal(formatTime(480), '8 h');
   assert.equal(formatTime(719), '11 h');
-  assert.equal(formatTime(599), '9.9 h'); // under 10 h (short) never reads "10 h"
+  assert.equal(formatTime(599), '9½ h'); // under 10 h (short) never reads "10 h"
   assert.equal(formatTime(600), '10 h');
-  assert.equal(formatTime(2500), '41 h');
+  assert.equal(formatTime(7200), '120 h');
   assert.equal(formatTime(null), '');
   assert.equal(formatTime(0), '');
 });
 
-test('drawer parts leave out what IGDB does not know', () => {
-  assert.deepEqual(ttbParts(g({ ttb_hastily: 600, ttb_completely: 1500 })), [{ label: 'Quick', text: '10 h' }, { label: 'Complete', text: '25 h' }]);
-  assert.deepEqual(ttbParts(g()), []);
+test('the labels are the same everywhere', () => {
+  assert.deepEqual(TTB_KINDS.map((k) => k.label), ['Main story', 'Main + extras', 'Completionist']);
+});
+
+test('tiles always list the three times; unknown ones are empty and the bar is relative to the longest', () => {
+  const t = ttbTiles(g({ ttb_hastily: 300, ttb_completely: 1200 }));
+  assert.deepEqual(t.map((x) => [x.label, x.text, x.share]), [['Main story', '5 h', 0.25], ['Main + extras', '', 0], ['Completionist', '20 h', 1]]);
+  assert.deepEqual(ttbTiles(g()).map((x) => x.minutes), [null, null, null]);
+  assert.equal(hasTimes(g()), false);
+  assert.equal(hasTimes(g({ ttb_normally: 5 })), true);
+});
+
+test('the source note names where the times came from; older data without a source is IGDB', () => {
+  assert.equal(ttbSourceNote(g({ ttb_normally: 5, ttb_source: 'hltb' })), 'from HowLongToBeat');
+  assert.equal(ttbSourceNote(g({ ttb_normally: 5, ttb_source: 'manual' })), 'set by you');
+  assert.equal(ttbSourceNote(g({ ttb_normally: 5, ttb_source: 'igdb' })), 'from IGDB');
+  assert.equal(ttbSourceNote(g({ ttb_normally: 5 })), 'from IGDB');
+  assert.equal(ttbSourceNote(g({ ttb_source: 'manual' })), ''); // no time, no note
+});
+
+test('typed times: hours by default, h and m forms, comma decimals; empty clears; nonsense is undefined', () => {
+  const cases = [['7.5', 450], ['7,5', 450], ['12', 720], ['7h30', 450], ['7 h 30 min', 450], ['7h', 420], ['1:30', 90], ['2h5', 125],
+    ['45m', 45], ['90 min', 90], ['0.5', 30], [' 8 ', 480], ['2H', 120]];
+  for (const [text, want] of cases) assert.equal(parseTime(text), want, text);
+  assert.equal(parseTime(''), null);
+  assert.equal(parseTime('   '), null);
+  assert.equal(parseTime(null), null);
+  for (const bad of ['abc', '0', '-3', '7h30m5', '1.2.3', '7 hours and a bit', '2000000', '0m']) assert.equal(parseTime(bad), undefined, bad);
+});
+
+test('the edit input shows hours, minutes below an hour, and survives a round trip', () => {
+  assert.equal(timeInputValue(450), '7.5');
+  assert.equal(timeInputValue(45), '45m');
+  assert.equal(timeInputValue(null), '');
+  for (const m of [45, 90, 125, 450, 7200]) assert.ok(Math.abs(parseTime(timeInputValue(m)) - m) <= 1, String(m));
+});
+
+test('a HowLongToBeat candidate becomes a patch with its source; missing kinds clear', () => {
+  assert.deepEqual(hltbPatch({ hastily: 180, normally: 0, completely: 450 }), { ttb_hastily: 180, ttb_normally: null, ttb_completely: 450, ttb_source: 'hltb' });
 });
 
 test('total time adds the estimates and counts games with and without one', () => {
