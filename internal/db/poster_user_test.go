@@ -47,7 +47,7 @@ func TestPosterUserMigration(t *testing.T) {
 	defer d.Close()
 	var v, user int
 	d.QueryRow("PRAGMA user_version").Scan(&v)
-	if v != 11 {
+	if v < 11 {
 		t.Fatalf("version %d", v)
 	}
 	if err := d.QueryRow(`SELECT count(*) FROM game WHERE poster_user = 0`).Scan(&user); err != nil || user != 2 {

@@ -23,12 +23,14 @@ type Server struct {
 	ShotMaxFile      int64    // largest accepted screenshot, bytes (default 25 MB)
 	ShotMaxRequest   int64    // largest upload request, bytes (default 200 MB)
 	ShotDecodeBudget int64    // most memory one screenshot may need to be decoded for its thumbnail, bytes (default 48 MB)
+	HLTB             HLTB     // HowLongToBeat lookups; nil means the real site (see hltbClient)
 	CoverHosts       []string // hosts a client-supplied cover URL may point at; defaults to the metadata CDNs
 
 	// PosterFetch and PosterPause replace the poster download and the pause between two posters (tests).
 	PosterFetch func(url, dir string, gameID int64) (string, error)
 	PosterPause time.Duration
 
+	hltbOnce   sync.Once
 	posterOnce sync.Once
 	posters    *posters.Queue // background poster worker, created on first use (see posterQ)
 
@@ -83,6 +85,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /screenshots/{gid}/{name}", s.serveShot)
 	mux.HandleFunc("GET /api/lookup", s.lookup)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
+	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
 	mux.HandleFunc("GET /api/facets", s.facets)
 	mux.HandleFunc("GET /api/link/queue", s.linkQueue)
 	mux.HandleFunc("POST /api/link/accept", s.linkAccept)

@@ -442,10 +442,12 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 		}
 	}
 	if h, n, c := timesToBeat(ttb); h != nil || n != nil || c != nil {
-		// coalesce: a value IGDB no longer reports does not erase the one we had
+		// coalesce: a value IGDB no longer reports does not erase the one we had. Times the owner typed or took from
+		// HowLongToBeat (time_to_beat_src hltb / manual) are not IGDB's to change.
 		if _, err := tx.Exec(`UPDATE game SET time_to_beat_hastily = coalesce(?, time_to_beat_hastily),
-			time_to_beat_normally = coalesce(?, time_to_beat_normally), time_to_beat_completely = coalesce(?, time_to_beat_completely)
-			WHERE id = ?`, h, n, c, gameID); err != nil {
+			time_to_beat_normally = coalesce(?, time_to_beat_normally), time_to_beat_completely = coalesce(?, time_to_beat_completely),
+			time_to_beat_src = 'igdb'
+			WHERE id = ? AND (time_to_beat_src IS NULL OR time_to_beat_src = 'igdb')`, h, n, c, gameID); err != nil {
 			return err
 		}
 		rep.TimeToBeat++

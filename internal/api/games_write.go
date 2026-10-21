@@ -31,6 +31,37 @@ type gamePatch struct {
 	Years       *[]int    `json:"years"`   // calendar years played
 	Periods     *[]string `json:"periods"` // "childhood", "always"
 	IGDBID      *int64    `json:"igdb_id"` // links the game to IGDB; 0 clears
+
+	// Time to beat, minutes. null (or 0) clears one; absent leaves it. Saving any of them makes the owner the
+	// source (TTBSource "manual", the default) or HowLongToBeat ("hltb"): the IGDB enrichment then leaves them alone.
+	TTBHastily    optMinutes `json:"ttb_hastily"`
+	TTBNormally   optMinutes `json:"ttb_normally"`
+	TTBCompletely optMinutes `json:"ttb_completely"`
+	TTBSource     *string    `json:"ttb_source"`
+}
+
+// maxTTBMinutes is the largest time to beat accepted (about 1,667 hours).
+const maxTTBMinutes = 100000
+
+// optMinutes is a JSON number that can be absent (Set false), null or 0 (clear), or a positive count of minutes.
+type optMinutes struct {
+	Set bool
+	V   *int
+}
+
+func (o *optMinutes) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if string(b) == "null" {
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(b, &n); err != nil {
+		return errInvalid
+	}
+	if n != 0 {
+		o.V = &n
+	}
+	return nil
 }
 
 var errInvalid = errors.New("invalid value")
@@ -49,6 +80,14 @@ func (in *gamePatch) validate() error {
 		}
 	}
 	if in.IGDBID != nil && *in.IGDBID < 0 {
+		return errInvalid
+	}
+	for _, m := range []optMinutes{in.TTBHastily, in.TTBNormally, in.TTBCompletely} {
+		if m.V != nil && (*m.V < 1 || *m.V > maxTTBMinutes) {
+			return errInvalid
+		}
+	}
+	if in.TTBSource != nil && *in.TTBSource != "manual" && *in.TTBSource != "hltb" {
 		return errInvalid
 	}
 	if in.ReleaseYear != nil && *in.ReleaseYear != 0 && (*in.ReleaseYear < 1950 || *in.ReleaseYear > 2100) {
@@ -318,6 +357,40 @@ func (s *Server) reorderGames(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, next)
 }
 
+// applyTTB stores the time-to-beat fields that are present. The three times share one source, so an edit of one
+// keeps the others and marks all of them as the owner's (or HowLongToBeat's).
+func applyTTB(tx *sql.Tx, id int64, in *gamePatch) error {
+	if !in.TTBHastily.Set && !in.TTBNormally.Set && !in.TTBCompletely.Set {
+		return nil
+	}
+	var cur [3]sql.NullInt64
+	if err := tx.QueryRow(`SELECT time_to_beat_hastily, time_to_beat_normally, time_to_beat_completely FROM game WHERE id = ?`, id).
+		Scan(&cur[0], &cur[1], &cur[2]); err != nil {
+		return err
+	}
+	var vals [3]any
+	any3 := false
+	for i, o := range []optMinutes{in.TTBHastily, in.TTBNormally, in.TTBCompletely} {
+		switch {
+		case o.Set && o.V != nil:
+			vals[i] = *o.V
+		case !o.Set && cur[i].Valid:
+			vals[i] = cur[i].Int64
+		}
+		any3 = any3 || vals[i] != nil
+	}
+	var src any
+	if any3 {
+		src = "manual"
+		if in.TTBSource != nil {
+			src = *in.TTBSource
+		}
+	}
+	_, err := tx.Exec(`UPDATE game SET time_to_beat_hastily = ?, time_to_beat_normally = ?, time_to_beat_completely = ?, time_to_beat_src = ? WHERE id = ?`,
+		vals[0], vals[1], vals[2], src, id)
+	return err
+}
+
 // applyFieldEdits writes the non-status fields of a patch inside the caller's transaction.
 func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 	if in.Title != nil {
@@ -362,7 +435,10 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			// A different (or no) IGDB game: what the enrichment stored for the old one is not this game's. All of it is
 			// IGDB's data, never owner-entered, so it goes; `sync-igdb --enrich` reads the new link.
 			for _, q := range []string{
-				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL WHERE id = ?",
+				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL WHERE id = ?",
+				// only IGDB's own times go: times the owner typed or took from HowLongToBeat stay
+				`UPDATE game SET time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL, time_to_beat_src = NULL
+					WHERE id = ? AND (time_to_beat_src IS NULL OR time_to_beat_src = 'igdb')`,
 				"DELETE FROM game_game_mode WHERE game_id = ?",
 				"DELETE FROM game_perspective WHERE game_id = ?",
 				"DELETE FROM game_link WHERE game_id = ?",
@@ -375,6 +451,9 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", next, id); err != nil {
 			return err
 		}
+	}
+	if err := applyTTB(tx, id, in); err != nil {
+		return err
 	}
 	if in.ReleaseYear != nil {
 		if _, err := tx.Exec("UPDATE game SET release_year = ? WHERE id = ?", nullInt(*in.ReleaseYear), id); err != nil {
