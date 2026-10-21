@@ -227,3 +227,46 @@ func TestAutomaticResultIsRefusedAfterAUserPick(t *testing.T) {
 		t.Errorf("file %q, poster_user %d: the user's poster was replaced", b, flag)
 	}
 }
+
+// "Fetch automatically again" that is still running when the user picks a poster must lose to the pick.
+func TestRemakeLosesToAPickMadeMeanwhile(t *testing.T) {
+	m, covers := posterTestDB(t)
+	user := &Maker{DB: m.DB, Dir: m.Dir, Allowed: m.Allowed, Fetch: fakeFetch("user1")}
+	if err := user.Choose(1, "http://x/first"); err != nil { // there is already a user poster, so Remake is "forced"
+		t.Fatal(err)
+	}
+	m.Src = fakeSource{sgdb: "http://x/auto"}
+	m.Fetch = func(url, dir string, id int64) (string, error) {
+		user.Fetch = fakeFetch("user2")
+		if err := user.Choose(id, "http://x/second"); err != nil { // picked while the remake downloads
+			t.Error(err)
+		}
+		return fakeFetch("auto")(url, dir, id)
+	}
+	time.Sleep(5 * time.Millisecond) // a later timestamp than the first pick
+	if _, err := m.Remake(context.Background(), 1); err != ErrUserPoster {
+		t.Fatalf("Remake = %v, want ErrUserPoster", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(covers, "p1.jpg")); string(b) != "user2" {
+		t.Errorf("poster file = %q, want the second pick", b)
+	}
+}
+
+func TestSweepScratchRemovesOnlyOldFolders(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{".poster-old", ".poster-new", "keep"} {
+		os.MkdirAll(filepath.Join(dir, n), 0o755)
+	}
+	os.WriteFile(filepath.Join(dir, ".poster-old", "p1.jpg"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "p1.jpg"), []byte("x"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(dir, ".poster-old"), old, old)
+	if n := SweepScratch(dir, 10*time.Minute); n != 1 {
+		t.Errorf("removed %d, want 1", n)
+	}
+	for name, want := range map[string]bool{".poster-old": false, ".poster-new": true, "keep": true, "p1.jpg": true} {
+		if _, err := os.Stat(filepath.Join(dir, name)); (err == nil) != want {
+			t.Errorf("%s present = %v, want %v", name, err == nil, want)
+		}
+	}
+}
