@@ -6,7 +6,7 @@ import { ownershipLabel } from './ownership.js';
 import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
 import { seriesPosition } from './series.js';
-import { ttbParts } from './ttb.js';
+import { ttbSection } from './ttbview.js';
 import { screenshotsSection } from './shotsview.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
@@ -38,9 +38,6 @@ function quickActions(game) {
 
 const STORE_LABELS = { steam: 'Steam', gog: 'GOG', epic: 'Epic Games', official: 'Official site' };
 
-/** "Quick 8 h · Usual 12 h · Complete 40 h" from IGDB, or null when IGDB has no time. */
-const ttbText = (game) => ttbParts(game).map((p) => `${p.label} ${p.text}`).join(' · ') || null;
-
 /** Buttons to the game's store pages and official site (links come from IGDB; only http(s) is ever opened). */
 function storeLinks(game) {
   const order = Object.keys(STORE_LABELS);
@@ -65,7 +62,7 @@ export function closeDrawer() {
 
 /** Close because the user asked to: when there are unsaved edits, ask first. */
 async function requestClose() {
-  if (open?.isDirty?.()) {
+  if (open?.isDirty?.() || open?.ttb?.isDirty()) {
     const ok = await confirmDialog({ title: 'Discard your changes?', message: 'You have edits that are not saved.', confirm: 'Discard' });
     if (!ok) return;
   }
@@ -84,6 +81,7 @@ export function openDrawer(game) {
     h('dd', {}, Array.isArray(value) ? h('div.tags', {}, value.map((v) => h('span.tag', {}, v))) : String(value)),
   ];
 
+  const ttb = ttbSection(game);
   const title = h('h2', {}, game.title);
   const readView = h('div.readview', {},
     h('dl.facts', {},
@@ -92,7 +90,6 @@ export function openDrawer(game) {
       fact('Themes', game.themes),
       fact('Game modes', game.modes),
       fact('Perspective', game.perspectives),
-      fact('Time to beat', ttbText(game)),
       fact('Series', seriesFact(game)),
       fact('Developer', game.developer),
       fact('Released', game.release_year),
@@ -101,6 +98,7 @@ export function openDrawer(game) {
       fact('Ownership', game.ownership && ownershipLabel(game.ownership)),
       fact('VR', game.vr ? 'Yes' : null),
       fact('100% completed', game.completed ? 'Yes' : null)),
+    ttb,
     game.notes && h('div.notes', {}, game.notes),
     storeLinks(game),
     screenshotsSection(game),
@@ -238,6 +236,6 @@ export function openDrawer(game) {
   };
   window.addEventListener('games-changed', onGames);
   document.body.append(scrim, drawer);
-  open = { drawer, scrim, onKey, onGames, isDirty: null, opener };
+  open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb };
   drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
 }

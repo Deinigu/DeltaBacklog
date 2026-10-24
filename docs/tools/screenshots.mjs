@@ -196,6 +196,8 @@ await p.keyboard.press('Escape'); await wait(300);
 await go(p, '#/library?q=outer+wilds');
 await p.click('.card'); await wait(700);
 await shot(p, 'game-phone');
+await p.$eval('.ttb', (e) => e.scrollIntoView()); await wait(400);
+await shot(p, 'time-to-beat-phone');
 await p.$eval('.shots', (e) => e.scrollIntoView()); await wait(900);
 await shot(p, 'screenshots-phone');
 await p.click('.shot-thumb'); await wait(900);

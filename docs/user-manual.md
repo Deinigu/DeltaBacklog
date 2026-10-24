@@ -65,8 +65,6 @@ The Library shows every game as a card.
 - A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 11](#11-what-the-little-icons-mean)).
 - Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
 
-- Once the IGDB details have been read (section 16), a small **⏱ 12 h** under the platforms: the time IGDB says it takes to beat the game.
-
 **Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
 
 **Filters.**
@@ -131,7 +129,14 @@ Tap a card to open the game.
 - **★ Favorite** switches the favourite mark.
 - **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
 
-**What IGDB adds** (after the one-off command in section 16): the game's **Game modes**, **Perspective** and **Time to beat** (quick, usual and complete, as IGDB's players report them) appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
+**What IGDB adds** (after the one-off command in section 16): the game's **Game modes** and **Perspective** appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
+
+**Time to beat.** The details have a **Time to beat** block with three tiles: **Main story**, **Main + extras** and **Completionist**, each with a small bar showing how long it is compared with the longest. A note says where the numbers come from: *from IGDB* (filled in by the command in section 16), *from HowLongToBeat* or *set by you*. The times are not shown on the cards, only here (the **Short game** filter, Surprise me's **Quick game** and the backlog hours on Stats still use them).
+- **✎ Edit times** opens three boxes. Type hours (`7.5`, `7,5`, `12`), hours and minutes (`7h30`, `1:30`) or minutes (`45m`); leave a box empty for no time. **Save** marks the times as *set by you*.
+- **Get from HowLongToBeat** looks the game up by its title and release year and lists the matches with their three times. Tap the right one and its times are saved at once (you can still edit them afterwards). The search box lets you try another title when the game is not found. If HowLongToBeat cannot be reached (it has no official service, and it can be blocked or change without notice) the block says so and nothing else is affected: type the times yourself.
+- Times you set or took from HowLongToBeat are **never replaced** by IGDB's later reads. Games with no time show "No time yet".
+
+![The time to beat block](img/time-to-beat-phone.jpg)
 
 **Edit** changes everything else.
 
@@ -276,7 +281,7 @@ If you delete a game from the library it leaves every ranking.
 
 Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
 
-- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the usual time to beat from IGDB of each game added up; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
+- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the "Main + extras" time of each game, or the closest time known when it has no such time, added up, whatever its source; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
 - **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
 - **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
@@ -300,7 +305,7 @@ Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or
 
 If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
 
-**The result.** You see the cover, the title, platforms, genres, the time to beat (when IGDB has one) and the years you played it, and three buttons:
+**The result.** You see the cover, the title, platforms, genres and the years you played it (the time to beat is only in the game details), and three buttons:
 - **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
 - **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
 - **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).

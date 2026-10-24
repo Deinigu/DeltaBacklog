@@ -1,5 +1,5 @@
-// Time to beat (from IGDB, minutes): which estimate to use, how to show it, and the "short game" rule.
-// Pure (no DOM): unit-tested. Games IGDB knows no time for have no estimate and are never counted as short.
+// Time to beat (minutes; from IGDB, HowLongToBeat or typed by the owner): which estimate to use, how to show it, and the "short game" rule.
+// Pure (no DOM): unit-tested. Games with no time have no estimate and are never counted as short.
 
 /** A game is "short" when its usual time to beat is under this many minutes (10 hours). */
 export const SHORT_MINUTES = 600;
@@ -17,19 +17,75 @@ export const isShort = (g) => {
   return m !== null && m < SHORT_MINUTES;
 };
 
-/** 45 -> "45 min", 90 -> "1.5 h", 450 -> "7.5 h", 720 -> "12 h", 2500 -> "41 h". Rounds down, so a game under 10 h (isShort) never reads "10 h". */
+/** The three times of a game, in the order they are shown, with the one set of labels used everywhere. */
+export const TTB_KINDS = [
+  { key: 'ttb_hastily', label: 'Main story' },
+  { key: 'ttb_normally', label: 'Main + extras' },
+  { key: 'ttb_completely', label: 'Completionist' },
+];
+
+/**
+ * 45 -> "45 min", 90 -> "1½ h", 450 -> "7½ h", 720 -> "12 h", 2500 -> "41 h". Rounds down (to the half hour below ten
+ * hours, to the hour above), so a game under 10 h (isShort) never reads "10 h".
+ */
 export function formatTime(minutes) {
   if (!has(minutes)) return '';
   if (minutes < 60) return `${Math.round(minutes)} min`;
   const h = minutes / 60;
-  return h < 10 ? `${Math.floor(h * 10) / 10} h` : `${Math.floor(h)} h`;
+  if (h >= 10) return `${Math.floor(h)} h`;
+  const half = Math.floor(h * 2) / 2;
+  return `${Math.floor(half)}${half % 1 ? '½' : ''} h`;
 }
 
-/** [{label: "Quick", text: "8 h"}, {label: "Usual", ...}, ...] for the drawer; parts IGDB does not know are left out. */
-export function ttbParts(g) {
-  return [['Quick', g.ttb_hastily], ['Usual', g.ttb_normally], ['Complete', g.ttb_completely]]
-    .filter(([, v]) => has(v)).map(([label, v]) => ({ label, text: formatTime(v) }));
+/** What the drawer shows: all three times, each {key, label, minutes (or null), text ("" when unknown), share (0..1 of the longest, for the bar)}. */
+export function ttbTiles(g) {
+  const longest = Math.max(0, ...TTB_KINDS.map((k) => (has(g[k.key]) ? g[k.key] : 0)));
+  return TTB_KINDS.map(({ key, label }) => {
+    const minutes = has(g[key]) ? g[key] : null;
+    return { key, label, minutes, text: formatTime(minutes), share: minutes && longest ? minutes / longest : 0 };
+  });
 }
+
+export const hasTimes = (g) => TTB_KINDS.some((k) => has(g[k.key]));
+
+/** Where the times come from, for the small note under them. Times without a recorded source are IGDB's (older data). */
+export function ttbSourceNote(g) {
+  if (!hasTimes(g)) return '';
+  return { hltb: 'from HowLongToBeat', manual: 'set by you' }[g.ttb_source] || 'from IGDB';
+}
+
+/** Largest time accepted, in minutes (the server's limit). */
+export const MAX_MINUTES = 100000;
+
+/**
+ * Read what someone typed as a time: hours by default ("7.5", "7,5", "12"), "7h30", "7 h 30 min", "1:30", or minutes
+ * ("45m", "90 min"). Returns whole minutes, null for an empty field (clear), or undefined when it cannot be read.
+ */
+export function parseTime(input) {
+  const t = String(input ?? '').trim().toLowerCase().replace(',', '.');
+  if (t === '') return null;
+  let m;
+  let minutes;
+  if ((m = t.match(/^(\d+(?:\.\d+)?)$/))) minutes = parseFloat(m[1]) * 60;
+  else if ((m = t.match(/^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)$/))) minutes = parseFloat(m[1]) * 60;
+  else if ((m = t.match(/^(\d+)\s*(?:h|hr|hrs|hour|hours|:)\s*(\d+)\s*(?:m|min|mins|minutes)?$/))) minutes = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  else if ((m = t.match(/^(\d+(?:\.\d+)?)\s*(?:m|min|mins|minutes)$/))) minutes = parseFloat(m[1]);
+  else return undefined;
+  minutes = Math.round(minutes);
+  return minutes >= 1 && minutes <= MAX_MINUTES ? minutes : undefined;
+}
+
+/** The text for an input: whole hours or hours with one decimal ("7.5"), minutes below an hour ("45m"); "" for no time. */
+export function timeInputValue(minutes) {
+  if (!has(minutes)) return '';
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  return String(Math.round((minutes / 60) * 100) / 100);
+}
+
+/** The patch that stores one HowLongToBeat candidate ({hastily, normally, completely} minutes, 0 = none). */
+export const hltbPatch = (c) => ({
+  ttb_hastily: c.hastily || null, ttb_normally: c.normally || null, ttb_completely: c.completely || null, ttb_source: 'hltb',
+});
 
 /**
  * Total time of a set of games, for "the backlog is N hours". `known` games have a time, `unknown` have none, so the

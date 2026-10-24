@@ -341,3 +341,10 @@ export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
  * Resolves {screenshots, total, years, available}; each screenshot has game_id, game_title and date as well.
  */
 export const listAllShots = (query = '') => request('GET', `/api/screenshots${query}`);
+
+/** HowLongToBeat candidates for a title (and release year). Resolves {query, results: [{id, name, year, hastily, normally, completely}]}; rejects with the site's problem in err.message. */
+export function hltbSearch(q, year = 0) {
+  const p = new URLSearchParams({ q });
+  if (year) p.set('year', String(year));
+  return request('GET', `/api/hltb/search?${p}`);
+}
