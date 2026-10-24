@@ -1,7 +1,7 @@
 // Game detail drawer: facts at a glance, quick status/favorite changes, and an Edit mode for every field.
 import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
-import { openCoverPicker, pickCandidate } from './add.js';
+import { openCoverPicker, openPosterPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
 import { badgeStyle } from './colors.js';
 import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from './editpatch.js';
@@ -107,6 +107,7 @@ export function openDrawer(game) {
     h('div.drawer-actions', {},
       h('button.btn.primary', { type: 'button', onclick: startEdit }, '✎ Edit'),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
+      h('button.btn', { type: 'button', onclick: () => openPosterPicker(game) }, 'Change poster'),
       h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete game')));
   const editView = h('div.editview', { hidden: true });
 

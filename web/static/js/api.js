@@ -174,10 +174,11 @@ const reloaded = () => window.dispatchEvent(new Event('games-reloaded'));
 export const lookup = (q) => request('GET', `/api/lookup?q=${encodeURIComponent(q)}`);
 /**
  * Cover options. source: 'steamgriddb' (search by title) or 'igdb' (the pictures IGDB holds; igdbId links to the
- * exact game when known). Resolves {configured, source, covers}.
+ * exact game when known). shape 'poster' asks for portrait images. Resolves {configured, source, covers}.
  */
-export function coverSearch(q, { source = 'steamgriddb', igdbId = 0 } = {}) {
+export function coverSearch(q, { source = 'steamgriddb', igdbId = 0, shape = 'cover' } = {}) {
   const p = new URLSearchParams({ q });
+  if (shape === 'poster') p.set('shape', 'poster'); // portrait images; a failed lookup rejects with err.data.unreachable
   if (source !== 'steamgriddb') p.set('source', source);
   if (igdbId) p.set('igdb_id', String(igdbId));
   return request('GET', `/api/covers/search?${p}`);
@@ -209,6 +210,19 @@ export async function setCover(id, url) {
   indexGame(g);
   gamesChanged(id);
   fetch('/api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new cover
+  return g;
+}
+
+/**
+ * Change the portrait poster: body is {url}, {crop: true} (centre crop of the wide cover) or {auto: true} (automatic again).
+ * Tells the open views (the ranking board) through games-changed, like a cover change.
+ */
+export async function setPoster(id, body) {
+  const fresh = await request('POST', `/api/games/${id}/poster`, body);
+  const g = store.byId.get(id);
+  if (g) { Object.assign(g, fresh); indexGame(g); }
+  gamesChanged(id);
+  fetch('/api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new poster
   return g;
 }
 

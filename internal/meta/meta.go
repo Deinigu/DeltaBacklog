@@ -935,3 +935,79 @@ func (c *Client) SteamGridPortrait(ctx context.Context, title string) (string, e
 	}
 	return res.Data[0].URL, nil
 }
+
+// ---------------- poster options (the portrait picker) ----------------
+
+// PosterOption sizes: SteamGridDB's portrait grids (600x900 is the one the automatic poster uses).
+const sgdbPortraitDims = "600x900,660x930,342x482"
+
+// SearchPosters returns portrait grids of the best SteamGridDB match for title, several of them, not just the first.
+func (c *Client) SearchPosters(ctx context.Context, title string) ([]CoverOption, error) {
+	if _, ok := c.Configured(); !ok {
+		return nil, ErrNotConfigured
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, nil
+	}
+	var found struct {
+		Data []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := c.sgdbGet(ctx, "/search/autocomplete/"+url.PathEscape(title), &found); err != nil {
+		return nil, err
+	}
+	if len(found.Data) == 0 {
+		return []CoverOption{}, nil
+	}
+	best := found.Data[0]
+	for _, d := range found.Data {
+		if strings.EqualFold(d.Name, title) {
+			best = d
+			break
+		}
+	}
+	var res struct {
+		Data []struct {
+			URL    string `json:"url"`
+			Thumb  string `json:"thumb"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"data"`
+	}
+	q := url.Values{"types": {"static"}, "dimensions": {sgdbPortraitDims}, "limit": {"18"}}
+	if err := c.sgdbGet(ctx, "/grids/game/"+strconv.FormatInt(best.ID, 10)+"?"+q.Encode(), &res); err != nil {
+		return nil, err
+	}
+	out := make([]CoverOption, 0, len(res.Data))
+	for _, g := range res.Data {
+		out = append(out, CoverOption{URL: g.URL, Thumb: g.Thumb, Width: g.Width, Height: g.Height, Source: "steamgriddb"})
+	}
+	return out, nil
+}
+
+// IGDBPosters returns the portrait cover IGDB holds for a game (igdbID, or the best title match when it is 0) at the
+// size the automatic poster uses.
+func (c *Client) IGDBPosters(ctx context.Context, igdbID int64, title string) ([]CoverOption, error) {
+	if ok, _ := c.Configured(); !ok {
+		return nil, ErrNotConfigured
+	}
+	if igdbID == 0 {
+		cands, err := c.SearchIGDB(ctx, title)
+		if err != nil || len(cands) == 0 {
+			return []CoverOption{}, err
+		}
+		igdbID = RankByTitle(cands, title)[0].IGDBID
+	}
+	u, err := c.IGDBCoverURL(ctx, igdbID)
+	if err != nil {
+		return nil, err
+	}
+	if u == "" {
+		return []CoverOption{}, nil
+	}
+	thumb := strings.Replace(u, "t_cover_big_2x", "t_cover_big", 1)
+	return []CoverOption{{URL: u, Thumb: thumb, Width: 528, Height: 748, Source: "igdb", Kind: "Cover"}}, nil
+}

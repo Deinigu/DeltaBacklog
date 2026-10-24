@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
@@ -88,5 +89,184 @@ func TestFetchPostersCommand(t *testing.T) {
 	}
 	if code, _ := Main([]string{"--db", filepath.Join(dir, "none.db"), "--dry-run"}, "", covers, src, allowed, &bytes.Buffer{}), 0; code != 1 {
 		t.Errorf("missing database exit %d", code)
+	}
+}
+
+// A poster the user chose is never remade by the queue's Make or by fetch-posters --upgrade; Remake replaces it.
+func TestUserPosterIsNotReplaced(t *testing.T) {
+	Pause = 0
+	img := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		png.Encode(w, image.NewRGBA(image.Rect(0, 0, 528, 748)))
+	}))
+	defer img.Close()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.db")
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO game(id, title, title_sort, status_id, poster_file, poster_src, poster_user) VALUES (1, 'Mine', 'mine', 7, 'p1.jpg', 'crop', 1)`,
+		`INSERT INTO game(id, title, title_sort, status_id, poster_file, poster_src, poster_user) VALUES (2, 'Auto crop', 'auto crop', 7, 'p2.jpg', 'crop', 0)`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer d.Close()
+	covers := filepath.Join(dir, "covers")
+	allowed := func(u string) bool { return strings.HasPrefix(u, img.URL) }
+	src := fakeSource{igdb: img.URL + "/a.png", sgdb: img.URL + "/b.png"}
+	var out bytes.Buffer
+	if code := Main([]string{"--upgrade"}, path, covers, src, allowed, &out); code != 0 || !strings.Contains(out.String(), "1 from SteamGridDB") {
+		t.Fatalf("upgrade: %d\n%s", code, out.String())
+	}
+	var user int
+	var s string
+	d.QueryRow(`SELECT poster_src, poster_user FROM game WHERE id = 1`).Scan(&s, &user)
+	if s != "crop" || user != 1 {
+		t.Errorf("the user's poster changed: %s %d", s, user)
+	}
+	if _, err := os.Stat(filepath.Join(covers, "p1.jpg")); err == nil {
+		t.Error("the user's poster file was rewritten")
+	}
+
+	m := &Maker{DB: d, Dir: covers, Src: src, Allowed: allowed}
+	if _, err := m.Make(context.Background(), 1); err != ErrUserPoster {
+		t.Errorf("Make = %v, want ErrUserPoster", err)
+	}
+	if how, err := m.Remake(context.Background(), 1); err != nil || how != "sgdb" {
+		t.Fatalf("Remake = %q %v", how, err)
+	}
+	d.QueryRow(`SELECT poster_src, poster_user FROM game WHERE id = 1`).Scan(&s, &user)
+	if s != "sgdb" || user != 0 {
+		t.Errorf("after Remake: %s %d", s, user)
+	}
+}
+
+// fakeFetch writes marker into dir/p<id>.jpg like the real download does and returns the name.
+func fakeFetch(marker string) func(url, dir string, id int64) (string, error) {
+	return func(url, dir string, id int64) (string, error) {
+		name := "p1.jpg"
+		return name, os.WriteFile(filepath.Join(dir, name), []byte(marker), 0o644)
+	}
+}
+
+func posterTestDB(t *testing.T) (*Maker, string) {
+	t.Helper()
+	dir := t.TempDir()
+	d, err := db.Open(filepath.Join(dir, "app.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	if _, err := d.Exec(`INSERT INTO game(id, title, title_sort, status_id) VALUES (1, 'G', 'g', 7)`); err != nil {
+		t.Fatal(err)
+	}
+	covers := filepath.Join(dir, "covers")
+	return &Maker{DB: d, Dir: covers, Allowed: func(string) bool { return true }}, covers
+}
+
+type blockingSource struct{ release chan struct{} }
+
+func (b blockingSource) IGDBCoverURL(context.Context, int64) (string, error) { return "", nil }
+func (b blockingSource) SteamGridPortrait(context.Context, string) (string, error) {
+	<-b.release
+	return "http://x/auto", nil
+}
+
+// A slow background job (a hanging SteamGridDB lookup) must not make the user's pick wait, and must not overwrite it.
+func TestChooseDoesNotWaitForASlowAutomaticJob(t *testing.T) {
+	m, covers := posterTestDB(t)
+	release := make(chan struct{})
+	auto := &Maker{DB: m.DB, Dir: m.Dir, Allowed: m.Allowed, Src: blockingSource{release}, Fetch: fakeFetch("auto")}
+	m.Fetch = fakeFetch("user")
+	done := make(chan error, 1)
+	go func() { _, err := auto.Make(context.Background(), 1); done <- err }()
+
+	chosen := make(chan error, 1)
+	go func() { chosen <- m.Choose(1, "http://x/user") }()
+	select {
+	case err := <-chosen:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the user's pick waited for the automatic job")
+	}
+	close(release)
+	if err := <-done; err != ErrUserPoster {
+		t.Errorf("automatic job = %v, want ErrUserPoster", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(covers, "p1.jpg")); string(b) != "user" {
+		t.Errorf("poster file = %q, want the user's", b)
+	}
+	if left, _ := filepath.Glob(filepath.Join(covers, ".poster-*")); len(left) != 0 {
+		t.Errorf("scratch folders left behind: %v", left)
+	}
+}
+
+// Another process (fetch-posters) read poster_user = 0 before the user's pick: its result is refused and its file
+// never replaces the user's image.
+func TestAutomaticResultIsRefusedAfterAUserPick(t *testing.T) {
+	m, covers := posterTestDB(t)
+	user := &Maker{DB: m.DB, Dir: m.Dir, Allowed: m.Allowed, Fetch: fakeFetch("user")}
+	m.Src = fakeSource{igdb: "", sgdb: "http://x/auto"}
+	m.Fetch = func(url, dir string, id int64) (string, error) {
+		if err := user.Choose(id, "http://x/user"); err != nil { // the pick lands while this job downloads
+			t.Error(err)
+		}
+		return fakeFetch("auto")(url, dir, id)
+	}
+	if _, err := m.Make(context.Background(), 1); err != ErrUserPoster {
+		t.Fatalf("Make = %v, want ErrUserPoster", err)
+	}
+	var flag int
+	m.DB.QueryRow(`SELECT poster_user FROM game WHERE id = 1`).Scan(&flag)
+	if b, _ := os.ReadFile(filepath.Join(covers, "p1.jpg")); string(b) != "user" || flag != 1 {
+		t.Errorf("file %q, poster_user %d: the user's poster was replaced", b, flag)
+	}
+}
+
+// "Fetch automatically again" that is still running when the user picks a poster must lose to the pick.
+func TestRemakeLosesToAPickMadeMeanwhile(t *testing.T) {
+	m, covers := posterTestDB(t)
+	user := &Maker{DB: m.DB, Dir: m.Dir, Allowed: m.Allowed, Fetch: fakeFetch("user1")}
+	if err := user.Choose(1, "http://x/first"); err != nil { // there is already a user poster, so Remake is "forced"
+		t.Fatal(err)
+	}
+	m.Src = fakeSource{sgdb: "http://x/auto"}
+	m.Fetch = func(url, dir string, id int64) (string, error) {
+		user.Fetch = fakeFetch("user2")
+		if err := user.Choose(id, "http://x/second"); err != nil { // picked while the remake downloads
+			t.Error(err)
+		}
+		return fakeFetch("auto")(url, dir, id)
+	}
+	time.Sleep(5 * time.Millisecond) // a later timestamp than the first pick
+	if _, err := m.Remake(context.Background(), 1); err != ErrUserPoster {
+		t.Fatalf("Remake = %v, want ErrUserPoster", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(covers, "p1.jpg")); string(b) != "user2" {
+		t.Errorf("poster file = %q, want the second pick", b)
+	}
+}
+
+func TestSweepScratchRemovesOnlyOldFolders(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{".poster-old", ".poster-new", "keep"} {
+		os.MkdirAll(filepath.Join(dir, n), 0o755)
+	}
+	os.WriteFile(filepath.Join(dir, ".poster-old", "p1.jpg"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "p1.jpg"), []byte("x"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(dir, ".poster-old"), old, old)
+	if n := SweepScratch(dir, 10*time.Minute); n != 1 {
+		t.Errorf("removed %d, want 1", n)
+	}
+	for name, want := range map[string]bool{".poster-old": false, ".poster-new": true, "keep": true, "p1.jpg": true} {
+		if _, err := os.Stat(filepath.Join(dir, name)); (err == nil) != want {
+			t.Errorf("%s present = %v, want %v", name, err == nil, want)
+		}
 	}
 }

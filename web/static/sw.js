@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v39';
+const VERSION = 'v40';
 
 const SHELL = `shell-${VERSION}`;
 const COVERS = 'covers-v2'; // keyed by path (one entry per cover file); the old 'covers' cache was keyed by URL with ?v=

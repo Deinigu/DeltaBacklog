@@ -24,19 +24,22 @@ import (
 )
 
 type fakeMeta struct {
-	igdb, sgdb bool
-	results    []meta.Candidate
-	covers     []meta.CoverOption
-	images     []meta.CoverOption
-	imgID      int64
-	imgTitle   string
-	resolved   string
-	resolveErr error
-	igdbErr    error
-	lastQuery  string
-	igdbCover  string // IGDBCoverURL answer
-	portrait   string // SteamGridPortrait answer
-	posterErr  error  // both poster lookups fail with it
+	igdb, sgdb  bool
+	results     []meta.Candidate
+	covers      []meta.CoverOption
+	images      []meta.CoverOption
+	imgID       int64
+	imgTitle    string
+	resolved    string
+	resolveErr  error
+	igdbErr     error
+	lastQuery   string
+	igdbCover   string             // IGDBCoverURL answer
+	portrait    string             // SteamGridPortrait answer
+	posterErr   error              // both poster lookups fail with it
+	posters     []meta.CoverOption // SearchPosters answer
+	igdbPosters []meta.CoverOption // IGDBPosters answer
+	sgdbErr     error              // SearchPosters error
 }
 
 func (f *fakeMeta) Configured() (bool, bool) { return f.igdb, f.sgdb }
@@ -56,6 +59,12 @@ func (f *fakeMeta) IGDBCoverURL(_ context.Context, id int64) (string, error) {
 }
 func (f *fakeMeta) SteamGridPortrait(_ context.Context, title string) (string, error) {
 	return f.portrait, f.posterErr
+}
+func (f *fakeMeta) SearchPosters(_ context.Context, t string) ([]meta.CoverOption, error) {
+	return f.posters, f.sgdbErr
+}
+func (f *fakeMeta) IGDBPosters(_ context.Context, id int64, title string) ([]meta.CoverOption, error) {
+	return f.igdbPosters, nil
 }
 func (f *fakeMeta) ResolveLink(_ context.Context, l string) (string, error) {
 	return f.resolved, f.resolveErr

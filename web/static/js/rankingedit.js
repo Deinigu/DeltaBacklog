@@ -8,6 +8,7 @@ import {
 } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openGamePicker } from './gamepicker.js';
+import { openPosterPicker } from './add.js';
 import { attachDrag } from './rankdrag.js';
 import { createSaveQueue } from './savequeue.js';
 import { exportRankingPNG } from './tierpng.js';
@@ -188,9 +189,16 @@ export function renderRanking(root, id) {
         btn('Up one tier', '▲', () => moveSel(carry(board, g.id, -1)), !board.tiers.length),
         btn('Down one tier', '▼', () => moveSel(carry(board, g.id, 1)), !board.tiers.length),
         btn('Back to not ranked', '⤓', () => moveSelectedTo(null), at.tier == null),
+        btn('Change poster', icon('screenshots'), () => changePoster(g)),
         btn('Details', 'ⓘ', () => openDrawer(g)),
         btn('Remove from this ranking', '🗑', () => removeSelected(g)),
         btn('Done', '✕', () => select(null))));
+  }
+
+  /** The poster sheet: the board redraws under it when the poster changes, so focus goes back to the tile, not the old button. */
+  function changePoster(g) {
+    const ui = openPosterPicker(g);
+    ui.onClose = () => { if (alive) focusTile(g.id); };
   }
 
   function select(gid) {
@@ -471,7 +479,7 @@ export function renderRanking(root, id) {
     drawBoard();
   }
 
-  const onKeyGlobal = (e) => { if (e.key === 'Escape' && selected != null && !sheet && !document.querySelector('.dialog')) select(null); };
+  const onKeyGlobal = (e) => { if (e.key === 'Escape' && selected != null && !sheet && !document.querySelector('.dialog, .sheet.open')) select(null); }; // a picker sheet on top takes the Escape itself
   document.addEventListener('keydown', onKeyGlobal);
   // A game got a new cover or poster: the tiles that show it follow.
   const onGameChanged = () => {
