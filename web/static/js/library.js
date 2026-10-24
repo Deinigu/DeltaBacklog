@@ -8,7 +8,6 @@ import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
-import { ttbMinutes, formatTime } from './ttb.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -136,7 +135,6 @@ export function renderLibrary(root, opts = {}) {
     const played = playedBadges(g, innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
     const hasPlayed = played.years.length || played.periods.length;
     const platforms = g.platforms.slice(0, 2);
-    const time = ttbMinutes(g);
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
         url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
@@ -146,7 +144,6 @@ export function renderLibrary(root, opts = {}) {
       h('div.card-body', {},
         h('div.card-title', {}, g.title),
         platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
-        time !== null ? h('div.tags-row', {}, h('span.pf.ttb', { title: 'Time to beat, from IGDB' }, `⏱ ${formatTime(time)}`)) : null,
         hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,

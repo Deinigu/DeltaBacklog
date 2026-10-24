@@ -22,7 +22,7 @@ export const FLAGS = [
   { key: 'favorite', label: '★ Favorite' },
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
-  { key: 'short', label: 'Short game (under 10 h)', test: isShort }, // time to beat from IGDB; games without one never match
+  { key: 'short', label: 'Short game (under 10 h)', test: isShort }, // time to beat (IGDB, HowLongToBeat or typed); games without one never match
 ];
 
 const FLAG_TESTS = Object.fromEntries(FLAGS.filter((f) => f.test).map((f) => [f.key, f.test]));

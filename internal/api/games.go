@@ -37,6 +37,7 @@ type Game struct {
 	TTBHastily    *int        `json:"ttb_hastily"`
 	TTBNormally   *int        `json:"ttb_normally"`
 	TTBCompletely *int        `json:"ttb_completely"`
+	TTBSource     *string     `json:"ttb_source"` // "igdb", "hltb" or "manual" (null with no time)
 	Modes         []string    `json:"modes"`
 	Perspectives  []string    `json:"perspectives"`
 	Links         []StoreLink `json:"links"`
@@ -96,7 +97,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	}
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
 			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at, g.poster_file, g.poster_updated_at,
-			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely
+			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely, g.time_to_beat_src
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
@@ -111,7 +112,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
 			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV, &g.Poster, &g.PosterV,
-			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely); err != nil {
+			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely, &g.TTBSource); err != nil {
 			rows.Close()
 			return nil, err
 		}

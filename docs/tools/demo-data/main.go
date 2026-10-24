@@ -180,6 +180,28 @@ func main() {
 		}
 		must(db.IndexGame(tx, id))
 	}
+	// Times to beat (minutes) for some games, from the three possible sources, so the drawer's block, the Short game
+	// filter and the backlog hours have something to show. The numbers are rounded, made up for the demo.
+	for _, t := range []struct {
+		game    string
+		h, n, c int
+		source  string
+	}{
+		{"Hollow Knight", 1620, 2500, 3940, "hltb"},
+		{"Celeste", 480, 600, 1500, "hltb"},
+		{"Return of the Obra Dinn", 480, 600, 720, "igdb"},
+		{"Disco Elysium", 1800, 2400, 3000, "igdb"},
+		{"Baldur's Gate 3", 4200, 5100, 7500, "igdb"},
+		{"Elden Ring", 3600, 5700, 8100, "igdb"},
+		{"Portal", 180, 320, 630, "hltb"},
+		{"Outer Wilds", 900, 1100, 1500, "manual"},
+		{"Slay the Spire", 0, 1200, 0, "manual"},
+		{"Pentiment", 960, 1200, 0, "igdb"},
+	} {
+		_, err := tx.Exec(`UPDATE game SET time_to_beat_hastily = nullif(?, 0), time_to_beat_normally = nullif(?, 0),
+			time_to_beat_completely = nullif(?, 0), time_to_beat_src = ? WHERE title = ?`, t.h, t.n, t.c, t.source, t.game)
+		must(err)
+	}
 	// Two games waiting in the "Link IGDB" review screen (made-up ids), so that screen has something to show.
 	for _, c := range []struct {
 		game     string
