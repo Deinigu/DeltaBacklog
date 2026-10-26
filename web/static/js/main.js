@@ -126,5 +126,6 @@ document.addEventListener('keydown', (e) => {
 route();
 
 if ('serviceWorker' in navigator) {
-  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  // relative, so under a sub-path (/backlog/sw.js) the worker's scope is that sub-path
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }

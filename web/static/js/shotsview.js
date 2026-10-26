@@ -10,7 +10,9 @@ const STORAGE_DOWN = 'Screenshot storage is not available (is the drive connecte
 // Screenshots deleted in the UI whose DELETE is still waiting out the undo time, by id. Module level on purpose: a
 // drawer that is closed and reopened (a new section) must still hide them, and leaving the page must still delete them.
 const pending = new Map(); // id -> { s, gameId, at, timer, toast }
-const THUMB_CACHE = 'screenshot-thumbs';
+// The service worker's cache of thumbnails (sw.js THUMBS): its name carries the app's base path when that is not '/'.
+const APP_BASE = new URL('../', import.meta.url).pathname;
+const THUMB_CACHE = `${APP_BASE === '/' ? '' : APP_BASE}screenshot-thumbs`;
 
 /** Tell the other pages (the Screenshots page) that the pictures of some game changed on the server. */
 const shotsChanged = () => window.dispatchEvent(new Event('screenshots-changed'));
