@@ -1,5 +1,7 @@
 // Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
+import { createTtbFilter } from './ttbfilter.js';
+import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
 import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
@@ -104,13 +106,14 @@ export function renderLibrary(root, opts = {}) {
     const btn = h('button.chip', { type: 'button', hidden: !!f.test && !state.flags.has(f.key) && !store.games.some(f.test), onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
     return { f, btn };
   });
+  const ttbFilter = createTtbFilter(state, () => update());
   const showBtn = h('button.btn.primary', { type: 'button', onclick: () => setSheet(false) });
   const resetBtn = h('button.btn', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset');
   const panel = h('aside.filters', { 'aria-label': 'Filters' },
     h('div.filters-head', {}, h('span', {}, 'Filters'), h('button.btn.close-sheet', { type: 'button', onclick: () => setSheet(false), 'aria-label': 'Close filters' }, '✕')),
     h('div.filters-body', {},
       h('p.chip-hint', {}, 'Tap a chip to include it, tap again to exclude it.'),
-      h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls),
+      h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls, ttbFilter.el),
     h('div.filters-foot', {}, resetBtn, showBtn));
   const scrim = h('div.scrim', { onclick: () => setSheet(false) });
   function setSheet(on) { panel.classList.toggle('open', on); scrim.classList.toggle('show', on); }
@@ -154,7 +157,8 @@ export function renderLibrary(root, opts = {}) {
 
   function reset() {
     const fresh = view ? stateFromView(view) : emptyState();
-    state.q = fresh.q; state.in = fresh.in; state.ex = fresh.ex; state.all = fresh.all; state.flags = fresh.flags;
+    state.q = fresh.q; state.in = fresh.in; state.ex = fresh.ex; state.all = fresh.all; state.flags = fresh.flags; state.ttb = fresh.ttb;
+    ttbFilter.sync();
     if (view) { state.sorts = fresh.sorts; state.group = fresh.group; sortSheet.render(); }
     input.value = state.q;
     update();
@@ -257,6 +261,8 @@ export function renderLibrary(root, opts = {}) {
       }
     }
 
+    ttbFilter.sync();
+
     // active filter pills
     const active = [];
     for (const grp of GROUPS) {
@@ -264,6 +270,8 @@ export function renderLibrary(root, opts = {}) {
       for (const v of state.ex[grp.key]) active.push(h('button.pill.ex', { type: 'button', onclick: () => { state.ex[grp.key].delete(v); update(); } }, h('b', {}, grp.label), `not ${label(grp, v)}`, ' ✕'));
     }
     for (const f of state.flags) active.push(h('button.pill', { type: 'button', onclick: () => { state.flags.delete(f); update(); } }, FLAGS.find((x) => x.key === f).label, ' ✕'));
+    if (ttbRangeActive(state.ttb)) active.push(h('button.pill', { type: 'button', onclick: () => { state.ttb.min = state.ttb.max = null; update(); } }, h('b', {}, ttbKindLabel(state.ttb.kind)), ttbRangeText(state.ttb), ' ✕'));
+    if (state.ttb.unknown) active.push(h('button.pill' + (state.ttb.unknown === 'ex' ? '.ex' : ''), { type: 'button', onclick: () => { state.ttb.unknown = ''; update(); } }, h('b', {}, ttbKindLabel(state.ttb.kind)), state.ttb.unknown === 'ex' ? 'not unknown' : 'unknown', ' ✕'));
     const nFilters = activeCount(state);
     saveBtn.hidden = !(view && dirty());
     saveAsBtn.hidden = view ? false : isPristine(state);

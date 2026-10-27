@@ -122,7 +122,7 @@ await go(p, '#/library?sort=status:asc,last_year:desc,title:asc&q=');
 await shot(p, 'library-phone');
 
 await p.click('.open-filters'); await wait(500);
-await p.$$eval('details.group', (d) => d.forEach((x) => { x.open = x.textContent.trim().startsWith('Status') || x.textContent.trim().startsWith('Ownership'); }));
+await p.$$eval('details.group', (d) => d.forEach((x) => { x.open = x.textContent.trim().startsWith('Status') || x.textContent.trim().startsWith('Time to beat'); }));
 await wait(300);
 await shot(p, 'filters-phone');
 

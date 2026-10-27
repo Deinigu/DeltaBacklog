@@ -122,10 +122,9 @@ test('game mode and perspective filters work like the other groups', () => {
   assert.deepEqual(found(t), ['Short coop']);
 });
 
-test('the short game flag keeps only games under ten hours', () => {
-  assert.ok(FLAGS.some((f) => f.key === 'short'));
+test('the under-10-hours range keeps only games under ten hours', () => {
   const s = emptyState();
-  s.flags.add('short');
+  s.ttb.max = SHORT_MINUTES;
   assert.deepEqual(found(s), ['Short coop']);
   assert.equal(activeCount(s), 1);
 });
@@ -142,9 +141,9 @@ test('saved views: old ones load, new filters round-trip through JSON and the UR
   assert.equal(old.in.mode.size, 0);
 
   const s = emptyState();
-  cycle(s, 'mode', 'Co-operative'); cycle(s, 'perspective', 'First person'); s.flags.add('short');
+  cycle(s, 'mode', 'Co-operative'); cycle(s, 'perspective', 'First person'); s.ttb.max = 600;
   const json = filterToJSON(s);
-  assert.deepEqual(json, { in: { mode: ['Co-operative'], perspective: ['First person'] }, flags: ['short'] });
+  assert.deepEqual(json, { in: { mode: ['Co-operative'], perspective: ['First person'] }, ttb: { max: 600 } });
   const back = stateFromView({ filter: JSON.parse(JSON.stringify(json)), sort: [] });
   assert.deepEqual(filterToJSON(back), json);
 
@@ -175,4 +174,38 @@ test('mood: quick game keeps games under ten hours and the chip count says how m
   assert.deepEqual(ids(applyMood([a, b, c], m, 2026)), [a.id]);
   m.vr = true; // the other choices still combine with AND
   assert.deepEqual(ids(applyMood([a, b, c], m, 2026)), []);
+});
+
+test('ttb filter: range is min inclusive, max exclusive, and the presets tile', async () => {
+  const { emptyTtbFilter, matchesTtb, TTB_PRESETS, ttbValue, ttbRangeText } = await import('../static/js/ttb.js');
+  const at = (m) => ({ ttb_normally: m });
+  const f = { ...emptyTtbFilter(), min: 300, max: 900 };
+  assert.equal(matchesTtb(f, at(300)), true);
+  assert.equal(matchesTtb(f, at(899)), true);
+  assert.equal(matchesTtb(f, at(900)), false);
+  assert.equal(matchesTtb(f, {}), false); // no time: never in a range
+  for (const m of [1, 299, 300, 899, 900, 2399, 2400, 9000]) {
+    assert.equal(TTB_PRESETS.filter((p) => matchesTtb({ ...emptyTtbFilter(), min: p.min, max: p.max }, at(m))).length, 1, `${m} min`);
+  }
+  assert.equal(ttbRangeText(f), '5-15 h');
+  assert.equal(ttbRangeText({ ...emptyTtbFilter(), max: 600 }), 'under 10 h');
+  assert.equal(ttbValue({ ttb_hastily: 60, ttb_normally: 120 }, 'ttb_completely'), null); // a chosen estimate has no fallback
+  assert.equal(ttbValue({ ttb_hastily: 60, ttb_normally: 120 }, 'ttb_hastily'), 60);
+});
+
+test('ttb filter: no time known', async () => {
+  const { emptyTtbFilter, matchesTtb } = await import('../static/js/ttb.js');
+  const known = { ttb_normally: 600 }, none = {};
+  const only = { ...emptyTtbFilter(), unknown: 'in' }, hide = { ...emptyTtbFilter(), unknown: 'ex' };
+  assert.deepEqual([matchesTtb(only, known), matchesTtb(only, none)], [false, true]);
+  assert.deepEqual([matchesTtb(hide, known), matchesTtb(hide, none)], [true, false]);
+  const both = { ...emptyTtbFilter(), max: 300, unknown: 'in' }; // short games or those with no time
+  assert.deepEqual([matchesTtb(both, { ttb_normally: 100 }), matchesTtb(both, known), matchesTtb(both, none)], [true, false, true]);
+  const rangeHide = { ...emptyTtbFilter(), max: 300, unknown: 'ex' };
+  assert.deepEqual([matchesTtb(rangeHide, { ttb_normally: 100 }), matchesTtb(rangeHide, none)], [true, false]);
+});
+
+test('an empty range (max not above min) is refused', async () => {
+  const { rangeOk } = await import('../static/js/ttb.js');
+  assert.deepEqual([rangeOk(null, 600), rangeOk(1200, null), rangeOk(300, 600), rangeOk(1200, 600), rangeOk(600, 600)], [true, true, true, false, false]);
 });

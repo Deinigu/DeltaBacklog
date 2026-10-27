@@ -233,6 +233,11 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .chip[data-state="in"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .chip[data-state="in"] .c { color: inherit; opacity: .8; }
 .chip[data-state="ex"] { border-color: #ef4444; color: #ef4444; text-decoration: line-through; background: color-mix(in srgb, #ef4444 10%, var(--surface)); }
+.ttb-range { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px 0 12px; }
+.ttb-box { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.ttb-box input, .ttb-box select.btn { height: 44px; width: 110px; max-width: none; padding: 0 10px; font-size: 15px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.ttb-box select.btn { width: 150px; }
+.ttb-box input[aria-invalid="true"] { border-color: #ef4444; }
 .mode { display: inline-flex; gap: 0; margin: 0 0 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .mode button { border: 0; background: var(--surface); height: 32px; padding: 0 14px; font-size: 13px; color: var(--muted); }
 .mode button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 600; }

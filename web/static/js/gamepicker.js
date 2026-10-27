@@ -3,6 +3,7 @@
 import { h, norm, icon, debounce, gradientFor, initials, lazyImg } from './util.js';
 import { store, coverURL, posterURL } from './api.js';
 import { GROUPS, FLAGS, emptyState, matches, cycle, chipState, activeCount } from './filters.js';
+import { createTtbFilter } from './ttbfilter.js';
 import { ownershipLabel } from './ownership.js';
 import { yearOrder } from './sort.js';
 
@@ -42,9 +43,10 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     });
     const flagBtns = FLAGS.map((f) => ({ f, btn: h('button.chip', { type: 'button', hidden: !!f.test && !games.some(f.test), onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label) }));
 
+    const ttbFilter = createTtbFilter(state, () => update(), () => games);
     const count = h('div.count.pk-count');
     const list = h('div.pk-list', { role: 'list' });
-    const filtersBox = h('div.pk-filters', {}, h('div.chips', {}, flagBtns.map((r) => r.btn)), groupEls.map((g) => g.el));
+    const filtersBox = h('div.pk-filters', {}, h('div.chips', {}, flagBtns.map((r) => r.btn)), groupEls.map((g) => g.el), ttbFilter.el);
     const filtersBtn = h('button.btn.pk-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => {
       const on = filtersBox.classList.toggle('open');
       filtersBtn.setAttribute('aria-expanded', String(on));
@@ -114,6 +116,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
         }
       }
       for (const r of flagBtns) r.btn.setAttribute('aria-pressed', String(state.flags.has(r.f.key)));
+      ttbFilter.sync();
       const n = activeCount(state);
       filtersBadge.hidden = n === 0;
       filtersBadge.textContent = String(n);

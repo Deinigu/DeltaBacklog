@@ -79,6 +79,38 @@ shots_dropin() {
 # backups folder is created next to it, and next to a mount point that is on the SD card.
 shots_is_mount() { [ "$(mount_point_of "$1" 2>/dev/null)" = "$1" ]; }
 
+# name_off <settings-file>: true when the settings turn the friendly address off (PUBLIC_NAME=off), for an app that
+# is only reached through a reverse proxy (for example the Raspberry Dashboard's /backlog/ path).
+name_off() { [ "$(env_value "$1" PUBLIC_NAME)" = off ]; }
+
+# merge_settings <new> <old>: a deploy's settings file (new) does not carry the Pi-only settings: SCREENSHOTS_DIR,
+# ALLOWED_HOSTS and PUBLIC_NAME come over from the installed one (old) when new has none, and with PUBLIC_NAME=off the
+# installed LISTEN_ADDR too (127.0.0.1:8081 behind a proxy; a deploy's file says :8081).
+merge_settings() {
+  for k in SCREENSHOTS_DIR ALLOWED_HOSTS PUBLIC_NAME; do
+    v=$(env_value "$2" "$k")
+    if [ -n "$v" ] && [ -z "$(env_value "$1" "$k")" ]; then echo "$k=$v" >> "$1"; fi
+  done
+  v=$(env_value "$2" LISTEN_ADDR)
+  if name_off "$1" && [ -n "$v" ]; then
+    sed -i '/^LISTEN_ADDR=/d' "$1"
+    echo "LISTEN_ADDR=$v" >> "$1"
+  fi
+}
+
+# name_unit <settings-file>: with PUBLIC_NAME=off, disable and stop deltabacklog-name.service (its ExecStopPost removes
+# the port 80 rules) and leave deltabacklog.local unannounced; otherwise set the friendly address up (name_setup).
+name_unit() {
+  if name_off "$1"; then
+    if systemctl is-enabled --quiet deltabacklog-name.service 2>/dev/null || systemctl is-active --quiet deltabacklog-name.service 2>/dev/null; then
+      systemctl disable --now deltabacklog-name.service >/dev/null 2>&1 || echo "warning: could not stop deltabacklog-name.service"
+    fi
+    echo "friendly address off (PUBLIC_NAME=off): no deltabacklog.local, no port 80 rules"
+    return 0
+  fi
+  name_setup || echo "warning: http://deltabacklog.local was not set up; use http://<address>:8081"
+}
+
 # Sourced by the tests (INSTALL_LIB=1): define the functions and stop.
 if [ "${INSTALL_LIB:-}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
@@ -113,12 +145,10 @@ install -d -m 750 -o deltabacklog -g deltabacklog "$DATA" "$DATA/covers" "$BACKU
 
 # 3. settings (secrets: readable by root only; systemd reads it before dropping privileges)
 if [ -f "$STAGE/env" ]; then
-  OLD_SHOTS=$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)
-  install -m 600 -o root -g root "$STAGE/env" /etc/deltabacklog.env
-  # the deploy's settings file does not carry the Pi-only drive setting: keep it
-  if [ -n "$OLD_SHOTS" ] && [ -z "$(env_value /etc/deltabacklog.env SCREENSHOTS_DIR)" ]; then
-    echo "SCREENSHOTS_DIR=$OLD_SHOTS" >> /etc/deltabacklog.env
-  fi
+  install -m 600 -o root -g root "$STAGE/env" /etc/deltabacklog.env.new
+  # the deploy's settings file does not carry the Pi-only settings: keep them
+  [ -f /etc/deltabacklog.env ] && merge_settings /etc/deltabacklog.env.new /etc/deltabacklog.env
+  mv -f /etc/deltabacklog.env.new /etc/deltabacklog.env
   echo "settings installed to /etc/deltabacklog.env"
 elif [ ! -f /etc/deltabacklog.env ]; then
   printf 'LISTEN_ADDR=:8081\nDATA_DIR=%s\nGOMEMLIMIT=96MiB\n#ALLOWED_HOSTS=\n' "$DATA" > /etc/deltabacklog.env
@@ -195,8 +225,8 @@ else
 fi
 systemctl start deltabacklog-backup.timer
 
-# 7. the friendly address http://deltabacklog.local (mDNS name + port 80 -> 8081). Optional: a failure here
-#    must not fail the install, the app itself is already running.
+# 7. the friendly address http://deltabacklog.local (mDNS name + port 80 -> 8081), unless PUBLIC_NAME=off. Optional: a
+#    failure here must not fail the install, the app itself is already running.
 name_setup() {
   if ! command -v avahi-publish >/dev/null 2>&1 || ! command -v iptables >/dev/null 2>&1 || ! systemctl cat avahi-daemon.service >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
@@ -209,7 +239,7 @@ name_setup() {
   # an older unit never removed its rules (the first one also caught forwarded traffic): clear them before restarting
   if [ "$NAME_CHANGED" = 1 ]; then "$APP/name.sh" rules-del; systemctl restart deltabacklog-name.service; else systemctl start deltabacklog-name.service; fi
 }
-name_setup || echo "warning: http://deltabacklog.local was not set up; use http://<address>:8081"
+name_unit /etc/deltabacklog.env
 
 # 8. wait for it to answer
 i=0
@@ -222,4 +252,8 @@ until curl -fsS -m 3 http://127.0.0.1:8081/healthz >/dev/null 2>&1; do
   fi
   sleep 1
 done
-echo "DeltaBacklog is running (enabled at boot): http://deltabacklog.local or http://$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'):8081"
+if name_off /etc/deltabacklog.env; then
+  echo "DeltaBacklog is running (enabled at boot) on $(env_value /etc/deltabacklog.env LISTEN_ADDR), for the reverse proxy in front of it"
+else
+  echo "DeltaBacklog is running (enabled at boot): http://deltabacklog.local or http://$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'):8081"
+fi
