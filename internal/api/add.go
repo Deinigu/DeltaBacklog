@@ -223,6 +223,12 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
+	if in.IGDBID != nil && *in.IGDBID > 0 && in.IGDBParentID != nil { // known root: the game's family is hidden at once
+		if _, err := tx.Exec("UPDATE game SET igdb_parent_id = ? WHERE id = ?", *in.IGDBParentID, id); err != nil {
+			fail(w, err)
+			return
+		}
+	}
 	if err := applyFieldEdits(tx, id, &in.gamePatch); err != nil {
 		fail(w, err)
 		return

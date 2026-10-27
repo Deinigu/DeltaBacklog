@@ -53,6 +53,23 @@ func FetchPosterStrict(url, dir string, gameID int64) (string, error) {
 	return SavePoster(io.LimitReader(resp.Body, maxDownload), dir, gameID)
 }
 
+// MissingName is the file name of the small poster kept for an IGDB game the library does not have.
+func MissingName(igdbID int64) string { return fmt.Sprintf("i%d.jpg", igdbID) }
+
+// FetchMissingPosterStrict downloads url (already host-checked), refusing redirects, and writes the poster of an
+// IGDB game that is not in the library as i<igdbID>.jpg.
+func FetchMissingPosterStrict(url, dir string, igdbID int64) (string, error) {
+	resp, err := strictClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", &StatusError{URL: url, Code: resp.StatusCode, Text: resp.Status}
+	}
+	return savePosterAs(io.LimitReader(resp.Body, maxDownload), dir, MissingName(igdbID))
+}
+
 // CropPoster makes the poster from the game's existing wide cover file (no network): the last resort.
 func CropPoster(coverPath, dir string, gameID int64) (string, error) {
 	f, err := os.Open(coverPath)
@@ -66,6 +83,11 @@ func CropPoster(coverPath, dir string, gameID int64) (string, error) {
 // SavePoster decodes an image, crops its centre to 2:3, scales it down to PosterWidth and writes dir/p<gameID>.jpg.
 // It returns the file name. The same pixel limit as for covers applies, checked before the image is decoded.
 func SavePoster(r io.Reader, dir string, gameID int64) (string, error) {
+	return savePosterAs(r, dir, PosterName(gameID))
+}
+
+// savePosterAs is SavePoster with the file name chosen by the caller.
+func savePosterAs(r io.Reader, dir, name string) (string, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -96,7 +118,6 @@ func SavePoster(r io.Reader, dir string, gameID int64) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := PosterName(gameID)
 	tmp := filepath.Join(dir, name+".tmp")
 	f, err := os.Create(tmp)
 	if err != nil {

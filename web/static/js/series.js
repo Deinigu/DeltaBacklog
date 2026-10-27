@@ -76,3 +76,75 @@ export function seriesPosition(game, games) {
   if (i < 0) return null;
   return { position: s.noYear ? null : i + 1, total: s.total, name: s.name };
 }
+
+// ---- games of the series' IGDB collections that the library does not have ("not registered") ----
+
+/** The key the page and the server group a series by: its name, trimmed and lower-cased. */
+export const seriesKey = keyOf;
+
+const EMPTY_EXTRA = Object.freeze({ missing: [], hidden: [], collections: [] });
+
+/**
+ * Index the answer of GET api/series/missing by series key: { missing, hidden, collections } per series.
+ * A game that has become a library game since the answer was made is dropped, so adding one needs no new refresh.
+ * IGDB splits one game into several entries (the original, an expanded edition, a remaster), so a game counts as owned
+ * with its family, like on the server: the root of its version chain (`parent`, or the game itself) is a root the server
+ * listed in `owned_roots`, or is (or is the parent of) a game added since.
+ */
+export function missingIndex(resp, games) {
+  const owned = new Set(games.map((g) => g.igdb_id).filter((id) => id != null));
+  const roots = new Set(resp?.owned_roots ?? []);
+  const isOwned = (m) => owned.has(m.igdb_id) || roots.has(m.parent > 0 ? m.parent : m.igdb_id) || (m.parent > 0 && owned.has(m.parent));
+  const out = new Map();
+  for (const s of resp?.series ?? []) {
+    out.set(s.key, {
+      missing: s.missing.filter((m) => !isOwned(m)),
+      hidden: s.hidden.filter((m) => !isOwned(m)),
+      collections: s.collections,
+    });
+  }
+  return out;
+}
+
+/** What the index holds for one series (never undefined). */
+export const extraOf = (index, s) => index.get(s.key) ?? EMPTY_EXTRA;
+
+/** Series that have at least one game the library does not have. */
+export const withMissing = (series, index) => series.filter((s) => extraOf(index, s).missing.length > 0);
+
+/**
+ * The items of an opened series in release order, owned and not registered together:
+ * { kind: 'owned', game } or { kind: 'missing', game: {igdb_id, title, year, cover, collection_id} }.
+ * Same order as compareInSeries (year ascending, unknown last, then title); an owned game comes before a game of
+ * the same year and title that is missing.
+ */
+export function shelfItems(s, extra) {
+  const items = s.games.map((game) => ({ kind: 'owned', game, year: game.release_year, title: game.title }));
+  for (const m of extra.missing) items.push({ kind: 'missing', game: m, year: m.year, title: m.title });
+  return items.sort((a, b) => {
+    const ya = a.year ?? Infinity, yb = b.year ?? Infinity;
+    if (ya !== yb) return ya < yb ? -1 : 1;
+    return collator.compare(a.title, b.title) || (a.kind === b.kind ? 0 : a.kind === 'owned' ? -1 : 1);
+  });
+}
+
+/** Up to `n` games whose pictures make the series' fan on its tile: the first ones in release order that have an image. */
+export function fanGames(s, hasImage, n = 4) {
+  const withImg = s.games.filter(hasImage);
+  return (withImg.length ? withImg : s.games).slice(0, n);
+}
+
+/** "2 finished · 3 played · 4 games · 1 left to play · 3 not in your library" */
+export function seriesSummary(s, extra) {
+  let t = progressText(s);
+  if (s.left) t += ` · ${s.left} left to play`;
+  if (extra.missing.length) t += ` · ${extra.missing.length} not in your library`;
+  return t;
+}
+
+/** The oldest time the cached collections of these series were read (an ISO string), or null when none was. */
+export function oldestFetch(index) {
+  let old = null;
+  for (const e of index.values()) for (const c of e.collections) if (!old || c.fetched_at < old) old = c.fetched_at;
+  return old;
+}

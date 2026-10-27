@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
@@ -417,6 +418,11 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 	}
 	if found {
 		// ---- data that is new in the app: IGDB's values replace what an earlier run stored ----
+		// The collections behind the Series page's "not registered" games (IGDB's own data). The version root is read by
+		// the collections refresh that ends `sync-igdb --enrich` (it also follows the links of games in no collection).
+		if err := collections.StoreCollections(tx, gameID, det.Collections); err != nil {
+			return err
+		}
 		if len(det.Modes) > 0 {
 			if err := replaceLinks(tx, gameID, "game_mode", "game_game_mode", "game_mode_id", det.Modes); err != nil {
 				return err

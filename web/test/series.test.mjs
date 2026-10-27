@@ -72,3 +72,80 @@ test('seriesPosition follows release order and hides single-game series', () => 
   assert.equal(seriesPosition(solo, all), null);
   assert.equal(seriesPosition(g('x', null), all), null);
 });
+
+// ---- not registered games ----
+import { seriesKey, missingIndex, extraOf, withMissing as seriesWithMissing, shelfItems, fanGames, seriesSummary, oldestFetch } from '../static/js/series.js';
+
+const miss = (igdb_id, title, year, o = {}) => ({ igdb_id, title, year, cover: null, collection_id: 7, ...o });
+const answer = (...series) => ({ configured: true, series });
+
+test('the series key is the trimmed lower-case name, like the server', () => {
+  assert.equal(seriesKey('  The Legend OF Zelda '), 'the legend of zelda');
+});
+
+test('the index drops games that are in the library by IGDB id, and series without a cache are empty', () => {
+  const games = [g('A', 'Zed', { igdb_id: 1 }), g('B', 'Zed', { igdb_id: 2 }), g('C', 'Zed')];
+  const idx = missingIndex(answer({ key: 'zed', collections: [{ id: 7, name: 'Zed', fetched_at: '2026-02-01T00:00:00Z' }], missing: [miss(2, 'B', 2001), miss(3, 'D', 2005)], hidden: [miss(1, 'A', 1999), miss(9, 'H', 2010)] }), games);
+  assert.deepEqual(idx.get('zed').missing.map((m) => m.igdb_id), [3]);
+  assert.deepEqual(idx.get('zed').hidden.map((m) => m.igdb_id), [9]);
+  const [s] = buildSeries(games);
+  assert.equal(extraOf(idx, s).missing.length, 1);
+  assert.deepEqual(extraOf(new Map(), s).missing, []);
+  assert.deepEqual(missingIndex(null, games).size, 0);
+});
+
+test('series with games to add', () => {
+  const games = [g('A', 'Zed'), g('B', 'Other')];
+  const idx = missingIndex(answer({ key: 'zed', collections: [], missing: [miss(3, 'D', 2005)], hidden: [] }, { key: 'other', collections: [], missing: [], hidden: [miss(4, 'E', 2005)] }), games);
+  assert.deepEqual(seriesWithMissing(buildSeries(games), idx).map((s) => s.name), ['Zed']); // a hidden game does not count
+});
+
+test('owned and missing games share one release order; unknown years last, owned first on a tie', () => {
+  const [s] = buildSeries([g('Two', 'X', { release_year: 2005 }), g('One', 'X', { release_year: 1998 }), g('Tail', 'X')]);
+  const items = shelfItems(s, { missing: [miss(1, 'Zero', 1995), miss(2, 'Two', 2005), miss(3, 'Lost', null), miss(4, 'Mid', 2001)], hidden: [], collections: [] });
+  assert.deepEqual(items.map((i) => `${i.kind[0]}:${i.title}`), ['m:Zero', 'o:One', 'm:Mid', 'o:Two', 'm:Two', 'm:Lost', 'o:Tail']);
+});
+
+test('the fan takes the first games that have a picture', () => {
+  const [s] = buildSeries([1, 2, 3, 4, 5, 6].map((y) => g('G' + y, 'X', { release_year: 2000 + y, cover: y === 2 ? null : 'c.jpg' })));
+  assert.deepEqual(fanGames(s, (x) => !!x.cover).map((x) => x.title), ['G1', 'G3', 'G4', 'G5']);
+  assert.equal(fanGames(s, () => false).length, 4); // no picture at all: placeholders
+  assert.equal(fanGames(s, () => true, 2).length, 2);
+});
+
+test('the summary names the games left and the games not in the library', () => {
+  const [s] = buildSeries([g('A', 'X', { status: 'finished' }), g('B', 'X')]);
+  assert.equal(seriesSummary(s, { missing: [], hidden: [], collections: [] }), '1 finished · 1 played · 2 games · 1 left to play');
+  assert.equal(seriesSummary(s, { missing: [miss(1, 'C', 2000), miss(2, 'D', 2001)], hidden: [], collections: [] }), '1 finished · 1 played · 2 games · 1 left to play · 2 not in your library');
+});
+
+test('the oldest fetch time of the cached collections', () => {
+  const idx = missingIndex(answer({ key: 'a', collections: [{ id: 1, name: 'A', fetched_at: '2026-03-01T00:00:00Z' }, { id: 2, name: 'B', fetched_at: '2026-01-01T00:00:00Z' }], missing: [], hidden: [] }), []);
+  assert.equal(oldestFetch(idx), '2026-01-01T00:00:00Z');
+  assert.equal(oldestFetch(new Map()), null);
+});
+
+test('a game counts as owned with its IGDB family: entry, parent, remaster, shared parent', () => {
+  // the owned DS entry 1426 has the JP original 221280 as parent; the 2013 remaster 221285 has 1426 as parent
+  const games = [g('Phoenix Wright', 'Ace', { igdb_id: 1426 })];
+  const resp = {
+    owned_roots: [221280],
+    series: [{ key: 'ace', collections: [], hidden: [], missing: [
+      miss(221280, 'Gyakuten Saiban', 2001), // the parent of an owned game
+      miss(221285, 'Phoenix Wright', 2013, { parent: 1426 }), // a version of an owned game
+      miss(230001, 'Sibling', 2013, { parent: 221280 }), // shares the parent of an owned game
+      miss(222000, 'Dual Destinies', 2013), // really missing
+    ] }],
+  };
+  assert.deepEqual(missingIndex(resp, games).get('ace').missing.map((m) => m.title), ['Dual Destinies']);
+  // a game added since the answer was made (no owned_roots yet) still hides its remaster and itself
+  const added = [g('Justice for All', 'Ace', { igdb_id: 1427 })];
+  const resp2 = { series: [{ key: 'ace', collections: [], hidden: [], missing: [miss(1427, 'JfA', 2002), miss(221286, 'JfA HD', 2013, { parent: 1427 }), miss(5, 'Other', 2010)] }] };
+  assert.deepEqual(missingIndex(resp2, added).get('ace').missing.map((m) => m.igdb_id), [5]);
+});
+
+test('the poster URL is relative and versioned by the cover image', async () => {
+  const { missingPosterURL } = await import('../static/js/api.js');
+  assert.equal(missingPosterURL('i7.jpg', 'co1x'), 'covers/i7.jpg?v=co1x');
+  assert.equal(missingPosterURL(null, 'x'), null);
+});

@@ -51,6 +51,8 @@ if (!BASE) {
   for (const args of [['run', './docs/tools/demo-data', '-data', data], ['build', '-o', exe, './cmd/deltabacklog']]) {
     if (spawnSync('go', args, { cwd: ROOT, env: childEnv, stdio: 'inherit' }).status !== 0) { console.error('go failed (is Go on PATH?)'); process.exit(1); }
   }
+  // Portrait posters (the Series tiles and shelves show them); without keys the wide covers are used instead.
+  if (lookups) spawnSync(exe, ['fetch-posters', '--db', join(data, 'app.db')], { cwd: ROOT, env: { ...childEnv, DATA_DIR: data }, stdio: 'inherit' }); // posters go next to the demo covers
   const port = await freePort();
   BASE = `http://127.0.0.1:${port}`;
   // Started in the repo root; the keys (if any) reach it through the environment.
@@ -132,9 +134,18 @@ await go(p, '#/views');
 await shot(p, 'views-phone');
 
 await go(p, '#/series');
-await p.$$eval('.scard', (ds) => { const d = ds.find((x) => x.textContent.includes('Ace Attorney')) || ds[0]; d.open = true; d.scrollIntoView(); });
-await wait(300);
+if (lookups && !process.env.BASE_URL) { // the games of the series' IGDB collections that the library lacks: read them (a few dozen requests)
+  await p.evaluate(() => fetch('/api/series/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' } }));
+  for (let i = 0; i < 120; i++) {
+    const running = await p.evaluate(async () => (await (await fetch('/api/series/missing')).json()).refresh.running);
+    if (!running) break;
+    await wait(1000);
+  }
+  await go(p, '#/series');
+}
 await shot(p, 'series-phone');
+await clickText(p, 'a.tile', 'Ace Attorney'); await wait(1200);
+await shot(p, 'series-shelf-phone');
 
 await go(p, '#/stats');
 await shot(p, 'stats-phone');

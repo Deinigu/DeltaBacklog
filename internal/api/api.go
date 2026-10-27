@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
 )
 
@@ -28,11 +29,18 @@ type Server struct {
 
 	// PosterFetch and PosterPause replace the poster download and the pause between two posters (tests).
 	PosterFetch func(url, dir string, gameID int64) (string, error)
-	PosterPause time.Duration
+	// MissingPosterFetch replaces the download of a poster for a game the library does not have (Series page; tests). Its
+	// own field: PosterFetch writes p<game id>.jpg, which must never be used for an IGDB id.
+	MissingPosterFetch func(url, dir string, igdbID int64) (string, error)
+	PosterPause        time.Duration
+
+	// Collections replaces the IGDB client the Series page reads collections with (tests); nil means Meta.
+	Collections collections.Source
 
 	hltbOnce   sync.Once
 	posterOnce sync.Once
 	posters    *posters.Queue // background poster worker, created on first use (see posterQ)
+	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -85,6 +93,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/screenshots/{id}", s.deleteShot)
 	mux.HandleFunc("GET /screenshots/{gid}/{name}", s.serveShot)
 	mux.HandleFunc("GET /api/lookup", s.lookup)
+	mux.HandleFunc("GET /api/igdb/{id}", s.igdbGame)
+	mux.HandleFunc("GET /api/series/missing", s.seriesMissing)
+	mux.HandleFunc("POST /api/series/refresh", s.seriesRefresh)
+	mux.HandleFunc("POST /api/series/hide", s.seriesHide)
+	mux.HandleFunc("POST /api/series/unhide", s.seriesUnhide)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
 	mux.HandleFunc("GET /api/facets", s.facets)

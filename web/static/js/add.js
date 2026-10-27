@@ -119,9 +119,10 @@ export function pickCandidate({ query = '', excludeId = null } = {}) {
 
 // ---------------------------------------------------------------- add a game
 
-export function openAdd({ query = '' } = {}) {
+/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). */
+export function openAdd({ query = '', candidate = null } = {}) {
   const ui = makeSheet('Add a game', 'add');
-  const state = { query };
+  const state = { query: candidate?.name || query };
 
   function toSearch() {
     ui.guard = null;
@@ -253,6 +254,7 @@ export function openAdd({ query = '' } = {}) {
       };
       if (/^\d{4}$/.test(String(f.release_year).trim())) body.release_year = Number(f.release_year);
       if (c?.igdb_id) body.igdb_id = c.igdb_id;
+      if (c?.igdb_id && c.igdb_parent_id != null) body.igdb_parent_id = c.igdb_parent_id; // the Series page's Add knows the version root
       if (f.cover) body.cover_url = f.cover;
       try {
         const { game, cover_error: coverError } = await createGame(body);
@@ -272,7 +274,7 @@ export function openAdd({ query = '' } = {}) {
     }
   }
 
-  toSearch();
+  if (candidate) toForm(candidate); else toSearch();
 }
 
 // ---------------------------------------------------------------- change a cover or a poster

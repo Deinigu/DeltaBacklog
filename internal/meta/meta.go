@@ -81,7 +81,8 @@ type Candidate struct {
 	Series    string   `json:"series,omitempty"`
 	CoverURL  string   `json:"cover_url,omitempty"`
 	Slug      string   `json:"slug,omitempty"`
-	AltNames  []string `json:"-"` // IGDB's localized and alternative names; the IGDB sync scores against them too
+	ParentID  int64    `json:"igdb_parent_id,omitempty"` // GameCandidate only: the game this one is another version of
+	AltNames  []string `json:"-"`                        // IGDB's localized and alternative names; the IGDB sync scores against them too
 
 	gameType int   // IGDB game_type: 0 main game, 1 DLC, 3 bundle, 8 remake, 9 remaster...
 	released int64 // first release, unix seconds; 0 when unknown
@@ -175,6 +176,12 @@ func (c *Client) pace(ctx context.Context) error {
 	return nil
 }
 
+// igdbCollection is the collection reference IGDB nests in a game.
+type igdbCollection struct {
+	ID   int64
+	Name string
+}
+
 type igdbGame struct {
 	ID               int64                   `json:"id"`
 	Name             string                  `json:"name"`
@@ -191,13 +198,32 @@ type igdbGame struct {
 		Developer bool
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
-	Collections      []struct{ Name string } `json:"collections"`
+	Collections      []igdbCollection        `json:"collections"`
+	ParentGame       int64                   `json:"parent_game"`    // set by the detail and collection queries only
+	VersionParent    int64                   `json:"version_parent"` // ditto
 	Franchises       []struct{ Name string } `json:"franchises"`
 	Slug             string                  `json:"slug"`
 	AlternativeNames []struct{ Name string } `json:"alternative_names"`
 	Cover            struct {
 		ImageID string `json:"image_id"`
 	} `json:"cover"`
+}
+
+// versionTypes are the IGDB game_type values whose parent_game is the same game in another form: 9 remaster, 10 expanded
+// game, 11 port. For the other types parent_game means something else (a standalone expansion, type 4, belongs to the game
+// it expands, a remake, type 8, to the game it remakes), and those are games of their own.
+var versionTypes = map[int]bool{9: true, 10: true, 11: true}
+
+// parent is the IGDB game this one is another version of: its version_parent (editions), else its parent_game when the
+// game is a remaster, an expanded game or a port; 0 when it has none (also for expansions and remakes).
+func (g igdbGame) parent() int64 {
+	if g.VersionParent > 0 {
+		return g.VersionParent
+	}
+	if g.ParentGame > 0 && versionTypes[g.GameType] {
+		return g.ParentGame
+	}
+	return 0
 }
 
 // searchLimit is how many hits IGDB is asked for: its relevance order buries the original of a long-running
@@ -733,9 +759,10 @@ type Details struct {
 	Genres       []string
 	Themes       []string
 	Developer    string
-	Series       string   // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
-	Modes        []string // game modes: Single player, Co-operative...
-	Perspectives []string // player perspectives: First person, Third person...
+	Series       string          // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
+	Collections  []CollectionRef // every IGDB collection of the game
+	Modes        []string        // game modes: Single player, Co-operative...
+	Perspectives []string        // player perspectives: First person, Third person...
 	Links        []StoreLink
 }
 
@@ -753,7 +780,7 @@ type igdbDetail struct {
 }
 
 const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
 func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {
@@ -797,6 +824,9 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
 		if len(g.Collections) > 0 {
 			d.Series = g.Collections[0].Name
+		}
+		for _, c := range g.Collections {
+			d.Collections = append(d.Collections, CollectionRef{ID: c.ID, Name: c.Name})
 		}
 		for _, m := range g.GameModes {
 			d.Modes = append(d.Modes, m.Name)

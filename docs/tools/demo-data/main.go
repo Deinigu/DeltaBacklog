@@ -255,9 +255,16 @@ func main() {
 	// unlinked). The rankings' posters then come from the right IGDB cover instead of a fuzzy SteamGridDB match
 	// ("Baldur's Gate 3" found "Baldur's Gate Toolkit").
 	igdbName := map[string]string{"Baldur's Gate 3": "Baldur's Gate III"} // IGDB's own spelling
+	// IGDB files the DS Phoenix Wright games under other entries than the title search finds (the DS ones are "expanded
+	// games" next to the Japanese originals and the 2013 remasters): link them by id, as the Series page needs them.
+	pinned := map[string]int64{"Phoenix Wright: Ace Attorney": 1426, "Phoenix Wright: Ace Attorney - Justice for All": 1427, "Phoenix Wright: Ace Attorney - Trials and Tribulations": 1428}
 	if igdb, _ := mc.Configured(); igdb {
 		for i, g := range games {
 			if g.title == "Pentiment" || g.title == "Subnautica" {
+				continue
+			}
+			if id, ok := pinned[g.title]; ok {
+				d.Exec("UPDATE game SET igdb_id = ? WHERE id = ? AND igdb_id IS NULL", id, ids[i])
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -31,6 +31,9 @@ type gamePatch struct {
 	Years       *[]int    `json:"years"`   // calendar years played
 	Periods     *[]string `json:"periods"` // "childhood", "always"
 	IGDBID      *int64    `json:"igdb_id"` // links the game to IGDB; 0 clears
+	// IGDBParentID is the root of the game's IGDB version chain (the Series page's Add sends what GET /api/igdb/{id}
+	// answered), 0 = the game is its own root. Only POST /api/games reads it, and only together with igdb_id.
+	IGDBParentID *int64 `json:"igdb_parent_id"`
 
 	// Time to beat, minutes. null (or 0) clears one; absent leaves it. Saving any of them makes the owner the
 	// source (TTBSource "manual", the default) or HowLongToBeat ("hltb"): the IGDB enrichment then leaves them alone.
@@ -79,7 +82,7 @@ func (in *gamePatch) validate() error {
 			return errInvalid
 		}
 	}
-	if in.IGDBID != nil && *in.IGDBID < 0 {
+	if (in.IGDBID != nil && *in.IGDBID < 0) || (in.IGDBParentID != nil && *in.IGDBParentID < 0) {
 		return errInvalid
 	}
 	for _, m := range []optMinutes{in.TTBHastily, in.TTBNormally, in.TTBCompletely} {
@@ -435,7 +438,8 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			// A different (or no) IGDB game: what the enrichment stored for the old one is not this game's. All of it is
 			// IGDB's data, never owner-entered, so it goes; `sync-igdb --enrich` reads the new link.
 			for _, q := range []string{
-				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL WHERE id = ?",
+				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, igdb_parent_id = NULL WHERE id = ?",
+				"DELETE FROM game_collection WHERE game_id = ?",
 				// only IGDB's own times go: times the owner typed or took from HowLongToBeat stay
 				`UPDATE game SET time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL, time_to_beat_src = NULL
 					WHERE id = ? AND (time_to_beat_src IS NULL OR time_to_beat_src = 'igdb')`,
