@@ -242,6 +242,9 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if in.IGDBID != nil && *in.IGDBID > 0 {
+		s.fillRelease(id, *in.IGDBID)
+	}
 	coverErr := ""
 	if in.CoverURL != "" {
 		if err := s.storeCover(id, in.CoverURL); err != nil {

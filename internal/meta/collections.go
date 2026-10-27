@@ -15,11 +15,13 @@ type CollectionRef struct {
 
 // CollectionGame is one game of an IGDB collection, as much as the Series page shows of a game the library lacks.
 type CollectionGame struct {
-	IGDBID   int64
-	Name     string
-	Year     int // 0 when IGDB has no release date
-	GameType int
-	CoverID  string // IGDB image id ("" when the game has no cover)
+	IGDBID    int64
+	Name      string
+	Year      int // 0 when IGDB has no release date
+	GameType  int
+	CoverID   string   // IGDB image id ("" when the game has no cover)
+	Release   Release  // the full first release date (zero when IGDB has none or says TBD)
+	Platforms []string // IGDB platforms, abbreviated
 }
 
 // realGameTypes are the IGDB game_type values that count as a game of a series: 0 main game, 4 standalone expansion,
@@ -72,9 +74,15 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 			Cover            struct {
 				ImageID string `json:"image_id"`
 			} `json:"cover"`
-			Collections []igdbCollection `json:"collections"`
+			Collections  []igdbCollection  `json:"collections"`
+			ReleaseDates []igdbReleaseDate `json:"release_dates"`
+			Platforms    []struct {
+				Abbreviation string
+				Name         string
+			} `json:"platforms"`
 		}
-		q := fmt.Sprintf("fields name,first_release_date,game_type,cover.image_id,collections.id,collections.name; "+
+		q := fmt.Sprintf("fields name,first_release_date,game_type,cover.image_id,collections.id,collections.name,"+
+			"release_dates.date,release_dates.date_format,platforms.abbreviation,platforms.name; "+
 			"where collections = (%d) & game_type = (0,4,8,9); sort id asc; limit %d; offset %d;", collectionID, collectionPage, offset)
 		if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 			return "", nil, err
@@ -86,6 +94,15 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 			cg := CollectionGame{IGDBID: g.ID, Name: strings.TrimSpace(g.Name), GameType: g.GameType, CoverID: g.Cover.ImageID}
 			if g.FirstReleaseDate > 0 {
 				cg.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
+			}
+			full := igdbGame{FirstReleaseDate: g.FirstReleaseDate, ReleaseDates: g.ReleaseDates}
+			cg.Release = full.release()
+			for _, p := range g.Platforms {
+				if p.Abbreviation != "" {
+					cg.Platforms = append(cg.Platforms, p.Abbreviation)
+				} else if p.Name != "" {
+					cg.Platforms = append(cg.Platforms, p.Name)
+				}
 			}
 			out = append(out, cg)
 			for _, col := range g.Collections {

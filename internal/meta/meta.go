@@ -181,10 +181,17 @@ type igdbCollection struct {
 	Name string
 }
 
+// igdbReleaseDate is one release of a game on one platform; DateFormat is how exact it is (see Release).
+type igdbReleaseDate struct {
+	Date       int64 `json:"date"`
+	DateFormat int   `json:"date_format"`
+}
+
 type igdbGame struct {
 	ID               int64                   `json:"id"`
 	Name             string                  `json:"name"`
 	FirstReleaseDate int64                   `json:"first_release_date"`
+	ReleaseDates     []igdbReleaseDate       `json:"release_dates"`
 	GameType         int                     `json:"game_type"`
 	ExternalGames    []int64                 `json:"external_games"` // store ids; only their number is used, to rank namesakes
 	Genres           []struct{ Name string } `json:"genres"`
@@ -735,6 +742,7 @@ type StoreLink struct {
 type Details struct {
 	IGDBID       int64
 	Year         int
+	Release      Release // the full first release date; the zero value when IGDB has none
 	Platforms    []string
 	Genres       []string
 	Themes       []string
@@ -759,7 +767,7 @@ type igdbDetail struct {
 	} `json:"websites"`
 }
 
-const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
+const detailFields = `fields id,first_release_date,release_dates.date,release_dates.date_format,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
 	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
@@ -801,7 +809,7 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 	out := make([]Details, 0, len(games))
 	for _, g := range games {
 		cand := g.igdbGame.candidate()
-		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
+		d := Details{IGDBID: g.ID, Year: cand.Year, Release: g.igdbGame.release(), Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
 		if len(g.Collections) > 0 {
 			d.Series = g.Collections[0].Name
 			d.CollectionID = g.Collections[0].ID

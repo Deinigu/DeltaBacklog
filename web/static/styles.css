@@ -909,3 +909,20 @@ body.rk-selecting #view { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 17
 .ttb-in input, .ttb-search input { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 0 12px; font-size: 16px; }
 .ttb-in input:focus, .ttb-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ttb-actions .btn { flex: 1 1 auto; }
+
+/* Upcoming page: games by month, a poster, the date and where the game comes from */
+.up-group h2 { font-size: 15px; margin: 18px 0 6px; }
+.up-group h2 small { color: var(--muted); font-weight: 400; }
+.up-list { list-style: none; margin: 0; padding: 0; }
+.up-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.up-open { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+button.up-open { cursor: pointer; border-radius: 8px; }
+.up-open .pst { flex: none; width: 52px; }
+.up-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.up-title { font-weight: 600; overflow-wrap: anywhere; }
+.up-date { font-size: 13px; }
+.up-from { font-size: 12px; color: var(--muted); }
+.up-tag { font-weight: 600; }
+.up-tag.own { color: var(--accent); }
+.up-row .si-actions { flex: none; flex-direction: column; margin: 0; }
+@media (min-width: 600px) { .up-row .si-actions { flex-direction: row; } }

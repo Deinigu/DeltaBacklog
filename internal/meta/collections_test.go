@@ -24,11 +24,14 @@ func collectionFake(t *testing.T, queries *[]string) *Client {
 		switch {
 		case strings.Contains(q, "where collections ="): // a DLC and a port slip through the fake: the client must drop them too
 			w.Write([]byte(`[
-			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}]},
-			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"collections":[{"id":7,"name":"Zed Series"}]},
+			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}],
+			  "release_dates":[{"date":852076800,"date_format":0}],"platforms":[{"abbreviation":"PC"},{"name":"Switch"}]},
+			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"collections":[{"id":7,"name":"Zed Series"}],"release_dates":[{"date":1104537600,"date_format":7}]},
 			 {"id":12,"name":"Zed: DLC","first_release_date":1104537600,"game_type":1,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":13,"name":"Zed (Port)","game_type":11,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":14,"name":"  ","game_type":0}]`))
+		case strings.Contains(q, "fields id,first_release_date"): // ReleaseDates
+			w.Write([]byte(`[{"id":10,"first_release_date":1830211199,"release_dates":[{"date":1830211199,"date_format":2}],"platforms":[{"abbreviation":"PC"}]}]`))
 		case strings.Contains(q, "fields collections.id"):
 			w.Write([]byte(`[{"id":10,"collections":[{"id":7,"name":"Zed Series"},{"id":8,"name":"Other"}]},{"id":99}]`))
 		default: // one game as a candidate

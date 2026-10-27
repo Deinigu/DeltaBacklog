@@ -86,6 +86,39 @@ var games = []game{
 	{"Pokémon Red", "finished", "Borrowed", "Pokémon", "Game Freak", 1996, "Game Boy", "RPG", "Fantasy", "childhood", false, true, false, ""},
 	{"Pokémon Legends: Arceus", "dropped", "Owned", "Pokémon", "Game Freak", 2022, "Switch", "RPG", "Fantasy, Open world", "2022", false, false, false, ""},
 	{"Undertale", "finished", "Owned", "", "Toby Fox", 2015, "PC, Switch", "RPG, Indie", "Comedy, Fantasy", "2016", false, true, true, ""},
+	// The wishlist (see due): games the owner wants but does not have. Not linked to IGDB, so their release dates stay
+	// the made-up ones below, relative to the day the demo is built.
+	{"Phantom Blade Zero", "wishlist", "", "", "S-GAME", 2026, "PC, PS5", "Hack and slash, RPG", "Fantasy", "", false, false, false, "Day-one buy."},
+	{"Professor Layton and the New World of Steam", "wishlist", "", "Professor Layton", "Level-5", 2026, "Switch", "Puzzle, Adventure", "Mystery", "", false, false, false, ""},
+	{"Marvel's Wolverine", "wishlist", "", "", "Insomniac Games", 2027, "PS5", "Adventure, Hack and slash", "Action", "", false, false, false, ""},
+	{"Slay the Spire II", "wishlist", "", "", "Mega Crit", 2026, "PC", "Card game, Roguelike", "Fantasy", "", false, false, false, "Out already: time to move it to the backlog."},
+	{"The Elder Scrolls VI", "wishlist", "", "", "Bethesda Game Studios", 0, "PC", "RPG", "Fantasy, Open world", "", false, false, false, ""},
+}
+
+// due is the made-up IGDB release date of a wishlist game, relative to today: an exact day (n days ahead), a month, a
+// quarter or a year, as precise as IGDB would give it. A negative n is a release in the past.
+var due = map[string]struct {
+	kind string
+	n    int
+}{
+	"Phantom Blade Zero": {"day", 9}, "Professor Layton and the New World of Steam": {"month", 1},
+	"Marvel's Wolverine": {"quarter", 5}, "Slay the Spire II": {"day", -18},
+}
+
+// dueDate turns a due entry into IGDB's shape: unix seconds (UTC) and date_format (0 day, 1 month, 2 year, 3-6 quarter).
+func dueDate(now time.Time, kind string, n int) (int64, int) {
+	t := now.UTC()
+	switch kind {
+	case "month":
+		return time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC).Unix(), 1
+	case "quarter":
+		x := time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC)
+		q := (int(x.Month()) - 1) / 3
+		return time.Date(x.Year(), time.Month(q*3+4), 0, 0, 0, 0, 0, time.UTC).Unix(), 3 + q
+	case "year":
+		return time.Date(t.Year()+n, 12, 31, 0, 0, 0, 0, time.UTC).Unix(), 2
+	}
+	return time.Date(t.Year(), t.Month(), t.Day()+n, 0, 0, 0, 0, time.UTC).Unix(), 0
 }
 
 func split(s string) []string {
@@ -148,10 +181,15 @@ func main() {
 		res, err := tx.Exec(`INSERT INTO game (title, title_sort, status_id, ownership_id, series_id, developer_id, release_year,
 			vr, favorite, completed, notes, queue_pos, added_at, updated_at)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?, strftime('%Y-%m-%dT%H:%M:%SZ','now','-'||?||' days'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))`,
-			g.title, db.TitleSort(g.title), statusID, own, series, dev, g.year, b2i(g.vr), b2i(g.fav), b2i(g.completed), g.notes, i+1, 400-i*8)
+			g.title, db.TitleSort(g.title), statusID, own, series, dev, nullYear(g.year), b2i(g.vr), b2i(g.fav), b2i(g.completed), g.notes, i+1, 400-i*8)
 		must(err)
 		id, _ := res.LastInsertId()
 		ids[i] = id
+		if w, ok := due[g.title]; ok {
+			date, format := dueDate(time.Now(), w.kind, w.n)
+			_, err = tx.Exec("UPDATE game SET first_release_date = ?, release_date_format = ? WHERE id = ?", date, format, id)
+			must(err)
+		}
 		for _, l := range []struct{ table, junction, fk, list string }{
 			{"platform", "game_platform", "platform_id", g.platforms},
 			{"genre", "game_genre", "genre_id", g.genres},
@@ -257,7 +295,7 @@ func main() {
 	igdbName := map[string]string{"Baldur's Gate 3": "Baldur's Gate III"} // IGDB's own spelling
 	if igdb, _ := mc.Configured(); igdb {
 		for i, g := range games {
-			if g.title == "Pentiment" || g.title == "Subnautica" {
+			if _, wish := due[g.title]; wish || g.status == "wishlist" || g.title == "Pentiment" || g.title == "Subnautica" {
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -385,3 +423,11 @@ func cover(title string) []byte {
 }
 
 func lerp(a, b uint8, t float64) uint8 { return uint8(float64(a) + (float64(b)-float64(a))*t) }
+
+// nullYear stores an unknown release year (0) as NULL.
+func nullYear(y int) any {
+	if y == 0 {
+		return nil
+	}
+	return y
+}

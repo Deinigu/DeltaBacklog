@@ -28,6 +28,12 @@ type Source interface {
 	CollectionGames(ctx context.Context, collectionID int64) (string, []meta.CollectionGame, error)
 }
 
+// ReleaseSource is the optional part of the IGDB client that reads the release dates of library games; a Source that
+// lacks it only refreshes the collections.
+type ReleaseSource interface {
+	ReleaseDates(ctx context.Context, igdbIDs []int64) (map[int64]meta.ReleaseOf, error)
+}
+
 // Options tune a refresh. The zero value downloads the posters into CoverDir from images.igdb.com only.
 type Options struct {
 	CoverDir string
@@ -44,6 +50,7 @@ type Report struct {
 	Linked      int // games that got their collection id from IGDB
 	Collections int // collections read
 	Games       int // games in those collections (before the library's own are left out)
+	Dates       int // library games whose release date was stored
 	Covers      int // posters downloaded
 	CoverErrors int // posters that failed (tried again next time)
 	Errors      int // collections that could not be read
@@ -51,7 +58,7 @@ type Report struct {
 }
 
 func (r *Report) String() string {
-	s := fmt.Sprintf("%d collections read (%d games), %d game links, %d covers saved", r.Collections, r.Games, r.Linked, r.Covers)
+	s := fmt.Sprintf("%d collections read (%d games), %d game links, %d release dates, %d covers saved", r.Collections, r.Games, r.Linked, r.Dates, r.Covers)
 	if r.Errors > 0 || r.CoverErrors > 0 {
 		s += fmt.Sprintf(", %d collections and %d covers failed", r.Errors, r.CoverErrors)
 	}
@@ -195,7 +202,17 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		o.Progress(len(cols), len(cols))
 	}
 
-	// 3. Posters of the games the library lacks (the library's own games have theirs).
+	// 3. The release dates of the library's own linked games (a wishlist game's date moves, a new one has none yet).
+	if rs, ok := src.(ReleaseSource); ok {
+		if err := refreshReleases(ctx, d, rs, o, rep); err != nil {
+			return rep, err
+		}
+		if rep.Stopped != "" {
+			return rep, nil
+		}
+	}
+
+	// 4. Posters of the games the library lacks (the library's own games have theirs).
 	prows, err := d.Query(`SELECT DISTINCT g.igdb_id, g.cover_image FROM igdb_collection_game g
 		WHERE g.cover_image IS NOT NULL AND g.cover_file IS NULL
 		  AND g.collection_id IN (SELECT igdb_collection_id FROM game WHERE series_id IS NOT NULL AND igdb_collection_id IS NOT NULL)
@@ -295,9 +312,15 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 	}
 	keep := map[string]bool{}
 	for _, g := range games {
-		var year, img, file any
+		var year, img, file, date, format, platforms any
 		if g.Year > 0 {
 			year = g.Year
+		}
+		if g.Release.Date > 0 {
+			date, format = g.Release.Date, g.Release.Format
+		}
+		if len(g.Platforms) > 0 {
+			platforms = strings.Join(g.Platforms, ", ")
 		}
 		if g.CoverID != "" {
 			img = g.CoverID
@@ -306,8 +329,9 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 			file = o[1]
 			keep[o[1]] = true
 		}
-		if _, err := tx.Exec(`INSERT OR REPLACE INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type, cover_image, cover_file)
-			VALUES (?,?,?,?,?,?,?)`, id, g.IGDBID, g.Name, year, g.GameType, img, file); err != nil {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type, cover_image, cover_file,
+				first_release_date, release_date_format, platforms)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`, id, g.IGDBID, g.Name, year, g.GameType, img, file, date, format, platforms); err != nil {
 			return err
 		}
 	}
@@ -325,4 +349,67 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 		}
 	}
 	return nil
+}
+
+// dateGraceDays is how long after its release a linked game is still read again, so a date that slipped, or the
+// release itself, is noticed; older dates are final.
+const dateGraceDays = 90
+
+// refreshReleases stores the release date of the linked games that are on the wishlist, have no date yet or are
+// not out (or only just). The date is IGDB's own data, so it is overwritten; a game IGDB gives no date keeps NULL.
+func refreshReleases(ctx context.Context, d *sql.DB, rs ReleaseSource, o Options, rep *Report) error {
+	cutoff := time.Now().AddDate(0, 0, -dateGraceDays).Unix()
+	rows, err := d.Query(`SELECT g.id, g.igdb_id FROM game g JOIN status s ON s.id = g.status_id
+		WHERE g.igdb_id IS NOT NULL AND (s.code = 'wishlist' OR g.first_release_date IS NULL OR g.first_release_date > ?) ORDER BY g.id`, cutoff)
+	if err != nil {
+		return err
+	}
+	byIGDB := map[int64][]int64{}
+	var igdbIDs []int64
+	for rows.Next() {
+		var id, igdbID int64
+		if err := rows.Scan(&id, &igdbID); err != nil {
+			rows.Close()
+			return err
+		}
+		if len(byIGDB[igdbID]) == 0 {
+			igdbIDs = append(igdbIDs, igdbID)
+		}
+		byIGDB[igdbID] = append(byIGDB[igdbID], id)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	const batch = 40
+	for start := 0; start < len(igdbIDs); start += batch {
+		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
+		var got map[int64]meta.ReleaseOf
+		if err := retry429(ctx, o, func() (err error) { got, err = rs.ReleaseDates(ctx, ids); return }); err != nil {
+			_, _ = stop(rep, ctx, err)
+			return nil
+		}
+		for igdbID, r := range got {
+			for _, gid := range byIGDB[igdbID] {
+				if err := SetRelease(d, gid, r.Release); err != nil {
+					return err
+				}
+				if r.Release.Date > 0 {
+					rep.Dates++
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// SetRelease stores (or, for a zero Release, clears) the IGDB release date of a library game.
+func SetRelease(x interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, gameID int64, r meta.Release) error {
+	var date, format any
+	if r.Date > 0 {
+		date, format = r.Date, r.Format
+	}
+	_, err := x.Exec(`UPDATE game SET first_release_date = ?, release_date_format = ? WHERE id = ?`, date, format, gameID)
+	return err
 }

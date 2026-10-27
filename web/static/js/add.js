@@ -119,8 +119,8 @@ export function pickCandidate({ query = '', excludeId = null } = {}) {
 
 // ---------------------------------------------------------------- add a game
 
-/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). */
-export function openAdd({ query = '', candidate = null } = {}) {
+/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). status: the status the form starts with (the Upcoming page adds to the Wishlist). */
+export function openAdd({ query = '', candidate = null, status = 'backlog' } = {}) {
   const ui = makeSheet('Add a game', 'add');
   const state = { query: candidate?.name || query };
 
@@ -144,14 +144,14 @@ export function openAdd({ query = '', candidate = null } = {}) {
     for (const g of store.games) for (const n of g.platforms) platformCounts.set(n, (platformCounts.get(n) || 0) + 1);
     const f = {
       title: c?.name || typedTitle.replace(/^https?:.*/i, ''),
-      status: 'backlog',
+      status: store.statusByCode.has(status) ? status : 'backlog',
       platforms: c ? defaultPlatforms(suggested, platformCounts) : (platformOptions.includes('PC') ? ['PC'] : []),
       genres: [...(c?.genres || [])],
       themes: [...(c?.themes || [])],
       series: c?.series || '',
       developer: c?.developer || '',
       release_year: c?.year ? String(c.year) : '',
-      ownership: unique((g) => (g.ownership ? [g.ownership] : [])).includes('Owned') ? 'Owned' : '',
+      ownership: status !== 'wishlist' && unique((g) => (g.ownership ? [g.ownership] : [])).includes('Owned') ? 'Owned' : '', // a wishlist game is not owned yet
       years: [], players: [], notes: '', favorite: false, vr: false, completed: false,
       cover: null,
     };

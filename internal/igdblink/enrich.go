@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
@@ -422,6 +423,9 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 			collection = det.CollectionID
 		}
 		if _, err := tx.Exec("UPDATE game SET igdb_collection_id = ? WHERE id = ?", collection, gameID); err != nil {
+			return err
+		}
+		if err := collections.SetRelease(tx, gameID, det.Release); err != nil { // the date for the Upcoming page
 			return err
 		}
 		if len(det.Modes) > 0 {
