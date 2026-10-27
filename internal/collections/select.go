@@ -8,14 +8,11 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
-// StoreCollections replaces the IGDB collections of a game. The game's root (igdb_parent_id) is left unknown (NULL): the
-// enrichment does not follow version links, the next collections refresh does.
+// StoreCollections replaces the IGDB collections of a game. The game's root (igdb_parent_id) is left as it is: it depends
+// only on the game's IGDB id (changing the id clears it), the enrichment does not follow version links, and a game never
+// read stays NULL until the next collections refresh.
 func StoreCollections(tx *sql.Tx, gameID int64, cols []meta.CollectionRef) error {
-	if err := storeCollections(tx, gameID, cols); err != nil {
-		return err
-	}
-	_, err := tx.Exec("UPDATE game SET igdb_parent_id = NULL WHERE id = ?", gameID)
-	return err
+	return storeCollections(tx, gameID, cols)
 }
 
 func storeCollections(tx *sql.Tx, gameID int64, cols []meta.CollectionRef) error {

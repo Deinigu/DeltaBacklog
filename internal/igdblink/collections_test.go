@@ -42,6 +42,30 @@ func TestEnrichStoresTheCollections(t *testing.T) {
 	}
 }
 
+// An enrichment (also --refresh) keeps the version root a game already has: it depends only on the IGDB id.
+func TestEnrichKeepsAStoredVersionRoot(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	d.Exec(`UPDATE game SET igdb_parent_id = 221280 WHERE id = ?`, id)
+	det := hades()
+	det.Collections = []meta.CollectionRef{{ID: 77, Name: "Hades"}}
+	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
+	for _, refresh := range []bool{false, true} {
+		if refresh {
+			d.Exec(`UPDATE game SET igdb_enriched_at = '2026-01-01T00:00:00Z' WHERE id = ?`, id)
+		}
+		if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: refresh}); err != nil {
+			t.Fatal(err)
+		}
+		var root sql.NullInt64
+		d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&root)
+		if !root.Valid || root.Int64 != 221280 {
+			t.Errorf("refresh=%v: the stored root became %v", refresh, root)
+		}
+	}
+}
+
 // collectionSearch adds the collection reads to the enrichment fake.
 type collectionSearch struct {
 	*enrichSearch
