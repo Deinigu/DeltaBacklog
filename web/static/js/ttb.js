@@ -1,7 +1,7 @@
-// Time to beat (minutes; from IGDB, HowLongToBeat or typed by the owner): which estimate to use, how to show it, and the "short game" rule.
+// Time to beat (minutes; from IGDB, HowLongToBeat or typed by the owner): which estimate to use, how to show it, and the library filter.
 // Pure (no DOM): unit-tested. Games with no time have no estimate and are never counted as short.
 
-/** A game is "short" when its usual time to beat is under this many minutes (10 hours). */
+/** The old "Short game" flag: a usual time to beat under this many minutes (10 hours). Saved views migrate it to a range. */
 export const SHORT_MINUTES = 600;
 
 const has = (v) => typeof v === 'number' && v > 0;
@@ -16,6 +16,47 @@ export const isShort = (g) => {
   const m = ttbMinutes(g);
   return m !== null && m < SHORT_MINUTES;
 };
+
+/** Which estimate a filter or sort looks at: '' = the one shown everywhere (ttbMinutes), else one of the TTB_KINDS keys. */
+export const ttbValue = (g, kind = '') => (kind ? (has(g[kind]) ? g[kind] : null) : ttbMinutes(g));
+
+// ---- the filter: {min, max (minutes; min inclusive, max exclusive, null = open), unknown ('' | 'in' | 'ex'), kind} ----
+export const emptyTtbFilter = () => ({ min: null, max: null, unknown: '', kind: '' });
+/** False for a range that is empty (max not above min): such a range is never stored. */
+export const rangeOk = (min, max) => min === null || max === null || max > min;
+export const ttbRangeActive = (f) => f.min !== null || f.max !== null;
+export const ttbFilterActive = (f) => ttbRangeActive(f) || f.unknown !== '';
+
+/** Quick ranges, tiling the line: each starts where the one before ends. */
+export const TTB_PRESETS = [
+  { label: 'Under 5 h', min: null, max: 300 },
+  { label: '5-15 h', min: 300, max: 900 },
+  { label: '15-40 h', min: 900, max: 2400 },
+  { label: 'Over 40 h', min: 2400, max: null },
+];
+
+/**
+ * A game passes when its time is in the range. Games without a time pass only when "no time known" is included, and
+ * never when it is excluded ("in" is an OR with the range, like the values of any other facet).
+ */
+export function matchesTtb(f, g) {
+  if (!ttbFilterActive(f)) return true;
+  const m = ttbValue(g, f.kind);
+  if (m === null) return f.unknown === 'in' || (f.unknown === '' && !ttbRangeActive(f));
+  if (f.unknown === 'in' && !ttbRangeActive(f)) return false;
+  return (f.min === null || m >= f.min) && (f.max === null || m < f.max);
+}
+
+/** The name of the estimate a filter uses, for pills. */
+export const ttbKindLabel = (kind) => TTB_KINDS.find((k) => k.key === kind)?.label ?? 'Time to beat';
+
+/** Pill text for the range, e.g. "5-15 h", "under 10 h", "over 40 h"; "" when open on both sides. */
+export function ttbRangeText(f) {
+  if (f.min !== null && f.max !== null) return `${formatTime(f.min).replace(' h', '')}-${formatTime(f.max)}`;
+  if (f.min !== null) return `over ${formatTime(f.min)}`;
+  if (f.max !== null) return `under ${formatTime(f.max)}`;
+  return '';
+}
 
 /** The three times of a game, in the order they are shown, with the one set of labels used everywhere. */
 export const TTB_KINDS = [

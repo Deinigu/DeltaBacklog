@@ -77,7 +77,8 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 - **Tap it again to exclude it.** The chip turns red and is crossed out. For example *Finished* excluded hides finished games.
 - **Tap a third time to clear it.**
 - When you include two or more values in *Platform*, *Genre*, *Theme*, *Game mode*, *Perspective*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
-- At the top are quick switches: **Favorite**, **VR**, **100% completed** and, once IGDB times exist, **Short game (under 10 h)**. Games IGDB has no time for are never shown as short.
+- At the top are quick switches: **Favorite**, **VR** and **100% completed**.
+- **Time to beat** (once some game has a time) filters by how long a game takes. Tap a quick range (**Under 5 h**, **5-15 h**, **15-40 h**, **Over 40 h**) or type your own in **From** and **Under** (hours: `7.5`, or `45m`; a game passes when it is from the first number up to, but not including, the second). **No time known** works like the other chips: tap once to see only games without a time, again to hide them, a third time to clear it. Next to the range, **Use** picks which time counts: the one shown in the details (the default), **Main story**, **Main + extras** or **Completionist**. Saved views from the old *Short game* switch now read *Time to beat under 10 h*.
 - **Game mode** (single player, co-op, multiplayer...) and **Perspective** (first person, third person, isometric...) come from IGDB and appear in the filters as soon as some game has them.
 - The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
 - The active filters appear as pills under the search box. Tap a pill's **✕** to remove it, or **Reset** to clear everything.
@@ -92,7 +93,7 @@ The address in your browser changes with your filters, so you can bookmark a fil
 Tap the sort button (the up/down arrows at the right of the search box).
 
 - **Sort levels.** Games are sorted by the first level. When two games tie, the next level decides, and so on. Each level has a field, an arrow for ascending or descending (↑ / ↓), buttons to move it up or down, and ✕ to remove it. **Add level** adds another one.
-- **Fields you can sort by:** Title, Status, Platform, Series, Release year, Last year played, First year played, Years played (count), Date added, Date edited, Favorites first, 100% completed first, and Manual order.
+- **Fields you can sort by:** Title, Status, Platform, Series, Release year, Last year played, First year played, Years played (count), Time to beat (shortest first; games without a time last), Date added, Date edited, Favorites first, 100% completed first, and Manual order.
 - Titles sort naturally ("Fallout 2" comes before "Fallout 10"), and games that have no value for a field always go last.
 - **Default order** is: Status, then your Manual order, then Title.
 - **Group by** splits the list into sections: Status, Platform, Series, Genre, Year played or Ownership. A game that was played in several years appears under each year, and one with several genres under each genre.
@@ -131,7 +132,7 @@ Tap a card to open the game.
 
 **What IGDB adds** (after the one-off command in section 16): the game's **Game modes** and **Perspective** appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
 
-**Time to beat.** The details have a **Time to beat** block with three tiles: **Main story**, **Main + extras** and **Completionist**, each with a small bar showing how long it is compared with the longest. A note says where the numbers come from: *from IGDB* (filled in by the command in section 16), *from HowLongToBeat* or *set by you*. The times are not shown on the cards, only here (the **Short game** filter, Surprise me's **Quick game** and the backlog hours on Stats still use them).
+**Time to beat.** The details have a **Time to beat** block with three tiles: **Main story**, **Main + extras** and **Completionist**, each with a small bar showing how long it is compared with the longest. A note says where the numbers come from: *from IGDB* (filled in by the command in section 16), *from HowLongToBeat* or *set by you*. The times are not shown on the cards, only here (the **Time to beat** filter, Surprise me's **Quick game** and the backlog hours on Stats still use them).
 - **✎ Edit times** opens three boxes. Type hours (`7.5`, `7,5`, `12`), hours and minutes (`7h30`, `1:30`) or minutes (`45m`); leave a box empty for no time. **Save** marks the times as *set by you*.
 - **Get from HowLongToBeat** looks the game up by its title and release year and lists the matches with their three times. Tap the right one and its times are saved at once (you can still edit them afterwards). The search box lets you try another title when the game is not found. If HowLongToBeat cannot be reached (it has no official service, and it can be blocked or change without notice) the block says so and nothing else is affected: type the times yourself.
 - Times you set or took from HowLongToBeat are **never replaced** by IGDB's later reads. Games with no time show "No time yet".
@@ -172,7 +173,7 @@ Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Ca
 
 - **Sort** by tapping a column heading. Tap again to reverse it.
 - **Resize** a column by dragging the edge of its heading.
-- **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, developer, released, ownership, played with, favorite, VR, 100%, notes, added). **Defaults** brings the original set back. Your choices are remembered on this device.
+- **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, time to beat, developer, released, ownership, played with, favorite, VR, 100%, notes, added). **Defaults** brings the original set back. Your choices are remembered on this device.
 - **Edit in place:** tap a cell and type. **Enter** saves and moves down, **Tab** saves and moves right, **Esc** cancels. Status is a drop-down, checkboxes toggle with one tap, and lists (platforms, genres, years...) open a sheet. Notes can have several lines (**Shift+Enter** for a new line).
 - The ↗ button at the start of a row opens the game.
 - **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets.

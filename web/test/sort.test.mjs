@@ -55,3 +55,11 @@ test('grouping by year puts a game under every year, newest first, "None" last',
 test('sort url round trip ignores unknown fields', () => {
   assert.equal(formatSort(parseSort('status:asc,bogus:desc,last_year:desc')), 'status:asc,last_year:desc');
 });
+
+test('sorts by time to beat, unknown last in both directions', async () => {
+  const { buildComparator } = await import('../static/js/sort.js');
+  const mk = (title, m) => ({ title, ttb_normally: m });
+  const list = [mk('B', 600), mk('A', null), mk('C', 60)];
+  assert.deepEqual([...list].sort(buildComparator([{ field: 'ttb', dir: 'asc' }])).map((g) => g.title), ['C', 'B', 'A']);
+  assert.deepEqual([...list].sort(buildComparator([{ field: 'ttb', dir: 'desc' }])).map((g) => g.title), ['B', 'C', 'A']);
+});
