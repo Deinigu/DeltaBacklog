@@ -9,7 +9,7 @@ import { similarIndex, setHiddenFlag, becauseText, isSource } from './similar.js
 
 function poster(s) {
   const url = missingPosterURL(s.cover, s.v);
-  return h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(s.title)}` }, initials(s.title)));
+  return h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(s.title)}` }, initials(s.title)));
 }
 
 export function renderSimilar(root) {

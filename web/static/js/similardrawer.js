@@ -15,7 +15,7 @@ export function similarSection(game) {
       h('h3', {}, 'Similar games'),
       h('ul.sim-strip', {}, list.map((s) => {
         const url = missingPosterURL(s.cover, s.v);
-        return h('li', {}, h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(s.title)}` }, initials(s.title))), s.title);
+        return h('li', {}, h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(s.title)}` }, initials(s.title))), s.title);
       })),
       h('a', { href: '#/similar', onclick: () => closeDrawer() }, 'See all similar games'));
     box.hidden = false;

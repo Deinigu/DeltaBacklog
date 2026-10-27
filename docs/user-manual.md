@@ -18,6 +18,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [Series progress](#12-series-progress)
     - [Wishlist and Upcoming releases](#wishlist-and-upcoming-releases)
+    - [Similar games](#similar-games)
 13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
@@ -48,7 +49,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -277,6 +278,20 @@ A Wishlist game is not a game of your library yet, so it does not count anywhere
 The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of your wishlist games and of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Wishlist games need an IGDB link to have a date (use **Link IGDB**). Dates are shown as IGDB's calendar date, whatever your time zone.
 
 ![The Upcoming page](img/upcoming-phone.jpg)
+
+### Similar games
+
+**Similar games** (in the navigation, **More** on a phone) suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see section 16). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and three buttons:
+
+- **Add** opens the add form, pre-filled from IGDB; pick the status you like there.
+- **Wishlist** opens the same form already on the **Wishlist** status.
+- **Hide** removes the game from the list for good (an **Undo** shows for a few seconds). **Hidden** at the bottom of the page lists them, each with **Show again**. This is its own list: hiding a game here does not hide it on the Series page, and the other way round.
+
+The page follows the same ownership rule as the Series page: a game you own is not suggested, and neither is another version of it (a remaster, an expanded edition or a port of a game you have). A remake or a standalone expansion of a game you have still is. A game that is already on your wishlist is listed under **Already on your wishlist**, with no Add button; tap it to open its details.
+
+The suggestions are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** to read them (a few requests in the background, with progress; it can be left and takes about a minute for a large library). `sync-igdb --enrich` reads them too. A game's details also show a small **Similar games** row for a finished or favourite game, from the same saved list.
+
+![The Similar games page](img/similar-phone.jpg)
 
 ## 13. Year in review and rankings
 

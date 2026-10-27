@@ -150,6 +150,19 @@ await shot(p, 'series-shelf-phone');
 await go(p, '#/upcoming'); await wait(1200); // the wishlist (made-up dates) and the series' new games read above
 await shot(p, 'upcoming-phone');
 
+await go(p, '#/similar');
+if (lookups && !process.env.BASE_URL) { // IGDB's similar games of the finished and favourite demo games (a handful of requests)
+  await p.evaluate(() => fetch('/api/similar/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' } }));
+  for (let i = 0; i < 120; i++) {
+    const running = await p.evaluate(async () => (await (await fetch('/api/similar')).json()).refresh.running);
+    if (!running) break;
+    await wait(1000);
+  }
+  await go(p, '#/similar');
+}
+await wait(1200); // the posters load as they scroll into view
+await shot(p, 'similar-phone');
+
 await go(p, '#/stats');
 await shot(p, 'stats-phone');
 
