@@ -61,9 +61,18 @@ func RefreshSimilar(ctx context.Context, d *sql.DB, src SimilarSource, o Options
 		}
 	}
 
-	// 1. The similar games of every source, in batches (one request each), with the roots of their version chains.
+	// 0. The version roots of the library's own games, so that "owned with its family" holds without a series refresh.
 	memo := map[int64]int64{}
 	res := resolver{ctx: ctx, o: o, src: linksOnly{src}, memo: memo}
+	if _, err := linkLibrary(ctx, d, res); err != nil {
+		var de dbError
+		if errors.As(err, &de) {
+			return rep, de.err
+		}
+		return stop(rep, ctx, err)
+	}
+
+	// 1. The similar games of every source, in batches (one request each), with the roots of their version chains.
 	const batch = 40
 	for start := 0; start < len(sources); start += batch {
 		progress(start)
@@ -92,7 +101,13 @@ func RefreshSimilar(ctx context.Context, d *sql.DB, src SimilarSource, o Options
 	}
 	progress(len(sources))
 
-	// 2. Posters of the suggestions the library lacks, the best ranked first (not the hidden ones).
+	// 2. Posters of the suggestions the library lacks, the best ranked first (not the hidden ones). A file the series cache
+	// already holds for the same image is reused instead of downloaded again.
+	if _, err := d.Exec(`UPDATE similar_game SET cover_file = (SELECT c.cover_file FROM igdb_collection_game c
+			WHERE c.igdb_id = similar_game.igdb_id AND c.cover_image = similar_game.cover_image AND c.cover_file IS NOT NULL LIMIT 1)
+		WHERE cover_file IS NULL AND cover_image IS NOT NULL`); err != nil {
+		return rep, err
+	}
 	fam, err := loadFamily(d)
 	if err != nil {
 		return rep, err

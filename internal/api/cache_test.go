@@ -181,6 +181,8 @@ func TestLoadGameMatchesTheFullList(t *testing.T) {
 		res, body := do(t, "PATCH", e.srv.URL+"/api/games/"+strconv.FormatInt(want.ID, 10), `{}`) // answers LoadGame(id)
 		var got Game
 		json.Unmarshal(body, &got)
+		// the empty PATCH bumps updated_at (to the second), so that field is left out of the comparison
+		got.UpdatedAt, want.UpdatedAt = "", ""
 		a, _ := json.Marshal(got)
 		w, _ := json.Marshal(want)
 		if res.StatusCode != 200 || !bytes.Equal(a, w) {

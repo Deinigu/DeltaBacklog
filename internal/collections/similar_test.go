@@ -318,3 +318,55 @@ func TestSimilarRateLimitStopsAndKeeps(t *testing.T) {
 		t.Errorf("the first batch was not kept: %+v", list.Suggestions)
 	}
 }
+
+// An owned remaster whose root was never read (NULL) must still own its original: a Similar refresh alone resolves it.
+func TestSimilarResolvesTheRootsOfOwnedGames(t *testing.T) {
+	d := open(t)
+	a := addGame(t, d, "Bloodborne", "", 1)
+	r := addGame(t, d, "Dark Souls: Remastered", "", 50) // root unknown (NULL): the Series refresh never ran
+	play(t, d, a, "finished", false)
+	play(t, d, r, "backlog", false)
+	f := newSim()
+	f.links[50] = meta.GameLinks{ParentID: 40}
+	f.similar[1] = []meta.CollectionGame{{IGDBID: 40, Name: "Dark Souls", Year: 2011, CoverID: "c40"}, {IGDBID: 41, Name: "Other", Year: 2012, CoverID: "c41"}}
+	opt, _ := opts(t)
+	if _, err := RefreshSimilar(context.Background(), d, f, opt); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := LoadSimilar(d)
+	got := byID(list)
+	if _, ok := got[40]; ok {
+		t.Error("the original of an owned remaster with an unread root is suggested")
+	}
+	if _, ok := got[41]; !ok {
+		t.Error("an unrelated game is not suggested")
+	}
+	var root sql.NullInt64
+	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, r).Scan(&root)
+	if root.Int64 != 40 {
+		t.Errorf("stored root %v", root)
+	}
+}
+
+// A poster the series cache already holds for the same image is reused, not downloaded again.
+func TestSimilarReusesTheSeriesPoster(t *testing.T) {
+	d := open(t)
+	a := addGame(t, d, "Finished", "", 1)
+	play(t, d, a, "finished", false)
+	f := newSim()
+	f.similar[1] = []meta.CollectionGame{{IGDBID: 10, Name: "Ten", Year: 2010, CoverID: "c10"}, {IGDBID: 11, Name: "Eleven", CoverID: "c11"}}
+	opt, fetched := opts(t)
+	os.WriteFile(filepath.Join(opt.CoverDir, "i10.jpg"), []byte("x"), 0o644)
+	d.Exec(`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'S', '2026-01-01T00:00:00Z')`)
+	d.Exec(`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type, cover_image, cover_file) VALUES (7, 10, 'Ten', 0, 'c10', 'i10.jpg')`)
+	if _, err := RefreshSimilar(context.Background(), d, f, opt); err != nil {
+		t.Fatal(err)
+	}
+	if len(*fetched) != 1 || (*fetched)[0] != 11 {
+		t.Errorf("fetched %v, want only 11", *fetched)
+	}
+	list, _ := LoadSimilar(d)
+	if g := byID(list)[10]; g.Cover == nil || *g.Cover != "i10.jpg" {
+		t.Errorf("game 10: %+v", g)
+	}
+}

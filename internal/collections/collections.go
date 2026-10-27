@@ -124,58 +124,16 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	rep := &Report{}
 
 	// 1. Linked games whose collections and parent game were never read (a game read by the enrichment already is).
-	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE igdb_id IS NOT NULL AND igdb_parent_id IS NULL ORDER BY id`)
-	if err != nil {
-		return rep, err
-	}
-	byIGDB := map[int64][]int64{} // igdb id -> game ids (an IGDB game is linked once, but be safe)
-	var igdbIDs []int64
-	for rows.Next() {
-		var id, igdbID int64
-		if err := rows.Scan(&id, &igdbID); err != nil {
-			rows.Close()
-			return rep, err
-		}
-		if len(byIGDB[igdbID]) == 0 {
-			igdbIDs = append(igdbIDs, igdbID)
-		}
-		byIGDB[igdbID] = append(byIGDB[igdbID], id)
-	}
-	if err := rows.Close(); err != nil {
-		return rep, err
-	}
 	memo := map[int64]int64{} // igdb id -> its parent (0 = none), for the whole run
 	res := resolver{ctx: ctx, o: o, src: src, memo: memo}
-	const batch = 40
-	for start := 0; start < len(igdbIDs); start += batch {
-		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
-		var got map[int64]meta.GameLinks
-		if err := retry429(ctx, o, func() (err error) { got, err = src.GameLinks(ctx, ids); return }); err != nil {
-			return stop(rep, ctx, err)
+	n, err := linkLibrary(ctx, d, res)
+	rep.Linked += n
+	if err != nil {
+		var de dbError
+		if errors.As(err, &de) {
+			return rep, de.err
 		}
-		for id, l := range got {
-			memo[id] = l.ParentID
-		}
-		if err := res.resolve(ctx, ids); err != nil {
-			return stop(rep, ctx, err)
-		}
-		tx, err := d.Begin()
-		if err != nil {
-			return rep, err
-		}
-		for igdbID, l := range got {
-			l.ParentID = res.root(igdbID)
-			for _, gid := range byIGDB[igdbID] {
-				if err := StoreGameLinks(tx, gid, l); err != nil {
-					tx.Rollback()
-					return rep, err
-				}
-				rep.Linked++
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return rep, err
-		}
+		return stop(rep, ctx, err)
 	}
 
 	// 2. The collection(s) of every series (see pickCollections).
@@ -311,6 +269,71 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		return rep, err
 	}
 	return rep, nil
+}
+
+// dbError marks a database failure among the errors linkLibrary returns (the others come from IGDB).
+type dbError struct{ err error }
+
+func (e dbError) Error() string { return e.err.Error() }
+
+// linkLibrary reads from IGDB the collections and the version root of the linked library games that were never read
+// (igdb_parent_id IS NULL) and stores them. It is a no-op when every root is known. The series refresh and the similar
+// games refresh both start with it, so the family rules hold after either. It returns the number of games stored; res.memo
+// keeps what was learnt about version chains for the rest of the run.
+func linkLibrary(ctx context.Context, d *sql.DB, res resolver) (int, error) {
+	linked := 0
+	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE igdb_id IS NOT NULL AND igdb_parent_id IS NULL ORDER BY id`)
+	if err != nil {
+		return 0, dbError{err}
+	}
+	byIGDB := map[int64][]int64{} // igdb id -> game ids (an IGDB game is linked once, but be safe)
+	var igdbIDs []int64
+	for rows.Next() {
+		var id, igdbID int64
+		if err := rows.Scan(&id, &igdbID); err != nil {
+			rows.Close()
+			return 0, dbError{err}
+		}
+		if len(byIGDB[igdbID]) == 0 {
+			igdbIDs = append(igdbIDs, igdbID)
+		}
+		byIGDB[igdbID] = append(byIGDB[igdbID], id)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, dbError{err}
+	}
+	const batch = 40
+	for start := 0; start < len(igdbIDs); start += batch {
+		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
+		var got map[int64]meta.GameLinks
+		if err := retry429(ctx, res.o, func() (err error) { got, err = res.src.GameLinks(ctx, ids); return }); err != nil {
+			return linked, err
+		}
+		for id, l := range got {
+			res.memo[id] = l.ParentID
+		}
+		if err := res.resolve(ctx, ids); err != nil {
+			return linked, err
+		}
+		tx, err := d.Begin()
+		if err != nil {
+			return linked, dbError{err}
+		}
+		for igdbID, l := range got {
+			l.ParentID = res.root(igdbID)
+			for _, gid := range byIGDB[igdbID] {
+				if err := StoreGameLinks(tx, gid, l); err != nil {
+					tx.Rollback()
+					return linked, dbError{err}
+				}
+				linked++
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return linked, dbError{err}
+		}
+	}
+	return linked, nil
 }
 
 // resolver follows the "another version of" links up to their root. memo holds what is known: igdb id -> its parent
