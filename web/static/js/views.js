@@ -1,7 +1,7 @@
 // Manage saved views: open, rename, pin, reorder, duplicate, delete (with undo).
 import { h, toast, askNameDialog } from './util.js';
 import { stateFromView } from './filters.js';
-import { ttbKindLabel, ttbRangeText } from './ttb.js';
+import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
 
 export function renderViews(root) {
@@ -62,7 +62,7 @@ export function renderViews(root) {
   }
   const ttbSummary = (v) => {
     const t = stateFromView(v).ttb; // also turns the old "short" flag into its range
-    return [ttbKindLabel(t.kind), ttbRangeText(t), t.unknown === 'in' ? '+ unknown' : t.unknown === 'ex' ? '(known only)' : ''].filter(Boolean).join(' ');
+    return [ttbKindLabel(t.kind), ttbRangeText(t), ttbRangeActive(t) ? (t.unknown === 'in' ? '+ unknown' : t.unknown === 'ex' ? '(known only)' : '') : (t.unknown === 'in' ? 'no time known' : t.unknown === 'ex' ? 'known only' : '')].filter(Boolean).join(' ');
   };
   const nice = (k) => (x) => (k === 'status' ? store.statusByCode.get(x)?.label ?? x : x);
 

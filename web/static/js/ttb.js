@@ -22,6 +22,8 @@ export const ttbValue = (g, kind = '') => (kind ? (has(g[kind]) ? g[kind] : null
 
 // ---- the filter: {min, max (minutes; min inclusive, max exclusive, null = open), unknown ('' | 'in' | 'ex'), kind} ----
 export const emptyTtbFilter = () => ({ min: null, max: null, unknown: '', kind: '' });
+/** False for a range that is empty (max not above min): such a range is never stored. */
+export const rangeOk = (min, max) => min === null || max === null || max > min;
 export const ttbRangeActive = (f) => f.min !== null || f.max !== null;
 export const ttbFilterActive = (f) => ttbRangeActive(f) || f.unknown !== '';
 

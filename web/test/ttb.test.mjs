@@ -204,3 +204,8 @@ test('ttb filter: no time known', async () => {
   const rangeHide = { ...emptyTtbFilter(), max: 300, unknown: 'ex' };
   assert.deepEqual([matchesTtb(rangeHide, { ttb_normally: 100 }), matchesTtb(rangeHide, none)], [true, false]);
 });
+
+test('an empty range (max not above min) is refused', async () => {
+  const { rangeOk } = await import('../static/js/ttb.js');
+  assert.deepEqual([rangeOk(null, 600), rangeOk(1200, null), rangeOk(300, 600), rangeOk(1200, 600), rangeOk(600, 600)], [true, true, true, false, false]);
+});

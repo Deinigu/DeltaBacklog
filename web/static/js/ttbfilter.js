@@ -2,25 +2,27 @@
 // from/under range in hours, "no time known" and which estimate to use. The state lives in state.ttb (see ttb.js).
 import { h } from './util.js';
 import { store } from './api.js';
-import { TTB_KINDS, TTB_PRESETS, emptyTtbFilter, ttbRangeActive, parseTime, timeInputValue } from './ttb.js';
+import { matches } from './filters.js';
+import { TTB_KINDS, rangeOk, TTB_PRESETS, emptyTtbFilter, ttbRangeActive, parseTime, timeInputValue } from './ttb.js';
 
 const KIND_OPTIONS = [{ key: '', label: 'Shown time' }, ...TTB_KINDS];
 
 /** Returns {el, sync}: put `el` in the panel, call `sync()` after the state changed (it repaints the controls). */
-export function createTtbFilter(state, onChange) {
+export function createTtbFilter(state, onChange, getGames = () => store.games) {
   const f = () => state.ttb;
   const change = () => { sync(); onChange(); };
   const nSel = h('span.n');
+  const counts = () => h('span.c');
 
   const presets = TTB_PRESETS.map((p) => ({
     p, btn: h('button.chip', { type: 'button', onclick: () => {
       const on = f().min === p.min && f().max === p.max;
       f().min = on ? null : p.min; f().max = on ? null : p.max;
       change();
-    } }, p.label),
+    } }, p.label, counts()),
   }));
   // "No time known" cycles like the other chips: off -> only those games -> hide them -> off.
-  const unknownBtn = h('button.chip', { type: 'button', onclick: () => { f().unknown = { '': 'in', in: 'ex', ex: '' }[f().unknown]; change(); } }, 'No time known');
+  const unknownBtn = h('button.chip', { type: 'button', onclick: () => { f().unknown = { '': 'in', in: 'ex', ex: '' }[f().unknown]; change(); } }, 'No time known', counts());
 
   // Typed as hours ("7.5", "7h30", "45m"); a value that cannot be read leaves the filter as it was and marks the box.
   const box = (key, label) => {
@@ -29,8 +31,9 @@ export function createTtbFilter(state, onChange) {
         const v = parseTime(input.value);
         input.setAttribute('aria-invalid', v === undefined ? 'true' : 'false');
         if (v === undefined) return;
+        const next = { ...f(), [key]: v };
+        if (!rangeOk(next.min, next.max)) { input.setAttribute('aria-invalid', 'true'); return; } // empty range: keep the old one
         f()[key] = v;
-        if (f().min !== null && f().max !== null && f().max <= f().min) return; // an empty range: wait for the other box
         paint(); onChange();
       },
       onchange: () => { input.value = timeInputValue(f()[key]); input.setAttribute('aria-invalid', 'false'); } });
@@ -46,8 +49,21 @@ export function createTtbFilter(state, onChange) {
     h('div.chips', {}, presets.map((r) => r.btn), unknownBtn),
     h('div.ttb-range', {}, from.el, under.el, h('label.ttb-box', {}, h('span', {}, 'Use'), kindSel)));
 
+  // How many games each chip would give if tapped, against the other active filters (like the other chips).
+  function paintCounts() {
+    const games = getGames();
+    const n = (ttb) => { const s = { ...state, ttb }; return games.reduce((k, g) => k + (matches(s, g) ? 1 : 0), 0); };
+    const show = (btn, ttb, on) => {
+      const c = n(ttb);
+      btn.querySelector('.c').textContent = c;
+      btn.classList.toggle('zero', c === 0 && !on);
+    };
+    for (const { p, btn } of presets) show(btn, { ...f(), min: p.min, max: p.max }, f().min === p.min && f().max === p.max);
+    show(unknownBtn, { ...f(), unknown: { '': 'in', in: 'ex', ex: '' }[f().unknown] }, f().unknown !== '');
+  }
   function paint() {
     const t = f();
+    paintCounts();
     for (const { p, btn } of presets) btn.setAttribute('aria-pressed', String(t.min === p.min && t.max === p.max));
     unknownBtn.dataset.state = t.unknown || 'off';
     unknownBtn.setAttribute('aria-pressed', t.unknown === 'in' ? 'true' : t.unknown === 'ex' ? 'mixed' : 'false');

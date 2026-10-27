@@ -43,7 +43,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     });
     const flagBtns = FLAGS.map((f) => ({ f, btn: h('button.chip', { type: 'button', hidden: !!f.test && !games.some(f.test), onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label) }));
 
-    const ttbFilter = createTtbFilter(state, () => update());
+    const ttbFilter = createTtbFilter(state, () => update(), () => games);
     const count = h('div.count.pk-count');
     const list = h('div.pk-list', { role: 'list' });
     const filtersBox = h('div.pk-filters', {}, h('div.chips', {}, flagBtns.map((r) => r.btn)), groupEls.map((g) => g.el), ttbFilter.el);
