@@ -448,16 +448,28 @@ func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
 		if _, err := d.Exec(`UPDATE igdb_collection_game SET cover_file = NULL WHERE collection_id = ? AND igdb_id = ?`, k.col, k.id); err != nil {
 			return err
 		}
-		var n int // the file goes at once when no other row names it (this run made the decision, nothing is mid-download)
-		if coverDir != "" && d.QueryRow(`SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?`, k.file).Scan(&n) == nil && n == 0 {
+		// the file goes at once when no other row names it (this run made the decision, nothing is mid-download)
+		if coverDir != "" && !fileInUse(d, k.file) {
 			os.Remove(filepath.Join(coverDir, filepath.Base(k.file)))
 		}
 	}
+	return sweepPosters(d, coverDir)
+}
+
+// fileInUse reports whether a row of the series cache or of the similar-games cache names the poster file (the two caches
+// share the i<id>.jpg files). A failed query counts as in use: nothing is deleted on a doubt.
+func fileInUse(d *sql.DB, file string) bool {
+	var n int
+	return d.QueryRow(`SELECT (SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?1) + (SELECT count(*) FROM similar_game WHERE cover_file = ?1)`, file).Scan(&n) != nil || n > 0
+}
+
+// sweepPosters removes the poster files in coverDir (i<id>.jpg) that no row of either cache names, unless they are fresh.
+func sweepPosters(d *sql.DB, coverDir string) error {
 	if coverDir == "" {
 		return nil
 	}
 	named := map[string]bool{}
-	frows, err := d.Query(`SELECT DISTINCT cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
+	frows, err := d.Query(`SELECT cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL UNION SELECT cover_file FROM similar_game WHERE cover_file IS NOT NULL`)
 	if err != nil {
 		return err
 	}
@@ -562,8 +574,7 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 		if o[1] == "" || keep[o[1]] {
 			continue
 		}
-		var n int
-		if d.QueryRow(`SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?`, o[1]).Scan(&n) == nil && n == 0 && coverDir != "" {
+		if coverDir != "" && !fileInUse(d, o[1]) {
 			os.Remove(filepath.Join(coverDir, filepath.Base(o[1])))
 		}
 	}

@@ -206,6 +206,7 @@ type igdbGame struct {
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
 	Collections      []igdbCollection        `json:"collections"`
+	SimilarGames     []igdbGame              `json:"similar_games"`  // expanded by SimilarGames only
 	ParentGame       int64                   `json:"parent_game"`    // set by the detail and collection queries only
 	VersionParent    int64                   `json:"version_parent"` // ditto
 	Franchises       []struct{ Name string } `json:"franchises"`

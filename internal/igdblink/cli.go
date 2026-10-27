@@ -156,5 +156,20 @@ func runEnrich(ctx context.Context, d *sql.DB, e Enricher, out io.Writer, dbPath
 			return 1
 		}
 	}
+	// ... and so are the similar games of the finished and favourite ones (the Similar page).
+	if src, ok := e.(collections.SimilarSource); ok && !opts.DryRun {
+		fmt.Fprintln(out, "Reading the games similar to your finished and favourite games...")
+		srep, err := collections.RefreshSimilar(ctx, d, src, collections.Options{CoverDir: filepath.Join(filepath.Dir(dbPath), "covers")})
+		if srep != nil {
+			fmt.Fprintln(out, srep.SimilarString())
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(out, "error:", err)
+			return 1
+		}
+		if srep != nil && srep.Stopped != "" {
+			return 1
+		}
+	}
 	return 0
 }

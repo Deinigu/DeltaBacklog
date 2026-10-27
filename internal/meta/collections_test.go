@@ -22,6 +22,13 @@ func collectionFake(t *testing.T, queries *[]string) *Client {
 		q := string(b)
 		*queries = append(*queries, q)
 		switch {
+		case strings.Contains(q, "similar_games.name"): // SimilarGames: a DLC, a port and an unnamed game slip through the fake
+			w.Write([]byte(`[{"id":10,"similar_games":[
+			 {"id":20,"name":"Alpha","first_release_date":1104537600,"game_type":0,"cover":{"image_id":"ca"},"release_dates":[{"date":1104537600,"date_format":0}]},
+			 {"id":21,"name":"Alpha Remake","game_type":8,"parent_game":20},
+			 {"id":22,"name":"Alpha DLC","game_type":1},
+			 {"id":23,"name":"Alpha Port","game_type":11,"parent_game":20},
+			 {"id":24,"name":" ","game_type":0}]},{"id":11}]`))
 		case strings.Contains(q, "where collections ="): // a DLC and a port slip through the fake: the client must drop them too
 			w.Write([]byte(`[
 			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}],
@@ -170,5 +177,30 @@ func TestOnlyVersionsOfTheSameGameHaveAParent(t *testing.T) {
 		if got := c.g.parent(); got != c.want {
 			t.Errorf("%s: parent %d, want %d", c.name, got, c.want)
 		}
+	}
+}
+
+func TestSimilarGamesKeepsOnlyRealGames(t *testing.T) {
+	var queries []string
+	c := collectionFake(t, &queries)
+	got, err := c.SimilarGames(context.Background(), []int64{10, 11})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := got[10]
+	if len(list) != 2 || list[0].IGDBID != 20 || list[0].Year != 2005 || list[0].CoverID != "ca" || list[0].Release.Date != 1104537600 {
+		t.Fatalf("%+v", list)
+	}
+	if list[1].IGDBID != 21 || list[1].GameType != 8 || list[1].ParentID != 0 { // a remake's parent_game is not a version link
+		t.Errorf("remake: %+v", list[1])
+	}
+	if l, ok := got[11]; !ok || len(l) != 0 {
+		t.Errorf("a game without similar games: %v %v", l, ok)
+	}
+	if len(queries) != 1 || !strings.Contains(queries[0], "where id = (10,11)") {
+		t.Errorf("queries %v", queries)
+	}
+	if m, err := c.SimilarGames(context.Background(), nil); err != nil || len(m) != 0 || len(queries) != 1 {
+		t.Errorf("no ids: %v %v", m, err)
 	}
 }

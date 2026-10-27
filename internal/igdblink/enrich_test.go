@@ -432,7 +432,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	id := addGame(t, d, "Hades", "PC")
 	d.Exec("UPDATE game SET release_year = 2020, igdb_id = 5, igdb_synced_at = '2026-01-01T00:00:00Z' WHERE id = ?", id)
 	for _, q := range []string{ // put the file back to what version 6 looked like
-		"DROP INDEX idx_icg_release_date", "DROP INDEX idx_game_release_date", "ALTER TABLE igdb_collection_game DROP COLUMN first_release_date", "ALTER TABLE igdb_collection_game DROP COLUMN release_date_format", "ALTER TABLE igdb_collection_game DROP COLUMN platforms", "ALTER TABLE game DROP COLUMN first_release_date", "ALTER TABLE game DROP COLUMN release_date_format", "DELETE FROM status WHERE code = 'wishlist'", "DROP TABLE series_hidden", "DROP TABLE igdb_collection_game", "DROP TABLE igdb_collection", "DROP TABLE game_collection", "ALTER TABLE game DROP COLUMN igdb_parent_id", "DROP TABLE ranking_entry", "DROP TABLE ranking_tier", "DROP TABLE ranking", "ALTER TABLE game DROP COLUMN poster_user", "ALTER TABLE game DROP COLUMN poster_file", "ALTER TABLE game DROP COLUMN poster_src", "ALTER TABLE game DROP COLUMN poster_updated_at", "DROP TABLE screenshot", "ALTER TABLE game DROP COLUMN igdb_series", "DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
+		"DROP TABLE similar_hidden", "DROP TABLE similar_link", "DROP TABLE similar_fetch", "DROP TABLE similar_game", "DROP INDEX idx_icg_release_date", "DROP INDEX idx_game_release_date", "ALTER TABLE igdb_collection_game DROP COLUMN first_release_date", "ALTER TABLE igdb_collection_game DROP COLUMN release_date_format", "ALTER TABLE igdb_collection_game DROP COLUMN platforms", "ALTER TABLE game DROP COLUMN first_release_date", "ALTER TABLE game DROP COLUMN release_date_format", "DELETE FROM status WHERE code = 'wishlist'", "DROP TABLE series_hidden", "DROP TABLE igdb_collection_game", "DROP TABLE igdb_collection", "DROP TABLE game_collection", "ALTER TABLE game DROP COLUMN igdb_parent_id", "DROP TABLE ranking_entry", "DROP TABLE ranking_tier", "DROP TABLE ranking", "ALTER TABLE game DROP COLUMN poster_user", "ALTER TABLE game DROP COLUMN poster_file", "ALTER TABLE game DROP COLUMN poster_src", "ALTER TABLE game DROP COLUMN poster_updated_at", "DROP TABLE screenshot", "ALTER TABLE game DROP COLUMN igdb_series", "DROP TABLE game_link", "DROP TABLE game_game_mode", "DROP TABLE game_perspective", "DROP TABLE game_mode", "DROP TABLE perspective",
 		"ALTER TABLE game DROP COLUMN time_to_beat_src", "ALTER TABLE game DROP COLUMN time_to_beat_hastily", "ALTER TABLE game DROP COLUMN time_to_beat_normally",
 		"ALTER TABLE game DROP COLUMN time_to_beat_completely", "ALTER TABLE game DROP COLUMN igdb_enriched_at", "PRAGMA user_version = 6",
 	} {
@@ -453,7 +453,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	if err := d.QueryRow("SELECT release_year, igdb_enriched_at, time_to_beat_normally FROM game WHERE id = ?", id).Scan(&year, &enriched, &ttb); err != nil {
 		t.Fatal(err)
 	}
-	if v != 14 || year != 2020 || enriched.Valid || ttb.Valid {
+	if v != 15 || year != 2020 || enriched.Valid || ttb.Valid {
 		t.Errorf("version %d, year %d, enriched %v, ttb %v", v, year, enriched, ttb)
 	}
 	for _, bad := range []string{
