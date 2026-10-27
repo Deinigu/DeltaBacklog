@@ -110,8 +110,8 @@ func (s *Server) listAllShots(w http.ResponseWriter, r *http.Request) {
 			fail(w, err)
 			return
 		}
-		g.Src = "/screenshots/" + strconv.FormatInt(g.GameID, 10) + "/" + file
-		g.Thumb = "/screenshots/" + strconv.FormatInt(g.GameID, 10) + "/" + thumb
+		g.Src = "screenshots/" + strconv.FormatInt(g.GameID, 10) + "/" + file
+		g.Thumb = "screenshots/" + strconv.FormatInt(g.GameID, 10) + "/" + thumb
 		list = append(list, g)
 	}
 	if err := rows.Err(); err != nil {

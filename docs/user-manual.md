@@ -33,6 +33,8 @@ Open **http://deltabacklog.local** in any browser (no port number needed). Use t
 
 If that name does not open (some Android phones cannot find `.local` names), use the Raspberry Pi's number instead, for example `http://<address-of-your-pi>:8081`. Both lead to the same app.
 
+The app can also sit under a sub-path of another address, when a reverse proxy on the Pi publishes it there (for example **http://deltaraspberry.local/backlog/**). Everything works the same; the proxy's name must be in `ALLOWED_HOSTS` (see "unknown host" in [section 17](#17-if-something-looks-wrong)).
+
 To open it with one tap from your phone's home screen, add a shortcut:
 - **Android (Chrome):** open the menu (⋮) and choose **Add to Home screen**.
 - **iPhone (Safari):** tap the Share button and choose **Add to Home Screen**.

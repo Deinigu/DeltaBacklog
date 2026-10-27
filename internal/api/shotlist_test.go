@@ -49,7 +49,7 @@ func TestListAllScreenshots(t *testing.T) {
 	if got := p.Screenshots[1].Taken[:4] + p.Screenshots[2].Taken[:4] + p.Screenshots[3].Taken[:4]; got != "202420232020" {
 		t.Errorf("newest first: %s", got)
 	}
-	if s := p.Screenshots[1]; s.Thumb == "" || s.Src == "" || s.GameID != 1 {
+	if s := p.Screenshots[1]; !strings.HasPrefix(s.Thumb, "screenshots/1/") || !strings.HasPrefix(s.Src, "screenshots/1/") || s.GameID != 1 {
 		t.Errorf("urls and game: %+v", s)
 	}
 	if len(p.Years) != 4 || p.Years[0] < 2024 || p.Years[3] != 2020 {

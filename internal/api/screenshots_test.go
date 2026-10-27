@@ -156,8 +156,11 @@ func TestUploadStoresOriginalAndThumbnail(t *testing.T) {
 	if strings.Contains(a.Src, "evil") || strings.Contains(a.Src, "..") || res[0].Name != "evil name.png" {
 		t.Errorf("client name leaked: %+v", res[0])
 	}
+	if !strings.HasPrefix(a.Src, "screenshots/1/") || !strings.HasPrefix(a.Thumb, "screenshots/1/") {
+		t.Errorf("paths must be relative to the app (it may be served under a sub-path): %q %q", a.Src, a.Thumb)
+	}
 	// the original is stored byte for byte
-	got, err := http.Get(e.srv.URL + a.Src)
+	got, err := http.Get(e.srv.URL + "/" + a.Src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,13 +169,13 @@ func TestUploadStoresOriginalAndThumbnail(t *testing.T) {
 	if !bytes.Equal(b, orig) || got.Header.Get("Content-Type") != "image/png" || got.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("original: %d bytes, %v", len(b), got.Header)
 	}
-	th, _ := http.Get(e.srv.URL + a.Thumb)
+	th, _ := http.Get(e.srv.URL + "/" + a.Thumb)
 	cfg, err := jpeg.DecodeConfig(th.Body)
 	th.Body.Close()
 	if err != nil || cfg.Width != 480 || cfg.Height != 320 || !strings.Contains(th.Header.Get("Cache-Control"), "max-age=31536000") {
 		t.Errorf("thumb %+v %v %v", cfg, err, th.Header)
 	}
-	dl, _ := http.Get(e.srv.URL + a.Src + "?download=1")
+	dl, _ := http.Get(e.srv.URL + "/" + a.Src + "?download=1")
 	dl.Body.Close()
 	if !strings.HasPrefix(dl.Header.Get("Content-Disposition"), "attachment") {
 		t.Errorf("no download header: %v", dl.Header)
@@ -451,7 +454,7 @@ func TestOverBudgetNeedsTheBrowsersThumbnail(t *testing.T) {
 		t.Errorf("size %dx%d", res[0].Screenshot.Width, res[0].Screenshot.Height)
 	}
 	// the small picture was thumbnailed by the server: the browser's 10x10 thumb was ignored
-	tf, _ := os.ReadFile(filepath.Join(e.root, "1", strings.TrimPrefix(res[1].Screenshot.Thumb, "/screenshots/1/")))
+	tf, _ := os.ReadFile(filepath.Join(e.root, "1", strings.TrimPrefix(res[1].Screenshot.Thumb, "screenshots/1/")))
 	if cfg, err := jpeg.DecodeConfig(bytes.NewReader(tf)); err != nil || cfg.Width != 50 {
 		t.Errorf("server thumbnail: %+v %v", cfg, err)
 	}
@@ -466,7 +469,7 @@ func TestThumbnailOfATallImageFits(t *testing.T) {
 	if res[0].Screenshot == nil {
 		t.Fatalf("%+v", res)
 	}
-	tf, _ := os.ReadFile(filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Thumb, "/screenshots/1/")))
+	tf, _ := os.ReadFile(filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Thumb, "screenshots/1/")))
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(tf))
 	if err != nil || cfg.Width > 480 || cfg.Height > 960 {
 		t.Errorf("thumbnail %+v %v", cfg, err)
@@ -547,8 +550,8 @@ func TestSweepNeverDeletesAnOriginal(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	age := func(p string, at time.Time) { os.Chtimes(p, at, at) }
 	_, res := e.upload(t, "1", upFile{name: "a.png", data: pngBytes(t, 40, 40)})
-	keepOrig := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Src, "/screenshots/1/"))
-	keepThumb := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Thumb, "/screenshots/1/"))
+	keepOrig := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Src, "screenshots/1/"))
+	keepThumb := filepath.Join(e.root, "1", strings.TrimPrefix(res[0].Screenshot.Thumb, "screenshots/1/"))
 	hex := strings.Repeat("a", 32)
 	mk := func(rel string, data []byte, at time.Time) string {
 		p := filepath.Join(e.root, rel)
@@ -645,12 +648,12 @@ func TestRestoredOlderDatabaseKeepsAndReadoptsNewerPictures(t *testing.T) {
 		t.Fatalf("not back: %+v", list)
 	}
 	for _, u := range []string{list[0].Src, list[0].Thumb} {
-		if r, err := http.Get(e.srv.URL + u); err != nil || r.StatusCode != 200 {
+		if r, err := http.Get(e.srv.URL + "/" + u); err != nil || r.StatusCode != 200 {
 			t.Errorf("%s: %v %v", u, r, err)
 		}
 	}
 	// a thumbnail that is missing is made again
-	os.Remove(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "/screenshots/1/")))
+	os.Remove(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "screenshots/1/")))
 	e.s.DB.Exec("DELETE FROM screenshot")
 	for _, p := range files(t, e.root) {
 		os.Chtimes(p, old, old)
@@ -658,7 +661,7 @@ func TestRestoredOlderDatabaseKeepsAndReadoptsNewerPictures(t *testing.T) {
 	if r, _ := e.s.SweepShots(); r.Adopted != 1 {
 		t.Errorf("second restore: %+v", r)
 	}
-	if _, err := os.Stat(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "/screenshots/1/"))); err != nil {
+	if _, err := os.Stat(filepath.Join(e.root, "1", strings.TrimPrefix(sc.Thumb, "screenshots/1/"))); err != nil {
 		t.Error("the thumbnail was not made again")
 	}
 }

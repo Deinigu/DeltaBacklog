@@ -35,7 +35,7 @@ const errStorage = "screenshot storage not available"
 type Screenshot struct {
 	ID      int64  `json:"id"`
 	GameID  int64  `json:"game_id"`
-	Src     string `json:"src"`   // the original, e.g. /screenshots/12/<hex>.png
+	Src     string `json:"src"`   // the original, e.g. screenshots/12/<hex>.png (relative to the app, which may sit under a sub-path)
 	Thumb   string `json:"thumb"` // the ~480px JPEG
 	Width   int    `json:"width"`
 	Height  int    `json:"height"`
@@ -54,8 +54,8 @@ func scanShot(r rowScanner) (Screenshot, error) {
 	var s Screenshot
 	var file, thumb string
 	err := r.Scan(&s.ID, &s.GameID, &file, &thumb, &s.Width, &s.Height, &s.Bytes, &s.Taken, &s.Caption, &s.Pos, &s.Added)
-	s.Src = fmt.Sprintf("/screenshots/%d/%s", s.GameID, file)
-	s.Thumb = fmt.Sprintf("/screenshots/%d/%s", s.GameID, thumb)
+	s.Src = fmt.Sprintf("screenshots/%d/%s", s.GameID, file)
+	s.Thumb = fmt.Sprintf("screenshots/%d/%s", s.GameID, thumb)
 	return s, err
 }
 

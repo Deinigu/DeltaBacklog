@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -128,12 +129,15 @@ func TestServiceWorkerCachesTheWholeShell(t *testing.T) {
 	}
 	list := src[start:]
 	list = list[:strings.Index(list, "];")]
-	want := []string{"'/'", "'/styles.css'", "'/icon.svg'"}
+	if strings.Contains(list, "'/") {
+		t.Error("sw.js SHELL_FILES must be relative (the app may be served under a sub-path)")
+	}
+	want := []string{"'./'", "'styles.css'", "'icon.svg'"}
 	sub, _ := fs.Sub(files, "static")
 	entries, _ := fs.ReadDir(sub, "js")
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".js") {
-			want = append(want, "'/js/"+e.Name()+"'")
+			want = append(want, "'js/"+e.Name()+"'")
 		}
 	}
 	for _, w := range want {
@@ -141,4 +145,23 @@ func TestServiceWorkerCachesTheWholeShell(t *testing.T) {
 			t.Errorf("sw.js SHELL_FILES is missing %s", w)
 		}
 	}
+}
+
+// A reverse proxy may serve the app under a sub-path (/backlog/): every URL the frontend builds must be relative to the
+// page, so a root-relative "/api/...", "/covers/..." or "/sw.js" would escape the prefix.
+func TestFrontendURLsAreRelative(t *testing.T) {
+	sub, _ := fs.Sub(files, "static")
+	abs := regexp.MustCompile(`["'\x60]/(api/|covers/|screenshots/|js/|sw\.js|styles\.css|icon\.svg|manifest\.webmanifest)`)
+	fs.WalkDir(sub, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, _ := fs.ReadFile(sub, p)
+		for i, line := range strings.Split(string(b), "\n") {
+			if m := abs.FindString(line); m != "" {
+				t.Errorf("%s:%d: root-relative URL %s", p, i+1, m)
+			}
+		}
+		return nil
+	})
 }

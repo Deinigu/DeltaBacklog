@@ -1,4 +1,5 @@
 // Data layer: one in-memory store loaded at startup; views read from it.
+// Every URL is relative (api/..., covers/...), resolved against the page, so the app also works under a reverse-proxy sub-path.
 import { norm } from './util.js';
 import { slotOrder } from './order.js';
 
@@ -25,7 +26,7 @@ export function indexGame(g) {
 }
 
 export async function load() {
-  const [games, facets, views] = await Promise.all([getJSON('/api/games'), getJSON('/api/facets'), getJSON('/api/views')]);
+  const [games, facets, views] = await Promise.all([getJSON('api/games'), getJSON('api/facets'), getJSON('api/views')]);
   store.views = views;
   store.games = games;
   for (const g of games) indexGame(g);
@@ -38,7 +39,7 @@ export async function load() {
 
 export function coverURL(g) {
   // cover_v changes only with the image itself, so editing a game never re-downloads its cover
-  return g.cover ? `/covers/${g.cover}?v=${encodeURIComponent(g.cover_v || '')}` : null;
+  return g.cover ? `covers/${g.cover}?v=${encodeURIComponent(g.cover_v || '')}` : null;
 }
 
 // ---- game edits ----
@@ -48,7 +49,7 @@ const gamesChanged = (id = null, extra = {}) => window.dispatchEvent(new CustomE
 /** Replace a game with the server's copy: the safe way out of a failed edit when others were chained behind it. */
 async function resync(id) {
   try {
-    const fresh = (await getJSON('/api/games')).find((x) => x.id === id);
+    const fresh = (await getJSON('api/games')).find((x) => x.id === id);
     const g = store.byId.get(id);
     if (fresh && g) { Object.assign(g, fresh); indexGame(g); }
   } catch { /* offline: the next load fixes it */ }
@@ -84,7 +85,7 @@ export function patchGame(id, patch) {
   slot.count++;
   const run = async () => {
     try {
-      const fresh = await send('PATCH', `/api/games/${id}`, patch);
+      const fresh = await send('PATCH', `api/games/${id}`, patch);
       if (slot.count === 1) { Object.assign(g, fresh); indexGame(g); } // this is the newest edit: authoritative
     } catch (e) {
       slot.failed = true;
@@ -110,7 +111,7 @@ export async function reorderGames(ids) {
   for (const [id, pos] of slotOrder(ids, before)) store.byId.get(id).queue_pos = pos; // optimistic
   gamesChanged(null, { reorder: true });
   try {
-    const next = await send('POST', '/api/games/reorder', ids);
+    const next = await send('POST', 'api/games/reorder', ids);
     for (const [id, pos] of Object.entries(next)) store.byId.get(Number(id)).queue_pos = pos;
   } catch (e) {
     for (const [id, pos] of before) store.byId.get(id).queue_pos = pos;
@@ -134,24 +135,24 @@ async function send(method, url, body) {
 const changed = () => window.dispatchEvent(new Event('views-changed'));
 
 export async function createView(v) {
-  const created = await send('POST', '/api/views', v);
+  const created = await send('POST', 'api/views', v);
   store.views.push(created);
   changed();
   return created;
 }
 export async function updateView(id, patch) {
-  const v = await send('PATCH', `/api/views/${id}`, patch);
+  const v = await send('PATCH', `api/views/${id}`, patch);
   store.views = store.views.map((x) => (x.id === id ? v : x));
   changed();
   return v;
 }
 export async function deleteView(id) {
-  await send('DELETE', `/api/views/${id}`);
+  await send('DELETE', `api/views/${id}`);
   store.views = store.views.filter((x) => x.id !== id);
   changed();
 }
 export async function reorderViews(ids) {
-  store.views = await send('PUT', '/api/views/order', ids);
+  store.views = await send('PUT', 'api/views/order', ids);
   changed();
 }
 
@@ -171,7 +172,7 @@ async function request(method, url, body) {
 const reloaded = () => window.dispatchEvent(new Event('games-reloaded'));
 
 /** Search IGDB by title or store link. Resolves {configured, query, results}. */
-export const lookup = (q) => request('GET', `/api/lookup?q=${encodeURIComponent(q)}`);
+export const lookup = (q) => request('GET', `api/lookup?q=${encodeURIComponent(q)}`);
 /**
  * Cover options. source: 'steamgriddb' (search by title) or 'igdb' (the pictures IGDB holds; igdbId links to the
  * exact game when known). shape 'poster' asks for portrait images. Resolves {configured, source, covers}.
@@ -181,12 +182,12 @@ export function coverSearch(q, { source = 'steamgriddb', igdbId = 0, shape = 'co
   if (shape === 'poster') p.set('shape', 'poster'); // portrait images; a failed lookup rejects with err.data.unreachable
   if (source !== 'steamgriddb') p.set('source', source);
   if (igdbId) p.set('igdb_id', String(igdbId));
-  return request('GET', `/api/covers/search?${p}`);
+  return request('GET', `api/covers/search?${p}`);
 }
 
 /** Create a game. Resolves {game, cover_error}; rejects with err.status 409 and err.data.id when it already exists. */
 export async function createGame(body) {
-  const data = await request('POST', '/api/games', body);
+  const data = await request('POST', 'api/games', body);
   const g = data.game;
   indexGame(g);
   store.games.push(g);
@@ -196,7 +197,7 @@ export async function createGame(body) {
 }
 
 export async function deleteGame(id) {
-  await request('DELETE', `/api/games/${id}`);
+  await request('DELETE', `api/games/${id}`);
   store.games = store.games.filter((g) => g.id !== id);
   store.byId.delete(id);
   reloaded();
@@ -204,12 +205,12 @@ export async function deleteGame(id) {
 
 /** Replace a game's cover with an image from the metadata CDNs. */
 export async function setCover(id, url) {
-  const fresh = await request('POST', `/api/games/${id}/cover`, { url });
+  const fresh = await request('POST', `api/games/${id}/cover`, { url });
   const g = store.byId.get(id);
   Object.assign(g, fresh);
   indexGame(g);
   gamesChanged(id);
-  fetch('/api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new cover
+  fetch('api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new cover
   return g;
 }
 
@@ -218,11 +219,11 @@ export async function setCover(id, url) {
  * Tells the open views (the ranking board) through games-changed, like a cover change.
  */
 export async function setPoster(id, body) {
-  const fresh = await request('POST', `/api/games/${id}/poster`, body);
+  const fresh = await request('POST', `api/games/${id}/poster`, body);
   const g = store.byId.get(id);
   if (g) { Object.assign(g, fresh); indexGame(g); }
   gamesChanged(id);
-  fetch('/api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new poster
+  fetch('api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new poster
   return g;
 }
 
@@ -230,18 +231,18 @@ export async function setPoster(id, body) {
 
 /** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score, platforms, slug}]}]. */
 export async function linkQueue() {
-  return (await request('GET', '/api/link/queue')).items;
+  return (await request('GET', 'api/link/queue')).items;
 }
 
 /** Link a game to an IGDB game (a proposal, or one picked with the lookup). Rejects with err.status 409 when it is taken. */
 export async function linkAccept(gameId, igdbId) {
-  await request('POST', '/api/link/accept', { game_id: gameId, igdb_id: igdbId });
+  await request('POST', 'api/link/accept', { game_id: gameId, igdb_id: igdbId });
   const g = store.byId.get(gameId);
   if (g) g.igdb_id = igdbId;
 }
 
 /** Record that a game is not on IGDB, so the sync never searches for it again. */
-export const linkNone = (gameId) => request('POST', '/api/link/none', { game_id: gameId });
+export const linkNone = (gameId) => request('POST', 'api/link/none', { game_id: gameId });
 
 /** Refresh store.linkPending (the navigation shows "Link IGDB" while the review queue is not empty). */
 export async function loadLinkPending() {
@@ -251,27 +252,27 @@ export async function loadLinkPending() {
 // ---- rankings ----
 /** Portrait box art for the rankings (null until the server has made it); poster_v is its cache key. */
 export function posterURL(g) {
-  return g.poster ? `/covers/${g.poster}?v=${encodeURIComponent(g.poster_v || '')}` : null;
+  return g.poster ? `covers/${g.poster}?v=${encodeURIComponent(g.poster_v || '')}` : null;
 }
 /** The rankings, in order: [{id, name, description, games, ranked, tiers: [{label, color}], preview: [gameId]}]. */
-export const listRankings = () => request('GET', '/api/rankings');
+export const listRankings = () => request('GET', 'api/rankings');
 /** One ranking with its tiers and entries ({id, name, tiers: [{id, label, color, pos}], entries: [{game_id, tier_id, pos}], posters_pending}). */
-export const getRanking = (id) => request('GET', `/api/rankings/${id}`);
+export const getRanking = (id) => request('GET', `api/rankings/${id}`);
 /** body: {name, description?, preset: 'sabcdf' | 'empty', game_ids?}. */
-export const createRanking = (body) => request('POST', '/api/rankings', body);
-export const patchRanking = (id, patch) => request('PATCH', `/api/rankings/${id}`, patch);
-export const deleteRanking = (id) => request('DELETE', `/api/rankings/${id}`);
-export const duplicateRanking = (id) => request('POST', `/api/rankings/${id}/duplicate`, {});
-export const reorderRankings = (ids) => request('PUT', '/api/rankings/order', ids);
-export const addRankingTier = (id, tier) => request('POST', `/api/rankings/${id}/tiers`, tier);
-export const deleteRankingTier = (id, tierId) => request('DELETE', `/api/rankings/${id}/tiers/${tierId}`);
+export const createRanking = (body) => request('POST', 'api/rankings', body);
+export const patchRanking = (id, patch) => request('PATCH', `api/rankings/${id}`, patch);
+export const deleteRanking = (id) => request('DELETE', `api/rankings/${id}`);
+export const duplicateRanking = (id) => request('POST', `api/rankings/${id}/duplicate`, {});
+export const reorderRankings = (ids) => request('PUT', 'api/rankings/order', ids);
+export const addRankingTier = (id, tier) => request('POST', `api/rankings/${id}/tiers`, tier);
+export const deleteRankingTier = (id, tierId) => request('DELETE', `api/rankings/${id}/tiers/${tierId}`);
 /** Put games in a ranking's pool. Resolves {added: [gameId]}. */
-export const addRankingGames = (id, gameIds) => request('POST', `/api/rankings/${id}/entries`, { game_ids: gameIds });
-export const removeRankingGame = (id, gameId) => request('DELETE', `/api/rankings/${id}/entries/${gameId}`);
+export const addRankingGames = (id, gameIds) => request('POST', `api/rankings/${id}/entries`, { game_ids: gameIds });
+export const removeRankingGame = (id, gameId) => request('DELETE', `api/rankings/${id}/entries/${gameId}`);
 /** Save the board (see rankboard.toBody). */
-export const saveBoard = (id, body) => send('PUT', `/api/rankings/${id}/board`, body);
+export const saveBoard = (id, body) => send('PUT', `api/rankings/${id}/board`, body);
 /** Save when the page is going away (keepalive lets the request outlive it). Fire and forget. */
-export const saveBoardKeepalive = (id, body) => { fetch(`/api/rankings/${id}/board`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); };
+export const saveBoardKeepalive = (id, body) => { fetch(`api/rankings/${id}/board`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); };
 
 /**
  * Posters are made in the background: copy the ones the server reports (the entries of GET /api/rankings/<id>) into the
@@ -288,7 +289,7 @@ export function applyPosters(entries) {
 
 /** The same for every game (the list page has no entries to read from). */
 export async function refreshPosters() {
-  const fresh = await getJSON('/api/games');
+  const fresh = await getJSON('api/games');
   let changed = false;
   for (const f of fresh) {
     const g = store.byId.get(f.id);
@@ -299,13 +300,13 @@ export async function refreshPosters() {
 
 // ---- screenshots ----
 /** A game's screenshots. Resolves {screenshots, available}; available is false while the storage (a drive) is missing. */
-export const listShots = (gameId) => request('GET', `/api/games/${gameId}/screenshots`);
-export const setShotCaption = (id, caption) => request('PATCH', `/api/screenshots/${id}`, { caption });
-export const deleteShot = (id) => request('DELETE', `/api/screenshots/${id}`);
+export const listShots = (gameId) => request('GET', `api/games/${gameId}/screenshots`);
+export const setShotCaption = (id, caption) => request('PATCH', `api/screenshots/${id}`, { caption });
+export const deleteShot = (id) => request('DELETE', `api/screenshots/${id}`);
 /** Delete when the page is going away (keepalive lets the request outlive it). Fire and forget. */
-export const deleteShotKeepalive = (id) => { fetch(`/api/screenshots/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {}); };
+export const deleteShotKeepalive = (id) => { fetch(`api/screenshots/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {}); };
 /** Save a new order; `ids` names every screenshot of the game. Resolves the fresh list. */
-export const orderShots = async (gameId, ids) => (await request('PUT', `/api/games/${gameId}/screenshots/order`, ids)).screenshots;
+export const orderShots = async (gameId, ids) => (await request('PUT', `api/games/${gameId}/screenshots/order`, ids)).screenshots;
 
 /**
  * Upload one file. XMLHttpRequest, because fetch cannot report upload progress. onProgress gets 0..1.
@@ -318,7 +319,7 @@ export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
     fd.append('file', file, file.name);
     if (thumb) fd.append('thumb', thumb, 'thumb.jpg'); // right after the file; only used when the server cannot decode the original
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/games/${gameId}/screenshots`);
+    xhr.open('POST', `api/games/${gameId}/screenshots`);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
     xhr.onerror = () => reject(new Error('network error'));
     xhr.onload = () => {
@@ -340,11 +341,11 @@ export function uploadShot(gameId, file, onProgress = () => {}, thumb = null) {
  * Every screenshot of the library, one page at a time (see galleryQuery in gallery.js for the query).
  * Resolves {screenshots, total, years, available}; each screenshot has game_id, game_title and date as well.
  */
-export const listAllShots = (query = '') => request('GET', `/api/screenshots${query}`);
+export const listAllShots = (query = '') => request('GET', `api/screenshots${query}`);
 
 /** HowLongToBeat candidates for a title (and release year). Resolves {query, results: [{id, name, year, hastily, normally, completely}]}; rejects with the site's problem in err.message. */
 export function hltbSearch(q, year = 0) {
   const p = new URLSearchParams({ q });
   if (year) p.set('year', String(year));
-  return request('GET', `/api/hltb/search?${p}`);
+  return request('GET', `api/hltb/search?${p}`);
 }
