@@ -112,3 +112,35 @@ func newSeriesEnvWith(t *testing.T, d *sql.DB, m Meta) *seriesEnv {
 	t.Cleanup(srv.Close)
 	return &seriesEnv{db: d, url: srv.URL, srv: s}
 }
+
+// gateMeta holds the release lookup of IGDB game 100 until the test lets it go.
+type gateMeta struct {
+	dateMeta
+	gate chan struct{}
+}
+
+func (m gateMeta) ReleaseDates(ctx context.Context, ids []int64) (map[int64]meta.ReleaseOf, error) {
+	if len(ids) == 1 && ids[0] == 100 {
+		<-m.gate
+	}
+	return m.dateMeta.ReleaseDates(ctx, ids)
+}
+
+// A lookup that returns after the game was relinked or unlinked must not store the old link's date.
+func TestLateReleaseLookupDoesNotWriteAnOldLinksDate(t *testing.T) {
+	for _, change := range []string{`{"igdb_id":555}`, `{"igdb_id":0}`} {
+		var calls int
+		e := newSeriesEnv(t, true)
+		e.db.Exec(`UPDATE game SET igdb_id = NULL WHERE title = 'Zed'`)
+		gate := make(chan struct{})
+		e2 := newSeriesEnvWith(t, e.db, gateMeta{dateMeta{candMeta{&fakeMeta{igdb: true}}, &calls}, gate})
+		e2.req(t, "POST", "/api/games", `{"title":"Late","status":"wishlist","igdb_id":100}`, 201) // lookup of 100 is now waiting
+		var id int64
+		e2.db.QueryRow(`SELECT id FROM game WHERE title = 'Late'`).Scan(&id)
+		e2.req(t, "PATCH", "/api/games/"+itoa(id), change, 200)
+		close(gate) // the old link's lookup finishes
+		if d, _ := releaseOf(t, e2, "Late"); d != nil {
+			t.Errorf("%s: the date of the old link was stored: %d", change, *d)
+		}
+	}
+}

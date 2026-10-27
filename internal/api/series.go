@@ -216,7 +216,7 @@ func (s *Server) fillRelease(gameID, igdbID int64) {
 		return
 	}
 	if r, ok := got[igdbID]; ok {
-		if err := collections.SetRelease(s.DB, gameID, r.Release); err != nil {
+		if err := collections.SetReleaseIfLinked(s.DB, gameID, igdbID, r.Release); err != nil {
 			log.Printf("release date of game %d: %v", gameID, err)
 		}
 	}

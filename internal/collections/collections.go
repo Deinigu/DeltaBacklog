@@ -622,13 +622,28 @@ func refreshReleases(ctx context.Context, d *sql.DB, rs ReleaseSource, o Options
 }
 
 // SetRelease stores (or, for a zero Release, clears) the IGDB release date of a library game.
-func SetRelease(x interface {
-	Exec(query string, args ...any) (sql.Result, error)
-}, gameID int64, r meta.Release) error {
-	var date, format any
-	if r.Date > 0 {
-		date, format = r.Date, r.Format
-	}
+func SetRelease(x Execer, gameID int64, r meta.Release) error {
+	date, format := releaseArgs(r)
 	_, err := x.Exec(`UPDATE game SET first_release_date = ?, release_date_format = ? WHERE id = ?`, date, format, gameID)
 	return err
+}
+
+// SetReleaseIfLinked is SetRelease for a date read in the background: it writes only while the game still has that IGDB
+// id, so a lookup that finishes after the game was relinked or unlinked cannot store the old link's date.
+func SetReleaseIfLinked(x Execer, gameID, igdbID int64, r meta.Release) error {
+	date, format := releaseArgs(r)
+	_, err := x.Exec(`UPDATE game SET first_release_date = ?, release_date_format = ? WHERE id = ? AND igdb_id = ?`, date, format, gameID, igdbID)
+	return err
+}
+
+// Execer is satisfied by *sql.DB and *sql.Tx.
+type Execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func releaseArgs(r meta.Release) (date, format any) {
+	if r.Date > 0 {
+		return r.Date, r.Format
+	}
+	return nil, nil
 }
