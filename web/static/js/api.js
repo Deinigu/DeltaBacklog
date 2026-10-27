@@ -181,6 +181,14 @@ export const seriesMissing = () => request('GET', 'api/series/missing');
 export const seriesRefresh = () => request('POST', 'api/series/refresh');
 export const seriesHide = (collectionId, igdbId) => request('POST', 'api/series/hide', { collection_id: collectionId, igdb_id: igdbId });
 export const seriesUnhide = (collectionId, igdbId) => request('POST', 'api/series/unhide', { collection_id: collectionId, igdb_id: igdbId });
+
+// ---- the Similar page: IGDB's similar games of the finished and favourite games (cached by the server) ----
+/** Resolves {configured, suggestions: [{igdb_id, title, year, cover, v, parent, sources, hidden}], owned_roots, wishlist_roots, fetched_at, refresh}. */
+export const similarList = () => request('GET', 'api/similar');
+/** Start reading the similar games from IGDB in the background; poll similarList() for its progress. */
+export const similarRefresh = () => request('POST', 'api/similar/refresh');
+export const similarHide = (igdbId) => request('POST', 'api/similar/hide', { igdb_id: igdbId });
+export const similarUnhide = (igdbId) => request('POST', 'api/similar/unhide', { igdb_id: igdbId });
 /** One IGDB game as a quick-add candidate (the Add button of a game the library does not have). */
 export const igdbGame = (igdbId) => request('GET', `api/igdb/${igdbId}`);
 /** The small poster the server kept of a game the library does not have (null until it is downloaded); v is IGDB's image id, so a changed cover is a new URL. */

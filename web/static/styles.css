@@ -616,6 +616,17 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .hidden-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; border-bottom: 1px solid var(--border); }
 .hidden-list small { color: var(--muted); }
 
+/* Similar games page and the drawer's row */
+.sim-why { color: var(--text); }
+.sim-page .up-row .si-actions { flex-direction: column; align-items: stretch; }
+.sim-page .up-row .si-actions .add-chip, .sim-page .up-row .si-actions .hide-chip { min-width: 84px; }
+@media (min-width: 600px) { .sim-page .up-row .si-actions { flex-direction: row; } }
+.sim-drawer h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.sim-strip { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.sim-strip li { flex: none; width: 76px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+.sim-strip .pst { width: 76px; }
+.sim-drawer a { display: inline-flex; align-items: center; min-height: 44px; }
+
 /* ---- Surprise me ---- */
 .mood-group h3 { margin: 10px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .surprise-msg { color: var(--muted); font-size: 14px; flex: 1; align-self: center; margin: 0; }

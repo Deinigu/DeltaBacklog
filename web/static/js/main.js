@@ -6,6 +6,7 @@ import { renderViews } from './views.js';
 import { renderStats } from './statspage.js';
 import { renderSeries } from './seriesview.js';
 import { renderUpcoming } from './upcomingview.js';
+import { renderSimilar } from './similarview.js';
 import { closeDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import { renderLink } from './link.js';
@@ -34,6 +35,7 @@ function resolve(path) {
   if (path === 'screenshots') return { path, render: renderGallery };
   if (path === 'stats') return { path, render: renderStats };
   if (path === 'upcoming') return { path, render: renderUpcoming };
+  if (path === 'similar') return { path, render: renderSimilar };
   const sr = /^series(?:\/(.+))?$/.exec(path); // series/<key>: one series opened (the key is URL-encoded)
   if (sr) return { path: 'series', render: (root) => renderSeries(root, sr[1] ? safeDecode(sr[1]) : null) };
   const m = /^view\/(\d+)$/.exec(path);
@@ -44,7 +46,7 @@ function resolve(path) {
   return { path: 'library', render: renderLibrary };
 }
 
-const SIDEBAR_ORDER = ['years', 'rankings', 'screenshots', 'series', 'upcoming', 'stats', 'views', 'link']; // the insight pages together, then Views
+const SIDEBAR_ORDER = ['years', 'rankings', 'screenshots', 'series', 'upcoming', 'similar', 'stats', 'views', 'link']; // the insight pages together, then Views
 
 // The sheet / sidebar pages; "Link IGDB" joins them only while the IGDB review queue is not empty.
 const morePages = () => (store.linkPending > 0 ? [...MORE_PAGES, { path: 'link', label: 'Link IGDB', icon: 'link' }] : MORE_PAGES);
