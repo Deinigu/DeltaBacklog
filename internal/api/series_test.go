@@ -54,6 +54,7 @@ type seriesEnv struct {
 	url  string
 	fake *collFake
 	dir  string
+	srv  *Server // set by newSeriesEnvWith: the tests wait for its background work
 }
 
 func newSeriesEnv(t *testing.T, configured bool) *seriesEnv {

@@ -200,7 +200,8 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var curStatus int64
-	if err := tx.QueryRow("SELECT status_id FROM game WHERE id = ?", id).Scan(&curStatus); errors.Is(err, sql.ErrNoRows) {
+	var curIGDB sql.NullInt64
+	if err := tx.QueryRow("SELECT status_id, igdb_id FROM game WHERE id = ?", id).Scan(&curStatus, &curIGDB); errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
@@ -254,8 +255,8 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	if in.IGDBID != nil && *in.IGDBID > 0 {
-		s.fillRelease(id, *in.IGDBID)
+	if in.IGDBID != nil && *in.IGDBID > 0 && (!curIGDB.Valid || curIGDB.Int64 != *in.IGDBID) { // only a new link needs its date
+		s.fillReleaseLater(id, *in.IGDBID)
 	}
 	g, err := LoadGame(s.DB, id)
 	if err != nil {

@@ -12,9 +12,13 @@ import (
 )
 
 // dateMeta answers the release date of IGDB game 100 (a year-precision release) and nothing else.
-type dateMeta struct{ candMeta }
+type dateMeta struct {
+	candMeta
+	calls *int
+}
 
-func (dateMeta) ReleaseDates(_ context.Context, ids []int64) (map[int64]meta.ReleaseOf, error) {
+func (m dateMeta) ReleaseDates(_ context.Context, ids []int64) (map[int64]meta.ReleaseOf, error) {
+	*m.calls++
 	out := map[int64]meta.ReleaseOf{}
 	for _, id := range ids {
 		if id == 100 {
@@ -26,6 +30,9 @@ func (dateMeta) ReleaseDates(_ context.Context, ids []int64) (map[int64]meta.Rel
 
 func releaseOf(t *testing.T, e *seriesEnv, title string) (date, format *int64) {
 	t.Helper()
+	if e.srv != nil {
+		e.srv.bg.Wait() // the date is stored after the response
+	}
 	body := e.req(t, "GET", "/api/games", "", 200)
 	var games []struct {
 		Title         string `json:"title"`
@@ -46,9 +53,10 @@ func releaseOf(t *testing.T, e *seriesEnv, title string) (date, format *int64) {
 
 // Adding or linking a game stores its IGDB release date; without one the game is added all the same.
 func TestAddAndRelinkStoreTheReleaseDate(t *testing.T) {
+	var calls int
 	e := newSeriesEnv(t, true)
 	// swap in a Meta that knows dates: rebuild the server on the same database
-	e2 := newSeriesEnvWith(t, e.db, dateMeta{candMeta{&fakeMeta{igdb: true}}})
+	e2 := newSeriesEnvWith(t, e.db, dateMeta{candMeta{&fakeMeta{igdb: true}}, &calls})
 
 	e.db.Exec(`UPDATE game SET igdb_id = NULL WHERE title = 'Zed'`) // the fixture game holds IGDB id 100
 	e2.req(t, "POST", "/api/games", `{"title":"Zed Origins","status":"wishlist","igdb_id":100}`, 201)
@@ -66,6 +74,13 @@ func TestAddAndRelinkStoreTheReleaseDate(t *testing.T) {
 	e2.req(t, "PATCH", "/api/games/"+itoa(id), `{"igdb_id":100}`, 200)
 	if d, _ := releaseOf(t, e2, "Other"); d == nil || *d != 1830211199 {
 		t.Errorf("after relink: %v", d)
+	}
+	// saving the same link again asks IGDB for nothing
+	before := calls
+	e2.req(t, "PATCH", "/api/games/"+itoa(id), `{"igdb_id":100,"notes":"x"}`, 200)
+	e2.srv.bg.Wait()
+	if calls != before {
+		t.Errorf("IGDB asked %d more times for an unchanged link", calls-before)
 	}
 	// relinking to another game drops the old game's date
 	e2.req(t, "PATCH", "/api/games/"+itoa(id), `{"igdb_id":555}`, 200)
@@ -95,5 +110,5 @@ func newSeriesEnvWith(t *testing.T, d *sql.DB, m Meta) *seriesEnv {
 	s := &Server{DB: d, CoverDir: t.TempDir(), Meta: m}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return &seriesEnv{db: d, url: srv.URL}
+	return &seriesEnv{db: d, url: srv.URL, srv: s}
 }

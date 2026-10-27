@@ -192,6 +192,15 @@ func (s *Server) igdbGame(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// fillReleaseLater runs fillRelease after the response, so a slow or unreachable IGDB never holds up an add or a link.
+func (s *Server) fillReleaseLater(gameID, igdbID int64) {
+	s.bg.Add(1)
+	go func() {
+		defer s.bg.Done()
+		s.fillRelease(gameID, igdbID)
+	}()
+}
+
 // fillRelease stores the IGDB release date of a game just added or linked, for the Upcoming page. It is best effort:
 // without IGDB (or when the lookup fails) the date stays empty until the next Refresh from IGDB or `sync-igdb --enrich`.
 func (s *Server) fillRelease(gameID, igdbID int64) {

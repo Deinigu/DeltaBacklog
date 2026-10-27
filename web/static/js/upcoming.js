@@ -6,6 +6,7 @@
 import { buildSeries } from './series.js';
 
 const DAY_MS = 86400000;
+export const LOCALE = 'en-GB'; // the UI text is English, so dates are too, whatever the browser's language
 export const RECENT_DAYS = 60;
 export const HORIZON_MONTHS = 18; // a release starting later than this goes under "Later / TBA"
 
@@ -34,7 +35,7 @@ export function releasePeriod(date, format) {
 const monthName = (y, m, locale) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(Date.UTC(y, m - 1, 15)));
 
 /** "Mar 4, 2027", "March 2027", "Q3 2027", "2027", or "TBA" without a date. */
-export function formatRelease(date, format, locale) {
+export function formatRelease(date, format, locale = LOCALE) {
   const p = releasePeriod(date, format);
   if (!p) return 'TBA';
   switch (p.precision) {
@@ -81,7 +82,7 @@ const byDate = (a, b) => a.period.endDay - b.period.endDay || a.period.startDay 
  *  recent: items out within the last RECENT_DAYS days, newest first
  * `index` maps a series key to { missing } as missingIndex builds it; hidden games are not in it.
  */
-export function buildUpcoming(games, index, now = new Date(), { recentDays = RECENT_DAYS, horizon = HORIZON_MONTHS, locale } = {}) {
+export function buildUpcoming(games, index, now = new Date(), { recentDays = RECENT_DAYS, horizon = HORIZON_MONTHS, locale = LOCALE } = {}) {
   const t = today(now);
   const items = games.filter((g) => g.status === 'wishlist').map(ownedItem);
   const names = new Map(buildSeries(games).map((s) => [s.key, s.name]));

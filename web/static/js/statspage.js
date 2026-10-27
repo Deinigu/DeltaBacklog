@@ -2,7 +2,7 @@
 // All numbers come from stats.js (pure); this file only draws them.
 import { h } from './util.js';
 import { store } from './api.js';
-import { backlogSize, backlogTime, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
+import { libraryGames, backlogSize, backlogTime, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 function svg(tag, attrs, ...children) {
@@ -133,12 +133,13 @@ function waitingTable(time) {
 }
 
 export function renderStats(root) {
-  const games = store.games;
+  const games = libraryGames(store.games);
+  const wished = store.games.length - games.length;
   const size = backlogSize(games);
   const cleanups = [];
   root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
-    h('p.hint', {}, `Computed from the ${games.length} games in your library.`),
+    h('p.hint', {}, `Computed from the ${games.length} games in your library${wished ? ` (${wished} on your wishlist ${wished === 1 ? 'is' : 'are'} not counted)` : ''}.`),
     h('div.stat-grid', {},
       card('Backlog', 'Games on the backlog or up next.',
         h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),

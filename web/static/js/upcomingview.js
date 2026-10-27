@@ -5,13 +5,13 @@ import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js
 import { store, load as reloadGames, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
-import { missingIndex, oldestFetch } from './series.js';
-import { buildUpcoming, formatRelease } from './upcoming.js';
+import { missingIndex, moveHidden, oldestFetch } from './series.js';
+import { buildUpcoming, formatRelease, LOCALE } from './upcoming.js';
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
 
 function poster(item) {
-  const url = item.kind === 'owned' ? imageOf(item.game) : missingPosterURL(item.missing.cover);
+  const url = item.kind === 'owned' ? imageOf(item.game) : missingPosterURL(item.missing.cover, item.missing.v);
   const box = h('span.pst' + (item.kind === 'missing' ? '.pst-missing' : ''), {},
     url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
   return box;
@@ -75,11 +75,9 @@ export function renderUpcoming(root) {
     try {
       await (hide ? seriesHide : seriesUnhide)(m.collection_id, m.igdb_id);
     } catch (e) { toast(e.message || (hide ? 'Could not hide the game' : 'Could not show the game again')); return; }
-    for (const e of index.values()) {
-      const from = hide ? e.missing : e.hidden, to = hide ? e.hidden : e.missing;
-      const i = from.findIndex((x) => x.igdb_id === m.igdb_id && x.collection_id === m.collection_id);
-      if (i >= 0) to.push(...from.splice(i, 1));
-    }
+    // Keep the answer we hold in step with the server: the index is rebuilt from it on every games-changed.
+    moveHidden(info, m, hide ? 'hidden' : 'missing');
+    index = missingIndex(info, store.games);
     draw();
     if (hide) {
       say(`${item.title} hidden.`);
@@ -112,7 +110,7 @@ export function renderUpcoming(root) {
       title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
     const old = oldestFetch(index);
-    const note = old ? `Release dates were read from IGDB on ${new Date(old).toLocaleDateString()}.`
+    const note = old ? `Release dates were read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
       : info.configured ? 'Press Refresh from IGDB to read the release dates of your wishlist and your series.' : '';
     return [btn, note];
   }

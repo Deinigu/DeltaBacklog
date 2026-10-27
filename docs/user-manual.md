@@ -270,7 +270,9 @@ Which IGDB collection belongs to a series is decided by your linked games: the s
 - **Your wishlist.** Tap one to open its details.
 - **New games of your series** that are not in your library (the same games as *Not in your library* on the Series page). They have **Add** (the add form pre-filled, status Wishlist) and **Hide** (the same hide list as the Series page, with Undo).
 
-A **Recently released** section at the top shows games that came out in the last 60 days, so a wishlist game that just launched does not go unnoticed. Older releases leave the page; a game you own is never listed.
+A **Recently released** section at the top shows games that came out in the last 60 days, so a wishlist game that just launched does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
+
+A Wishlist game is not a game of your library yet, so it does not count anywhere that counts your library: not in a series' *n games*, *finished*, *played* or *left to play*, and not in the Stats. On the Series page it still sits in its series' shelf in release order, greyed like a game you do not have and marked **On your wishlist** (tap it for its details). A series with only wishlist games has no tile until you own one of its games.
 
 The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of your wishlist games and of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Wishlist games need an IGDB link to have a date (use **Link IGDB**). Dates are shown as IGDB's calendar date, whatever your time zone.
 

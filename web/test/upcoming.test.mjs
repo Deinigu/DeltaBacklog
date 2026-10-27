@@ -108,3 +108,10 @@ test('time zones: months follow the UTC date of the release, "today" the viewerâ
     if (original === undefined) delete process.env.TZ; else process.env.TZ = original;
   }
 });
+
+test('dates are English whatever the browser language: a fixed en-GB locale by default', () => {
+  assert.equal(formatRelease(utc(2026, 11, 5), 0), '5 Nov 2026');
+  assert.equal(formatRelease(utc(2026, 11, 1), 1), 'November 2026');
+  const { groups } = buildUpcoming([wish('Dec', utc(2026, 12, 1), 0)], new Map(), NOW);
+  assert.equal(groups[0].label, 'December 2026');
+});

@@ -5,6 +5,9 @@ export const WAITING = ['backlog', 'up_next'];                  // "the backlog"
 export const WAITING_STATUSES = ['backlog', 'up_next', 'hold']; // statuses where "time waiting" is meaningful
 const PLAYED_STATUSES = new Set(['playing', 'playing_evergreen', 'evergreen', 'finished', 'dropped']);
 const DAY = 86400000;
+
+/** The games the stats are about: the library's own. A Wishlist game is not in the library yet. */
+export const libraryGames = (games) => games.filter((g) => g.status !== 'wishlist');
 export const MIN_HISTORY_DAYS = 7;
 
 /** Count values, biggest first, ties alphabetical. Returns [{label, count}], at most `limit` (0 = all). */

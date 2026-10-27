@@ -60,7 +60,7 @@ func (s *Server) linkAccept(w http.ResponseWriter, r *http.Request) {
 	}
 	err := igdblink.Accept(s.DB, in.GameID, in.IGDBID)
 	if err == nil {
-		s.fillRelease(in.GameID, in.IGDBID)
+		s.fillReleaseLater(in.GameID, in.IGDBID)
 	}
 	s.linkResult(w, err)
 }

@@ -249,7 +249,7 @@ func (s *Server) createGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if in.IGDBID != nil && *in.IGDBID > 0 {
-		s.fillRelease(id, *in.IGDBID)
+		s.fillReleaseLater(id, *in.IGDBID)
 	}
 	coverErr := ""
 	if in.CoverURL != "" {
