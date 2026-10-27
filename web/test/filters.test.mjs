@@ -95,3 +95,36 @@ test('facetSignature changes when a filter value appears or disappears, not when
   assert.notEqual(facetSignature([a[0]]), base, 'a value that disappeared (Indie)');
   assert.notEqual(facetSignature([a[0], g('B', { genres: ['Indie'], platforms: ['PC'], years: [2024] })]), base, 'a new year');
 });
+
+test('time to beat filter round-trips through saved views and the URL', () => {
+  const s = emptyState();
+  s.ttb.min = 300; s.ttb.max = 900; s.ttb.unknown = 'in'; s.ttb.kind = 'ttb_hastily';
+  const json = filterToJSON(s);
+  assert.deepEqual(json.ttb, { min: 300, max: 900, unknown: 'in', kind: 'ttb_hastily' });
+  const back = stateFromView({ filter: JSON.parse(JSON.stringify(json)) });
+  assert.deepEqual(back.ttb, s.ttb);
+  assert.equal(signature(back), signature(s));
+  assert.deepEqual(stateFromQuery(stateToQuery(s)).ttb, s.ttb);
+  assert.equal(activeCount(s), 2); // the range and "no time known"
+  assert.equal(filterToJSON(emptyState()).ttb, undefined);
+});
+
+test('time to beat filter drops garbage from saved JSON', () => {
+  const t = stateFromView({ filter: { ttb: { min: -5, max: 'x', unknown: 'maybe', kind: 'nope' } } }).ttb;
+  assert.deepEqual(t, { min: null, max: null, unknown: '', kind: '' });
+  assert.deepEqual(stateFromView({ filter: { ttb: { min: 900, max: 300 } } }).ttb.min, null); // empty range
+});
+
+test('old "short" flag becomes a range under 10 h', () => {
+  const v = stateFromView({ filter: { flags: ['short', 'vr'] } });
+  assert.equal(v.ttb.max, 600);
+  assert.deepEqual([...v.flags], ['vr']);
+  const keep = stateFromView({ filter: { flags: ['short'], ttb: { max: 300 } } });
+  assert.equal(keep.ttb.max, 300); // the stricter bound wins
+  const q = stateFromQuery('short=1');
+  assert.equal(q.ttb.max, 600);
+  assert.deepEqual(filterToJSON(v), { flags: ['vr'], ttb: { max: 600 } });
+  const gm = (m) => ({ ...games[0], ttb_normally: m });
+  assert.equal(matches(v, { ...gm(599), vr: true }), true);
+  assert.equal(matches(v, { ...gm(600), vr: true }), false);
+});
