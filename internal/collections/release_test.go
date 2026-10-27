@@ -109,3 +109,30 @@ func TestRefreshReadsDatesOfWishlistAndUndatedGames(t *testing.T) {
 		t.Errorf("report %+v", rep)
 	}
 }
+
+// A game on the wishlist is a library game like any other: its whole IGDB version family counts as owned, so the
+// original and the remaster of a wishlisted game are not offered a second time as "not in your library".
+func TestWishlistGameOwnsItsFamily(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Zed", "Zeds", 100)
+	wish := addGame(t, d, "Zed II (wishlist)", "Zeds", 101)
+	d.Exec(`UPDATE game SET status_id = (SELECT id FROM status WHERE code = 'wishlist') WHERE id = ?`, wish)
+	f := newFake()
+	f.games[7] = []meta.CollectionGame{
+		{IGDBID: 100, Name: "Zed", Year: 1997},
+		{IGDBID: 101, Name: "Zed II", Year: 2005, GameType: 9, ParentID: 100},
+		{IGDBID: 102, Name: "Zed III", Release: meta.Release{Date: 1830211199, Format: meta.FormatYear}},
+	}
+	f.links[101] = meta.GameLinks{Collections: zed().Collections, ParentID: 100}
+	o, _ := opts(t)
+	if _, err := Refresh(context.Background(), d, f, o); err != nil {
+		t.Fatal(err)
+	}
+	list, err := Load(d)
+	if err != nil || len(list) != 1 {
+		t.Fatal(list, err)
+	}
+	if len(list[0].Missing) != 1 || list[0].Missing[0].IGDBID != 102 || list[0].Missing[0].Date == nil {
+		t.Errorf("missing: %+v", list[0].Missing)
+	}
+}

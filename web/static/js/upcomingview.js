@@ -65,8 +65,9 @@ export function renderUpcoming(root) {
     const m = item.missing;
     btn.disabled = true;
     let cand = { igdb_id: m.igdb_id, name: m.title, year: m.year ?? 0, platforms: [], genres: [], themes: [] };
-    try { cand = await igdbGame(m.igdb_id); } catch { /* offline or IGDB down: the form opens with what is cached */ }
+    try { cand = { ...(await igdbGame(m.igdb_id)) }; cand.igdb_parent_id ??= 0; } catch { /* offline or IGDB down: the form opens with what is cached */ }
     btn.disabled = false;
+    // igdb_parent_id (the root of its IGDB version chain) is saved with the game, so its original stops being listed at once.
     openAdd({ candidate: { ...cand, series: item.seriesName || cand.series }, status: 'wishlist' });
   }
   async function setHidden(item, hide) {

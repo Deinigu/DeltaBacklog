@@ -67,5 +67,3 @@ func (c *Client) ReleaseDates(ctx context.Context, ids []int64) (map[int64]Relea
 	}
 	return out, nil
 }
-
-

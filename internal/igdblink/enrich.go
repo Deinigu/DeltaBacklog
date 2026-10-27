@@ -418,11 +418,9 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 	}
 	if found {
 		// ---- data that is new in the app: IGDB's values replace what an earlier run stored ----
-		var collection any // the IGDB collection behind the Series page's "not registered" games
-		if det.CollectionID > 0 {
-			collection = det.CollectionID
-		}
-		if _, err := tx.Exec("UPDATE game SET igdb_collection_id = ? WHERE id = ?", collection, gameID); err != nil {
+		// The collections behind the Series page's "not registered" games (IGDB's own data). The version root is read by
+		// the collections refresh that ends `sync-igdb --enrich` (it also follows the links of games in no collection).
+		if err := collections.StoreCollections(tx, gameID, det.Collections); err != nil {
 			return err
 		}
 		if err := collections.SetRelease(tx, gameID, det.Release); err != nil { // the date for the Upcoming page

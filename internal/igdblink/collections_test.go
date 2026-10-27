@@ -3,6 +3,7 @@ package igdblink
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,32 +12,57 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
-// The enrichment keeps IGDB's collection id of a linked game (also on a --refresh run), and a game IGDB puts in no
-// collection loses a stale one.
-func TestEnrichStoresTheCollectionID(t *testing.T) {
+// The enrichment keeps every IGDB collection of a linked game (and leaves its version root to the collections refresh) (also on a --refresh run), and a game
+// IGDB puts in no collection loses the stale ones.
+func TestEnrichStoresTheCollections(t *testing.T) {
 	d := openDB(t)
 	id := addGame(t, d, "Hades")
 	link(t, d, id, 1)
 	det := hades()
-	det.CollectionID = 77
+	det.Collections = []meta.CollectionRef{{ID: 77, Name: "Hades"}, {ID: 78, Name: "Supergiant"}}
 	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep}); err != nil {
 		t.Fatal(err)
 	}
-	var col *int64
-	d.QueryRow(`SELECT igdb_collection_id FROM game WHERE id = ?`, id).Scan(&col)
-	if col == nil || *col != 77 {
-		t.Fatalf("collection id = %v", col)
+	var n int
+	var parent sql.NullInt64
+	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
+	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&parent)
+	if n != 2 || parent.Valid { // the version root is read later by the collections refresh
+		t.Fatalf("collections %d, root %v", n, parent)
 	}
-	det.CollectionID = 0
+	det.Collections = nil
 	f.details[1] = det
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: true}); err != nil {
 		t.Fatal(err)
 	}
-	col = nil
-	d.QueryRow(`SELECT igdb_collection_id FROM game WHERE id = ?`, id).Scan(&col)
-	if col != nil {
-		t.Errorf("a stale collection id survived a refresh: %v", *col)
+	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
+	if n != 0 {
+		t.Errorf("stale collections survived a refresh: %d", n)
+	}
+}
+
+// An enrichment (also --refresh) keeps the version root a game already has: it depends only on the IGDB id.
+func TestEnrichKeepsAStoredVersionRoot(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	d.Exec(`UPDATE game SET igdb_parent_id = 221280 WHERE id = ?`, id)
+	det := hades()
+	det.Collections = []meta.CollectionRef{{ID: 77, Name: "Hades"}}
+	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
+	for _, refresh := range []bool{false, true} {
+		if refresh {
+			d.Exec(`UPDATE game SET igdb_enriched_at = '2026-01-01T00:00:00Z' WHERE id = ?`, id)
+		}
+		if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: refresh}); err != nil {
+			t.Fatal(err)
+		}
+		var root sql.NullInt64
+		d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&root)
+		if !root.Valid || root.Int64 != 221280 {
+			t.Errorf("refresh=%v: the stored root became %v", refresh, root)
+		}
 	}
 }
 
@@ -73,8 +99,12 @@ type collectionSearch struct {
 	read []int64
 }
 
-func (c *collectionSearch) CollectionsOf(context.Context, []int64) (map[int64]meta.CollectionRef, error) {
-	return map[int64]meta.CollectionRef{}, nil
+func (c *collectionSearch) GameLinks(_ context.Context, ids []int64) (map[int64]meta.GameLinks, error) {
+	out := map[int64]meta.GameLinks{}
+	for _, id := range ids {
+		out[id] = meta.GameLinks{Collections: []meta.CollectionRef{{ID: 5, Name: "Hades"}}} // no parent
+	}
+	return out, nil
 }
 
 func (c *collectionSearch) CollectionGames(_ context.Context, id int64) (string, []meta.CollectionGame, error) {
@@ -92,7 +122,7 @@ func TestEnrichCommandReadsTheCollections(t *testing.T) {
 	d.Exec(`UPDATE game SET series_id = ? WHERE id = ?`, series, id)
 	d.Close()
 	det := hades()
-	det.CollectionID = 5
+	det.Collections = []meta.CollectionRef{{ID: 5, Name: "Hades"}}
 	src := &collectionSearch{enrichSearch: &enrichSearch{&fakeEnricher{details: map[int64]meta.Details{1: det}}}}
 
 	var out bytes.Buffer

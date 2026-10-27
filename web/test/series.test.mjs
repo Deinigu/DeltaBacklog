@@ -124,3 +124,28 @@ test('the oldest fetch time of the cached collections', () => {
   assert.equal(oldestFetch(idx), '2026-01-01T00:00:00Z');
   assert.equal(oldestFetch(new Map()), null);
 });
+
+test('a game counts as owned with its IGDB family: entry, parent, remaster, shared parent', () => {
+  // the owned DS entry 1426 has the JP original 221280 as parent; the 2013 remaster 221285 has 1426 as parent
+  const games = [g('Phoenix Wright', 'Ace', { igdb_id: 1426 })];
+  const resp = {
+    owned_roots: [221280],
+    series: [{ key: 'ace', collections: [], hidden: [], missing: [
+      miss(221280, 'Gyakuten Saiban', 2001), // the parent of an owned game
+      miss(221285, 'Phoenix Wright', 2013, { parent: 1426 }), // a version of an owned game
+      miss(230001, 'Sibling', 2013, { parent: 221280 }), // shares the parent of an owned game
+      miss(222000, 'Dual Destinies', 2013), // really missing
+    ] }],
+  };
+  assert.deepEqual(missingIndex(resp, games).get('ace').missing.map((m) => m.title), ['Dual Destinies']);
+  // a game added since the answer was made (no owned_roots yet) still hides its remaster and itself
+  const added = [g('Justice for All', 'Ace', { igdb_id: 1427 })];
+  const resp2 = { series: [{ key: 'ace', collections: [], hidden: [], missing: [miss(1427, 'JfA', 2002), miss(221286, 'JfA HD', 2013, { parent: 1427 }), miss(5, 'Other', 2010)] }] };
+  assert.deepEqual(missingIndex(resp2, added).get('ace').missing.map((m) => m.igdb_id), [5]);
+});
+
+test('the poster URL is relative and versioned by the cover image', async () => {
+  const { missingPosterURL } = await import('../static/js/api.js');
+  assert.equal(missingPosterURL('i7.jpg', 'co1x'), 'covers/i7.jpg?v=co1x');
+  assert.equal(missingPosterURL(null, 'x'), null);
+});

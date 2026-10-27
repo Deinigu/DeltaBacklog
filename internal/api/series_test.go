@@ -21,11 +21,11 @@ import (
 // collFake is an offline IGDB for the Series page: collection 7 has Zed (100, in the library), Zed II and Zed III.
 type collFake struct{ reads int }
 
-func (f *collFake) CollectionsOf(_ context.Context, ids []int64) (map[int64]meta.CollectionRef, error) {
-	out := map[int64]meta.CollectionRef{}
+func (f *collFake) GameLinks(_ context.Context, ids []int64) (map[int64]meta.GameLinks, error) {
+	out := map[int64]meta.GameLinks{}
 	for _, id := range ids {
 		if id == 100 {
-			out[id] = meta.CollectionRef{ID: 7, Name: "Zed Series"}
+			out[id] = meta.GameLinks{Collections: []meta.CollectionRef{{ID: 7, Name: "Zed Series"}}, ParentID: 90}
 		}
 	}
 	return out, nil
@@ -34,7 +34,7 @@ func (f *collFake) CollectionsOf(_ context.Context, ids []int64) (map[int64]meta
 func (f *collFake) CollectionGames(context.Context, int64) (string, []meta.CollectionGame, error) {
 	f.reads++
 	return "Zed Series", []meta.CollectionGame{
-		{IGDBID: 100, Name: "Zed", Year: 1997, CoverID: "a"},
+		{IGDBID: 100, Name: "Zed", Year: 1997, ParentID: 90, CoverID: "a"},
 		{IGDBID: 101, Name: "Zed II", Year: 2005, CoverID: "b"},
 		{IGDBID: 102, Name: "Zed III", Year: 2011, CoverID: "c"},
 	}, nil
@@ -70,7 +70,7 @@ func newSeriesEnv(t *testing.T, configured bool) *seriesEnv {
 	fake := &collFake{}
 	dir := t.TempDir()
 	s := &Server{DB: d, CoverDir: dir, Meta: candMeta{&fakeMeta{igdb: configured}}, Collections: fake,
-		PosterFetch: func(url, dir string, igdbID int64) (string, error) {
+		MissingPosterFetch: func(url, dir string, igdbID int64) (string, error) {
 			name := "i" + strconv.FormatInt(igdbID, 10) + ".jpg"
 			return name, os.WriteFile(filepath.Join(dir, name), []byte("jpeg"), 0o644)
 		}}
@@ -103,6 +103,7 @@ func (e *seriesEnv) req(t *testing.T, method, path, body string, want int) []byt
 }
 
 type missingResp struct {
+	OwnedRoots []int64              `json:"owned_roots"`
 	Configured bool                 `json:"configured"`
 	Series     []collections.Series `json:"series"`
 	Refresh    seriesStatus         `json:"refresh"`
@@ -147,8 +148,11 @@ func TestSeriesMissingComesFromTheCache(t *testing.T) {
 	if len(r.Series) != 1 || r.Series[0].Key != "zeds" || len(r.Series[0].Missing) != 2 {
 		t.Fatalf("series: %+v", r.Series)
 	}
+	if len(r.OwnedRoots) != 1 || r.OwnedRoots[0] != 90 { // the browser applies the family rule to games added later
+		t.Errorf("owned roots: %v", r.OwnedRoots)
+	}
 	m := r.Series[0].Missing[0]
-	if m.IGDBID != 101 || m.Title != "Zed II" || m.Cover == nil || *m.Cover != "i101.jpg" || m.CollectionID != 7 {
+	if m.IGDBID != 101 || m.Title != "Zed II" || m.Cover == nil || *m.Cover != "i101.jpg" || m.V != "b" || m.CollectionID != 7 {
 		t.Errorf("missing[0] = %+v", m)
 	}
 	if _, err := os.Stat(filepath.Join(e.dir, "i101.jpg")); err != nil {
@@ -219,4 +223,22 @@ func TestIGDBGameCandidate(t *testing.T) {
 	e.req(t, "GET", "/api/igdb/abc", "", 400)
 	off := newSeriesEnv(t, false)
 	off.req(t, "GET", "/api/igdb/101", "", 503)
+}
+
+// Adding a game from the shelf stores the root of its version chain, so its original stops being listed at once.
+func TestAddStoresTheVersionRoot(t *testing.T) {
+	e := newSeriesEnv(t, true)
+	e.req(t, "POST", "/api/games", `{"title":"Zed II","status":"backlog","igdb_id":101,"igdb_parent_id":90}`, 201)
+	var root int64
+	e.db.QueryRow(`SELECT igdb_parent_id FROM game WHERE igdb_id = 101`).Scan(&root)
+	if root != 90 {
+		t.Errorf("stored root = %d", root)
+	}
+	e.req(t, "POST", "/api/games", `{"title":"Other","status":"backlog","igdb_id":102,"igdb_parent_id":-1}`, 400)
+	e.req(t, "POST", "/api/games", `{"title":"Plain","status":"backlog","igdb_id":103}`, 201)
+	var unknown *int64
+	e.db.QueryRow(`SELECT igdb_parent_id FROM game WHERE igdb_id = 103`).Scan(&unknown)
+	if unknown != nil { // not sent: still unknown, the next refresh reads it
+		t.Errorf("root = %v", *unknown)
+	}
 }

@@ -13,12 +13,20 @@ type CollectionRef struct {
 	Name string
 }
 
+// GameLinks is how IGDB relates one game to others: its collections, and the game it is another version of (see
+// igdbGame.parent: never the game a standalone expansion expands or a remake remakes).
+type GameLinks struct {
+	Collections []CollectionRef
+	ParentID    int64 // 0 = none
+}
+
 // CollectionGame is one game of an IGDB collection, as much as the Series page shows of a game the library lacks.
 type CollectionGame struct {
 	IGDBID    int64
 	Name      string
 	Year      int // 0 when IGDB has no release date
 	GameType  int
+	ParentID  int64    // the game this one is another version of; 0 = none
 	CoverID   string   // IGDB image id ("" when the game has no cover)
 	Release   Release  // the full first release date (zero when IGDB has none or says TBD)
 	Platforms []string // IGDB platforms, abbreviated
@@ -38,24 +46,24 @@ const (
 	maxCollectionGames = 1000
 )
 
-// CollectionsOf reads the first IGDB collection of up to ~50 games in one request. Games without one are absent.
-func (c *Client) CollectionsOf(ctx context.Context, igdbIDs []int64) (map[int64]CollectionRef, error) {
-	out := map[int64]CollectionRef{}
+// GameLinks reads the collections and the parent of up to ~50 games in one request. Games IGDB does not return are
+// absent; a game without collections or parent is present with empty values.
+func (c *Client) GameLinks(ctx context.Context, igdbIDs []int64) (map[int64]GameLinks, error) {
+	out := map[int64]GameLinks{}
 	if len(igdbIDs) == 0 {
 		return out, nil
 	}
-	var games []struct {
-		ID          int64            `json:"id"`
-		Collections []igdbCollection `json:"collections"`
-	}
-	q := fmt.Sprintf("fields collections.id,collections.name; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
+	var games []igdbGame
+	q := fmt.Sprintf("fields collections.id,collections.name,game_type,parent_game,version_parent; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
 	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 		return nil, err
 	}
 	for _, g := range games {
-		if len(g.Collections) > 0 {
-			out[g.ID] = CollectionRef{ID: g.Collections[0].ID, Name: g.Collections[0].Name}
+		l := GameLinks{ParentID: g.parent()}
+		for _, col := range g.Collections {
+			l.Collections = append(l.Collections, CollectionRef{ID: col.ID, Name: col.Name})
 		}
+		out[g.ID] = l
 	}
 	return out, nil
 }
@@ -66,22 +74,8 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 	var out []CollectionGame
 	name := ""
 	for offset := 0; offset < maxCollectionGames; offset += collectionPage {
-		var games []struct {
-			ID               int64  `json:"id"`
-			Name             string `json:"name"`
-			FirstReleaseDate int64  `json:"first_release_date"`
-			GameType         int    `json:"game_type"`
-			Cover            struct {
-				ImageID string `json:"image_id"`
-			} `json:"cover"`
-			Collections  []igdbCollection  `json:"collections"`
-			ReleaseDates []igdbReleaseDate `json:"release_dates"`
-			Platforms    []struct {
-				Abbreviation string
-				Name         string
-			} `json:"platforms"`
-		}
-		q := fmt.Sprintf("fields name,first_release_date,game_type,cover.image_id,collections.id,collections.name,"+
+		var games []igdbGame
+		q := fmt.Sprintf("fields name,first_release_date,game_type,parent_game,version_parent,cover.image_id,collections.id,collections.name,"+
 			"release_dates.date,release_dates.date_format,platforms.abbreviation,platforms.name; "+
 			"where collections = (%d) & game_type = (0,4,8,9); sort id asc; limit %d; offset %d;", collectionID, collectionPage, offset)
 		if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
@@ -91,19 +85,12 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 			if !IsRealGameType(g.GameType) || strings.TrimSpace(g.Name) == "" {
 				continue
 			}
-			cg := CollectionGame{IGDBID: g.ID, Name: strings.TrimSpace(g.Name), GameType: g.GameType, CoverID: g.Cover.ImageID}
+			cg := CollectionGame{IGDBID: g.ID, Name: strings.TrimSpace(g.Name), GameType: g.GameType, ParentID: g.parent(), CoverID: g.Cover.ImageID}
 			if g.FirstReleaseDate > 0 {
 				cg.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
 			}
-			full := igdbGame{FirstReleaseDate: g.FirstReleaseDate, ReleaseDates: g.ReleaseDates}
-			cg.Release = full.release()
-			for _, p := range g.Platforms {
-				if p.Abbreviation != "" {
-					cg.Platforms = append(cg.Platforms, p.Abbreviation)
-				} else if p.Name != "" {
-					cg.Platforms = append(cg.Platforms, p.Name)
-				}
-			}
+			cg.Release = g.release()
+			cg.Platforms = g.candidate().Platforms
 			out = append(out, cg)
 			for _, col := range g.Collections {
 				if col.ID == collectionID && name == "" {
@@ -125,13 +112,16 @@ func CollectionCoverURL(imageID string) string { return igdbImg + "t_cover_big/"
 // cover), for the "Add" button of a game the library does not have. A game IGDB does not know is ErrNoGame.
 func (c *Client) GameCandidate(ctx context.Context, igdbID int64) (Candidate, error) {
 	var games []igdbGame
-	if err := c.igdbPost(ctx, "/games", fmt.Sprintf("%s where id = %d;", searchFields, igdbID), &games); err != nil {
+	q := fmt.Sprintf("%s,parent_game,version_parent; where id = %d;", strings.TrimSuffix(strings.TrimSpace(searchFields), ";"), igdbID)
+	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 		return Candidate{}, err
 	}
 	if len(games) == 0 {
 		return Candidate{}, ErrNoGame
 	}
-	return games[0].candidate(), nil
+	cand := games[0].candidate()
+	cand.ParentID = games[0].parent()
+	return cand, nil
 }
 
 // ErrNoGame means IGDB does not hold the game asked for.

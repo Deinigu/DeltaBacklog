@@ -77,7 +77,8 @@ func TestAddAndRelinkStoreTheReleaseDate(t *testing.T) {
 func TestSeriesMissingCarriesDatesAndPlatforms(t *testing.T) {
 	e := newSeriesEnv(t, true)
 	e.db.Exec(`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'Zed Series', '2026-01-01T00:00:00Z')`)
-	e.db.Exec(`UPDATE game SET igdb_collection_id = 7`)
+	e.db.Exec(`UPDATE game SET igdb_parent_id = 0`)
+	e.db.Exec(`INSERT INTO game_collection(game_id, collection_id, name) SELECT id, 7, 'Zed Series' FROM game`)
 	e.db.Exec(`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type, first_release_date, release_date_format, platforms) VALUES (7, 101, 'Zed II', 0, 1830211199, 2, 'PC, PS5')`)
 	e.db.Exec(`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type) VALUES (7, 102, 'Zed III', 0)`)
 	body := string(e.req(t, "GET", "/api/series/missing", "", 200))

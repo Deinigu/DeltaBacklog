@@ -254,6 +254,7 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
       };
       if (/^\d{4}$/.test(String(f.release_year).trim())) body.release_year = Number(f.release_year);
       if (c?.igdb_id) body.igdb_id = c.igdb_id;
+      if (c?.igdb_id && c.igdb_parent_id != null) body.igdb_parent_id = c.igdb_parent_id; // the Series page's Add knows the version root
       if (f.cover) body.cover_url = f.cover;
       try {
         const { game, cover_error: coverError } = await createGame(body);
