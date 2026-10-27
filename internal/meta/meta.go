@@ -198,12 +198,22 @@ type igdbGame struct {
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
 	Collections      []igdbCollection        `json:"collections"`
+	ParentGame       int64                   `json:"parent_game"`    // set by the detail and collection queries only
+	VersionParent    int64                   `json:"version_parent"` // ditto
 	Franchises       []struct{ Name string } `json:"franchises"`
 	Slug             string                  `json:"slug"`
 	AlternativeNames []struct{ Name string } `json:"alternative_names"`
 	Cover            struct {
 		ImageID string `json:"image_id"`
 	} `json:"cover"`
+}
+
+// parent is the IGDB game this one is a version or port of (parent_game, else version_parent), 0 when it has none.
+func (g igdbGame) parent() int64 {
+	if g.ParentGame > 0 {
+		return g.ParentGame
+	}
+	return g.VersionParent
 }
 
 // searchLimit is how many hits IGDB is asked for: its relevance order buries the original of a long-running
@@ -739,10 +749,11 @@ type Details struct {
 	Genres       []string
 	Themes       []string
 	Developer    string
-	Series       string   // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
-	CollectionID int64    // the id of that collection; 0 when the game has none
-	Modes        []string // game modes: Single player, Co-operative...
-	Perspectives []string // player perspectives: First person, Third person...
+	Series       string          // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
+	Collections  []CollectionRef // every IGDB collection of the game
+	ParentID     int64           // the IGDB game this one is a version or port of (parent_game, else version_parent); 0 = none
+	Modes        []string        // game modes: Single player, Co-operative...
+	Perspectives []string        // player perspectives: First person, Third person...
 	Links        []StoreLink
 }
 
@@ -760,7 +771,7 @@ type igdbDetail struct {
 }
 
 const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,parent_game,version_parent,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
 func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {
@@ -801,10 +812,12 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 	out := make([]Details, 0, len(games))
 	for _, g := range games {
 		cand := g.igdbGame.candidate()
-		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
+		d := Details{IGDBID: g.ID, ParentID: g.parent(), Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
 		if len(g.Collections) > 0 {
 			d.Series = g.Collections[0].Name
-			d.CollectionID = g.Collections[0].ID
+		}
+		for _, c := range g.Collections {
+			d.Collections = append(d.Collections, CollectionRef{ID: c.ID, Name: c.Name})
 		}
 		for _, m := range g.GameModes {
 			d.Modes = append(d.Modes, m.Name)

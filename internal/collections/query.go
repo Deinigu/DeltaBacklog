@@ -12,7 +12,9 @@ type Game struct {
 	IGDBID       int64   `json:"igdb_id"`
 	Title        string  `json:"title"`
 	Year         *int    `json:"year"`
-	Cover        *string `json:"cover"` // poster file name under /covers/, nil until downloaded
+	Cover        *string `json:"cover"`  // poster file name under /covers/, nil until downloaded
+	V            string  `json:"v"`      // IGDB's image id of the cover: the cache key of the poster URL
+	Parent       int64   `json:"parent"` // the IGDB game this one is a version of, 0 = none (the browser applies the family rule too)
 	CollectionID int64   `json:"collection_id"`
 }
 
@@ -35,49 +37,35 @@ type Series struct {
 // Key is how the Series page identifies a series: its name, trimmed and lower-cased.
 func Key(name string) string { return strings.ToLower(strings.TrimSpace(name)) }
 
-// Load returns, for every series with a cached collection, the games of the collection the library lacks (matched on
-// igdb_id) and the ones the owner hid. Series without a cached collection are absent.
+// Load returns, for every series whose collection(s) are cached, the games of the collection the library lacks and the
+// ones the owner hid. A game counts as owned with its whole family (see family). Series without a cached collection
+// are absent.
 func Load(d *sql.DB) ([]Series, error) {
-	// series -> collections, from the linked games
-	rows, err := d.Query(`SELECT DISTINCT s.name, c.id, c.name, c.fetched_at
-		FROM game g JOIN series s ON s.id = g.series_id JOIN igdb_collection c ON c.id = g.igdb_collection_id`)
+	picked, err := pickCollections(d)
 	if err != nil {
 		return nil, err
 	}
-	bySeries := map[string]*Series{}
-	seen := map[string]map[int64]bool{}
-	for rows.Next() {
-		var sname string
-		var c Collection
-		if err := rows.Scan(&sname, &c.ID, &c.Name, &c.FetchedAt); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		k := Key(sname)
-		s := bySeries[k]
-		if s == nil {
-			s = &Series{Key: k, Collections: []Collection{}, Missing: []Game{}, Hidden: []Game{}}
-			bySeries[k] = s
-			seen[k] = map[int64]bool{}
-		}
-		if !seen[k][c.ID] {
-			seen[k][c.ID] = true
-			s.Collections = append(s.Collections, c)
-		}
-	}
-	if err := rows.Close(); err != nil {
+	fam, err := loadFamily(d)
+	if err != nil {
 		return nil, err
 	}
-
-	for _, s := range bySeries {
-		sort.Slice(s.Collections, func(i, j int) bool { return s.Collections[i].ID < s.Collections[j].ID })
+	var out []Series
+	for key, ps := range picked {
+		s := Series{Key: key, Collections: []Collection{}, Missing: []Game{}, Hidden: []Game{}}
 		have := map[int64]bool{}
-		for _, c := range s.Collections {
-			grows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file,
+		for _, p := range ps {
+			c := Collection{ID: p.ID}
+			err := d.QueryRow(`SELECT name, fetched_at FROM igdb_collection WHERE id = ?`, p.ID).Scan(&c.Name, &c.FetchedAt)
+			if errors.Is(err, sql.ErrNoRows) {
+				continue // not read yet
+			}
+			if err != nil {
+				return nil, err
+			}
+			s.Collections = append(s.Collections, c)
+			grows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file, coalesce(g.cover_image, ''), g.parent_igdb_id,
 					EXISTS (SELECT 1 FROM series_hidden h WHERE h.collection_id = g.collection_id AND h.igdb_id = g.igdb_id)
-				FROM igdb_collection_game g
-				WHERE g.collection_id = ? AND g.igdb_id NOT IN (SELECT igdb_id FROM game WHERE igdb_id IS NOT NULL)
-				ORDER BY coalesce(g.release_year, 9999), g.title, g.igdb_id`, c.ID)
+				FROM igdb_collection_game g WHERE g.collection_id = ?`, c.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -86,11 +74,11 @@ func Load(d *sql.DB) ([]Series, error) {
 				var year sql.NullInt64
 				var cover sql.NullString
 				var hidden bool
-				if err := grows.Scan(&g.IGDBID, &g.Title, &year, &cover, &hidden); err != nil {
+				if err := grows.Scan(&g.IGDBID, &g.Title, &year, &cover, &g.V, &g.Parent, &hidden); err != nil {
 					grows.Close()
 					return nil, err
 				}
-				if have[g.IGDBID] { // in two collections of the same series
+				if have[g.IGDBID] || fam.has(g.IGDBID, g.Parent) { // in two collections of the same series, or owned
 					continue
 				}
 				have[g.IGDBID] = true
@@ -111,12 +99,13 @@ func Load(d *sql.DB) ([]Series, error) {
 				return nil, err
 			}
 		}
+		if len(s.Collections) == 0 {
+			continue
+		}
+		sort.Slice(s.Collections, func(i, j int) bool { return s.Collections[i].ID < s.Collections[j].ID })
 		sortGames(s.Missing)
 		sortGames(s.Hidden)
-	}
-	out := make([]Series, 0, len(bySeries))
-	for _, s := range bySeries {
-		out = append(out, *s)
+		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil

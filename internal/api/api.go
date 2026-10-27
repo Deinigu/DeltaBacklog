@@ -29,7 +29,10 @@ type Server struct {
 
 	// PosterFetch and PosterPause replace the poster download and the pause between two posters (tests).
 	PosterFetch func(url, dir string, gameID int64) (string, error)
-	PosterPause time.Duration
+	// MissingPosterFetch replaces the download of a poster for a game the library does not have (Series page; tests). Its
+	// own field: PosterFetch writes p<game id>.jpg, which must never be used for an IGDB id.
+	MissingPosterFetch func(url, dir string, igdbID int64) (string, error)
+	PosterPause        time.Duration
 
 	// Collections replaces the IGDB client the Series page reads collections with (tests); nil means Meta.
 	Collections collections.Source

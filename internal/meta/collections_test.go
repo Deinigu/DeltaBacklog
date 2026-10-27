@@ -25,12 +25,13 @@ func collectionFake(t *testing.T, queries *[]string) *Client {
 		case strings.Contains(q, "where collections ="): // a DLC and a port slip through the fake: the client must drop them too
 			w.Write([]byte(`[
 			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}]},
-			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"collections":[{"id":7,"name":"Zed Series"}]},
+			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"parent_game":10,"collections":[{"id":7,"name":"Zed Series"}]},
+			 {"id":15,"name":"Zed III","game_type":9,"version_parent":11,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":12,"name":"Zed: DLC","first_release_date":1104537600,"game_type":1,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":13,"name":"Zed (Port)","game_type":11,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":14,"name":"  ","game_type":0}]`))
 		case strings.Contains(q, "fields collections.id"):
-			w.Write([]byte(`[{"id":10,"collections":[{"id":7,"name":"Zed Series"},{"id":8,"name":"Other"}]},{"id":99}]`))
+			w.Write([]byte(`[{"id":10,"collections":[{"id":7,"name":"Zed Series"},{"id":8,"name":"Other"}],"parent_game":5},{"id":11,"version_parent":10}]`))
 		default: // one game as a candidate
 			w.Write([]byte(`[{"id":10,"name":"Zed","first_release_date":852076800,"genres":[{"name":"RPG"}],"collections":[{"id":7,"name":"Zed Series"}],"cover":{"image_id":"co1"}}]`))
 		}
@@ -50,8 +51,15 @@ func TestCollectionGamesKeepsOnlyRealGames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "Zed Series" || len(games) != 2 || games[0].IGDBID != 10 || games[0].Year != 1997 || games[0].CoverID != "co1" || games[1].GameType != 8 {
+	if name != "Zed Series" || len(games) != 3 || games[0].IGDBID != 10 || games[0].Year != 1997 || games[0].CoverID != "co1" || games[1].GameType != 8 {
 		t.Errorf("name %q games %+v", name, games)
+	}
+	// the relation to the original is read: parent_game, else version_parent
+	if games[0].ParentID != 0 || games[1].ParentID != 10 || games[2].ParentID != 11 {
+		t.Errorf("parents: %+v", games)
+	}
+	if !strings.Contains(queries[0], "parent_game") || !strings.Contains(queries[0], "version_parent") {
+		t.Errorf("query lacks the relation fields: %s", queries[0])
 	}
 	// the type filter is also part of the request, so IGDB does the work
 	if !strings.Contains(queries[0], "game_type = (0,4,8,9)") || !strings.Contains(queries[0], "collections = (7)") {
@@ -62,12 +70,18 @@ func TestCollectionGamesKeepsOnlyRealGames(t *testing.T) {
 	}
 }
 
-func TestCollectionsOfTakesTheFirstCollection(t *testing.T) {
+func TestGameLinksReadsEveryCollectionAndTheParent(t *testing.T) {
 	var queries []string
 	c := collectionFake(t, &queries)
-	got, err := c.CollectionsOf(context.Background(), []int64{10, 99})
-	if err != nil || len(got) != 1 || got[10].ID != 7 || got[10].Name != "Zed Series" {
-		t.Errorf("got %+v, %v", got, err)
+	got, err := c.GameLinks(context.Background(), []int64{10, 11, 99})
+	if err != nil || len(got) != 2 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if l := got[10]; len(l.Collections) != 2 || l.Collections[0].ID != 7 || l.Collections[1].Name != "Other" || l.ParentID != 5 {
+		t.Errorf("game 10: %+v", l)
+	}
+	if l := got[11]; len(l.Collections) != 0 || l.ParentID != 10 { // version_parent when there is no parent_game
+		t.Errorf("game 11: %+v", l)
 	}
 }
 
@@ -101,11 +115,14 @@ func TestLiveCollections(t *testing.T) {
 		if err != nil || len(cands) == 0 {
 			t.Fatalf("%s: search %v %v", title, cands, err)
 		}
-		refs, err := c.CollectionsOf(ctx, []int64{cands[0].IGDBID})
+		refs, err := c.GameLinks(ctx, []int64{cands[0].IGDBID})
 		if err != nil || len(refs) != 1 {
 			t.Fatalf("%s: collections %v %v", title, refs, err)
 		}
-		ref := refs[cands[0].IGDBID]
+		if len(refs[cands[0].IGDBID].Collections) == 0 {
+			t.Fatalf("%s: no collection", title)
+		}
+		ref := refs[cands[0].IGDBID].Collections[0]
 		name, games, err := c.CollectionGames(ctx, ref.ID)
 		if err != nil || len(games) == 0 {
 			t.Fatalf("%s: games %v %v", title, games, err)

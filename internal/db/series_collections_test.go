@@ -51,15 +51,16 @@ func TestSeriesCollectionsMigration(t *testing.T) {
 	var version, games int
 	d.QueryRow(`PRAGMA user_version`).Scan(&version)
 	d.QueryRow(`SELECT count(*) FROM game`).Scan(&games)
-	var collection sql.NullInt64
+	var parent sql.NullInt64
 	var igdbSeries string
-	if err := d.QueryRow(`SELECT igdb_collection_id, igdb_series FROM game WHERE id = 1`).Scan(&collection, &igdbSeries); err != nil {
+	if err := d.QueryRow(`SELECT igdb_parent_id, igdb_series FROM game WHERE id = 1`).Scan(&parent, &igdbSeries); err != nil {
 		t.Fatal(err)
 	}
-	if version < 13 || games != 2 || collection.Valid || igdbSeries != "Zed Series" {
-		t.Errorf("version %d, games %d, collection %v, igdb_series %q", version, games, collection, igdbSeries)
+	if version < 13 || games != 2 || parent.Valid || igdbSeries != "Zed Series" {
+		t.Errorf("version %d, games %d, parent %v, igdb_series %q", version, games, parent, igdbSeries)
 	}
 	for _, q := range []string{
+		`INSERT INTO game_collection(game_id, collection_id, name) VALUES (1, 7, 'Zed Series')`,
 		`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'Zed Series', '2026-01-01T00:00:00Z')`,
 		`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type) VALUES (7, 100, 'Zed', 1997, 0)`,
 		`INSERT INTO series_hidden(collection_id, igdb_id) VALUES (7, 100)`,
@@ -71,6 +72,12 @@ func TestSeriesCollectionsMigration(t *testing.T) {
 	// a collection game needs its collection; deleting the collection takes its games along
 	if _, err := d.Exec(`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type) VALUES (8, 1, 'x', 0)`); err == nil {
 		t.Error("a game of an unknown collection was accepted")
+	}
+	d.Exec(`DELETE FROM game WHERE id = 1`) // a deleted game takes its collection links along
+	var links int
+	d.QueryRow(`SELECT count(*) FROM game_collection`).Scan(&links)
+	if links != 0 {
+		t.Errorf("%d collection links left after their game was deleted", links)
 	}
 	d.Exec(`DELETE FROM igdb_collection WHERE id = 7`)
 	var n int

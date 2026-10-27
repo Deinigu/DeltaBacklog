@@ -68,7 +68,12 @@ func (s *Server) seriesMissing(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []collections.Series{}
 	}
-	writeJSON(w, map[string]any{"configured": s.igdbConfigured(), "series": list, "refresh": s.seriesJob.status()})
+	parents, err := collections.OwnedParents(s.DB)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"configured": s.igdbConfigured(), "series": list, "owned_parents": parents, "refresh": s.seriesJob.status()})
 }
 
 // seriesRefresh starts reading the collections from IGDB in the background; the answer is the job's status.
@@ -90,7 +95,7 @@ func (s *Server) seriesRefresh(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
-		fetch := s.PosterFetch // tests replace the download
+		fetch := s.MissingPosterFetch // tests replace the download
 		rep, err := collections.Refresh(ctx, s.DB, src, collections.Options{
 			CoverDir: s.CoverDir, Fetch: fetch, Allowed: s.coverHostAllowed,
 			Progress: func(done, total int) { j.mu.Lock(); j.done, j.total = done, total; j.mu.Unlock() },

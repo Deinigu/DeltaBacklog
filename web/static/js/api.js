@@ -183,8 +183,8 @@ export const seriesHide = (collectionId, igdbId) => request('POST', 'api/series/
 export const seriesUnhide = (collectionId, igdbId) => request('POST', 'api/series/unhide', { collection_id: collectionId, igdb_id: igdbId });
 /** One IGDB game as a quick-add candidate (the Add button of a game the library does not have). */
 export const igdbGame = (igdbId) => request('GET', `api/igdb/${igdbId}`);
-/** The small poster the server kept of a game the library does not have (null until it is downloaded). */
-export const missingPosterURL = (file) => (file ? `covers/${encodeURIComponent(file)}` : null);
+/** The small poster the server kept of a game the library does not have (null until it is downloaded); v is IGDB's image id, so a changed cover is a new URL. */
+export const missingPosterURL = (file, v = '') => (file ? `covers/${encodeURIComponent(file)}?v=${encodeURIComponent(v)}` : null);
 /**
  * Cover options. source: 'steamgriddb' (search by title) or 'igdb' (the pictures IGDB holds; igdbId links to the
  * exact game when known). shape 'poster' asks for portrait images. Resolves {configured, source, covers}.

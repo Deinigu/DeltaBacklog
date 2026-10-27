@@ -3,6 +3,7 @@ package igdblink
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,32 +12,35 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
-// The enrichment keeps IGDB's collection id of a linked game (also on a --refresh run), and a game IGDB puts in no
-// collection loses a stale one.
-func TestEnrichStoresTheCollectionID(t *testing.T) {
+// The enrichment keeps every IGDB collection of a linked game and its parent game (also on a --refresh run), and a game
+// IGDB puts in no collection loses the stale ones.
+func TestEnrichStoresTheCollectionsAndTheParent(t *testing.T) {
 	d := openDB(t)
 	id := addGame(t, d, "Hades")
 	link(t, d, id, 1)
 	det := hades()
-	det.CollectionID = 77
+	det.Collections = []meta.CollectionRef{{ID: 77, Name: "Hades"}, {ID: 78, Name: "Supergiant"}}
+	det.ParentID = 55
 	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep}); err != nil {
 		t.Fatal(err)
 	}
-	var col *int64
-	d.QueryRow(`SELECT igdb_collection_id FROM game WHERE id = ?`, id).Scan(&col)
-	if col == nil || *col != 77 {
-		t.Fatalf("collection id = %v", col)
+	var n, parent int
+	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
+	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&parent)
+	if n != 2 || parent != 55 {
+		t.Fatalf("collections %d, parent %d", n, parent)
 	}
-	det.CollectionID = 0
+	det.Collections, det.ParentID = nil, 0
 	f.details[1] = det
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: true}); err != nil {
 		t.Fatal(err)
 	}
-	col = nil
-	d.QueryRow(`SELECT igdb_collection_id FROM game WHERE id = ?`, id).Scan(&col)
-	if col != nil {
-		t.Errorf("a stale collection id survived a refresh: %v", *col)
+	var read sql.NullInt64
+	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
+	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&read)
+	if n != 0 || !read.Valid || read.Int64 != 0 { // 0 = read, IGDB has none
+		t.Errorf("stale links survived a refresh: %d collections, parent %v", n, read)
 	}
 }
 
@@ -46,8 +50,8 @@ type collectionSearch struct {
 	read []int64
 }
 
-func (c *collectionSearch) CollectionsOf(context.Context, []int64) (map[int64]meta.CollectionRef, error) {
-	return map[int64]meta.CollectionRef{}, nil
+func (c *collectionSearch) GameLinks(context.Context, []int64) (map[int64]meta.GameLinks, error) {
+	return map[int64]meta.GameLinks{}, nil
 }
 
 func (c *collectionSearch) CollectionGames(_ context.Context, id int64) (string, []meta.CollectionGame, error) {
@@ -65,7 +69,7 @@ func TestEnrichCommandReadsTheCollections(t *testing.T) {
 	d.Exec(`UPDATE game SET series_id = ? WHERE id = ?`, series, id)
 	d.Close()
 	det := hades()
-	det.CollectionID = 5
+	det.Collections = []meta.CollectionRef{{ID: 5, Name: "Hades"}}
 	src := &collectionSearch{enrichSearch: &enrichSearch{&fakeEnricher{details: map[int64]meta.Details{1: det}}}}
 
 	var out bytes.Buffer

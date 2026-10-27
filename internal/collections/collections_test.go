@@ -15,16 +15,16 @@ import (
 
 // fake is an offline IGDB: Zed Series (collection 7) has four real games, Other (8) one.
 type fake struct {
-	collOf map[int64]meta.CollectionRef
-	games  map[int64][]meta.CollectionGame
-	asked  []int64 // collection ids read
+	links map[int64]meta.GameLinks
+	games map[int64][]meta.CollectionGame
+	asked []int64 // collection ids read
 }
 
-func (f *fake) CollectionsOf(_ context.Context, ids []int64) (map[int64]meta.CollectionRef, error) {
-	out := map[int64]meta.CollectionRef{}
+func (f *fake) GameLinks(_ context.Context, ids []int64) (map[int64]meta.GameLinks, error) {
+	out := map[int64]meta.GameLinks{}
 	for _, id := range ids {
-		if r, ok := f.collOf[id]; ok {
-			out[id] = r
+		if l, ok := f.links[id]; ok {
+			out[id] = l
 		}
 	}
 	return out, nil
@@ -32,12 +32,19 @@ func (f *fake) CollectionsOf(_ context.Context, ids []int64) (map[int64]meta.Col
 
 func (f *fake) CollectionGames(_ context.Context, id int64) (string, []meta.CollectionGame, error) {
 	f.asked = append(f.asked, id)
-	return map[int64]string{7: "Zed Series", 8: "Other"}[id], f.games[id], nil
+	return map[int64]string{7: "Zed Series", 8: "Other", 302: "Ace Attorney"}[id], f.games[id], nil
+}
+
+func zed() meta.GameLinks {
+	return meta.GameLinks{Collections: []meta.CollectionRef{{ID: 7, Name: "Zed Series"}}}
+}
+func other() meta.GameLinks {
+	return meta.GameLinks{Collections: []meta.CollectionRef{{ID: 8, Name: "Other"}}}
 }
 
 func newFake() *fake {
 	return &fake{
-		collOf: map[int64]meta.CollectionRef{100: {ID: 7, Name: "Zed Series"}, 101: {ID: 7, Name: "Zed Series"}, 300: {ID: 8, Name: "Other"}},
+		links: map[int64]meta.GameLinks{100: zed(), 101: zed(), 300: other()},
 		games: map[int64][]meta.CollectionGame{
 			7: {{IGDBID: 100, Name: "Zed", Year: 1997, CoverID: "c100"}, {IGDBID: 101, Name: "Zed II", Year: 2005, GameType: 8, CoverID: "c101"},
 				{IGDBID: 102, Name: "Zed III", Year: 2011, CoverID: "c102"}, {IGDBID: 103, Name: "Zed Origins"}},
@@ -121,6 +128,99 @@ func TestRefreshAndLoad(t *testing.T) {
 	if s.Missing[0].Cover == nil || s.Missing[1].Cover != nil {
 		t.Errorf("covers: %+v", s.Missing)
 	}
+	if s.Missing[0].V != "c102" { // the poster URL's cache key follows IGDB's image
+		t.Errorf("cover version = %q", s.Missing[0].V)
+	}
+}
+
+// IGDB splits Ace Attorney into several entries per game: the owned DS entry (an expanded game, so not even in the
+// collection list), its JP original (its parent) and the 2013 remaster (its child). Only really missing games are listed.
+func TestOwnedGamesFamilyIsNotMissing(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Phoenix Wright: Ace Attorney", "Ace Attorney", 1426)
+	addGame(t, d, "Justice for All", "Ace Attorney", 1427)
+	f := &fake{
+		links: map[int64]meta.GameLinks{
+			1426: {Collections: []meta.CollectionRef{{ID: 302, Name: "Ace Attorney"}}, ParentID: 221280},
+			1427: {Collections: []meta.CollectionRef{{ID: 302, Name: "Ace Attorney"}}, ParentID: 221289},
+		},
+		games: map[int64][]meta.CollectionGame{302: {
+			{IGDBID: 221280, Name: "Gyakuten Saiban", Year: 2001, CoverID: "a1"},                                           // the parent of an owned game
+			{IGDBID: 221285, Name: "Phoenix Wright: Ace Attorney", Year: 2013, GameType: 9, ParentID: 1426, CoverID: "a2"}, // a remaster of an owned game
+			{IGDBID: 221289, Name: "Gyakuten Saiban 2", Year: 2002, CoverID: "a3"},
+			{IGDBID: 221286, Name: "Justice for All", Year: 2013, GameType: 9, ParentID: 1427, CoverID: "a4"},
+			{IGDBID: 230001, Name: "Ace Attorney Chronicles sibling", Year: 2013, GameType: 9, ParentID: 221280, CoverID: "a6"}, // shares a parent with an owned game
+			{IGDBID: 222000, Name: "Dual Destinies", Year: 2013, CoverID: "a5"},                                                 // really missing
+		}},
+	}
+	o, fetched := opts(t)
+	if _, err := Refresh(context.Background(), d, f, o); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := Load(d)
+	if len(list) != 1 || len(list[0].Missing) != 1 || list[0].Missing[0].Title != "Dual Destinies" {
+		t.Fatalf("missing: %+v", list)
+	}
+	if len(*fetched) != 1 || (*fetched)[0] != 222000 { // no poster is downloaded for the owned family
+		t.Errorf("fetched %v", *fetched)
+	}
+	parents, err := OwnedParents(d)
+	if err != nil || len(parents) != 2 || parents[0] != 221280 || parents[1] != 221289 {
+		t.Errorf("owned parents %v, %v", parents, err)
+	}
+}
+
+// pick fills game_collection for one series by hand and asks which collections the series gets.
+func pick(t *testing.T, series, igdbSeries string, games [][]meta.CollectionRef) []int64 {
+	t.Helper()
+	d := open(t)
+	for i, cols := range games {
+		id := addGame(t, d, fmt.Sprintf("G%d", i), series, int64(1000+i))
+		if igdbSeries != "" {
+			d.Exec(`UPDATE game SET igdb_series = ? WHERE id = ?`, igdbSeries, id)
+		}
+		tx, _ := d.Begin()
+		if err := StoreGameLinks(tx, id, meta.GameLinks{Collections: cols}); err != nil {
+			t.Fatal(err)
+		}
+		tx.Commit()
+	}
+	p, err := pickCollections(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, c := range p[Key(series)] {
+		ids = append(ids, c.ID)
+	}
+	return ids
+}
+
+func TestPickCollections(t *testing.T) {
+	zelda := meta.CollectionRef{ID: 1, Name: "The Legend of Zelda"}
+	oot := meta.CollectionRef{ID: 2, Name: "Ocarina of Time"}
+	mario := meta.CollectionRef{ID: 3, Name: "Super Mario"}
+	kart := meta.CollectionRef{ID: 4, Name: "Mario Kart"}
+	cases := []struct {
+		name       string
+		series, is string
+		games      [][]meta.CollectionRef
+		want       []int64
+	}{
+		{"the collection most games share wins", "Zelda", "", [][]meta.CollectionRef{{oot, zelda}, {zelda}}, []int64{1}},
+		{"order inside IGDB's list does not matter", "Zelda", "", [][]meta.CollectionRef{{zelda, oot}, {zelda}}, []int64{1}},
+		{"a tie goes to the collection named like the series", "The Legend of Zelda", "", [][]meta.CollectionRef{{oot, zelda}}, []int64{1}},
+		{"a broad collection listed first does not win a tie against the series' name", "Mario Kart", "", [][]meta.CollectionRef{{mario, kart}}, []int64{4}},
+		{"or like the IGDB series of a game", "My karts", "Mario Kart", [][]meta.CollectionRef{{mario, kart}}, []int64{4}},
+		{"a tie nothing is named like keeps both", "Plumbers", "", [][]meta.CollectionRef{{mario, kart}}, []int64{3, 4}},
+		{"no collections, no pick", "Solo", "", [][]meta.CollectionRef{{}}, nil},
+	}
+	for _, c := range cases {
+		got := pick(t, c.series, c.is, c.games)
+		if fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
 }
 
 // A game the user adds later disappears from "not registered" without another refresh (matched on igdb_id).
@@ -164,6 +264,14 @@ func TestHideAndUnhide(t *testing.T) {
 	if len(list[0].Missing) != 2 || len(list[0].Hidden) != 1 || list[0].Hidden[0].IGDBID != 102 {
 		t.Errorf("after hide: %+v", list[0])
 	}
+	// a refresh does not bring it back
+	if _, err := Refresh(context.Background(), d, newFake(), o); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = Load(d)
+	if len(list[0].Hidden) != 1 {
+		t.Errorf("after refresh: %+v", list[0])
+	}
 	if err := Unhide(d, 7, 102); err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +307,71 @@ func TestRefreshKeepsAndCleansPosters(t *testing.T) {
 	}
 	if _, err := os.Stat(poster); !os.IsNotExist(err) {
 		t.Error("the poster of a game that left the collection was kept")
+	}
+}
+
+// A finished refresh drops the collections no series uses (a game unlinked or moved), the poster files nothing names,
+// and the poster of a game that has become owned.
+func TestRefreshPrunesWhatNothingUses(t *testing.T) {
+	d := open(t)
+	zedID := addGame(t, d, "Zed", "Zeds", 100)
+	otherID := addGame(t, d, "Other", "Others", 300)
+	f := newFake()
+	o, _ := opts(t)
+	if _, err := Refresh(context.Background(), d, f, o); err != nil {
+		t.Fatal(err)
+	}
+	n := func(q string) (c int) { d.QueryRow(q).Scan(&c); return }
+	if n(`SELECT count(*) FROM igdb_collection`) != 2 {
+		t.Fatal("both collections should be cached")
+	}
+	stray := filepath.Join(o.CoverDir, "i999.jpg") // nothing names it
+	os.WriteFile(stray, []byte("x"), 0o644)
+	keep := filepath.Join(o.CoverDir, "p5.jpg") // a game's own poster is none of the cache's business
+	os.WriteFile(keep, []byte("x"), 0o644)
+	// the user adds Zed III: the cache no longer needs its poster
+	addGame(t, d, "Zed III", "Zeds", 102)
+	// the second game is unlinked: its collection is unused
+	d.Exec(`DELETE FROM game_collection WHERE game_id = ?`, otherID)
+	d.Exec(`UPDATE game SET igdb_id = NULL, igdb_parent_id = NULL WHERE id = ?`, otherID)
+	_ = zedID
+	if _, err := Refresh(context.Background(), d, f, o); err != nil {
+		t.Fatal(err)
+	}
+	if n(`SELECT count(*) FROM igdb_collection`) != 1 || n(`SELECT count(*) FROM igdb_collection WHERE id = 8`) != 0 {
+		t.Error("the collection no series points at was kept")
+	}
+	for _, name := range []string{stray, filepath.Join(o.CoverDir, "i102.jpg")} {
+		if _, err := os.Stat(name); !os.IsNotExist(err) {
+			t.Errorf("%s was kept", filepath.Base(name))
+		}
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Error("a game's own poster was deleted")
+	}
+	if n(`SELECT count(*) FROM igdb_collection_game WHERE igdb_id = 102 AND cover_file IS NOT NULL`) != 0 {
+		t.Error("the cache still names the poster of an owned game")
+	}
+}
+
+// The progress covers the poster phase too: it ends at total, and the total grows by the posters to download.
+func TestProgressIncludesThePosters(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Zed", "Zeds", 100)
+	o, _ := opts(t)
+	var last [2]int
+	var beyond bool
+	o.Progress = func(done, total int) {
+		last = [2]int{done, total}
+		if done > 1 {
+			beyond = true // more than the one collection: the poster phase is reported
+		}
+	}
+	if _, err := Refresh(context.Background(), d, newFake(), o); err != nil {
+		t.Fatal(err)
+	}
+	if last != [2]int{3, 3} || !beyond { // 1 collection + 2 posters (101 and 102)
+		t.Errorf("last progress %v, poster phase reported: %v", last, beyond)
 	}
 }
 

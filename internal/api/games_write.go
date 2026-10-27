@@ -435,7 +435,8 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			// A different (or no) IGDB game: what the enrichment stored for the old one is not this game's. All of it is
 			// IGDB's data, never owner-entered, so it goes; `sync-igdb --enrich` reads the new link.
 			for _, q := range []string{
-				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, igdb_collection_id = NULL WHERE id = ?",
+				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, igdb_parent_id = NULL WHERE id = ?",
+				"DELETE FROM game_collection WHERE game_id = ?",
 				// only IGDB's own times go: times the owner typed or took from HowLongToBeat stay
 				`UPDATE game SET time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL, time_to_beat_src = NULL
 					WHERE id = ? AND (time_to_beat_src IS NULL OR time_to_beat_src = 'igdb')`,

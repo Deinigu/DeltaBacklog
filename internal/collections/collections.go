@@ -2,8 +2,10 @@
 // games the library does not have ("not registered"). The lists are cached in the database and read from IGDB only
 // when the owner asks (Series > Refresh from IGDB) or `sync-igdb --enrich` runs, never on a page load.
 //
-// A user series is mapped to IGDB through its linked games: the collection of each game (game.igdb_collection_id) is the
-// series' collection, whatever the series is called. A series without a linked game has none and lists nothing.
+// A user series is mapped to IGDB through its linked games, whatever the series is called: the collection most of its
+// linked games share (see pickCollections). A series with no linked game has none and lists nothing. IGDB splits one
+// game into several entries (original, expanded edition, remaster); a game counts as owned with its whole family (see
+// family), so only games that are really missing are listed.
 package collections
 
 import (
@@ -15,6 +17,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,7 +28,7 @@ import (
 
 // Source is what a refresh needs from IGDB (satisfied by *meta.Client).
 type Source interface {
-	CollectionsOf(ctx context.Context, igdbIDs []int64) (map[int64]meta.CollectionRef, error)
+	GameLinks(ctx context.Context, igdbIDs []int64) (map[int64]meta.GameLinks, error)
 	CollectionGames(ctx context.Context, collectionID int64) (string, []meta.CollectionGame, error)
 }
 
@@ -34,14 +38,14 @@ type Options struct {
 	// Fetch downloads a poster (replaced in tests); Allowed vets its URL (default: images.igdb.com over https).
 	Fetch    func(url, dir string, igdbID int64) (string, error)
 	Allowed  func(rawURL string) bool
-	Progress func(done, total int)
+	Progress func(done, total int) // collections first, then the posters
 	// Sleep waits between retries after a 429 (replaced in tests).
 	Sleep func(context.Context, time.Duration) error
 }
 
 // Report is what a refresh did.
 type Report struct {
-	Linked      int // games that got their collection id from IGDB
+	Linked      int // games whose collections and parent were read from IGDB
 	Collections int // collections read
 	Games       int // games in those collections (before the library's own are left out)
 	Covers      int // posters downloaded
@@ -98,7 +102,8 @@ func retry429(ctx context.Context, o Options, f func() error) error {
 }
 
 // Refresh reads from IGDB the collections of the library's series and stores their games and the posters of the games
-// the library lacks. It is resumable: a collection that was read stays read when a later one fails.
+// the library lacks. It is resumable: a collection that was read stays read when a later one fails. A run that
+// finishes also drops the cache nothing uses any more.
 func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, error) {
 	if o.Sleep == nil {
 		o.Sleep = sleep
@@ -111,8 +116,8 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	}
 	rep := &Report{}
 
-	// 1. Linked games of a series that do not know their collection yet.
-	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE series_id IS NOT NULL AND igdb_id IS NOT NULL AND igdb_collection_id IS NULL ORDER BY id`)
+	// 1. Linked games whose collections and parent game were never read (a game read by the enrichment already is).
+	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE igdb_id IS NOT NULL AND igdb_parent_id IS NULL ORDER BY id`)
 	if err != nil {
 		return rep, err
 	}
@@ -135,41 +140,52 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	const batch = 40
 	for start := 0; start < len(igdbIDs); start += batch {
 		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
-		var got map[int64]meta.CollectionRef
-		if err := retry429(ctx, o, func() (err error) { got, err = src.CollectionsOf(ctx, ids); return }); err != nil {
+		var got map[int64]meta.GameLinks
+		if err := retry429(ctx, o, func() (err error) { got, err = src.GameLinks(ctx, ids); return }); err != nil {
 			return stop(rep, ctx, err)
 		}
-		for igdbID, ref := range got {
+		tx, err := d.Begin()
+		if err != nil {
+			return rep, err
+		}
+		for igdbID, l := range got {
 			for _, gid := range byIGDB[igdbID] {
-				if _, err := d.Exec(`UPDATE game SET igdb_collection_id = ? WHERE id = ? AND igdb_collection_id IS NULL`, ref.ID, gid); err != nil {
+				if err := StoreGameLinks(tx, gid, l); err != nil {
+					tx.Rollback()
 					return rep, err
 				}
 				rep.Linked++
 			}
 		}
+		if err := tx.Commit(); err != nil {
+			return rep, err
+		}
 	}
 
-	// 2. The collections of every series.
-	var cols []int64
-	crow, err := d.Query(`SELECT DISTINCT igdb_collection_id FROM game WHERE series_id IS NOT NULL AND igdb_collection_id IS NOT NULL ORDER BY 1`)
+	// 2. The collection(s) of every series (see pickCollections).
+	picked, err := pickCollections(d)
 	if err != nil {
 		return rep, err
 	}
-	for crow.Next() {
-		var id int64
-		if err := crow.Scan(&id); err != nil {
-			crow.Close()
-			return rep, err
+	used := map[int64]bool{}
+	var cols []int64
+	for _, ps := range picked {
+		for _, p := range ps {
+			if !used[p.ID] {
+				used[p.ID] = true
+				cols = append(cols, p.ID)
+			}
 		}
-		cols = append(cols, id)
 	}
-	if err := crow.Close(); err != nil {
-		return rep, err
+	sort.Slice(cols, func(i, j int) bool { return cols[i] < cols[j] })
+	total := len(cols)
+	progress := func(done int) {
+		if o.Progress != nil {
+			o.Progress(done, total)
+		}
 	}
 	for i, id := range cols {
-		if o.Progress != nil {
-			o.Progress(i, len(cols))
-		}
+		progress(i)
 		var name string
 		var games []meta.CollectionGame
 		if err := retry429(ctx, o, func() (err error) { name, games, err = src.CollectionGames(ctx, id); return }); err != nil {
@@ -191,17 +207,10 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		rep.Collections++
 		rep.Games += len(games)
 	}
-	if o.Progress != nil {
-		o.Progress(len(cols), len(cols))
-	}
+	progress(len(cols))
 
-	// 3. Posters of the games the library lacks (the library's own games have theirs).
-	prows, err := d.Query(`SELECT DISTINCT g.igdb_id, g.cover_image FROM igdb_collection_game g
-		WHERE g.cover_image IS NOT NULL AND g.cover_file IS NULL
-		  AND g.collection_id IN (SELECT igdb_collection_id FROM game WHERE series_id IS NOT NULL AND igdb_collection_id IS NOT NULL)
-		  AND g.igdb_id NOT IN (SELECT igdb_id FROM game WHERE igdb_id IS NOT NULL)
-		  AND NOT EXISTS (SELECT 1 FROM series_hidden h WHERE h.collection_id = g.collection_id AND h.igdb_id = g.igdb_id)
-		ORDER BY g.igdb_id`)
+	// 3. Posters of the games the library lacks (not its own family, not the hidden ones); they count in the progress.
+	fam, err := loadFamily(d)
 	if err != nil {
 		return rep, err
 	}
@@ -210,18 +219,34 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		image  string
 	}
 	var wants []want
-	for prows.Next() {
-		var w want
-		if err := prows.Scan(&w.igdbID, &w.image); err != nil {
-			prows.Close()
+	queued := map[int64]bool{}
+	for _, id := range cols {
+		prows, err := d.Query(`SELECT g.igdb_id, g.cover_image, g.parent_igdb_id FROM igdb_collection_game g
+			WHERE g.collection_id = ? AND g.cover_image IS NOT NULL AND g.cover_file IS NULL
+			  AND NOT EXISTS (SELECT 1 FROM series_hidden h WHERE h.collection_id = g.collection_id AND h.igdb_id = g.igdb_id)
+			ORDER BY g.igdb_id`, id)
+		if err != nil {
 			return rep, err
 		}
-		wants = append(wants, w)
+		for prows.Next() {
+			var w want
+			var parent int64
+			if err := prows.Scan(&w.igdbID, &w.image, &parent); err != nil {
+				prows.Close()
+				return rep, err
+			}
+			if !queued[w.igdbID] && !fam.has(w.igdbID, parent) {
+				queued[w.igdbID] = true
+				wants = append(wants, w)
+			}
+		}
+		if err := prows.Close(); err != nil {
+			return rep, err
+		}
 	}
-	if err := prows.Close(); err != nil {
-		return rep, err
-	}
-	for _, w := range wants {
+	total = len(cols) + len(wants)
+	for i, w := range wants {
+		progress(len(cols) + i)
 		if ctx.Err() != nil {
 			rep.Stopped = "interrupted"
 			return rep, nil
@@ -242,6 +267,12 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		}
 		rep.Covers++
 	}
+	progress(total)
+
+	// 4. A finished run drops what no series uses any more.
+	if err := prune(d, o.CoverDir, used, fam); err != nil {
+		return rep, err
+	}
 	return rep, nil
 }
 
@@ -253,6 +284,91 @@ func stop(rep *Report, ctx context.Context, err error) (*Report, error) {
 	}
 	rep.Stopped = err.Error()
 	return rep, nil
+}
+
+// missingFile matches the poster files of games the library does not have (covers.MissingName).
+var missingFile = regexp.MustCompile(`^i[0-9]+\.jpg$`)
+
+// prune deletes the cached collections no series points at (their games go with them by cascade), forgets the poster
+// of a game that has become owned (with its family), and removes poster files that no row names any more.
+func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
+	rows, err := d.Query(`SELECT id FROM igdb_collection`)
+	if err != nil {
+		return err
+	}
+	var stale []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		if !used[id] {
+			stale = append(stale, id)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, id := range stale {
+		if _, err := d.Exec(`DELETE FROM igdb_collection WHERE id = ?`, id); err != nil {
+			return err
+		}
+	}
+	grows, err := d.Query(`SELECT collection_id, igdb_id, parent_igdb_id FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	type key struct{ col, id int64 }
+	var owned []key
+	for grows.Next() {
+		var k key
+		var parent int64
+		if err := grows.Scan(&k.col, &k.id, &parent); err != nil {
+			grows.Close()
+			return err
+		}
+		if fam.has(k.id, parent) { // a game the library has needs no poster from the cache
+			owned = append(owned, k)
+		}
+	}
+	if err := grows.Close(); err != nil {
+		return err
+	}
+	for _, k := range owned {
+		if _, err := d.Exec(`UPDATE igdb_collection_game SET cover_file = NULL WHERE collection_id = ? AND igdb_id = ?`, k.col, k.id); err != nil {
+			return err
+		}
+	}
+	if coverDir == "" {
+		return nil
+	}
+	named := map[string]bool{}
+	frows, err := d.Query(`SELECT DISTINCT cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	for frows.Next() {
+		var f string
+		if err := frows.Scan(&f); err != nil {
+			frows.Close()
+			return err
+		}
+		named[f] = true
+	}
+	if err := frows.Close(); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(coverDir)
+	if err != nil {
+		return nil // no folder, nothing to clean
+	}
+	for _, e := range entries {
+		if n := e.Name(); !e.IsDir() && missingFile.MatchString(n) && !named[n] {
+			os.Remove(filepath.Join(coverDir, n))
+		}
+	}
+	return nil
 }
 
 // store replaces the cached games of one collection in one transaction. A game that stays keeps its poster file (unless
@@ -306,8 +422,8 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 			file = o[1]
 			keep[o[1]] = true
 		}
-		if _, err := tx.Exec(`INSERT OR REPLACE INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type, cover_image, cover_file)
-			VALUES (?,?,?,?,?,?,?)`, id, g.IGDBID, g.Name, year, g.GameType, img, file); err != nil {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type, parent_igdb_id, cover_image, cover_file)
+			VALUES (?,?,?,?,?,?,?,?)`, id, g.IGDBID, g.Name, year, g.GameType, max(g.ParentID, 0), img, file); err != nil {
 			return err
 		}
 	}

@@ -21,11 +21,11 @@ import (
 // collFake is an offline IGDB for the Series page: collection 7 has Zed (100, in the library), Zed II and Zed III.
 type collFake struct{ reads int }
 
-func (f *collFake) CollectionsOf(_ context.Context, ids []int64) (map[int64]meta.CollectionRef, error) {
-	out := map[int64]meta.CollectionRef{}
+func (f *collFake) GameLinks(_ context.Context, ids []int64) (map[int64]meta.GameLinks, error) {
+	out := map[int64]meta.GameLinks{}
 	for _, id := range ids {
 		if id == 100 {
-			out[id] = meta.CollectionRef{ID: 7, Name: "Zed Series"}
+			out[id] = meta.GameLinks{Collections: []meta.CollectionRef{{ID: 7, Name: "Zed Series"}}, ParentID: 90}
 		}
 	}
 	return out, nil
@@ -70,7 +70,7 @@ func newSeriesEnv(t *testing.T, configured bool) *seriesEnv {
 	fake := &collFake{}
 	dir := t.TempDir()
 	s := &Server{DB: d, CoverDir: dir, Meta: candMeta{&fakeMeta{igdb: configured}}, Collections: fake,
-		PosterFetch: func(url, dir string, igdbID int64) (string, error) {
+		MissingPosterFetch: func(url, dir string, igdbID int64) (string, error) {
 			name := "i" + strconv.FormatInt(igdbID, 10) + ".jpg"
 			return name, os.WriteFile(filepath.Join(dir, name), []byte("jpeg"), 0o644)
 		}}
@@ -103,9 +103,10 @@ func (e *seriesEnv) req(t *testing.T, method, path, body string, want int) []byt
 }
 
 type missingResp struct {
-	Configured bool                 `json:"configured"`
-	Series     []collections.Series `json:"series"`
-	Refresh    seriesStatus         `json:"refresh"`
+	OwnedParents []int64              `json:"owned_parents"`
+	Configured   bool                 `json:"configured"`
+	Series       []collections.Series `json:"series"`
+	Refresh      seriesStatus         `json:"refresh"`
 }
 
 func (e *seriesEnv) missing(t *testing.T) missingResp {
@@ -147,8 +148,11 @@ func TestSeriesMissingComesFromTheCache(t *testing.T) {
 	if len(r.Series) != 1 || r.Series[0].Key != "zeds" || len(r.Series[0].Missing) != 2 {
 		t.Fatalf("series: %+v", r.Series)
 	}
+	if len(r.OwnedParents) != 1 || r.OwnedParents[0] != 90 { // the browser applies the family rule to games added later
+		t.Errorf("owned parents: %v", r.OwnedParents)
+	}
 	m := r.Series[0].Missing[0]
-	if m.IGDBID != 101 || m.Title != "Zed II" || m.Cover == nil || *m.Cover != "i101.jpg" || m.CollectionID != 7 {
+	if m.IGDBID != 101 || m.Title != "Zed II" || m.Cover == nil || *m.Cover != "i101.jpg" || m.V != "b" || m.CollectionID != 7 {
 		t.Errorf("missing[0] = %+v", m)
 	}
 	if _, err := os.Stat(filepath.Join(e.dir, "i101.jpg")); err != nil {

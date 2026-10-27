@@ -100,16 +100,18 @@ export function renderSeries(root, openKey = null) {
     draw();
     say(`${m.title} is back in the list.`);
   }
-  // Keep the local copy in step with the server so the page redraws without another request.
+  // Keep the answer we hold in step with the server (the index is rebuilt from it on every games-changed), so a hidden
+  // game stays hidden and the page redraws without another request.
   function moveTo(m, to) {
     const from = to === 'hidden' ? 'missing' : 'hidden';
-    for (const e of index.values()) {
+    for (const e of info.series ?? []) {
       const i = e[from].findIndex((x) => x.igdb_id === m.igdb_id && x.collection_id === m.collection_id);
       if (i < 0) continue;
       const [x] = e[from].splice(i, 1);
       e[to].push(x);
       e[to].sort((a, b) => (a.year ?? Infinity) - (b.year ?? Infinity) || a.title.localeCompare(b.title));
     }
+    index = missingIndex(info, store.games);
   }
 
   // ---- the page of tiles ----
@@ -173,7 +175,7 @@ export function renderSeries(root, openKey = null) {
         h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
     }
     const m = item.game;
-    const url = missingPosterURL(m.cover);
+    const url = missingPosterURL(m.cover, m.v);
     const box = h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(m.title)}` }, h('b', {}, m.title)));
     box.append(h('i.pnew', {}, 'Not in your library'));
     const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${m.title} to your library`, onclick: () => add(m, s.name, addBtn) }, 'Add');
