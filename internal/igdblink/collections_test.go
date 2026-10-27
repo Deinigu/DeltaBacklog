@@ -12,35 +12,33 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
 
-// The enrichment keeps every IGDB collection of a linked game and its parent game (also on a --refresh run), and a game
+// The enrichment keeps every IGDB collection of a linked game (and leaves its version root to the collections refresh) (also on a --refresh run), and a game
 // IGDB puts in no collection loses the stale ones.
-func TestEnrichStoresTheCollectionsAndTheParent(t *testing.T) {
+func TestEnrichStoresTheCollections(t *testing.T) {
 	d := openDB(t)
 	id := addGame(t, d, "Hades")
 	link(t, d, id, 1)
 	det := hades()
 	det.Collections = []meta.CollectionRef{{ID: 77, Name: "Hades"}, {ID: 78, Name: "Supergiant"}}
-	det.ParentID = 55
 	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep}); err != nil {
 		t.Fatal(err)
 	}
-	var n, parent int
+	var n int
+	var parent sql.NullInt64
 	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
 	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&parent)
-	if n != 2 || parent != 55 {
-		t.Fatalf("collections %d, parent %d", n, parent)
+	if n != 2 || parent.Valid { // the version root is read later by the collections refresh
+		t.Fatalf("collections %d, root %v", n, parent)
 	}
-	det.Collections, det.ParentID = nil, 0
+	det.Collections = nil
 	f.details[1] = det
 	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: true}); err != nil {
 		t.Fatal(err)
 	}
-	var read sql.NullInt64
 	d.QueryRow(`SELECT count(*) FROM game_collection WHERE game_id = ?`, id).Scan(&n)
-	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE id = ?`, id).Scan(&read)
-	if n != 0 || !read.Valid || read.Int64 != 0 { // 0 = read, IGDB has none
-		t.Errorf("stale links survived a refresh: %d collections, parent %v", n, read)
+	if n != 0 {
+		t.Errorf("stale collections survived a refresh: %d", n)
 	}
 }
 
@@ -50,8 +48,12 @@ type collectionSearch struct {
 	read []int64
 }
 
-func (c *collectionSearch) GameLinks(context.Context, []int64) (map[int64]meta.GameLinks, error) {
-	return map[int64]meta.GameLinks{}, nil
+func (c *collectionSearch) GameLinks(_ context.Context, ids []int64) (map[int64]meta.GameLinks, error) {
+	out := map[int64]meta.GameLinks{}
+	for _, id := range ids {
+		out[id] = meta.GameLinks{Collections: []meta.CollectionRef{{ID: 5, Name: "Hades"}}} // no parent
+	}
+	return out, nil
 }
 
 func (c *collectionSearch) CollectionGames(_ context.Context, id int64) (string, []meta.CollectionGame, error) {

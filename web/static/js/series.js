@@ -88,13 +88,13 @@ const EMPTY_EXTRA = Object.freeze({ missing: [], hidden: [], collections: [] });
  * Index the answer of GET api/series/missing by series key: { missing, hidden, collections } per series.
  * A game that has become a library game since the answer was made is dropped, so adding one needs no new refresh.
  * IGDB splits one game into several entries (the original, an expanded edition, a remaster), so a game counts as owned
- * with its family, like on the server: it is an owned entry, the parent of one (`owned_parents` has the parents of the
- * linked games the server knew), or its own parent is an owned entry or a known owned parent.
+ * with its family, like on the server: the root of its version chain (`parent`, or the game itself) is a root the server
+ * listed in `owned_roots`, or is (or is the parent of) a game added since.
  */
 export function missingIndex(resp, games) {
   const owned = new Set(games.map((g) => g.igdb_id).filter((id) => id != null));
-  const parents = new Set(resp?.owned_parents ?? []);
-  const isOwned = (m) => owned.has(m.igdb_id) || parents.has(m.igdb_id) || (m.parent > 0 && (owned.has(m.parent) || parents.has(m.parent)));
+  const roots = new Set(resp?.owned_roots ?? []);
+  const isOwned = (m) => owned.has(m.igdb_id) || roots.has(m.parent > 0 ? m.parent : m.igdb_id) || (m.parent > 0 && owned.has(m.parent));
   const out = new Map();
   for (const s of resp?.series ?? []) {
     out.set(s.key, {

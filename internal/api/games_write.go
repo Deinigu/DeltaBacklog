@@ -31,6 +31,9 @@ type gamePatch struct {
 	Years       *[]int    `json:"years"`   // calendar years played
 	Periods     *[]string `json:"periods"` // "childhood", "always"
 	IGDBID      *int64    `json:"igdb_id"` // links the game to IGDB; 0 clears
+	// IGDBParentID is the root of the game's IGDB version chain (the Series page's Add sends what GET /api/igdb/{id}
+	// answered), 0 = the game is its own root. Only POST /api/games reads it, and only together with igdb_id.
+	IGDBParentID *int64 `json:"igdb_parent_id"`
 
 	// Time to beat, minutes. null (or 0) clears one; absent leaves it. Saving any of them makes the owner the
 	// source (TTBSource "manual", the default) or HowLongToBeat ("hltb"): the IGDB enrichment then leaves them alone.
@@ -79,7 +82,7 @@ func (in *gamePatch) validate() error {
 			return errInvalid
 		}
 	}
-	if in.IGDBID != nil && *in.IGDBID < 0 {
+	if (in.IGDBID != nil && *in.IGDBID < 0) || (in.IGDBParentID != nil && *in.IGDBParentID < 0) {
 		return errInvalid
 	}
 	for _, m := range []optMinutes{in.TTBHastily, in.TTBNormally, in.TTBCompletely} {

@@ -2,9 +2,10 @@
 -- does not have ("not registered"). Refreshed on demand and by `sync-igdb --enrich`, never on a page load.
 --   game_collection         every IGDB collection of a linked game (IGDB's own data); a series is mapped to the
 --                           collection(s) most of its linked games share (see internal/collections)
---   game.igdb_parent_id     the IGDB game this one is a version or port of (parent_game, else version_parent);
---                           0 = IGDB has none, NULL = not read yet. IGDB splits one game into several entries
---                           (original, expanded edition, remaster), so a game counts as owned with its whole family
+--   game.igdb_parent_id     the root of the game's IGDB version chain (original <- expanded edition <- remaster or
+--                           port; only links that mean "another version of the same game", never a standalone
+--                           expansion's or a remake's parent); 0 = the game is its own root, NULL = not read yet.
+--                           IGDB splits one game into several entries, so a game counts as owned with its whole family
 --   igdb_collection         one row per cached collection; fetched_at is when its games were read
 --   igdb_collection_game    the real games of a collection (IGDB game_type main game, standalone expansion, remake,
 --                           remaster); cover_image is IGDB's image id, cover_file the small poster kept on disk
@@ -31,7 +32,7 @@ CREATE TABLE igdb_collection_game (
     title           TEXT NOT NULL,
     release_year    INTEGER,
     game_type       INTEGER NOT NULL,
-    parent_igdb_id  INTEGER NOT NULL DEFAULT 0,
+    parent_igdb_id  INTEGER NOT NULL DEFAULT 0, -- the root of its version chain, 0 = itself
     cover_image     TEXT,
     cover_file      TEXT,
     PRIMARY KEY (collection_id, igdb_id)

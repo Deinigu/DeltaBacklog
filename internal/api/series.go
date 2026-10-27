@@ -68,12 +68,12 @@ func (s *Server) seriesMissing(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []collections.Series{}
 	}
-	parents, err := collections.OwnedParents(s.DB)
+	roots, err := collections.OwnedRoots(s.DB)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"configured": s.igdbConfigured(), "series": list, "owned_parents": parents, "refresh": s.seriesJob.status()})
+	writeJSON(w, map[string]any{"configured": s.igdbConfigured(), "series": list, "owned_roots": roots, "refresh": s.seriesJob.status()})
 }
 
 // seriesRefresh starts reading the collections from IGDB in the background; the answer is the job's status.
@@ -177,6 +177,17 @@ func (s *Server) igdbGame(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErr(w, http.StatusBadGateway, "IGDB lookup failed", nil)
 	default:
+		// The root of the game's version chain, so the add form can hand it back and the game's other entries (the
+		// original, an expanded edition) stop being listed as missing at once. A failed walk just leaves it unknown.
+		if src := s.collectionSource(); src != nil {
+			if root, err := collections.RootOf(ctx, src, id, c.ParentID); err == nil {
+				c.ParentID = root
+			} else {
+				c.ParentID = 0
+			}
+		} else {
+			c.ParentID = 0
+		}
 		writeJSON(w, c)
 	}
 }

@@ -81,7 +81,8 @@ type Candidate struct {
 	Series    string   `json:"series,omitempty"`
 	CoverURL  string   `json:"cover_url,omitempty"`
 	Slug      string   `json:"slug,omitempty"`
-	AltNames  []string `json:"-"` // IGDB's localized and alternative names; the IGDB sync scores against them too
+	ParentID  int64    `json:"igdb_parent_id,omitempty"` // GameCandidate only: the game this one is another version of
+	AltNames  []string `json:"-"`                        // IGDB's localized and alternative names; the IGDB sync scores against them too
 
 	gameType int   // IGDB game_type: 0 main game, 1 DLC, 3 bundle, 8 remake, 9 remaster...
 	released int64 // first release, unix seconds; 0 when unknown
@@ -208,12 +209,21 @@ type igdbGame struct {
 	} `json:"cover"`
 }
 
-// parent is the IGDB game this one is a version or port of (parent_game, else version_parent), 0 when it has none.
+// versionTypes are the IGDB game_type values whose parent_game is the same game in another form: 9 remaster, 10 expanded
+// game, 11 port. For the other types parent_game means something else (a standalone expansion, type 4, belongs to the game
+// it expands, a remake, type 8, to the game it remakes), and those are games of their own.
+var versionTypes = map[int]bool{9: true, 10: true, 11: true}
+
+// parent is the IGDB game this one is another version of: its version_parent (editions), else its parent_game when the
+// game is a remaster, an expanded game or a port; 0 when it has none (also for expansions and remakes).
 func (g igdbGame) parent() int64 {
-	if g.ParentGame > 0 {
+	if g.VersionParent > 0 {
+		return g.VersionParent
+	}
+	if g.ParentGame > 0 && versionTypes[g.GameType] {
 		return g.ParentGame
 	}
-	return g.VersionParent
+	return 0
 }
 
 // searchLimit is how many hits IGDB is asked for: its relevance order buries the original of a long-running
@@ -751,7 +761,6 @@ type Details struct {
 	Developer    string
 	Series       string          // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
 	Collections  []CollectionRef // every IGDB collection of the game
-	ParentID     int64           // the IGDB game this one is a version or port of (parent_game, else version_parent); 0 = none
 	Modes        []string        // game modes: Single player, Co-operative...
 	Perspectives []string        // player perspectives: First person, Third person...
 	Links        []StoreLink
@@ -771,7 +780,7 @@ type igdbDetail struct {
 }
 
 const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,parent_game,version_parent,` +
+	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
 func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {
@@ -812,7 +821,7 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 	out := make([]Details, 0, len(games))
 	for _, g := range games {
 		cand := g.igdbGame.candidate()
-		d := Details{IGDBID: g.ID, ParentID: g.parent(), Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
+		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
 		if len(g.Collections) > 0 {
 			d.Series = g.Collections[0].Name
 		}

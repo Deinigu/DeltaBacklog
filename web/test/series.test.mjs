@@ -129,7 +129,7 @@ test('a game counts as owned with its IGDB family: entry, parent, remaster, shar
   // the owned DS entry 1426 has the JP original 221280 as parent; the 2013 remaster 221285 has 1426 as parent
   const games = [g('Phoenix Wright', 'Ace', { igdb_id: 1426 })];
   const resp = {
-    owned_parents: [221280],
+    owned_roots: [221280],
     series: [{ key: 'ace', collections: [], hidden: [], missing: [
       miss(221280, 'Gyakuten Saiban', 2001), // the parent of an owned game
       miss(221285, 'Phoenix Wright', 2013, { parent: 1426 }), // a version of an owned game
@@ -138,7 +138,7 @@ test('a game counts as owned with its IGDB family: entry, parent, remaster, shar
     ] }],
   };
   assert.deepEqual(missingIndex(resp, games).get('ace').missing.map((m) => m.title), ['Dual Destinies']);
-  // a game added since the answer was made (no owned_parents yet) still hides its remaster and itself
+  // a game added since the answer was made (no owned_roots yet) still hides its remaster and itself
   const added = [g('Justice for All', 'Ace', { igdb_id: 1427 })];
   const resp2 = { series: [{ key: 'ace', collections: [], hidden: [], missing: [miss(1427, 'JfA', 2002), miss(221286, 'JfA HD', 2013, { parent: 1427 }), miss(5, 'Other', 2010)] }] };
   assert.deepEqual(missingIndex(resp2, added).get('ace').missing.map((m) => m.igdb_id), [5]);

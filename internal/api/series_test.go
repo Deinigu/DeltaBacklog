@@ -34,7 +34,7 @@ func (f *collFake) GameLinks(_ context.Context, ids []int64) (map[int64]meta.Gam
 func (f *collFake) CollectionGames(context.Context, int64) (string, []meta.CollectionGame, error) {
 	f.reads++
 	return "Zed Series", []meta.CollectionGame{
-		{IGDBID: 100, Name: "Zed", Year: 1997, CoverID: "a"},
+		{IGDBID: 100, Name: "Zed", Year: 1997, ParentID: 90, CoverID: "a"},
 		{IGDBID: 101, Name: "Zed II", Year: 2005, CoverID: "b"},
 		{IGDBID: 102, Name: "Zed III", Year: 2011, CoverID: "c"},
 	}, nil
@@ -103,10 +103,10 @@ func (e *seriesEnv) req(t *testing.T, method, path, body string, want int) []byt
 }
 
 type missingResp struct {
-	OwnedParents []int64              `json:"owned_parents"`
-	Configured   bool                 `json:"configured"`
-	Series       []collections.Series `json:"series"`
-	Refresh      seriesStatus         `json:"refresh"`
+	OwnedRoots []int64              `json:"owned_roots"`
+	Configured bool                 `json:"configured"`
+	Series     []collections.Series `json:"series"`
+	Refresh    seriesStatus         `json:"refresh"`
 }
 
 func (e *seriesEnv) missing(t *testing.T) missingResp {
@@ -148,8 +148,8 @@ func TestSeriesMissingComesFromTheCache(t *testing.T) {
 	if len(r.Series) != 1 || r.Series[0].Key != "zeds" || len(r.Series[0].Missing) != 2 {
 		t.Fatalf("series: %+v", r.Series)
 	}
-	if len(r.OwnedParents) != 1 || r.OwnedParents[0] != 90 { // the browser applies the family rule to games added later
-		t.Errorf("owned parents: %v", r.OwnedParents)
+	if len(r.OwnedRoots) != 1 || r.OwnedRoots[0] != 90 { // the browser applies the family rule to games added later
+		t.Errorf("owned roots: %v", r.OwnedRoots)
 	}
 	m := r.Series[0].Missing[0]
 	if m.IGDBID != 101 || m.Title != "Zed II" || m.Cover == nil || *m.Cover != "i101.jpg" || m.V != "b" || m.CollectionID != 7 {
@@ -223,4 +223,22 @@ func TestIGDBGameCandidate(t *testing.T) {
 	e.req(t, "GET", "/api/igdb/abc", "", 400)
 	off := newSeriesEnv(t, false)
 	off.req(t, "GET", "/api/igdb/101", "", 503)
+}
+
+// Adding a game from the shelf stores the root of its version chain, so its original stops being listed at once.
+func TestAddStoresTheVersionRoot(t *testing.T) {
+	e := newSeriesEnv(t, true)
+	e.req(t, "POST", "/api/games", `{"title":"Zed II","status":"backlog","igdb_id":101,"igdb_parent_id":90}`, 201)
+	var root int64
+	e.db.QueryRow(`SELECT igdb_parent_id FROM game WHERE igdb_id = 101`).Scan(&root)
+	if root != 90 {
+		t.Errorf("stored root = %d", root)
+	}
+	e.req(t, "POST", "/api/games", `{"title":"Other","status":"backlog","igdb_id":102,"igdb_parent_id":-1}`, 400)
+	e.req(t, "POST", "/api/games", `{"title":"Plain","status":"backlog","igdb_id":103}`, 201)
+	var unknown *int64
+	e.db.QueryRow(`SELECT igdb_parent_id FROM game WHERE igdb_id = 103`).Scan(&unknown)
+	if unknown != nil { // not sent: still unknown, the next refresh reads it
+		t.Errorf("root = %v", *unknown)
+	}
 }

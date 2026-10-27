@@ -13,10 +13,11 @@ type CollectionRef struct {
 	Name string
 }
 
-// GameLinks is how IGDB relates one game to others: its collections, and the game it is a version or port of.
+// GameLinks is how IGDB relates one game to others: its collections, and the game it is another version of (see
+// igdbGame.parent: never the game a standalone expansion expands or a remake remakes).
 type GameLinks struct {
 	Collections []CollectionRef
-	ParentID    int64 // parent_game, else version_parent; 0 = none
+	ParentID    int64 // 0 = none
 }
 
 // CollectionGame is one game of an IGDB collection, as much as the Series page shows of a game the library lacks.
@@ -25,7 +26,7 @@ type CollectionGame struct {
 	Name     string
 	Year     int // 0 when IGDB has no release date
 	GameType int
-	ParentID int64  // the game this one is a version of (parent_game, else version_parent); 0 = none
+	ParentID int64  // the game this one is another version of; 0 = none
 	CoverID  string // IGDB image id ("" when the game has no cover)
 }
 
@@ -51,7 +52,7 @@ func (c *Client) GameLinks(ctx context.Context, igdbIDs []int64) (map[int64]Game
 		return out, nil
 	}
 	var games []igdbGame
-	q := fmt.Sprintf("fields collections.id,collections.name,parent_game,version_parent; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
+	q := fmt.Sprintf("fields collections.id,collections.name,game_type,parent_game,version_parent; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
 	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 		return nil, err
 	}
@@ -106,13 +107,16 @@ func CollectionCoverURL(imageID string) string { return igdbImg + "t_cover_big/"
 // cover), for the "Add" button of a game the library does not have. A game IGDB does not know is ErrNoGame.
 func (c *Client) GameCandidate(ctx context.Context, igdbID int64) (Candidate, error) {
 	var games []igdbGame
-	if err := c.igdbPost(ctx, "/games", fmt.Sprintf("%s where id = %d;", searchFields, igdbID), &games); err != nil {
+	q := fmt.Sprintf("%s,parent_game,version_parent; where id = %d;", strings.TrimSuffix(strings.TrimSpace(searchFields), ";"), igdbID)
+	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 		return Candidate{}, err
 	}
 	if len(games) == 0 {
 		return Candidate{}, ErrNoGame
 	}
-	return games[0].candidate(), nil
+	cand := games[0].candidate()
+	cand.ParentID = games[0].parent()
+	return cand, nil
 }
 
 // ErrNoGame means IGDB does not hold the game asked for.

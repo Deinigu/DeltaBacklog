@@ -137,6 +137,8 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	if err := rows.Close(); err != nil {
 		return rep, err
 	}
+	memo := map[int64]int64{} // igdb id -> its parent (0 = none), for the whole run
+	res := resolver{ctx: ctx, o: o, src: src, memo: memo}
 	const batch = 40
 	for start := 0; start < len(igdbIDs); start += batch {
 		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
@@ -144,11 +146,18 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 		if err := retry429(ctx, o, func() (err error) { got, err = src.GameLinks(ctx, ids); return }); err != nil {
 			return stop(rep, ctx, err)
 		}
+		for id, l := range got {
+			memo[id] = l.ParentID
+		}
+		if err := res.resolve(ctx, ids); err != nil {
+			return stop(rep, ctx, err)
+		}
 		tx, err := d.Begin()
 		if err != nil {
 			return rep, err
 		}
 		for igdbID, l := range got {
+			l.ParentID = res.root(igdbID)
 			for _, gid := range byIGDB[igdbID] {
 				if err := StoreGameLinks(tx, gid, l); err != nil {
 					tx.Rollback()
@@ -201,6 +210,17 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 			continue
 		}
 		rep.Errors = 0 // "in a row"
+		ids := make([]int64, len(games))
+		for i, g := range games {
+			memo[g.IGDBID] = g.ParentID
+			ids[i] = g.IGDBID
+		}
+		if err := res.resolve(ctx, ids); err != nil {
+			return stop(rep, ctx, err)
+		}
+		for i := range games {
+			games[i].ParentID = res.root(games[i].IGDBID)
+		}
 		if err := store(d, o.CoverDir, id, name, games); err != nil {
 			return rep, err
 		}
@@ -276,6 +296,72 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	return rep, nil
 }
 
+// resolver follows the "another version of" links up to their root. memo holds what is known: igdb id -> its parent
+// (0 = none). Entries IGDB lists in no collection (an expanded edition, a port) are asked for on demand.
+type resolver struct {
+	ctx  context.Context
+	o    Options
+	src  Source
+	memo map[int64]int64
+}
+
+// resolve makes sure the chain of every id is known up to its root (five links at most).
+func (r resolver) resolve(ctx context.Context, ids []int64) error {
+	for round := 0; round < 5; round++ {
+		var need []int64
+		seen := map[int64]bool{}
+		for _, id := range ids {
+			for p, depth := r.memo[id], 0; p > 0 && depth < 6; p, depth = r.memo[p], depth+1 {
+				if _, known := r.memo[p]; !known && !seen[p] {
+					seen[p] = true
+					need = append(need, p)
+					break
+				}
+			}
+		}
+		if len(need) == 0 {
+			return nil
+		}
+		for start := 0; start < len(need); start += 40 {
+			batch := need[start:min(start+40, len(need))]
+			var got map[int64]meta.GameLinks
+			if err := retry429(ctx, r.o, func() (err error) { got, err = r.src.GameLinks(ctx, batch); return }); err != nil {
+				return err
+			}
+			for _, id := range batch {
+				r.memo[id] = got[id].ParentID // IGDB does not know it: no parent
+			}
+		}
+	}
+	return nil
+}
+
+// RootOf resolves the root of the version chain of one IGDB game whose nearest parent is parent (0 = none), asking IGDB
+// for the links of the parents (a few requests at most). 0 means the game is its own root.
+func RootOf(ctx context.Context, src Source, igdbID, parent int64) (int64, error) {
+	r := resolver{ctx: ctx, o: Options{Sleep: sleep}, src: src, memo: map[int64]int64{igdbID: parent}}
+	if err := r.resolve(ctx, []int64{igdbID}); err != nil {
+		return 0, err
+	}
+	return r.root(igdbID), nil
+}
+
+// root is the last game of the chain starting at id; 0 when id is its own root.
+func (r resolver) root(id int64) int64 {
+	cur := id
+	for i := 0; i < 8; i++ {
+		p := r.memo[cur]
+		if p <= 0 || p == id {
+			break
+		}
+		cur = p
+	}
+	if cur == id {
+		return 0
+	}
+	return cur
+}
+
 // stop ends a refresh that IGDB (or the caller) interrupted; what was stored stays.
 func stop(rep *Report, ctx context.Context, err error) (*Report, error) {
 	if ctx.Err() != nil {
@@ -285,6 +371,9 @@ func stop(rep *Report, ctx context.Context, err error) (*Report, error) {
 	rep.Stopped = err.Error()
 	return rep, nil
 }
+
+// sweepGrace is how old an unnamed poster file must be before the sweep deletes it.
+const sweepGrace = 10 * time.Minute
 
 // missingFile matches the poster files of games the library does not have (covers.MissingName).
 var missingFile = regexp.MustCompile(`^i[0-9]+\.jpg$`)
@@ -315,16 +404,19 @@ func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
 			return err
 		}
 	}
-	grows, err := d.Query(`SELECT collection_id, igdb_id, parent_igdb_id FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
+	grows, err := d.Query(`SELECT collection_id, igdb_id, parent_igdb_id, cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
 	if err != nil {
 		return err
 	}
-	type key struct{ col, id int64 }
+	type key struct {
+		col, id int64
+		file    string
+	}
 	var owned []key
 	for grows.Next() {
 		var k key
 		var parent int64
-		if err := grows.Scan(&k.col, &k.id, &parent); err != nil {
+		if err := grows.Scan(&k.col, &k.id, &parent, &k.file); err != nil {
 			grows.Close()
 			return err
 		}
@@ -338,6 +430,10 @@ func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
 	for _, k := range owned {
 		if _, err := d.Exec(`UPDATE igdb_collection_game SET cover_file = NULL WHERE collection_id = ? AND igdb_id = ?`, k.col, k.id); err != nil {
 			return err
+		}
+		var n int // the file goes at once when no other row names it (this run made the decision, nothing is mid-download)
+		if coverDir != "" && d.QueryRow(`SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?`, k.file).Scan(&n) == nil && n == 0 {
+			os.Remove(filepath.Join(coverDir, filepath.Base(k.file)))
 		}
 	}
 	if coverDir == "" {
@@ -364,9 +460,16 @@ func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
 		return nil // no folder, nothing to clean
 	}
 	for _, e := range entries {
-		if n := e.Name(); !e.IsDir() && missingFile.MatchString(n) && !named[n] {
-			os.Remove(filepath.Join(coverDir, n))
+		n := e.Name()
+		if e.IsDir() || !missingFile.MatchString(n) || named[n] {
+			continue
 		}
+		// A file written in the last minutes may belong to a download of another process (the server's refresh and
+		// `sync-igdb --enrich` share the folder) that has not recorded it yet.
+		if info, err := e.Info(); err != nil || time.Since(info.ModTime()) < sweepGrace {
+			continue
+		}
+		os.Remove(filepath.Join(coverDir, n))
 	}
 	return nil
 }

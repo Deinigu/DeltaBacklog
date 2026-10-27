@@ -78,9 +78,10 @@ export function renderSeries(root, openKey = null) {
     btn.disabled = true;
     const fallback = { igdb_id: m.igdb_id, name: m.title, year: m.year ?? 0, platforms: [], genres: [], themes: [] };
     let cand = fallback;
-    try { cand = await igdbGame(m.igdb_id); } catch { /* offline or IGDB down: the form opens with what is cached */ }
+    try { cand = { ...(await igdbGame(m.igdb_id)) }; cand.igdb_parent_id ??= 0; } catch { /* offline or IGDB down: the form opens with what is cached */ }
     btn.disabled = false;
-    // The series is the user's own name for it, not IGDB's.
+    // The series is the user's own name for it, not IGDB's. igdb_parent_id (the root of its IGDB version chain; 0 = itself)
+    // is saved with the game, so its original and remaster stop being listed at once.
     openAdd({ candidate: { ...cand, series: seriesName } });
   }
   async function hide(m) {

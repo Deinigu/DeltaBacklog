@@ -418,8 +418,9 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 	}
 	if found {
 		// ---- data that is new in the app: IGDB's values replace what an earlier run stored ----
-		// The collections and the parent game behind the Series page's "not registered" games (IGDB's own data).
-		if err := collections.StoreGameLinks(tx, gameID, meta.GameLinks{Collections: det.Collections, ParentID: det.ParentID}); err != nil {
+		// The collections behind the Series page's "not registered" games (IGDB's own data). The version root is read by
+		// the collections refresh that ends `sync-igdb --enrich` (it also follows the links of games in no collection).
+		if err := collections.StoreCollections(tx, gameID, det.Collections); err != nil {
 			return err
 		}
 		if len(det.Modes) > 0 {

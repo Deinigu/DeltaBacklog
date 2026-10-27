@@ -164,9 +164,9 @@ func TestOwnedGamesFamilyIsNotMissing(t *testing.T) {
 	if len(*fetched) != 1 || (*fetched)[0] != 222000 { // no poster is downloaded for the owned family
 		t.Errorf("fetched %v", *fetched)
 	}
-	parents, err := OwnedParents(d)
-	if err != nil || len(parents) != 2 || parents[0] != 221280 || parents[1] != 221289 {
-		t.Errorf("owned parents %v, %v", parents, err)
+	roots, err := OwnedRoots(d)
+	if err != nil || len(roots) != 2 || roots[0] != 221280 || roots[1] != 221289 {
+		t.Errorf("owned roots %v, %v", roots, err)
 	}
 }
 
@@ -199,6 +199,7 @@ func pick(t *testing.T, series, igdbSeries string, games [][]meta.CollectionRef)
 func TestPickCollections(t *testing.T) {
 	zelda := meta.CollectionRef{ID: 1, Name: "The Legend of Zelda"}
 	oot := meta.CollectionRef{ID: 2, Name: "Ocarina of Time"}
+	zeldaMain := meta.CollectionRef{ID: 5, Name: "The Legend of Zelda"}
 	mario := meta.CollectionRef{ID: 3, Name: "Super Mario"}
 	kart := meta.CollectionRef{ID: 4, Name: "Mario Kart"}
 	cases := []struct {
@@ -213,6 +214,9 @@ func TestPickCollections(t *testing.T) {
 		{"a broad collection listed first does not win a tie against the series' name", "Mario Kart", "", [][]meta.CollectionRef{{mario, kart}}, []int64{4}},
 		{"or like the IGDB series of a game", "My karts", "Mario Kart", [][]meta.CollectionRef{{mario, kart}}, []int64{4}},
 		{"a tie nothing is named like keeps both", "Plumbers", "", [][]meta.CollectionRef{{mario, kart}}, []int64{3, 4}},
+		// IGDB's first collection of Ocarina is its own small one; a series called "Zelda" must still get the whole series
+		{"the user's own name beats igdb_series (Zelda with only Ocarina linked)", "Zelda", "Ocarina of Time", [][]meta.CollectionRef{{oot, zeldaMain}}, []int64{5}},
+		{"igdb_series decides only when the series name matches nothing", "My games", "Ocarina of Time", [][]meta.CollectionRef{{oot, zeldaMain}}, []int64{2}},
 		{"no collections, no pick", "Solo", "", [][]meta.CollectionRef{{}}, nil},
 	}
 	for _, c := range cases {
@@ -325,8 +329,10 @@ func TestRefreshPrunesWhatNothingUses(t *testing.T) {
 	if n(`SELECT count(*) FROM igdb_collection`) != 2 {
 		t.Fatal("both collections should be cached")
 	}
-	stray := filepath.Join(o.CoverDir, "i999.jpg") // nothing names it
+	stray := filepath.Join(o.CoverDir, "i999.jpg") // nothing names it, and it is old
 	os.WriteFile(stray, []byte("x"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(stray, old, old)
 	keep := filepath.Join(o.CoverDir, "p5.jpg") // a game's own poster is none of the cache's business
 	os.WriteFile(keep, []byte("x"), 0o644)
 	// the user adds Zed III: the cache no longer needs its poster
@@ -429,5 +435,101 @@ func TestRateLimitStopsTheRun(t *testing.T) {
 	rep, err := Refresh(context.Background(), d, flaky{newFake(), &meta.HTTPError{Status: 429, Text: "429"}}, o)
 	if err != nil || rep.Stopped == "" || rep.Collections != 1 || sleeps != 3 {
 		t.Fatalf("%+v %v (sleeps %d)", rep, err, sleeps)
+	}
+}
+
+// A chain of versions: the JP original <- the DS entry (an expanded game, in no collection list) <- the 2013 remaster
+// and a port. Owning only the remaster still makes the whole chain owned.
+func TestOwningTheRemasterOfAnExpandedEntryOwnsTheChain(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Phoenix Wright (HD)", "Ace Attorney", 221285)
+	f := &fake{
+		links: map[int64]meta.GameLinks{
+			221285: {Collections: []meta.CollectionRef{{ID: 302, Name: "Ace Attorney"}}, ParentID: 1426},
+			1426:   {ParentID: 221280}, // the expanded entry points at the JP original; IGDB lists it in no collection
+			221280: {},
+		},
+		games: map[int64][]meta.CollectionGame{302: {
+			{IGDBID: 221280, Name: "Gyakuten Saiban", Year: 2001, CoverID: "a1"},
+			{IGDBID: 221285, Name: "Phoenix Wright: Ace Attorney", Year: 2013, GameType: 9, ParentID: 1426, CoverID: "a2"},
+			{IGDBID: 221282, Name: "Phoenix Wright: Ace Attorney", Year: 2012, GameType: 11, ParentID: 1426, CoverID: "a3"}, // a port
+			{IGDBID: 222000, Name: "Dual Destinies", Year: 2013, CoverID: "a5"},
+		}},
+	}
+	o, fetched := opts(t)
+	if _, err := Refresh(context.Background(), d, f, o); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := Load(d)
+	if len(list) != 1 || len(list[0].Missing) != 1 || list[0].Missing[0].Title != "Dual Destinies" {
+		t.Fatalf("missing: %+v", list)
+	}
+	if len(*fetched) != 1 {
+		t.Errorf("fetched %v", *fetched)
+	}
+	var root int64
+	d.QueryRow(`SELECT igdb_parent_id FROM game WHERE igdb_id = 221285`).Scan(&root)
+	if root != 221280 { // the root, not the nearest parent
+		t.Errorf("stored root = %d", root)
+	}
+}
+
+// Standalone expansions and remakes are games of their own (the parent link the meta client never stores for them):
+// owning Uncharted: The Lost Legacy does not own Uncharted 4, nor the other way round; owning Resident Evil 2 (2019)
+// does not own the 1998 game or its remaster.
+func TestExpansionsAndRemakesAreNotTheSameGame(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		owned        int64
+		listed, gone []int64
+	}{
+		{"own the Lost Legacy", 26193, []int64{7331}, []int64{26193}},
+		{"own Uncharted 4", 7331, []int64{26193}, []int64{7331}},
+		{"own Resident Evil 2 (2019)", 19686, []int64{880, 396728}, []int64{19686}},
+	} {
+		d := open(t)
+		addGame(t, d, "Owned", "Series", c.owned)
+		f := &fake{
+			links: map[int64]meta.GameLinks{c.owned: {Collections: []meta.CollectionRef{{ID: 9, Name: "Series"}}}}, // no parent: the client drops it for these types
+			games: map[int64][]meta.CollectionGame{9: {
+				{IGDBID: 7331, Name: "Uncharted 4", Year: 2016}, {IGDBID: 26193, Name: "The Lost Legacy", Year: 2017, GameType: 4},
+				{IGDBID: 880, Name: "Resident Evil 2", Year: 1998}, {IGDBID: 19686, Name: "Resident Evil 2", Year: 2019, GameType: 8},
+				{IGDBID: 396728, Name: "Resident Evil 2 (remaster)", Year: 2020, GameType: 9, ParentID: 880},
+			}},
+		}
+		o, _ := opts(t)
+		if _, err := Refresh(context.Background(), d, f, o); err != nil {
+			t.Fatal(err)
+		}
+		list, _ := Load(d)
+		in := map[int64]bool{}
+		for _, g := range list[0].Missing {
+			in[g.IGDBID] = true
+		}
+		for _, id := range c.listed {
+			if !in[id] {
+				t.Errorf("%s: game %d is not listed as missing", c.name, id)
+			}
+		}
+		for _, id := range c.gone {
+			if in[id] {
+				t.Errorf("%s: game %d is listed although the library owns it", c.name, id)
+			}
+		}
+	}
+}
+
+// A file written a moment ago may be a download of another process that has not been recorded yet: the sweep leaves it.
+func TestSweepSkipsFreshFiles(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Zed", "Zeds", 100)
+	o, _ := opts(t)
+	young := filepath.Join(o.CoverDir, "i777.jpg")
+	os.WriteFile(young, []byte("x"), 0o644)
+	if _, err := Refresh(context.Background(), d, newFake(), o); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(young); err != nil {
+		t.Error("a fresh unnamed poster file was swept")
 	}
 }
