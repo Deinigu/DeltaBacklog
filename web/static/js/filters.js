@@ -5,7 +5,7 @@
 // values and NONE of the excluded ones.
 import { parseSort, formatSort, GROUP_FIELDS } from './sort.js';
 import { norm } from './util.js';
-import { isShort } from './ttb.js';
+import { SHORT_MINUTES, emptyTtbFilter, ttbRangeActive, ttbFilterActive, matchesTtb, TTB_KINDS } from './ttb.js';
 
 export const GROUPS = [
   { key: 'status', label: 'Status', get: (g) => [g.status], multi: false },
@@ -22,10 +22,24 @@ export const FLAGS = [
   { key: 'favorite', label: '★ Favorite' },
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
-  { key: 'short', label: 'Short game (under 10 h)', test: isShort }, // time to beat (IGDB, HowLongToBeat or typed); games without one never match
 ];
 
-const FLAG_TESTS = Object.fromEntries(FLAGS.filter((f) => f.test).map((f) => [f.key, f.test]));
+// The old "short" flag (under 10 h) is now a time-to-beat range; saved views and links that still carry it are migrated on load.
+function migrateShort(s) {
+  if (s.ttb.max === null || s.ttb.max > SHORT_MINUTES) s.ttb.max = SHORT_MINUTES;
+}
+const KIND_KEYS = new Set(TTB_KINDS.map((k) => k.key));
+// Reads {min, max, unknown, kind} from untrusted JSON: anything off is dropped.
+function ttbFrom(f) {
+  const t = emptyTtbFilter();
+  const mins = (v) => (Number.isInteger(v) && v >= 0 ? v : null);
+  t.min = mins(f?.min);
+  t.max = mins(f?.max);
+  if (t.min !== null && t.max !== null && t.max <= t.min) t.min = t.max = null;
+  t.unknown = f?.unknown === 'in' || f?.unknown === 'ex' ? f.unknown : '';
+  t.kind = KIND_KEYS.has(f?.kind) ? f.kind : '';
+  return t;
+}
 
 export function emptyState() {
   return {
@@ -34,6 +48,7 @@ export function emptyState() {
     ex: Object.fromEntries(GROUPS.map((g) => [g.key, new Set()])),
     all: new Set(),
     flags: new Set(),
+    ttb: emptyTtbFilter(),
     sorts: [],
     group: '',
     layout: 'cards', // 'cards' | 'table'
@@ -43,7 +58,8 @@ export function emptyState() {
 /** True when the game passes every active filter. `skip` ignores one group (for facet counts). */
 export function matches(state, g, skip) {
   if (state.q && !state.q.split(/\s+/).every((t) => g._search.includes(t))) return false;
-  for (const f of state.flags) if (!(FLAG_TESTS[f] ? FLAG_TESTS[f](g) : g[f])) return false;
+  for (const f of state.flags) if (!g[f]) return false;
+  if (!matchesTtb(state.ttb, g)) return false;
   for (const grp of GROUPS) {
     if (grp.key === skip) continue;
     const inc = state.in[grp.key], exc = state.ex[grp.key];
@@ -60,7 +76,7 @@ export function matches(state, g, skip) {
 
 /** Number of active filter items (for badges). */
 export function activeCount(state) {
-  let n = state.flags.size;
+  let n = state.flags.size + (ttbRangeActive(state.ttb) ? 1 : 0) + (state.ttb.unknown ? 1 : 0);
   for (const grp of GROUPS) n += state.in[grp.key].size + state.ex[grp.key].size;
   return n;
 }
@@ -91,6 +107,7 @@ export function filterToJSON(state) {
   if (Object.keys(e).length) out.ex = e;
   if (state.all.size) out.all = [...state.all];
   if (state.flags.size) out.flags = [...state.flags];
+  if (ttbFilterActive(state.ttb)) out.ttb = Object.fromEntries(Object.entries(state.ttb).filter(([, v]) => v !== null && v !== ''));
   return out;
 }
 
@@ -104,6 +121,8 @@ export function stateFromView(view) {
   }
   for (const k of f.all || []) if (GROUPS.some((g) => g.key === k && g.multi)) s.all.add(k);
   for (const k of f.flags || []) if (FLAGS.some((x) => x.key === k)) s.flags.add(k);
+  s.ttb = ttbFrom(f.ttb);
+  if ((f.flags || []).includes('short')) migrateShort(s);
   s.sorts = (view.sort || []).filter((l) => l && typeof l.field === 'string').map((l) => ({ field: l.field, dir: l.dir === 'desc' ? 'desc' : 'asc' }));
   s.group = GROUP_FIELDS[view.group_by] ? view.group_by : '';
   s.layout = view.layout === 'table' ? 'table' : 'cards';
@@ -126,6 +145,9 @@ export function stateFromQuery(search) {
   }
   for (const k of (qs.get('all') || '').split(',')) if (GROUPS.some((g) => g.key === k && g.multi)) s.all.add(k);
   for (const f of FLAGS) if (qs.get(f.key) === '1') s.flags.add(f.key);
+  const num = (k) => (qs.has(k) && /^\d+$/.test(qs.get(k)) ? Number(qs.get(k)) : null);
+  s.ttb = ttbFrom({ min: num('ttb_min'), max: num('ttb_max'), unknown: qs.get('ttb_unknown'), kind: qs.get('ttb_kind') });
+  if (qs.get('short') === '1') migrateShort(s);
   s.sorts = parseSort(qs.get('sort'));
   s.group = GROUP_FIELDS[qs.get('group')] ? qs.get('group') : '';
   s.layout = qs.get('layout') === 'table' ? 'table' : 'cards';
@@ -141,6 +163,13 @@ export function stateToQuery(state) {
   }
   if (state.all.size) qs.set('all', [...state.all].join(','));
   for (const f of state.flags) qs.set(f, '1');
+  if (ttbFilterActive(state.ttb)) {
+    const t = state.ttb;
+    if (t.min !== null) qs.set('ttb_min', t.min);
+    if (t.max !== null) qs.set('ttb_max', t.max);
+    if (t.unknown) qs.set('ttb_unknown', t.unknown);
+    if (t.kind) qs.set('ttb_kind', t.kind);
+  }
   if (state.sorts.length) qs.set('sort', formatSort(state.sorts));
   if (state.group) qs.set('group', state.group);
   if (state.layout === 'table') qs.set('layout', 'table');

@@ -1,5 +1,7 @@
 // Manage saved views: open, rename, pin, reorder, duplicate, delete (with undo).
 import { h, toast, askNameDialog } from './util.js';
+import { stateFromView } from './filters.js';
+import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
 
 export function renderViews(root) {
@@ -53,10 +55,15 @@ export function renderViews(root) {
     const parts = [];
     for (const [k, vals] of Object.entries(f.in || {})) parts.push(`${k}: ${vals.map(nice(k)).join(f.all?.includes(k) ? ' + ' : ' / ')}`);
     for (const [k, vals] of Object.entries(f.ex || {})) parts.push(`not ${k}: ${vals.map(nice(k)).join(', ')}`);
-    for (const fl of f.flags || []) parts.push(fl);
+    for (const fl of f.flags || []) if (fl !== 'short') parts.push(fl);
+    if (f.ttb || (f.flags || []).includes('short')) parts.push(ttbSummary(v));
     if (f.q) parts.push(`“${f.q}”`);
     return parts.join(' · ') || 'All games';
   }
+  const ttbSummary = (v) => {
+    const t = stateFromView(v).ttb; // also turns the old "short" flag into its range
+    return [ttbKindLabel(t.kind), ttbRangeText(t), ttbRangeActive(t) ? (t.unknown === 'in' ? '+ unknown' : t.unknown === 'ex' ? '(known only)' : '') : (t.unknown === 'in' ? 'no time known' : t.unknown === 'ex' ? 'known only' : '')].filter(Boolean).join(' ');
+  };
   const nice = (k) => (x) => (k === 'status' ? store.statusByCode.get(x)?.label ?? x : x);
 
   draw();
