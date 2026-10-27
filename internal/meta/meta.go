@@ -175,6 +175,12 @@ func (c *Client) pace(ctx context.Context) error {
 	return nil
 }
 
+// igdbCollection is the collection reference IGDB nests in a game.
+type igdbCollection struct {
+	ID   int64
+	Name string
+}
+
 type igdbGame struct {
 	ID               int64                   `json:"id"`
 	Name             string                  `json:"name"`
@@ -191,7 +197,7 @@ type igdbGame struct {
 		Developer bool
 		Company   struct{ Name string }
 	} `json:"involved_companies"`
-	Collections      []struct{ Name string } `json:"collections"`
+	Collections      []igdbCollection        `json:"collections"`
 	Franchises       []struct{ Name string } `json:"franchises"`
 	Slug             string                  `json:"slug"`
 	AlternativeNames []struct{ Name string } `json:"alternative_names"`
@@ -734,6 +740,7 @@ type Details struct {
 	Themes       []string
 	Developer    string
 	Series       string   // IGDB's collection only (never a franchise: those are far too broad to fill a series from)
+	CollectionID int64    // the id of that collection; 0 when the game has none
 	Modes        []string // game modes: Single player, Co-operative...
 	Perspectives []string // player perspectives: First person, Third person...
 	Links        []StoreLink
@@ -753,7 +760,7 @@ type igdbDetail struct {
 }
 
 const detailFields = `fields id,first_release_date,genres.name,themes.name,platforms.abbreviation,platforms.name,` +
-	`involved_companies.developer,involved_companies.company.name,collections.name,` +
+	`involved_companies.developer,involved_companies.company.name,collections.id,collections.name,` +
 	`game_modes.name,player_perspectives.name,websites.url,websites.type;`
 
 func (c *Client) igdbPost(ctx context.Context, endpoint, query string, out any) error {
@@ -797,6 +804,7 @@ func (c *Client) GameDetails(ctx context.Context, ids []int64) ([]Details, error
 		d := Details{IGDBID: g.ID, Year: cand.Year, Platforms: cand.Platforms, Genres: cand.Genres, Themes: cand.Themes, Developer: cand.Developer}
 		if len(g.Collections) > 0 {
 			d.Series = g.Collections[0].Name
+			d.CollectionID = g.Collections[0].ID
 		}
 		for _, m := range g.GameModes {
 			d.Modes = append(d.Modes, m.Name)

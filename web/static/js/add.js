@@ -119,9 +119,10 @@ export function pickCandidate({ query = '', excludeId = null } = {}) {
 
 // ---------------------------------------------------------------- add a game
 
-export function openAdd({ query = '' } = {}) {
+/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). */
+export function openAdd({ query = '', candidate = null } = {}) {
   const ui = makeSheet('Add a game', 'add');
-  const state = { query };
+  const state = { query: candidate?.name || query };
 
   function toSearch() {
     ui.guard = null;
@@ -272,7 +273,7 @@ export function openAdd({ query = '' } = {}) {
     }
   }
 
-  toSearch();
+  if (candidate) toForm(candidate); else toSearch();
 }
 
 // ---------------------------------------------------------------- change a cover or a poster

@@ -232,17 +232,30 @@ The rankings and their PNG use a **portrait poster** of each game, made for you 
 
 ## 12. Series progress
 
-Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a card with its name, a progress bar and a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a card to open the list of its games, and tap a game to open its details.
+Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a tile: a fan of its posters, its name, a progress bar and *2/4 finished*. Tap a tile to open the series on its own page (the phone's back button returns to the tiles): its games are posters in release order, with a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a poster to open the game's details. A green ✓ on a poster means finished, a ▶ means played; posters of games you have not played yet are a little paler.
 
 - **Finished** means the game's status is **Finished**.
 - **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
 - **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
 - The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
-- **Games left to play** (the button at the top) hides series where nothing is left.
+- **Games left to play** (the button at the top) hides series where nothing is left. **Not in your library** shows only the series that have a game you do not have yet (see below). Both stay on when you open a series and come back.
 - Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
 - A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
 
-![The Series page with a series open](img/series-phone.jpg)
+![The Series page](img/series-phone.jpg)
+
+### Games you do not have yet ("Not in your library")
+
+An opened series also shows the games of the same IGDB collection that are not in your library, in release order among yours. They appear greyed, with a dashed outline, the label **Not in your library**, and two buttons:
+
+- **Add** opens the add form already filled in from IGDB (genres, developer, release year, cover, and the series name you use). You choose the status, platforms and the rest, then **Add to library**. The game then disappears from the not-in-your-library list by itself.
+- **Hide** removes the game from this list for good (for example a spin-off you will never play). A message offers **Undo**; hidden games are listed under **Hidden (n)** at the bottom of the series, each with **Show again**.
+
+Only real games are listed: DLC, expansions, bundles, ports, updates, mods, episodes and seasons are left out; remakes and remasters are kept. Games are matched by their IGDB link, so a game you have not linked to IGDB can show up here too (use **Link IGDB** to link your games first).
+
+Which IGDB collection belongs to a series is decided by your linked games: the series *Souls* with Dark Souls linked gets Dark Souls' collection, whatever IGDB calls it. A series with no game linked to IGDB shows nothing. The lists are saved on the server and are **not** read when you open the page. Tap **↻ Refresh from IGDB** to read them (it takes about half a minute for a big library and keeps going if you leave the page); the page says when they were last read. **`deltabacklog sync-igdb --enrich`** refreshes them too. Big series (Pokémon, Mario) can list dozens of games: hide the ones you do not care about.
+
+![A series opened, with games that are not in the library](img/series-shelf-phone.jpg)
 
 ## 13. Year in review and rankings
 
@@ -332,7 +345,7 @@ For each game you see its title, year and platforms, and IGDB's best guesses wit
 
 If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
 
-**Second step: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`, see the developer manual). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed, and it adds what the app did not have: time to beat, game modes, perspectives and store links. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. Restart the app afterwards to see the new data.
+**Second step: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`, see the developer manual). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed, and it adds what the app did not have: time to beat, game modes, perspectives and store links. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. At the end it also reads the IGDB collections of your series, which feed the *Not in your library* games on the Series page ([section 12](#12-series-progress)). Restart the app afterwards to see the new data.
 
 ## 17. If something looks wrong
 

@@ -19,6 +19,7 @@ const nav = document.getElementById('nav');
 const view = document.getElementById('view');
 let cleanup = null;
 
+const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 const currentPath = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'library';
 
 // Later feature branches add their routes here (table, years, add).
@@ -31,7 +32,8 @@ function resolve(path) {
   if (rk) return { path: 'rankings', render: rk[1] ? (root) => renderRanking(root, Number(rk[1])) : renderRankings };
   if (path === 'screenshots') return { path, render: renderGallery };
   if (path === 'stats') return { path, render: renderStats };
-  if (path === 'series') return { path, render: renderSeries };
+  const sr = /^series(?:\/(.+))?$/.exec(path); // series/<key>: one series opened (the key is URL-encoded)
+  if (sr) return { path: 'series', render: (root) => renderSeries(root, sr[1] ? safeDecode(sr[1]) : null) };
   const m = /^view\/(\d+)$/.exec(path);
   if (m) {
     const v = store.views.find((x) => x.id === Number(m[1]));

@@ -417,6 +417,13 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 	}
 	if found {
 		// ---- data that is new in the app: IGDB's values replace what an earlier run stored ----
+		var collection any // the IGDB collection behind the Series page's "not registered" games
+		if det.CollectionID > 0 {
+			collection = det.CollectionID
+		}
+		if _, err := tx.Exec("UPDATE game SET igdb_collection_id = ? WHERE id = ?", collection, gameID); err != nil {
+			return err
+		}
 		if len(det.Modes) > 0 {
 			if err := replaceLinks(tx, gameID, "game_mode", "game_game_mode", "game_mode_id", det.Modes); err != nil {
 				return err

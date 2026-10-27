@@ -1,60 +1,215 @@
-// Series progress page: every series with a progress bar and its games in release order.
-import { h, gradientFor, initials, lazyImg } from './util.js';
-import { store, coverURL } from './api.js';
+// Series page: a grid of series tiles (a fan of the series' posters, progress), and each series opened on its own
+// route (#/series/<key>) as a poster shelf in release order. The games of the series' IGDB collection that the
+// library does not have sit in the shelf as "Not in your library", with Add and Hide.
+import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
-import { badgeStyle } from './colors.js';
-import { buildSeries, withLeft, barShares, progressText, isFinished, isPlayed } from './series.js';
+import { openAdd } from './add.js';
+import {
+  buildSeries, withLeft, withMissing, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
+} from './series.js';
 
-export function renderSeries(root) {
-  let onlyLeft = false;
-  const open = new Set(); // series keys that are expanded; survives redraws
-  const list = h('div.series-list');
-  const count = h('p.hint');
-  const noYearHint = h('p.hint');
-  const leftBtn = h('button.chip', { type: 'button', 'aria-pressed': 'false', onclick: () => {
-    onlyLeft = !onlyLeft;
-    leftBtn.setAttribute('aria-pressed', String(onlyLeft));
+// The filters survive going into a series and back (the route re-renders the page).
+let onlyLeft = false;
+let onlyNew = false;
+
+const imageOf = (g) => posterURL(g) || coverURL(g);
+const href = (key) => `#/series/${encodeURIComponent(key)}`;
+const bar = (s) => {
+  const sh = barShares(s);
+  return h('span.sbar', { 'aria-hidden': 'true' }, h('i.fin', { style: `width:${sh.finished}%` }), h('i.pl', { style: `width:${sh.played}%` }));
+};
+
+/** A 2:3 picture box: the game's poster (or wide cover, centre-cropped), else a coloured placeholder with initials. */
+function poster(game, extraClass = '') {
+  const url = imageOf(game);
+  return h('span.pst' + extraClass, {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)));
+}
+
+function stateOf(g) { return isFinished(g) ? 'finished' : isPlayed(g) ? 'played' : 'unplayed'; }
+const STATE_LABEL = { finished: 'Finished', played: 'Played', unplayed: 'Not played yet' };
+
+export function renderSeries(root, openKey = null) {
+  let index = new Map();
+  let info = { configured: false, refresh: { running: false } };
+  let alive = true;
+  let timer = null;
+  let focused = false;
+  const live = h('div.sr-only', { role: 'status', 'aria-live': 'polite' });
+  const page = h('div.manage.series-page.sv-page');
+  root.replaceChildren(page, live);
+  const say = (t) => { live.textContent = t; };
+
+  // ---- loading the cached "not registered" games (the server never asks IGDB for this) ----
+  async function loadMissing() {
+    try {
+      info = await seriesMissing();
+      index = missingIndex(info, store.games);
+    } catch { /* offline or old server: the page works without them */ }
+    if (!alive) return;
     draw();
-  } }, 'Games left to play');
-  root.replaceChildren(h('div.manage.series-page', {},
-    h('h1', {}, 'Series'),
-    h('p.hint', {}, 'How far you are through each series. Games are listed by release year.'),
-    h('div.chips', {}, leftBtn),
-    count, noYearHint, list));
-
-  function gameRow(g) {
-    const st = store.statusByCode.get(g.status);
-    const url = coverURL(g);
-    const mark = isFinished(g) ? '✓' : isPlayed(g) ? '▶' : '';
-    return h('button.srow', { type: 'button', onclick: () => openDrawer(g) },
-      h('span.sthumb', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title))),
-      h('span.sname', {}, g.title, h('small', {}, g.release_year ?? 'Year unknown')),
-      mark ? h('span.smark', { 'aria-hidden': 'true' }, mark) : null,
-      st ? h('span.st-badge', { style: badgeStyle(st.color) }, st.label) : null);
+    if (info.refresh?.running) schedulePoll();
+  }
+  function schedulePoll() {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const was = info.refresh;
+      await loadMissing();
+      if (alive && was.running && !info.refresh.running) {
+        const r = info.refresh;
+        toast(r.failed ? `IGDB refresh: ${r.report || 'failed'}` : `IGDB refreshed. ${r.report || ''}`, 5000);
+      }
+    }, 1500);
+  }
+  async function refresh() {
+    try {
+      info.refresh = await seriesRefresh();
+      say('Reading your series from IGDB.');
+    } catch (e) {
+      toast(e.message || 'Could not start the refresh');
+      return;
+    }
+    draw();
+    schedulePoll();
   }
 
-  function seriesCard(s) {
-    const sh = barShares(s);
-    const det = h('details.scard', { open: open.has(s.key) || null, ontoggle: () => (det.open ? open.add(s.key) : open.delete(s.key)) },
-      h('summary', {},
-        h('span.shead', {}, h('span.stitle', {}, s.name), h('small', {}, progressText(s) + (s.left ? ` · ${s.left} left to play` : ''))),
-        h('span.sbar', { 'aria-hidden': 'true' },
-          h('i.fin', { style: `width:${sh.finished}%` }), h('i.pl', { style: `width:${sh.played}%` })),
-        h('span.chev', { 'aria-hidden': 'true' }, '›')),
-      h('div.sgames', {}, s.games.map(gameRow)));
-    return det;
+  // ---- add / hide ----
+  async function add(m, seriesName, btn) {
+    btn.disabled = true;
+    const fallback = { igdb_id: m.igdb_id, name: m.title, year: m.year ?? 0, platforms: [], genres: [], themes: [] };
+    let cand = fallback;
+    try { cand = await igdbGame(m.igdb_id); } catch { /* offline or IGDB down: the form opens with what is cached */ }
+    btn.disabled = false;
+    // The series is the user's own name for it, not IGDB's.
+    openAdd({ candidate: { ...cand, series: seriesName } });
+  }
+  async function hide(m) {
+    try {
+      await seriesHide(m.collection_id, m.igdb_id);
+    } catch (e) { toast(e.message || 'Could not hide the game'); return; }
+    moveTo(m, 'hidden');
+    draw();
+    say(`${m.title} hidden.`);
+    toastAction(`Hidden “${m.title}”`, 'Undo', () => unhide(m));
+  }
+  async function unhide(m) {
+    try {
+      await seriesUnhide(m.collection_id, m.igdb_id);
+    } catch (e) { toast(e.message || 'Could not show the game again'); return; }
+    moveTo(m, 'missing');
+    draw();
+    say(`${m.title} is back in the list.`);
+  }
+  // Keep the local copy in step with the server so the page redraws without another request.
+  function moveTo(m, to) {
+    const from = to === 'hidden' ? 'missing' : 'hidden';
+    for (const e of index.values()) {
+      const i = e[from].findIndex((x) => x.igdb_id === m.igdb_id && x.collection_id === m.collection_id);
+      if (i < 0) continue;
+      const [x] = e[from].splice(i, 1);
+      e[to].push(x);
+      e[to].sort((a, b) => (a.year ?? Infinity) - (b.year ?? Infinity) || a.title.localeCompare(b.title));
+    }
+  }
+
+  // ---- the page of tiles ----
+  function tile(s) {
+    const extra = extraOf(index, s);
+    const games = fanGames(s, (g) => !!imageOf(g));
+    const n = extra.missing.length;
+    return h('a.tile', { href: href(s.key), 'aria-label': `${s.name}: ${seriesSummary(s, extra)}` },
+      h('span.fan', { 'aria-hidden': 'true' }, games.map((g, i) => {
+        const p = poster(g);
+        p.style.setProperty('--i', String(i - (games.length - 1) / 2));
+        return p;
+      })),
+      h('span.stitle', {}, s.name),
+      bar(s),
+      h('small', {}, `${s.finished}/${s.total} finished`, n ? h('b.newn', {}, ` · +${n} not in your library`) : null));
+  }
+
+  function refreshBar() {
+    const r = info.refresh || {};
+    const btn = h('button.chip', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
+      title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
+    r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
+    const old = oldestFetch(index);
+    const note = old ? `Games not in your library were read from IGDB on ${new Date(old).toLocaleDateString()}.`
+      : info.configured ? 'Press Refresh from IGDB to find the games of your series that you do not have yet.' : '';
+    return [btn, note];
+  }
+
+  function drawList() {
+    const all = buildSeries(store.games);
+    let shown = onlyLeft ? withLeft(all) : all;
+    if (onlyNew) shown = withMissing(shown, index);
+    const noYear = all.reduce((n, s) => n + (s.total > 1 ? s.noYear : 0), 0); // a game alone in its series has no order to get wrong
+    const leftBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyLeft), onclick: () => { onlyLeft = !onlyLeft; draw(); } }, 'Games left to play');
+    const newBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyNew), onclick: () => { onlyNew = !onlyNew; draw(); } }, 'Not in your library');
+    const [rbtn, note] = refreshBar();
+    page.replaceChildren(...[ // replaceChildren would print a null as the text "null"
+      h('h1', {}, 'Series'),
+      h('p.hint', {}, 'How far you are through each series. Open one to see its games in release order, with the ones you do not have yet.'),
+      h('div.chips', {}, leftBtn, newBtn, rbtn),
+      note ? h('p.hint', {}, note) : null,
+      all.length ? h('p.hint', {}, `${shown.length} of ${all.length} series`) : null,
+      noYear ? h('p.hint', {}, `${noYear} ${noYear === 1 ? 'game has' : 'games have'} no release year, so ${noYear === 1 ? 'its' : 'their'} order is only by title. Use Fill from IGDB in a game’s details to set it.`) : null,
+      shown.length ? h('div.series-list.tiles', {}, shown.map(tile))
+        : h('div.empty', {}, all.length ? (onlyNew ? 'No series has a game you do not have yet (or nothing was read from IGDB yet).' : 'Nothing left to play in any series.') : 'No game has a series yet. Set one in a game’s details.'),
+    ].filter(Boolean));
+  }
+
+  // ---- one series as a poster shelf ----
+  function cell(item, s) {
+    if (item.kind === 'owned') {
+      const g = item.game;
+      const st = store.statusByCode.get(g.status);
+      const state = stateOf(g);
+      const box = poster(g, '.pst-' + state);
+      if (state === 'finished') box.append(h('i.pmark', { 'aria-hidden': 'true' }, '✓'));
+      else if (state === 'played') box.append(h('i.pmark.pl', { 'aria-hidden': 'true' }, '▶'));
+      return h('div.shelf-cell', {},
+        h('button.si', { type: 'button', onclick: () => openDrawer(g), 'aria-label': `${g.title}, ${g.release_year ?? 'year unknown'}, ${STATE_LABEL[state]}${st ? `, ${st.label}` : ''}` }, box),
+        h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
+    }
+    const m = item.game;
+    const url = missingPosterURL(m.cover);
+    const box = h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(m.title)}` }, h('b', {}, m.title)));
+    box.append(h('i.pnew', {}, 'Not in your library'));
+    const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${m.title} to your library`, onclick: () => add(m, s.name, addBtn) }, 'Add');
+    return h('div.shelf-cell.missing', { role: 'group', 'aria-label': `${m.title}, ${m.year ?? 'year unknown'}, not in your library` },
+      box, h('span.si-name', {}, m.title), h('small', {}, m.year ?? 'Year unknown'),
+      h('span.si-actions', {}, addBtn, h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${m.title} from this series`, onclick: () => hide(m) }, 'Hide')));
+  }
+
+  function drawSeries() {
+    const s = buildSeries(store.games).find((x) => x.key === openKey);
+    const back = h('a.chip.back', { href: '#/series' }, '‹ All series');
+    if (!s) {
+      page.replaceChildren(back, h('div.empty', {}, 'That series is not in your library (any more).'));
+      return;
+    }
+    const extra = extraOf(index, s);
+    const title = h('h1.sv-title', { tabindex: '-1' }, s.name);
+    const hidden = extra.hidden.length ? h('details.hidden-list', {},
+      h('summary', {}, `Hidden (${extra.hidden.length})`),
+      h('ul', {}, extra.hidden.map((m) => h('li', {}, h('span', {}, m.title, h('small', {}, m.year ? ` (${m.year})` : '')),
+        h('button.hide-chip', { type: 'button', 'aria-label': `Show ${m.title} again`, onclick: () => unhide(m) }, 'Show again'))))) : null;
+    const [rbtn] = refreshBar();
+    page.replaceChildren(...[back, title, h('p.hint', {}, seriesSummary(s, extra)), bar(s),
+      h('div.chips.sv-tools', {}, rbtn),
+      h('div.pgrid', {}, shelfItems(s, extra).map((it) => cell(it, s))),
+      !extra.collections.length && info.configured ? h('p.hint', {}, 'No IGDB collection is known for this series yet. Link its games to IGDB, then use Refresh from IGDB.') : null,
+      hidden].filter(Boolean));
+    if (!focused) { focused = true; title.focus({ preventScroll: true }); }
   }
 
   function draw() {
-    const all = buildSeries(store.games);
-    const shown = onlyLeft ? withLeft(all) : all;
-    const noYear = all.reduce((n, s) => n + (s.total > 1 ? s.noYear : 0), 0); // a game alone in its series has no order to get wrong
-    noYearHint.textContent = noYear ? `${noYear} ${noYear === 1 ? 'game has' : 'games have'} no release year, so ${noYear === 1 ? 'its' : 'their'} order is only by title. Use Fill from IGDB in a game’s details to set it.` : '';
-    count.textContent = all.length ? `${shown.length} of ${all.length} series` : '';
-    list.replaceChildren(...(shown.length ? shown.map(seriesCard)
-      : [h('div.empty', {}, all.length ? 'Nothing left to play in any series.' : 'No game has a series yet. Set one in a game’s details.')]));
+    if (openKey != null) drawSeries(); else drawList();
   }
+  function onGames() { index = missingIndex(info, store.games); draw(); }
   draw();
-  window.addEventListener('games-changed', draw);
-  return () => window.removeEventListener('games-changed', draw);
+  loadMissing();
+  window.addEventListener('games-changed', onGames);
+  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); };
 }

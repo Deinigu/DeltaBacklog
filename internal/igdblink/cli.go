@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
@@ -139,6 +140,21 @@ func runEnrich(ctx context.Context, d *sql.DB, e Enricher, out io.Writer, dbPath
 	}
 	if rep != nil && rep.Stopped != "" {
 		return 1
+	}
+	// The games of the IGDB collections behind the series (the Series page's "not registered" games) are read too.
+	if src, ok := e.(collections.Source); ok && !opts.DryRun {
+		fmt.Fprintln(out, "Reading the IGDB collections of your series...")
+		crep, err := collections.Refresh(ctx, d, src, collections.Options{CoverDir: filepath.Join(filepath.Dir(dbPath), "covers")})
+		if crep != nil {
+			fmt.Fprintln(out, crep)
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(out, "error:", err)
+			return 1
+		}
+		if crep != nil && crep.Stopped != "" {
+			return 1
+		}
 	}
 	return 0
 }
