@@ -101,6 +101,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `SCREENSHOT_MAX_MB`, `SCREENSHOT_REQUEST_MAX_MB` | `25`, `200` | Largest screenshot, and largest upload request, in megabytes. |
 | `SCREENSHOTS_DECODE_BUDGET_MB` | `48` | Most memory the server may use to decode one screenshot for its thumbnail; bigger pictures are stored untouched with a thumbnail made by the browser. |
 | `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
+| `PUBLIC_NAME` | empty | Read by `deploy/install.sh` on the Pi, not by the app. `off` turns the friendly address off: `deltabacklog-name.service` is disabled and stopped (no `deltabacklog.local`, no port 80 rules), for an app reached only through a reverse proxy; then also set `LISTEN_ADDR=127.0.0.1:8081`, which `install.sh` keeps. See the [developer manual](docs/developer-manual.md#11-build-and-deploy). |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |

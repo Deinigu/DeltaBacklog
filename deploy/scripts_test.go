@@ -177,3 +177,66 @@ func TestOnOtherMountRefusesRoot(t *testing.T) {
 		t.Error("a path that resolves to / is not another mount")
 	}
 }
+
+// A deploy's settings file (LISTEN_ADDR=:8081 and the keys) keeps the Pi-only settings of the installed one; with
+// PUBLIC_NAME=off it also keeps the installed LISTEN_ADDR, and without it LISTEN_ADDR is the deploy's, as before.
+func TestMergeSettings(t *testing.T) {
+	dir := t.TempDir()
+	merge := func(installed string) string {
+		t.Helper()
+		newf, oldf := filepath.Join(dir, "new"), filepath.Join(dir, "old")
+		os.WriteFile(newf, []byte("LISTEN_ADDR=:8081\nDATA_DIR=/var/lib/deltabacklog\nIGDB_CLIENT_ID=abc\n"), 0o600)
+		os.WriteFile(oldf, []byte(installed), 0o600)
+		if out, err := run(t, "install.sh", "INSTALL_LIB", "merge_settings '"+filepath.ToSlash(newf)+"' '"+filepath.ToSlash(oldf)+"'"); err != nil {
+			t.Fatalf("%v %q", err, out)
+		}
+		b, _ := os.ReadFile(newf)
+		return string(b)
+	}
+
+	got := merge("LISTEN_ADDR=127.0.0.1:8081\nPUBLIC_NAME=off\nALLOWED_HOSTS=deltaraspberry.local\nSCREENSHOTS_DIR=/mnt/d/shots\nIGDB_CLIENT_ID=old\n")
+	want := "DATA_DIR=/var/lib/deltabacklog\nIGDB_CLIENT_ID=abc\nSCREENSHOTS_DIR=/mnt/d/shots\nALLOWED_HOSTS=deltaraspberry.local\nPUBLIC_NAME=off\nLISTEN_ADDR=127.0.0.1:8081\n"
+	if got != want {
+		t.Errorf("PUBLIC_NAME=off:\n%q\nwant\n%q", got, want)
+	}
+
+	got = merge("LISTEN_ADDR=127.0.0.1:8081\nSCREENSHOTS_DIR=/mnt/d/shots\n")
+	want = "LISTEN_ADDR=:8081\nDATA_DIR=/var/lib/deltabacklog\nIGDB_CLIENT_ID=abc\nSCREENSHOTS_DIR=/mnt/d/shots\n"
+	if got != want {
+		t.Errorf("without PUBLIC_NAME:\n%q\nwant\n%q", got, want)
+	}
+}
+
+// PUBLIC_NAME=off disables and stops deltabacklog-name.service (its ExecStopPost removes the port 80 rules) instead of
+// setting it up; absent or anything else, the friendly address is set up as before.
+func TestNameUnit(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "systemctl.log")
+	bin := filepath.Join(dir, "bin")
+	os.Mkdir(bin, 0o755)
+	// the fake systemctl logs its arguments; is-enabled / is-active answer $UNIT_STATE (0: enabled and running)
+	os.WriteFile(filepath.Join(bin, "systemctl"), []byte("#!/bin/sh\necho \"$*\" >> '"+filepath.ToSlash(log)+"'\n"+
+		"case \"$1\" in is-enabled|is-active) exit \"${UNIT_STATE:-0}\" ;; esac\n"), 0o755)
+	path := "PATH=" + filepath.ToSlash(bin) + ":" + os.Getenv("PATH")
+	stub := "name_setup() { echo SETUP; }\n"
+	env := filepath.Join(dir, "env")
+
+	for _, c := range []struct {
+		settings, state string
+		setup           bool
+		calls           string
+	}{
+		{"LISTEN_ADDR=127.0.0.1:8081\nPUBLIC_NAME=off\n", "0", false, "is-enabled --quiet deltabacklog-name.service\ndisable --now deltabacklog-name.service\n"},
+		{"PUBLIC_NAME=\"off\"\n", "1", false, "is-enabled --quiet deltabacklog-name.service\nis-active --quiet deltabacklog-name.service\n"},
+		{"LISTEN_ADDR=:8081\n", "0", true, ""},
+		{"PUBLIC_NAME=on\n", "0", true, ""},
+	} {
+		os.WriteFile(env, []byte(c.settings), 0o600)
+		os.Remove(log)
+		out, err := run(t, "install.sh", "INSTALL_LIB", stub+"name_unit '"+filepath.ToSlash(env)+"'", path, "UNIT_STATE="+c.state)
+		calls, _ := os.ReadFile(log)
+		if err != nil || strings.Contains(out, "SETUP") != c.setup || string(calls) != c.calls {
+			t.Errorf("%q (state %s): %v, output %q, systemctl calls %q", c.settings, c.state, err, out, calls)
+		}
+	}
+}
