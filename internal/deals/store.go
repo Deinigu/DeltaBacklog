@@ -311,11 +311,12 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 		if err := saveAutoMatch(d, g.id, found); err != nil {
 			return rep, err
 		}
-		if found.Game.ID != "" {
-			matches[g.id] = matchRow{id: found.Game.ID}
-		} else {
-			matches[g.id] = matchRow{noID: true, source: found.Source}
+		// What is stored wins over what was just found: the owner may have chosen or reset a match meanwhile.
+		stored, err := storedMatch(d, g.id)
+		if err != nil {
+			return rep, err
 		}
+		matches[g.id] = stored
 		done++
 		progress(done, total)
 	}
@@ -347,10 +348,13 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 		}
 		for _, id := range batch {
 			for _, gid := range byID[id] {
-				if err := savePrice(d, gid, res[id]); err != nil {
+				ok, err := savePrice(d, gid, id, country, res[id])
+				if err != nil {
 					return rep, err
 				}
-				rep.Priced++
+				if ok {
+					rep.Priced++
+				}
 				done++
 			}
 		}
@@ -373,11 +377,28 @@ func RefreshOne(ctx context.Context, d *sql.DB, src Source, gameID int64) error 
 	if err != nil {
 		return err
 	}
-	res, err := src.Overview(ctx, []string{id}, Country(d))
+	country := Country(d)
+	res, err := src.Overview(ctx, []string{id}, country)
 	if err != nil {
 		return err
 	}
-	return savePrice(d, gameID, res[id])
+	_, err = savePrice(d, gameID, id, country, res[id])
+	return err
+}
+
+// storedMatch reads a game's match as it is now. A game with no row (the owner reset it) counts as unmatched.
+func storedMatch(d *sql.DB, gameID int64) (matchRow, error) {
+	var id sql.NullString
+	var m matchRow
+	err := d.QueryRow(`SELECT itad_id, source FROM deal_match WHERE game_id = ?`, gameID).Scan(&id, &m.source)
+	if errors.Is(err, sql.ErrNoRows) {
+		return matchRow{noID: true, source: "title"}, nil
+	}
+	if err != nil {
+		return matchRow{}, err
+	}
+	m.id, m.noID = id.String, !id.Valid
+	return m, nil
 }
 
 type matchRow struct {
@@ -450,7 +471,10 @@ func saveAutoMatch(d *sql.DB, gameID int64, f found) error {
 	return err
 }
 
-func savePrice(d *sql.DB, gameID int64, o Overview) error {
+// savePrice stores prices read for itadID in country. It does nothing (and says false) unless the game is still matched
+// with that ITAD game and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
+// fix a match, reset it or change the country meanwhile.
+func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (bool, error) {
 	cur := o.Current
 	var currency, shop, curURL, expiry any
 	var price, regular, cut any
@@ -471,11 +495,17 @@ func savePrice(d *sql.DB, gameID int64, o Overview) error {
 			currency = o.Low.Price.Currency
 		}
 	}
-	_, err := d.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
-		low_price, low_shop, low_at, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	res, err := d.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
+		low_price, low_shop, low_at, fetched_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE EXISTS (SELECT 1 FROM deal_match WHERE game_id = ?1 AND itad_id = ?13)
+		AND coalesce((SELECT value FROM setting WHERE key = 'deals_country'), 'ES') = ?14
 		ON CONFLICT(game_id) DO UPDATE SET currency = excluded.currency, cur_shop = excluded.cur_shop, cur_price = excluded.cur_price,
 		cur_regular = excluded.cur_regular, cur_cut = excluded.cur_cut, cur_url = excluded.cur_url, cur_expiry = excluded.cur_expiry,
 		low_price = excluded.low_price, low_shop = excluded.low_shop, low_at = excluded.low_at, fetched_at = excluded.fetched_at`,
-		gameID, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now())
-	return err
+		gameID, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now(), itadID, country)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }

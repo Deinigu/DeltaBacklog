@@ -127,6 +127,11 @@ export function renderDeals(root) {
       h('input', { value: info.country || 'ES', maxlength: 2, 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off',
         onchange: (e) => saveCountry(e.target.value) }));
     const scope = rows.length + unmatched.length + waiting.length;
+    // Matched, but no shop sells it: often the match is an old or delisted entry (a game and its "Final Cut"), so say where to look.
+    const unsold = rows.filter((r) => r.p.price == null).map((r) => r.game.title);
+    const unsoldHint = unsold.length
+      ? h('p.hint', {}, `No shop lists ${unsold.slice(0, 5).join(', ')}${unsold.length > 5 ? ` and ${unsold.length - 5} more` : ''}. Wrong game? Open one and tap “Wrong game?” to pick another.`)
+      : null;
     page.replaceChildren(...[
       h('h1', {}, 'Deals'),
       h('p.hint', {}, 'The best price right now and the historical low of the games on your wishlist, in your backlog and up next, from IsThereAnyDeal.'),
@@ -135,6 +140,7 @@ export function renderDeals(root) {
       info.configured ? country : null,
       ...controls(),
       rows.length ? h('ul.up-list', {}, rows.map((r) => row(r, r.badge))) : null,
+      unsoldHint,
       !rows.length && info.configured ? h('div.empty', {}, scope ? 'No prices yet. Press Refresh prices.' : 'No games on the wishlist, in the backlog or up next match these filters.') : null,
       waiting.length ? h('p.hint', {}, `${waiting.length} ${waiting.length === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`) : null,
       unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),

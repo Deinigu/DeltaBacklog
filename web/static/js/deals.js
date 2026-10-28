@@ -32,17 +32,23 @@ export function formatDate(iso, locale = LOCALE) {
   return t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** 'low' when the price is at (or under) the historical low, 'near' within NEAR_LOW above it, else null. */
+/**
+ * Whether a low price means something: the game is on sale now, or its lowest ever was a real discount. A game that never
+ * left its full price has price = regular = lowest ever, and calling that a "historical low" would be noise.
+ */
+const realLow = (p) => (p.cut ?? 0) > 0 || (p.regular != null && p.low_price < p.regular);
+
+/** 'low' when the price is at (or under) the historical low, 'near' within NEAR_LOW above it, else null (also for a game never discounted). */
 export function badgeOf(p) {
-  if (!p || p.price == null || p.low_price == null) return null;
+  if (!p || p.price == null || p.low_price == null || !realLow(p)) return null;
   if (p.price <= p.low_price) return 'low';
   if (p.price <= p.low_price * (1 + NEAR_LOW)) return 'near';
   return null;
 }
 export const BADGE_LABEL = { low: 'Historical low', near: 'Near low (within 10%)' };
 
-/** price / low: 1 is at the low, 1.1 is 10% above it; Infinity without both numbers. */
-const lowRatio = (p) => (p.price != null && p.low_price > 0 ? p.price / p.low_price : Infinity);
+/** price / low: 1 is at the low, 1.1 is 10% above it; Infinity without both numbers or when the low is no real discount. */
+const lowRatio = (p) => (p.price != null && p.low_price > 0 && realLow(p) ? p.price / p.low_price : Infinity);
 const onSale = (p) => p.price != null && (p.cut ?? 0) > 0;
 
 // Each sort puts the games it has nothing to say about last, then by title.

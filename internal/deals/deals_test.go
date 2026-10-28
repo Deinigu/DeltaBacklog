@@ -306,6 +306,117 @@ func TestRefreshStopsOnRateLimit(t *testing.T) {
 	}
 }
 
+// hookSource runs hook from inside Overview, the way the owner would act while a refresh is waiting for ITAD.
+type hookSource struct {
+	*fakeSource
+	hook func()
+}
+
+func (h *hookSource) Overview(ctx context.Context, ids []string, country string) (map[string]Overview, error) {
+	if h.hook != nil {
+		h.hook()
+	}
+	return h.fakeSource.Overview(ctx, ids, country)
+}
+
+func priceCount(d *sql.DB) int {
+	var n int
+	d.QueryRow(`SELECT count(*) FROM deal_price`).Scan(&n)
+	return n
+}
+
+func TestRefreshDoesNotOverwriteWhatTheOwnerDidMeanwhile(t *testing.T) {
+	cheap := Overview{Current: &Current{Shop: "Steam", Price: eur(100), Regular: eur(200), Cut: 50}}
+	setup := func(t *testing.T) (*sql.DB, *hookSource) {
+		d := newDB(t)
+		addGame(t, d, 1, "Alpha", "wishlist", "")
+		src := &hookSource{fakeSource: &fakeSource{byTitle: map[string]Game{"Alpha": {ID: "auto", Title: "Alpha"}},
+			prices: map[string]Overview{"auto": cheap, "picked": {Current: &Current{Shop: "GOG", Price: eur(999), Regular: eur(999)}}}}}
+		return d, src
+	}
+
+	t.Run("a match picked during the run", func(t *testing.T) {
+		d, src := setup(t)
+		src.hook = func() {
+			SetMatch(d, 1, Game{ID: "picked", Title: "Alpha Deluxe"})
+			RefreshOne(context.Background(), d, src.fakeSource, 1)
+		}
+		rep, err := Refresh(context.Background(), d, src, Options{})
+		if err != nil || rep.Priced != 0 {
+			t.Fatalf("%+v %v", rep, err)
+		}
+		l, _ := Load(d)
+		if len(l.Prices) != 1 || *l.Prices[0].Price != 999 || l.Matches[0].ITADID != "picked" {
+			t.Errorf("the owner's pick and its price must stay: %+v %+v", l.Matches, l.Prices)
+		}
+	})
+
+	t.Run("a match picked before the run reaches the game", func(t *testing.T) {
+		d, src := setup(t)
+		src.fakeSource.byTitle["Alpha"] = Game{ID: "auto", Title: "Alpha"}
+		// The lookup finds "auto", but by the time it is stored the owner has chosen "picked".
+		lk := &lookupHook{hookSource: src, before: func() { SetMatch(d, 1, Game{ID: "picked", Title: "Alpha Deluxe"}) }}
+		rep, err := Refresh(context.Background(), d, lk, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, _ := Load(d)
+		if l.Matches[0].ITADID != "picked" || rep.Priced != 1 || len(l.Prices) != 1 || *l.Prices[0].Price != 999 {
+			t.Errorf("%+v %+v %+v", rep, l.Matches, l.Prices)
+		}
+	})
+
+	t.Run("a match reset during the run", func(t *testing.T) {
+		d, src := setup(t)
+		src.hook = func() { ClearMatch(d, 1) }
+		if _, err := Refresh(context.Background(), d, src, Options{}); err != nil {
+			t.Fatal(err)
+		}
+		if n := priceCount(d); n != 0 {
+			t.Errorf("a game with no match must get no price: %d", n)
+		}
+	})
+
+	t.Run("the country changed during the run", func(t *testing.T) {
+		d, src := setup(t)
+		src.hook = func() { SetCountry(d, "US") }
+		rep, err := Refresh(context.Background(), d, src, Options{})
+		if err != nil || rep.Priced != 0 || priceCount(d) != 0 {
+			t.Errorf("prices of the old country must not be saved: %+v %v %d", rep, err, priceCount(d))
+		}
+	})
+
+	t.Run("RefreshOne guards the same way", func(t *testing.T) {
+		d, src := setup(t)
+		SetMatch(d, 1, Game{ID: "auto", Title: "Alpha"})
+		src.hook = func() { SetMatch(d, 1, Game{ID: "picked", Title: "Alpha Deluxe"}) }
+		if err := RefreshOne(context.Background(), d, src, 1); err != nil {
+			t.Fatal(err)
+		}
+		if n := priceCount(d); n != 0 {
+			t.Errorf("the price of the old match must not be saved: %d", n)
+		}
+		src.hook = func() { SetCountry(d, "FR") }
+		SetMatch(d, 1, Game{ID: "auto", Title: "Alpha"})
+		RefreshOne(context.Background(), d, src, 1)
+		if n := priceCount(d); n != 0 {
+			t.Errorf("the price of the old country must not be saved: %d", n)
+		}
+	})
+}
+
+// lookupHook runs before a title lookup answers.
+type lookupHook struct {
+	*hookSource
+	before func()
+}
+
+func (l *lookupHook) LookupTitle(ctx context.Context, t string) (Game, bool, error) {
+	g, ok, err := l.hookSource.LookupTitle(ctx, t)
+	l.before()
+	return g, ok, err
+}
+
 func TestRefreshBatchesAndSharedIDs(t *testing.T) {
 	d := newDB(t)
 	src := &fakeSource{byTitle: map[string]Game{}, prices: map[string]Overview{}}
@@ -333,7 +444,12 @@ func TestCountry(t *testing.T) {
 	if Country(d) != "ES" {
 		t.Fatal("default country")
 	}
-	savePrice(d, 1, Overview{Current: &Current{Price: eur(1), Regular: eur(2)}})
+	if err := SetMatch(d, 1, Game{ID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := savePrice(d, 1, "x", "ES", Overview{Current: &Current{Price: eur(1), Regular: eur(2)}}); err != nil || !ok {
+		t.Fatalf("%v %v", ok, err)
+	}
 	if err := SetCountry(d, "es"); err == nil {
 		t.Error("lower case is refused here; the API upper-cases first")
 	}

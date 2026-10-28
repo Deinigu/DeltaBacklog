@@ -19,13 +19,27 @@ test('money is formatted in en-GB with the price’s own currency', () => {
 });
 
 test('badges: at the low, within 10% of it, or none', () => {
-  assert.equal(badgeOf({ price: 800, low_price: 800 }), 'low');
-  assert.equal(badgeOf({ price: 700, low_price: 800 }), 'low'); // under a recorded low (the low was in another currency or shop)
-  assert.equal(badgeOf({ price: 880, low_price: 800 }), 'near'); // exactly +10%
-  assert.equal(badgeOf({ price: 881, low_price: 800 }), null);
-  assert.equal(badgeOf({ price: null, low_price: 800 }), null);
-  assert.equal(badgeOf({ price: 800, low_price: null }), null);
+  assert.equal(badgeOf({ price: 800, low_price: 800, regular: 2000 }), 'low');
+  assert.equal(badgeOf({ price: 700, low_price: 800, regular: 2000 }), 'low'); // under a recorded low (the low was in another currency or shop)
+  assert.equal(badgeOf({ price: 880, low_price: 800, regular: 2000 }), 'near'); // exactly +10%
+  assert.equal(badgeOf({ price: 881, low_price: 800, regular: 2000 }), null);
+  assert.equal(badgeOf({ price: null, low_price: 800, regular: 2000 }), null);
+  assert.equal(badgeOf({ price: 800, low_price: null, regular: 2000 }), null);
   assert.equal(badgeOf(null), null);
+});
+
+test('a game that was never discounted gets no badge and no rank for it', () => {
+  const never = game('Never'), once = game('Once');
+  // price = regular = lowest ever: nothing to celebrate.
+  const flat = price(never, { price: 2999, regular: 2999, cut: 0, low_price: 2999 });
+  assert.equal(badgeOf(flat), null);
+  assert.equal(badgeOf({ ...flat, price: 3100 }), null);
+  assert.equal(badgeOf({ ...flat, cut: 10, price: 2699, low_price: 2699 }), 'low', 'on sale now: the sale is the discount');
+  // Lowest ever was a real discount in the past: at the low again is worth saying.
+  assert.equal(badgeOf(price(once, { price: 1000, regular: 2000, cut: 0, low_price: 1000 })), 'low');
+  const info = { prices: [flat, price(once, { price: 1050, regular: 2000, cut: 0, low_price: 1000 })], matches: [] };
+  assert.deepEqual(titles(buildDeals([never, once], info).rows), ['Once', 'Never'], 'the sort keeps the never-discounted game behind');
+  assert.deepEqual(titles(buildDeals([never, once], info, { sort: 'low' }).rows), ['Once', 'Never']);
 });
 
 test('sorted by discount: sales first (biggest cut), then near the low, then the rest', () => {
