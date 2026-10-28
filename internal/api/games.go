@@ -42,6 +42,9 @@ type Game struct {
 	TTBNormally   *int        `json:"ttb_normally"`
 	TTBCompletely *int        `json:"ttb_completely"`
 	TTBSource     *string     `json:"ttb_source"` // "igdb", "hltb" or "manual" (null with no time)
+	// Hours played on Steam (minutes; null until a Steam sync matched the game) and the unix time it was last played.
+	PlaytimeMin     *int   `json:"playtime_min"`
+	SteamLastPlayed *int64 `json:"steam_last_played"`
 	Modes         []string    `json:"modes"`
 	Perspectives  []string    `json:"perspectives"`
 	Links         []StoreLink `json:"links"`
@@ -101,7 +104,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	}
 	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year, g.first_release_date, g.release_date_format,
 			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at, g.poster_file, g.poster_updated_at,
-			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely, g.time_to_beat_src
+			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely, g.time_to_beat_src, g.playtime_min, g.steam_last_played
 		FROM game g
 		JOIN status s ON s.id = g.status_id
 		LEFT JOIN ownership o ON o.id = g.ownership_id
@@ -116,7 +119,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
 			&g.ReleaseYear, &g.ReleaseDate, &g.ReleaseFormat, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV, &g.Poster, &g.PosterV,
-			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely, &g.TTBSource); err != nil {
+			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely, &g.TTBSource, &g.PlaytimeMin, &g.SteamLastPlayed); err != nil {
 			rows.Close()
 			return nil, err
 		}

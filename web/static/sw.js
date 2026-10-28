@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v48';
+const VERSION = 'v51';
 
 // The app's base path: '/' at the root, '/backlog/' behind a proxy that serves it under that prefix. Every path in
 // this file is relative to it (SHELL_FILES resolve against this script's URL).
@@ -13,7 +13,7 @@ const COVERS = `${NS}covers-v2`; // keyed by path (one entry per cover file); th
 const THUMBS = `${NS}screenshot-thumbs`; // shotsview.js deletes from it by the same name
 const MAX_THUMBS = 400; // thumbnails are ~30 KB each; originals are never cached
 const API = `${NS}api`;
-const SHELL_FILES = ['./', 'styles.css', 'js/main.js', 'js/api.js', 'js/util.js', 'js/library.js', 'js/drawer.js', 'js/sort.js', 'js/filters.js', 'js/ttb.js', 'js/ttbfilter.js', 'js/ttbview.js', 'js/views.js', 'js/order.js', 'js/reorder.js', 'js/table.js', 'js/picker.js', 'js/csv.js', 'js/add.js', 'js/platforms.js', 'js/ownership.js', 'js/form.js', 'js/editpatch.js', 'js/years.js', 'js/yearreview.js', 'js/yearpage.js', 'js/tierpng.js', 'js/rankboard.js', 'js/rankdrag.js', 'js/rankingedit.js', 'js/rankingspage.js', 'js/gamepicker.js', 'js/savequeue.js', 'js/more.js', 'js/colors.js', 'js/pick.js', 'js/surprise.js', 'js/series.js', 'js/seriesview.js', 'js/upcoming.js', 'js/upcomingview.js', 'js/similar.js', 'js/similarview.js', 'js/similardrawer.js', 'js/deals.js', 'js/dealsview.js', 'js/dealsdrawer.js', 'js/stats.js', 'js/statspage.js', 'js/link.js', 'js/linkqueue.js', 'js/shots.js', 'js/shotsview.js', 'js/gallery.js', 'js/gallerypage.js', 'js/shotviewer.js', 'icon.svg'];
+const SHELL_FILES = ['./', 'styles.css', 'js/main.js', 'js/api.js', 'js/util.js', 'js/library.js', 'js/drawer.js', 'js/sort.js', 'js/filters.js', 'js/ttb.js', 'js/ttbfilter.js', 'js/ttbview.js', 'js/views.js', 'js/order.js', 'js/reorder.js', 'js/table.js', 'js/picker.js', 'js/csv.js', 'js/add.js', 'js/platforms.js', 'js/ownership.js', 'js/form.js', 'js/editpatch.js', 'js/years.js', 'js/yearreview.js', 'js/yearpage.js', 'js/tierpng.js', 'js/rankboard.js', 'js/rankdrag.js', 'js/rankingedit.js', 'js/rankingspage.js', 'js/gamepicker.js', 'js/savequeue.js', 'js/more.js', 'js/colors.js', 'js/pick.js', 'js/surprise.js', 'js/series.js', 'js/seriesview.js', 'js/upcoming.js', 'js/upcomingview.js', 'js/similar.js', 'js/similarview.js', 'js/similardrawer.js', 'js/deals.js', 'js/dealsview.js', 'js/dealsdrawer.js', 'js/steam.js', 'js/steamview.js', 'js/stats.js', 'js/statspage.js', 'js/link.js', 'js/linkqueue.js', 'js/shots.js', 'js/shotsview.js', 'js/gallery.js', 'js/gallerypage.js', 'js/shotviewer.js', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));

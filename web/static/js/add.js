@@ -119,8 +119,8 @@ export function pickCandidate({ query = '', excludeId = null } = {}) {
 
 // ---------------------------------------------------------------- add a game
 
-/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). status: the status the form starts with (the Upcoming page adds to the Wishlist). */
-export function openAdd({ query = '', candidate = null, status = 'backlog' } = {}) {
+/** candidate: skip the search and open the pre-filled review step for this IGDB game (the Series page's Add). status: the status the form starts with (the Upcoming page adds to the Wishlist). platforms: the platforms the form starts with, instead of the guess (the Steam page adds PC games). onAdded(game): called with the new game before its drawer opens (the Steam page matches the Steam app to it). */
+export function openAdd({ query = '', candidate = null, status = 'backlog', platforms = null, onAdded = null } = {}) {
   const ui = makeSheet('Add a game', 'add');
   const state = { query: candidate?.name || query };
 
@@ -145,7 +145,7 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
     const f = {
       title: c?.name || typedTitle.replace(/^https?:.*/i, ''),
       status: store.statusByCode.has(status) ? status : 'backlog',
-      platforms: c ? defaultPlatforms(suggested, platformCounts) : (platformOptions.includes('PC') ? ['PC'] : []),
+      platforms: platforms ? [...platforms] : c ? defaultPlatforms(suggested, platformCounts) : (platformOptions.includes('PC') ? ['PC'] : []),
       genres: [...(c?.genres || [])],
       themes: [...(c?.themes || [])],
       series: c?.series || '',
@@ -261,7 +261,8 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
         ui.close();
         toast(`Added “${game.title}”`);
         if (coverError) toast(coverError, 5000);
-        openDrawer(game);
+        if (onAdded) { try { await onAdded(game); } catch { /* the caller says what failed */ } }
+        openDrawer(store.byId.get(game.id) || game);
       } catch (e) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Add to library';

@@ -2,7 +2,7 @@
 // The formatting and parsing live in ttb.js (pure, unit-tested); this file only builds the DOM.
 import { h, toast } from './util.js';
 import { patchGame, hltbSearch } from './api.js';
-import { TTB_KINDS, ttbTiles, hasTimes, ttbSourceNote, parseTime, timeInputValue, hltbPatch, formatTime } from './ttb.js';
+import { TTB_KINDS, ttbTiles, hasTimes, ttbSourceNote, parseTime, timeInputValue, hltbPatch, formatTime, playedOfText } from './ttb.js';
 
 const SITE_DOWN = "HowLongToBeat can't be reached right now. Try again later, or type the times yourself.";
 
@@ -26,7 +26,9 @@ export function ttbSection(game) {
     const actions = h('div.ttb-actions', {},
       h('button.btn', { type: 'button', onclick: () => go('edit') }, known ? '✎ Edit times' : '✎ Add times'),
       h('button.btn', { type: 'button', onclick: () => go('hltb') }, 'Get from HowLongToBeat'));
-    return [heading(ttbSourceNote(game)), known ? tiles() : h('p.ttb-empty', {}, 'No time yet'), actions];
+    const played = playedOfText(game);
+    return [heading(ttbSourceNote(game)), known ? tiles() : h('p.ttb-empty', {}, 'No time yet'),
+      played ? h('p.ttb-played', {}, h('b', {}, played), ' played on Steam') : null, actions].filter(Boolean);
   }
 
   function editMode() {

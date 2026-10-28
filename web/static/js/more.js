@@ -7,6 +7,7 @@ export const MORE_PAGES = [
   { path: 'upcoming', label: 'Upcoming', icon: 'upcoming' },
   { path: 'similar', label: 'Similar games', icon: 'similar' },
   { path: 'deals', label: 'Deals', icon: 'deals' },
+  { path: 'steam', label: 'Steam', icon: 'steam' },
   { path: 'stats', label: 'Stats', icon: 'stats' },
   { path: 'years', label: 'Year in review', icon: 'years' },
   { path: 'rankings', label: 'Rankings', icon: 'rankings' },

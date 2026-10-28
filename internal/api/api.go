@@ -14,6 +14,7 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/deals"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
+	"github.com/Deinigu/DeltaBacklog/internal/steam"
 )
 
 // Server holds the dependencies of the HTTP handlers.
@@ -41,6 +42,8 @@ type Server struct {
 	Similar collections.SimilarSource
 	// Deals is the IsThereAnyDeal client the Deals page reads prices with; nil means the feature is off (tests set a fake).
 	Deals deals.Source
+	// Steam is the Steam Web API client the Steam page reads the owned games with; nil means the feature is off (tests set a fake).
+	Steam steam.Source
 
 	hltbOnce   sync.Once
 	posterOnce sync.Once
@@ -49,6 +52,7 @@ type Server struct {
 	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
 	similarJob seriesJob      // ditto for the Similar page
 	dealsJob   seriesJob      // ditto for the Deals page
+	steamJob   seriesJob      // ditto for the Steam page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -115,6 +119,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/deals/search", s.dealsSearch)
 	mux.HandleFunc("PUT /api/deals/country", s.dealsSetCountry)
 	mux.HandleFunc("PUT /api/games/{id}/deal-match", s.dealsSetMatch)
+	mux.HandleFunc("GET /api/steam", s.steamList)
+	mux.HandleFunc("POST /api/steam/sync", s.steamSync)
+	mux.HandleFunc("PUT /api/steam/apps/{app}/match", s.steamSetMatch)
+	mux.HandleFunc("PUT /api/steam/apps/{app}/ignore", s.steamIgnore)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
 	mux.HandleFunc("GET /api/facets", s.facets)
