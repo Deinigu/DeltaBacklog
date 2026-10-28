@@ -18,32 +18,45 @@
 ## Features
 
 **Find things**
-- Instant search that ignores accents; filter chips combine *any* or *all* values and can *exclude* too (RPG **and** Indie, **not** Finished). The whole library is filtered in the browser, so it never waits.
-- **Saved views**: any filter, sort and layout as a named view (*Playing now*, *Backlog*, *Indie RPGs to try*), pinned to the bottom bar.
+- Instant search that ignores accents; filter chips combine *any* or *all* values and can *exclude* too (RPG **and** Indie, **not** Finished), plus a **time to beat** range. The whole library is filtered in the browser, so it never waits.
+- **Saved views**: any filter, sort and layout as a named view (*Playing now*, *Backlog*, *Indie RPGs to try*), pinned to the bottom bar. The default order is Status, then Title; your own manual order is a sort level.
 - Multi-level sorting, grouping by status, platform, series, genre, year or ownership, and a spreadsheet-style **table** with inline editing and CSV export.
 
 **Track what you play**
 - **Years played** on every card, plus 🧒 childhood and ♾️ always; starting or finishing a game records the year for you.
 - Your own **queue order** (drag to rank), ownership badges (🏴‍☠️ 🆓 🤝), platforms, VR, favorites and notes.
-- **Series progress**, a **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform, finished per year, how long games have waited).
+- **Time to beat** from IGDB or HowLongToBeat, editable by hand, with a filter and a sort.
 - **Surprise me** picks a random game from what you are looking at, with filters, and never repeats.
-- **Screenshots** per game: upload from your phone or computer, view full screen, caption, reorder, download the original. Originals are kept untouched, with a small thumbnail for the grid; they can live on an external drive and are backed up nightly.
+- **Screenshots** per game: upload from your phone or computer, view full screen, caption, reorder, download the original. A page shows them all. Originals are kept untouched, with a small thumbnail for the grid; they can live on an external drive and are backed up nightly.
+
+**Look beyond your library** (optional, each with its own free key and a refresh button that you press; nothing is read when a page opens)
+- **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
+- **Upcoming**: the new games of your series that are not out yet, by release month.
+- **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
+- **Deals**: the price now and the historical low of your backlog and up next games, from [IsThereAnyDeal](https://isthereanydeal.com).
+- A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
 
 **Add games quickly (optional lookups)**
 - Type a title and genres, themes, developer, series, release year and a cover come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/). Needs free API keys; everything else works without them.
-- `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen.
-- `deltabacklog fetch-posters` makes the portrait posters of the rankings for the whole library in one go (they are otherwise made in the background when a game joins a ranking).
+- `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen. `--enrich` then fills in the details.
+- `deltabacklog fetch-posters` makes the portrait posters for the whole library in one go (they are otherwise made in the background when a game joins a ranking); you can choose any poster by hand.
 
 **Yours to keep**
-- Covers are stored next to the database, so the app keeps working when those websites do not.
+- Covers and posters are stored next to the database, so the app keeps working when those websites do not.
 - Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
+- Works at the root of a host or under a sub-path behind a reverse proxy (for example `/backlog/`), with no setting.
 - A PWA: add it to your home screen (needs HTTPS or `localhost`).
 
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
-  <img src="docs/img/views-phone.jpg" alt="Saved views" width="180">
+  <img src="docs/img/series-phone.jpg" alt="Series" width="180">
   <img src="docs/img/game-phone.jpg" alt="A game" width="180">
   <img src="docs/img/ranking-phone.jpg" alt="A ranking" width="180">
+</p>
+<p align="center">
+  <img src="docs/img/upcoming-phone.jpg" alt="Upcoming releases" width="180">
+  <img src="docs/img/similar-phone.jpg" alt="Similar games" width="180">
+  <img src="docs/img/deals-phone.jpg" alt="Deals" width="180">
 </p>
 
 > **Status:** used daily by its author, but young. Prefer a [release](https://github.com/Deinigu/DeltaBacklog/releases) over `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
@@ -83,11 +96,11 @@ DeltaBacklog is built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of m
 
 ```sh
 # on your PC, in the cloned repo, with Go installed and passwordless ssh + sudo on the Pi (Raspberry Pi OS / Debian)
-cp .env.example .env                                     # optional: add your IGDB / SteamGridDB keys
-DEPLOY_HOST=pi@raspberrypi.local bash deploy/deploy.sh --env .env
+cp .env.example .env                                     # optional: add your keys (IGDB, SteamGridDB, IsThereAnyDeal)
+DEPLOY_HOST=<user>@<pi-address> bash deploy/deploy.sh --env .env
 ```
 
-Run it again to update: data and settings are kept, and the database is backed up before a new version starts. To start from an existing library, add `--seed <dir>` (a folder with `app.db` and `covers/`). Open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot). Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
+Run it again to update: data and settings are kept, and the database is backed up before a new version starts. To start from an existing library, add `--seed <dir>` (a folder with `app.db` and `covers/`). Open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot). To publish it under a path of a reverse proxy instead (`http://<host>/backlog/`), set `ALLOWED_HOSTS` to the proxy's name and, if the proxy is the only way in, `PUBLIC_NAME=off` and `LISTEN_ADDR=127.0.0.1:8081` in `/etc/deltabacklog.env`. Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
 
 ## Configuration
 
@@ -102,17 +115,19 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `SCREENSHOTS_DECODE_BUDGET_MB` | `48` | Most memory the server may use to decode one screenshot for its thumbnail; bigger pictures are stored untouched with a thumbnail made by the browser. |
 | `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
 | `PUBLIC_NAME` | empty | Read by `deploy/install.sh` on the Pi, not by the app. `off` turns the friendly address off: `deltabacklog-name.service` is disabled and stopped (no `deltabacklog.local`, no port 80 rules), for an app reached only through a reverse proxy; then also set `LISTEN_ADDR=127.0.0.1:8081`, which `install.sh` keeps. See the [developer manual](docs/developer-manual.md#11-build-and-deploy). |
-| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
-| `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
+| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming and Similar games pages). |
+| `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers and posters. |
 | `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the backlog and up next games). |
+| `SHOTS_MIN_FREE_GB` | `5` | Read by the Pi's nightly backup script, not by the app: the screenshot copy leaves this much space free on the backup disk. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |
 
 ### Getting the keys (free)
 
 - **IGDB**: IGDB is owned by Twitch. Create a Twitch account with two-factor authentication, register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (category *Application Integration*, redirect URL `http://localhost`), then copy the **Client ID** and generate a **Client Secret**. Details: [IGDB API docs](https://api-docs.igdb.com/#account-creation).
 - **SteamGridDB**: sign in at [steamgriddb.com](https://www.steamgriddb.com/), open *Preferences → API* and copy your key.
+- **IsThereAnyDeal** (Deals page): create an app at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and copy its API key.
 
-Without keys the app still works; games are added by hand. To check keys against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
+A page whose key is missing says it is not set up; without any key the app still works and games are added by hand. The [user manual](docs/user-manual.md#3-setting-up-keys) has the same steps. To check keys against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
 
 ## Commands
 
@@ -121,7 +136,7 @@ deltabacklog                       # serve the app
 deltabacklog backup <file>         # write a consistent copy of the database (safe while it runs; never migrates it)
 deltabacklog backup-screenshots <dir>  # copy the screenshot files <dir> does not have yet (never deletes)
 deltabacklog check <file>          # verify a database or backup (read-only)
-deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys)
+deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys); add --enrich to fill in details, times, dates and the Series and Similar games caches
 deltabacklog fetch-posters [--dry-run] [--limit N] # make the ranking posters for every game (IGDB / SteamGridDB keys help)
 ```
 
@@ -156,13 +171,13 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Does it work offline?** The app and your covers are served from your own machine. Lookups need internet. The offline cache of the installed PWA needs HTTPS (browsers do not allow service workers on plain `http://` outside `localhost`).
 
-**Where does the game data come from?** From you. IGDB and SteamGridDB are only used, with your own keys, to fill in details and covers when you add or fix a game. IGDB scores and ratings are never fetched or stored.
+**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, only when you press the refresh button; HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
 
-**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above.
+**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above, to the services you set up keys for; no page reads them just by being opened.
 
 ## Ideas
 
-No commitment and no schedule, just things the author may or may not get to: more IGDB data (time to beat, filling empty fields), an official container image, optional HTTPS/authentication helpers, and import from other trackers. The known gaps are listed in the [developer manual](docs/developer-manual.md#12-known-gaps).
+No commitment and no schedule, just things the author may or may not get to: a full JSON export, an official container image, optional HTTPS/authentication helpers, and import from other trackers. The known gaps are listed in the [developer manual](docs/developer-manual.md#12-known-gaps).
 
 ## How this was built
 
@@ -173,7 +188,7 @@ DeltaBacklog was built by its owner with [Claude Code](https://claude.com/claude
 - **Read-only review.** An Opus agent reviewed each PR without editing it; the owner triaged the findings and they were fixed before merging.
 - **A final review.** At the end an Opus agent reviewed the whole codebase, and its findings were triaged and fixed the same way.
 
-For scale, as of this writing: 36 merged pull requests (a few of them Dependabot updates), 8 database migrations, 19 Go test files and 18 frontend test files. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
+For scale, as of this writing: 11 merged pull requests in this repository (one of them a Dependabot update), 17 database migrations, 50 Go test files and 25 frontend test files. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
 
 ## Support
 
@@ -183,12 +198,12 @@ None. It is shared as-is, with no support and no SLA; use it at your own risk. I
 
 | | |
 |---|---|
-| [User manual](docs/user-manual.md) | Every screen with screenshots |
-| [Developer manual](docs/developer-manual.md) | Architecture, data model, every API call, frontend modules, testing, deployment |
+| [User manual](docs/user-manual.md) | Every screen with screenshots, setting up keys, the refresh buttons, troubleshooting |
+| [Developer manual](docs/developer-manual.md) | Architecture, data model, every API call, background jobs, frontend modules, testing, deployment |
 | [Changelog](CHANGELOG.md) | What changed in each release |
 | [Security policy](SECURITY.md) | Design limits and how to report a vulnerability |
 | [Contributing](CONTRIBUTING.md) | Why contributions are not accepted, and forking |
 
 ## License
 
-[MIT](LICENSE). IGDB and SteamGridDB data and artwork belong to their owners and are used through their APIs under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.
+[MIT](LICENSE). IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat data and artwork belong to their owners and are used through their APIs (or, for HowLongToBeat, its public search) under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.
