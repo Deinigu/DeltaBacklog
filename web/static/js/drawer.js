@@ -9,6 +9,7 @@ import { seriesPosition } from './series.js';
 import { ttbSection } from './ttbview.js';
 import { screenshotsSection } from './shotsview.js';
 import { similarSection } from './similardrawer.js';
+import { dealsSection } from './dealsdrawer.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
@@ -101,6 +102,7 @@ export function openDrawer(game) {
       fact('100% completed', game.completed ? 'Yes' : null)),
     ttb,
     similarSection(game),
+    dealsSection(game),
     game.notes && h('div.notes', {}, game.notes),
     storeLinks(game),
     screenshotsSection(game),

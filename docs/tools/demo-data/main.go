@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -258,6 +259,37 @@ func main() {
 		must(err)
 		// The review queue lists games the sync has already searched.
 		_, err = tx.Exec("UPDATE game SET igdb_checked_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE title = ?", c.game)
+		must(err)
+	}
+	// Made-up prices for the Deals page (nothing is read from IsThereAnyDeal): cents of EUR. Hollow Knight sits at its
+	// historical low, Celeste near it; Baldur's Gate 3 has no deal; Cyberpunk has no match; the rest wait.
+	for _, f := range []struct {
+		game, shop       string
+		price, regular   int
+		cut, low         int
+		lowShop, lowDate string
+	}{
+		{"Hollow Knight", "Steam", 749, 1499, 50, 749, "Fanatical", "2025-06-26T17:00:00Z"},
+		{"Disco Elysium", "GOG", 1499, 3999, 63, 999, "Humble Store", "2024-11-28T18:00:00Z"},
+		{"Celeste", "Steam", 499, 1999, 75, 459, "GOG", "2025-03-12T09:00:00Z"},
+		{"Baldur's Gate 3", "Steam", 5999, 5999, 0, 4799, "GreenManGaming", "2025-07-03T16:00:00Z"},
+		{"Elden Ring", "Steam", 3999, 5999, 33, 2999, "Steam", "2025-11-27T18:00:00Z"},
+		{"Subnautica", "Epic Games Store", 1049, 2999, 65, 749, "Steam", "2024-06-27T17:00:00Z"},
+		{"Phantom Blade Zero", "", 0, 0, 0, 0, "", ""},
+	} {
+		var gid int64
+		must(tx.QueryRow("SELECT id FROM game WHERE title = ?", f.game).Scan(&gid))
+		_, err := tx.Exec(`INSERT INTO deal_match(game_id, itad_id, itad_title, itad_slug, source) VALUES (?, ?, ?, '', 'title')`, gid, "demo-"+strconv.FormatInt(gid, 10), f.game)
+		must(err)
+		if f.shop == "" {
+			continue // matched, no price read yet
+		}
+		_, err = tx.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, low_price, low_shop, low_at, fetched_at)
+			VALUES (?, 'EUR', ?, ?, ?, ?, 'https://example.org/deal', ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, gid, f.shop, f.price, f.regular, f.cut, f.low, f.lowShop, f.lowDate)
+		must(err)
+	}
+	for _, g := range []string{"Cyberpunk 2077"} {
+		_, err := tx.Exec(`INSERT INTO deal_match(game_id, source) SELECT id, 'title' FROM game WHERE title = ?`, g)
 		must(err)
 	}
 	must(tx.Commit())
