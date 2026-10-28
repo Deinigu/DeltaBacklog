@@ -431,6 +431,7 @@ a.btn.primary { color: var(--accent-text); }
    and the search row stays pinned. */
 @media (max-width: 599px) {
   .toolbar { top: calc(var(--head-h, 0px) * -1); }
+  .toolbar.stuck .view-head { visibility: hidden; }
   .view-head { flex-wrap: wrap; gap: 6px; }
   .view-head h1 { flex: 1 0 100%; white-space: normal; }
   .view-head .btn { flex: 1 1 auto; padding: 0 6px; gap: 5px; font-size: 13px; white-space: nowrap; }

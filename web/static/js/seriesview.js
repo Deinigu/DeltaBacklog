@@ -131,7 +131,6 @@ export function renderSeries(root, openKey = null) {
     const btn = h('button.chip', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
       title: info.configured ? 'Refresh from IGDB' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh');
-    btn.setAttribute('aria-label', 'Refresh from IGDB');
     const old = oldestFetch(index);
     const note = old ? `Missing games read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
       : info.configured ? 'Press Refresh to read the games of your series that you do not have yet.' : '';
@@ -191,6 +190,13 @@ export function renderSeries(root, openKey = null) {
   }
 
   let showAllMissing = false;
+  // Show all redraws the page: keep the keyboard where the user was (the first game that was hidden) and say what happened.
+  function showAll(shown, missing) {
+    showAllMissing = true;
+    draw();
+    page.querySelectorAll('.pgrid > .shelf-cell')[shown]?.querySelector('button')?.focus();
+    say(`Showing all ${missing} games that are not in your library.`);
+  }
   function drawSeries() {
     const s = buildSeries(store.games).find((x) => x.key === openKey);
     const back = h('a.chip.back', { href: '#/series' }, '‹ All series');
@@ -209,7 +215,7 @@ export function renderSeries(root, openKey = null) {
     page.replaceChildren(...[back, title, h('p.hint', {}, seriesSummary(s, extra)), bar(s),
       h('div.chips.sv-tools', {}, rbtn),
       h('div.pgrid', {}, shelf.items.map((it) => cell(it, s))),
-      shelf.hidden ? h('div.chips.sv-more', {}, h('button.chip', { type: 'button', onclick: () => { showAllMissing = true; draw(); } }, `Show all ${extra.missing.length} not in your library (${shelf.hidden} more)`)) : null,
+      shelf.hidden ? h('div.chips.sv-more', {}, h('button.chip', { type: 'button', onclick: () => showAll(shelf.items.length, extra.missing.length) }, `Show all ${extra.missing.length} not in your library (${shelf.hidden} more)`)) : null,
       !extra.collections.length && info.configured ? h('p.hint', {}, 'No IGDB collection is known for this series yet. Link its games to IGDB, then use Refresh from IGDB.') : null,
       hidden].filter(Boolean));
     if (!focused) { focused = true; title.focus({ preventScroll: true }); }

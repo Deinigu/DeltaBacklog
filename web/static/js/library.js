@@ -124,11 +124,16 @@ export function renderLibrary(root, opts = {}) {
   input.value = state.q;
 
   // The filter panel sticks below the toolbar, whose height varies (view title row, wrapped pills).
-  // --head-h: on phones the title row scrolls away and only the search row stays pinned (see .toolbar in the CSS).
+  // --head-h: on phones the title row (plus the 6px above the search row) scrolls away and only the search row stays
+  // pinned (see .toolbar in the CSS). Once pinned the toolbar is "stuck" and its title row is hidden, so no strip of it
+  // shows above the search row (with a safe-area inset that strip would be tall).
+  const syncStuck = () => toolbar.classList.toggle('stuck', narrow.matches && toolbar.getBoundingClientRect().top <= 1 - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h') || '0'));
   const syncToolbar = () => {
     document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
-    document.documentElement.style.setProperty('--head-h', head.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--head-h', head.offsetHeight + 6 + 'px');
+    syncStuck();
   };
+  window.addEventListener('scroll', syncStuck, { passive: true });
   const ro = new ResizeObserver(syncToolbar);
   ro.observe(toolbar);
   syncToolbar();
@@ -315,5 +320,5 @@ export function renderLibrary(root, opts = {}) {
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {
-    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); ro.disconnect(); };
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
 }
