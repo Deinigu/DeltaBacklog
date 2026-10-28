@@ -3,7 +3,7 @@
 // state = { q, in: {key: Set}, ex: {key: Set}, all: Set<key>, flags: Set, sorts: [], group: '' }
 // A game passes a facet group when it has ANY (or ALL, if the group is in `all`) of the included
 // values and NONE of the excluded ones.
-import { parseSort, formatSort, GROUP_FIELDS } from './sort.js';
+import { parseSort, formatSort, GROUP_FIELDS, SORT_FIELDS } from './sort.js';
 import { norm } from './util.js';
 import { SHORT_MINUTES, emptyTtbFilter, ttbRangeActive, ttbFilterActive, matchesTtb, TTB_KINDS } from './ttb.js';
 
@@ -123,7 +123,7 @@ export function stateFromView(view) {
   for (const k of f.flags || []) if (FLAGS.some((x) => x.key === k)) s.flags.add(k);
   s.ttb = ttbFrom(f.ttb);
   if ((f.flags || []).includes('short')) migrateShort(s);
-  s.sorts = (view.sort || []).filter((l) => l && typeof l.field === 'string').map((l) => ({ field: l.field, dir: l.dir === 'desc' ? 'desc' : 'asc' }));
+  s.sorts = (view.sort || []).filter((l) => l && typeof l.field === 'string' && Object.hasOwn(SORT_FIELDS, l.field)).map((l) => ({ field: l.field, dir: l.dir === 'desc' ? 'desc' : 'asc' }));
   s.group = GROUP_FIELDS[view.group_by] ? view.group_by : '';
   s.layout = view.layout === 'table' ? 'table' : 'cards';
   return s;

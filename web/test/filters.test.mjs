@@ -128,3 +128,8 @@ test('old "short" flag becomes a range under 10 h', () => {
   assert.equal(matches(v, { ...gm(599), vr: true }), true);
   assert.equal(matches(v, { ...gm(600), vr: true }), false);
 });
+
+test('a stored sort level on a field that no longer exists is dropped (the removed Steam hours)', () => {
+  const s = stateFromView({ filter: {}, sort: [{ field: 'playtime', dir: 'desc' }, { field: 'title', dir: 'asc' }, { field: 'toString', dir: 'asc' }], group_by: '' });
+  assert.deepEqual(s.sorts, [{ field: 'title', dir: 'asc' }]);
+});

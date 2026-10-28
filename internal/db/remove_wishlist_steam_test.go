@@ -34,16 +34,27 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 	}
 	for _, q := range []string{
 		`PRAGMA user_version = 17`,
-		`INSERT INTO game(id, title, title_sort, status_id, igdb_id, playtime_min, steam_last_played) VALUES (1,'Hades','hades',(SELECT id FROM status WHERE code='finished'),100,600,1700000000)`,
+		`INSERT INTO game(id, title, title_sort, status_id, igdb_id, playtime_min, steam_last_played, poster_file, first_release_date, release_date_format) VALUES (1,'Hades','hades',(SELECT id FROM status WHERE code='finished'),100,600,1700000000,'p1.jpg',1600000000,0)`,
 		`INSERT INTO game(id, title, title_sort, status_id) VALUES (2,'Wished','wished',(SELECT id FROM status WHERE code='wishlist'))`,
 		`INSERT INTO game(id, title, title_sort, status_id) VALUES (3,'Held','held',(SELECT id FROM status WHERE code='hold'))`,
 		`INSERT INTO play(game_id, year) VALUES (1, 2024)`,
+		`INSERT INTO play(game_id, year) VALUES (3, 2023)`,
+		`INSERT INTO ranking(id, name) VALUES (1, 'Best')`,
+		`INSERT INTO ranking_tier(id, ranking_id, label, color, pos) VALUES (1, 1, 'S', '#fff', 1)`,
+		`INSERT INTO ranking_entry(ranking_id, game_id, tier_id, pos) VALUES (1, 1, 1, 1)`,
+		`INSERT INTO similar_game(igdb_id, title, game_type) VALUES (500, 'Similar', 0)`,
+		`INSERT INTO similar_link(source_igdb_id, similar_igdb_id) VALUES (100, 500)`,
+		`INSERT INTO deal_price(game_id, currency, fetched_at) VALUES (1, 'EUR', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO setting(key, value) VALUES ('steam_synced_at', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO setting(key, value) VALUES ('deals_country', 'ES')`,
 		`INSERT INTO steam_app(app_id, name, playtime_min, game_id, source, seen_at) VALUES (1, 'Hades', 600, 1, 'link', '2026-01-01T00:00:00Z')`,
 		`INSERT INTO steam_app(app_id, name, seen_at) VALUES (2, 'Unmatched', '2026-01-01T00:00:00Z')`,
 		`INSERT INTO deal_match(game_id, itad_id, source) VALUES (1, 'abc', 'title')`,
 		`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'Zed Series', '2026-01-01T00:00:00Z')`,
-		`INSERT INTO saved_view(name, icon, filter_json, sort_json, pinned, pos) VALUES ('Wanted', 'x', '{"in":{"status":["wishlist","backlog"]}}', '[]', 0, 90)`,
-		`INSERT INTO saved_view(name, icon, filter_json, sort_json, pinned, pos) VALUES ('Only', 'x', '{"in":{"status":["wishlist"]},"flags":["vr"]}', '[]', 0, 91)`,
+		`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type, first_release_date, release_date_format) VALUES (7, 101, 'Hades II', 0, 1900000000, 0)`,
+		`INSERT INTO saved_view(name, icon, filter_json, sort_json, pinned, pos) VALUES ('Wanted', 'x', '{"in":{"status":["wishlist","backlog"]},"ex":{"status":["wishlist"]}}', '[{"field":"playtime","dir":"desc"},{"field":"title","dir":"asc"}]', 0, 90)`,
+		`INSERT INTO saved_view(name, icon, filter_json, sort_json, pinned, pos) VALUES ('Only', 'x', '{"in":{"status":["wishlist"]},"flags":["vr"]}', '[{"field":"playtime","dir":"asc"}]', 0, 91)`,
+		`INSERT INTO saved_view(name, icon, filter_json, sort_json, pinned, pos) VALUES ('Search', 'x', '{"q":"wishlist","in":{"genre":["wishlist"]}}', '[{"field":"title","dir":"asc"}]', 0, 92)`,
 	} {
 		if _, err := old.Exec(q); err != nil {
 			t.Fatal(q, err)
@@ -69,7 +80,7 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 	if n := count(`SELECT count(*) FROM game`); n != 3 {
 		t.Errorf("games %d", n)
 	}
-	if n := count(`SELECT count(*) FROM play`); n != 1 {
+	if n := count(`SELECT count(*) FROM play`); n != 2 {
 		t.Errorf("plays %d", n)
 	}
 	if n := count(`SELECT count(*) FROM saved_view`); n != views {
@@ -78,8 +89,23 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 	if n := count(`SELECT count(*) FROM ranking`); n != rankings {
 		t.Errorf("rankings %d, want %d", n, rankings)
 	}
-	if n := count(`SELECT count(*) FROM igdb_collection`) + count(`SELECT count(*) FROM deal_match`); n != 2 {
-		t.Errorf("series cache and deal rows: %d", n)
+	for table, want := range map[string]int{"igdb_collection": 1, "igdb_collection_game": 1, "similar_game": 1, "similar_link": 1,
+		"deal_match": 1, "deal_price": 1, "ranking": 1, "ranking_tier": 1, "ranking_entry": 1} {
+		if n := count(`SELECT count(*) FROM ` + table); n != want {
+			t.Errorf("%s: %d rows, want %d", table, n, want)
+		}
+	}
+	if n := count(`SELECT count(*) FROM game WHERE id = 1 AND poster_file = 'p1.jpg' AND first_release_date = 1600000000 AND release_date_format = 0`); n != 1 {
+		t.Error("poster or release date of game 1 changed")
+	}
+	if n := count(`SELECT count(*) FROM igdb_collection_game WHERE first_release_date = 1900000000`); n != 1 {
+		t.Error("collection game release date changed")
+	}
+	if n := count(`SELECT count(*) FROM setting WHERE key = 'steam_synced_at'`); n != 0 {
+		t.Error("steam_synced_at left")
+	}
+	if n := count(`SELECT count(*) FROM setting WHERE key = 'deals_country'`); n != 1 {
+		t.Error("deals_country lost")
 	}
 	if n := count(`SELECT count(*) FROM sqlite_master WHERE name LIKE '%steam%'`); n != 0 {
 		t.Errorf("%d steam objects left", n)
@@ -107,18 +133,28 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 	if got := strings.Join(order, " "); got != "playing=1 playing_evergreen=2 up_next=3 backlog=4 hold=5 evergreen=6 finished=7 dropped=8 not_interested=9" {
 		t.Errorf("status order: %s", got)
 	}
-	var wanted, only string
-	d.QueryRow(`SELECT filter_json FROM saved_view WHERE name = 'Wanted'`).Scan(&wanted)
-	d.QueryRow(`SELECT filter_json FROM saved_view WHERE name = 'Only'`).Scan(&only)
-	if wanted != `{"in":{"status":["backlog"]}}` || only != `{"in":{"status":[]},"flags":["vr"]}` {
-		t.Errorf("views: %s | %s", wanted, only)
+	var wanted, wantedSort, only, onlySort, search, searchSort string
+	d.QueryRow(`SELECT filter_json, sort_json FROM saved_view WHERE name = 'Wanted'`).Scan(&wanted, &wantedSort)
+	d.QueryRow(`SELECT filter_json, sort_json FROM saved_view WHERE name = 'Only'`).Scan(&only, &onlySort)
+	d.QueryRow(`SELECT filter_json, sort_json FROM saved_view WHERE name = 'Search'`).Scan(&search, &searchSort)
+	if wanted != `{"in":{"status":["backlog"]},"ex":{"status":[]}}` || wantedSort != `[{"field":"title","dir":"asc"}]` {
+		t.Errorf("view Wanted: %s | %s", wanted, wantedSort)
 	}
-	var fk, integrity string
+	if only != `{"in":{"status":[]},"flags":["vr"]}` || onlySort != `[]` {
+		t.Errorf("view Only: %s | %s", only, onlySort)
+	}
+	if search != `{"q":"wishlist","in":{"genre":["wishlist"]}}` || searchSort != `[{"field":"title","dir":"asc"}]` {
+		t.Errorf("a search or genre named wishlist was touched: %s | %s", search, searchSort)
+	}
+	if n := count(`SELECT count(*) FROM saved_view WHERE NOT json_valid(filter_json) OR NOT json_valid(sort_json)`); n != 0 {
+		t.Errorf("%d views with invalid JSON", n)
+	}
 	if n := count(`SELECT count(*) FROM pragma_foreign_key_check`); n != 0 {
 		t.Errorf("%d foreign key violations", n)
 	}
+	var integrity string
 	d.QueryRow(`PRAGMA integrity_check`).Scan(&integrity)
 	if integrity != "ok" {
-		t.Errorf("integrity %s %s", integrity, fk)
+		t.Errorf("integrity %s", integrity)
 	}
 }
