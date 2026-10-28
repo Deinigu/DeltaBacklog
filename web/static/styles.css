@@ -503,7 +503,7 @@ a.btn.primary { color: var(--accent-text); }
 .year-title .hint { margin: 2px 0 0; }
 .year-step { width: 48px; min-height: 48px; justify-content: center; font-size: 26px; text-decoration: none; color: inherit; }
 .year-step.off { opacity: .3; }
-.year-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin; }
+.year-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 24px 6px 0; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); } /* the fade tells there are more years */
 .year-strip .chip { flex: none; min-height: 44px; text-decoration: none; color: inherit; }
 .year-strip .chip[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .year-strip .chip[aria-current="page"] .c { color: inherit; }
@@ -511,6 +511,8 @@ a.btn.primary { color: var(--accent-text); }
 .year-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
 .year-stat b { font-size: 26px; line-height: 1.1; }
 .year-stat span { color: var(--muted); font-size: 13px; }
+.year-stat.zero { box-shadow: none; background: none; }
+.year-stat.zero b { color: var(--muted); font-weight: 500; } /* a zero does not shout like a real number */
 .year-two, .ygroups { display: grid; gap: 14px; grid-template-columns: 1fr; }
 .year-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); min-width: 0; }
 .year-box h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
@@ -545,7 +547,7 @@ a.btn.primary { color: var(--accent-text); }
 .stat-card h2 { margin: 0; font-size: 17px; }
 .stat-card h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .stats-page .big { font-size: 30px; font-weight: 700; margin: 6px 0; line-height: 1.2; }
-.stats-page .big small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.stats-page .big small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); } /* the caption under the number, not wrapped after it */
 .hbars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .hbars li { display: grid; grid-template-columns: minmax(70px, 38%) 1fr 36px; align-items: center; gap: 8px; font-size: 14px; }
 .hb-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
