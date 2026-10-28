@@ -166,6 +166,9 @@ await shot(p, 'similar-phone');
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
 
+await go(p, '#/steam'); await wait(800); // a made-up Steam library from the demo data (nothing is read from Steam)
+await shot(p, 'steam-phone');
+
 await go(p, '#/stats');
 await shot(p, 'stats-phone');
 

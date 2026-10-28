@@ -292,6 +292,51 @@ func main() {
 		_, err := tx.Exec(`INSERT INTO deal_match(game_id, source) SELECT id, 'title' FROM game WHERE title = ?`, g)
 		must(err)
 	}
+	// A made-up Steam library for the Steam page (nothing is read from Steam): minutes played, matched to the demo games
+	// by title, plus games the demo library does not have (the review list) and one the owner ignored.
+	for _, a := range []struct {
+		app           int
+		name          string
+		minutes, last int
+		game, source  string // the library game it is matched to ("" = not in the library)
+		ignored       bool
+	}{
+		{1145360, "Hades", 3120, 1767225600, "Hades", "title", false},
+		{367520, "Hollow Knight", 540, 1759276800, "Hollow Knight", "title", false},
+		{620, "Portal 2", 840, 1704067200, "Portal 2", "title", false},
+		{413150, "Stardew Valley", 5280, 1766534400, "Stardew Valley", "title", false},
+		{632470, "Disco Elysium", 120, 1735689600, "Disco Elysium", "link", false},
+		{1245620, "ELDEN RING", 0, 0, "Elden Ring", "user", false},
+		{1794680, "Vampire Survivors", 2210, 1764547200, "", "", false},
+		{2379780, "Balatro", 1830, 1768435200, "", "", false},
+		{1868140, "DAVE THE DIVER", 940, 1751328000, "", "", false},
+		{1092790, "Inscryption", 610, 1743465600, "", "", false},
+		{1283400, "Tunic", 95, 1706745600, "", "", false},
+		{553420, "TUNIC Demo", 0, 0, "", "", false},
+		{1145350, "Hades II", 0, 0, "", "", false},
+		{1966720, "Lethal Company", 0, 0, "", "", false},
+		{480, "Spacewar", 0, 0, "", "", true},
+		{431960, "Wallpaper Engine", 6800, 1767916800, "", "", true},
+	} {
+		var game, source, last any
+		if a.game != "" {
+			var gid int64
+			must(tx.QueryRow("SELECT id FROM game WHERE title = ?", a.game).Scan(&gid))
+			game, source = gid, a.source
+		}
+		if a.last > 0 {
+			last = a.last
+		}
+		_, err := tx.Exec(`INSERT INTO steam_app(app_id, name, playtime_min, last_played, game_id, source, ignored, seen_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, a.app, a.name, a.minutes, last, game, source, b2i(a.ignored))
+		must(err)
+	}
+	_, err = tx.Exec(`UPDATE game SET playtime_min = (SELECT sum(playtime_min) FROM steam_app WHERE game_id = game.id),
+		steam_last_played = (SELECT max(last_played) FROM steam_app WHERE game_id = game.id)
+		WHERE id IN (SELECT game_id FROM steam_app WHERE game_id IS NOT NULL)`)
+	must(err)
+	_, err = tx.Exec(`INSERT INTO setting(key, value) VALUES ('steam_synced_at', strftime('%Y-%m-%dT%H:%M:%SZ','now'))`)
+	must(err)
 	must(tx.Commit())
 
 	for i, g := range games {

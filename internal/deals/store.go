@@ -195,6 +195,9 @@ func normTitle(s string) string {
 	return b.String()
 }
 
+// TitleKey is the form of a title that SameTitle compares: two titles are the same when their keys are equal and not empty.
+func TitleKey(s string) string { return normTitle(s) }
+
 // SameTitle is the strict title test of the automatic match: equal after normalising.
 func SameTitle(a, b string) bool {
 	na := normTitle(a)

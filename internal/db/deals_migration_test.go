@@ -53,7 +53,7 @@ func TestDealsMigration(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM deal_match`).Scan(&matches)
 	d.QueryRow(`SELECT count(*) FROM deal_price`).Scan(&prices)
 	d.QueryRow(`SELECT count(*) FROM setting`).Scan(&settings)
-	if version != 16 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
+	if version != 17 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
 		t.Fatalf("version %d games %d matches %d prices %d settings %d", version, games, matches, prices, settings)
 	}
 	for _, q := range []string{
