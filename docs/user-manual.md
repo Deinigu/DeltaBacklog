@@ -49,7 +49,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -160,7 +160,7 @@ The *manual order* is how you rank games yourself, for example the order you pla
 ![Reordering a view](img/reorder-phone.jpg)
 
 1. Open the view or the Library list you want to order (for example *Up next*).
-2. Tap **⇅ Reorder** (on a phone, the icon with two arrows).
+2. Tap **⇅ Reorder** (on a phone, the three buttons *Surprise me*, *Table* and *Reorder* have their names under the title).
 3. Drag the **⠿** handle to move a game, or use the **▲ ▼** buttons.
 4. Tap **✓** (Done).
 
@@ -243,7 +243,7 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 - **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
 - **Left to play** means a game you have not played yet (for example Backlog or Up Next). Games marked **Not Interested** are not counted as left to play, but they still count in the total.
 - The bar is green for finished games, in the accent colour for games played but not finished, and grey for the rest.
-- **Games left to play** (the button at the top) hides series where nothing is left. **Not in your library** shows only the series that have a game you do not have yet (see below). Both stay on when you open a series and come back.
+- **Left to play** (the button at the top) hides series where nothing is left. **Not in library** shows only the series that have a game you do not have yet (see below). Both stay on when you open a series and come back.
 - Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
 - A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
 
@@ -251,7 +251,7 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 
 ### Games you do not have yet ("Not in your library")
 
-An opened series also shows the games of the same IGDB collection that are not in your library, in release order among yours. They appear greyed, with a dashed outline, the label **Not in your library**, and two buttons:
+An opened series also shows the games of the same IGDB collection that are not in your library, in release order among yours. They appear greyed, with a dashed outline, the label **Not in your library**, and two buttons. When the series has more than six of them, only the first six are listed, with **Show all** under the games to see the rest:
 
 - **Add** opens the add form already filled in from IGDB (genres, developer, release year, cover, and the series name you use). You choose the status, platforms and the rest, then **Add to library**. The game then disappears from the not-in-your-library list by itself.
 - **Hide** removes the game from this list for good (for example a spin-off you will never play). A message offers **Undo**; hidden games are listed under **Hidden (n)** at the bottom of the series, each with **Show again**.
@@ -309,7 +309,7 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 ![The rankings list](img/rankings-phone.jpg)
 
-- **The list.** **New ranking** asks for a name and the starting tiers: **S to F** or **Empty** (you make the tiers). Each ranking shows its best games, how many games it has and its tier colours. Under it: move it up or down, rename, duplicate and delete (the games stay in your library). The old per-year tier lists became rankings called *Tier list 2025*, *Tier list 2024*... with the same tiers and games.
+- **The list.** **New ranking** asks for a name and the starting tiers: **S to F** or **Empty** (you make the tiers). Each ranking shows its best games, how many games it has and its tier colours. Under it: move it up or down (the arrows appear only when you have more than one ranking, and not at the end where they cannot go), rename, duplicate and, apart on the right in red, delete (after a confirmation; the games stay in your library). The old per-year tier lists became rankings called *Tier list 2025*, *Tier list 2024*... with the same tiers and games.
 - **Add games.** The button opens your whole library with search and the same filters as the Library page. Tick games one by one, or filter (for example *Year played: 2025*) and tap **Select these** to take every match at once, then **Add**. New games wait in **Not ranked**, below the board. The first time a game joins a ranking its poster is fetched in the background (a few seconds each; the page fills them in by itself). Until then the wide cover is shown.
 - **Move a game.** On a PC drag it with the mouse. On a phone **press and hold** until it lifts, then drag (near the top or bottom edge the page scrolls by itself). Or **tap a game** to select it: the bar at the bottom has **◀ ▶** (earlier or later in its tier), **▲ ▼** (one tier up or down), *Not ranked*, *Details* and *Remove from this ranking*, and with a game selected you can also **tap a tier** to put it there. With the keyboard: Tab to a game, **Enter** selects it, the **arrow keys** move it (left and right inside the tier, up and down between tiers), **Esc** lets go. Without a selection the arrows just move between games.
 - **Tiers.** **Tap a tier's name** (with nothing selected) to change its **label** (up to 80 characters, it wraps), its **colour** (a palette or any custom colour), move it up or down, **duplicate** it or **delete** it (its games go back to *Not ranked*; **Undo** in the message at the bottom brings it back). **Add tier** adds a new one at the end; the menu **⋯** can add the classic S to F tiers.
@@ -342,7 +342,7 @@ The charts have text labels and work in light and dark. Screen readers get the n
 
 ## 15. Surprise me: let the app choose
 
-Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
+Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone the buttons sit on their own row under the title, and that row scrolls away while the search box stays at the top). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
 
 **What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested, Evergreen or on the Wishlist are never offered, unless you filtered to that status on purpose.
 
