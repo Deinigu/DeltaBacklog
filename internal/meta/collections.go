@@ -22,12 +22,14 @@ type GameLinks struct {
 
 // CollectionGame is one game of an IGDB collection, as much as the Series page shows of a game the library lacks.
 type CollectionGame struct {
-	IGDBID   int64
-	Name     string
-	Year     int // 0 when IGDB has no release date
-	GameType int
-	ParentID int64  // the game this one is another version of; 0 = none
-	CoverID  string // IGDB image id ("" when the game has no cover)
+	IGDBID    int64
+	Name      string
+	Year      int // 0 when IGDB has no release date
+	GameType  int
+	ParentID  int64    // the game this one is another version of; 0 = none
+	CoverID   string   // IGDB image id ("" when the game has no cover)
+	Release   Release  // the full first release date (zero when IGDB has none or says TBD)
+	Platforms []string // IGDB platforms, abbreviated
 }
 
 // realGameTypes are the IGDB game_type values that count as a game of a series: 0 main game, 4 standalone expansion,
@@ -73,7 +75,8 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 	name := ""
 	for offset := 0; offset < maxCollectionGames; offset += collectionPage {
 		var games []igdbGame
-		q := fmt.Sprintf("fields name,first_release_date,game_type,parent_game,version_parent,cover.image_id,collections.id,collections.name; "+
+		q := fmt.Sprintf("fields name,first_release_date,game_type,parent_game,version_parent,cover.image_id,collections.id,collections.name,"+
+			"release_dates.date,release_dates.date_format,platforms.abbreviation,platforms.name; "+
 			"where collections = (%d) & game_type = (0,4,8,9); sort id asc; limit %d; offset %d;", collectionID, collectionPage, offset)
 		if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 			return "", nil, err
@@ -86,6 +89,8 @@ func (c *Client) CollectionGames(ctx context.Context, collectionID int64) (strin
 			if g.FirstReleaseDate > 0 {
 				cg.Year = time.Unix(g.FirstReleaseDate, 0).UTC().Year()
 			}
+			cg.Release = g.release()
+			cg.Platforms = g.candidate().Platforms
 			out = append(out, cg)
 			for _, col := range g.Collections {
 				if col.ID == collectionID && name == "" {

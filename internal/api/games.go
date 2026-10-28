@@ -7,31 +7,35 @@ import (
 
 // Game is the full read model of one game, with multi-valued fields as arrays.
 type Game struct {
-	ID          int64    `json:"id"`
-	Title       string   `json:"title"`
-	Status      string   `json:"status"` // status code
-	Ownership   *string  `json:"ownership"`
-	Series      *string  `json:"series"`
-	Developer   *string  `json:"developer"`
-	ReleaseYear *int     `json:"release_year"`
-	VR          bool     `json:"vr"`
-	Favorite    bool     `json:"favorite"`
-	Completed   bool     `json:"completed"`
-	Notes       string   `json:"notes"`
-	Cover       *string  `json:"cover"` // file name under /covers/
-	QueuePos    *int     `json:"queue_pos"`
-	IGDBID      *int64   `json:"igdb_id"`
-	AddedAt     string   `json:"added_at"`
-	UpdatedAt   string   `json:"updated_at"`
-	CoverV      string   `json:"cover_v"`  // changes only when the cover image does: the browser cache key for /covers/
-	Poster      *string  `json:"poster"`   // portrait box art for the rankings, a file name under /covers/ (null until made)
-	PosterV     string   `json:"poster_v"` // the browser cache key of the poster
-	Platforms   []string `json:"platforms"`
-	Genres      []string `json:"genres"`
-	Themes      []string `json:"themes"`
-	Players     []string `json:"players"`
-	Years       []int    `json:"years"`   // calendar years played
-	Periods     []string `json:"periods"` // "childhood", "always"
+	ID          int64   `json:"id"`
+	Title       string  `json:"title"`
+	Status      string  `json:"status"` // status code
+	Ownership   *string `json:"ownership"`
+	Series      *string `json:"series"`
+	Developer   *string `json:"developer"`
+	ReleaseYear *int    `json:"release_year"`
+	// IGDB's first release date (unix seconds, UTC) and how exact it is (IGDB date_format: 0 day, 1 month, 2 year, 3-6
+	// quarter); null until IGDB was read. Only the Upcoming page uses them.
+	ReleaseDate   *int64   `json:"release_date"`
+	ReleaseFormat *int     `json:"release_format"`
+	VR            bool     `json:"vr"`
+	Favorite      bool     `json:"favorite"`
+	Completed     bool     `json:"completed"`
+	Notes         string   `json:"notes"`
+	Cover         *string  `json:"cover"` // file name under /covers/
+	QueuePos      *int     `json:"queue_pos"`
+	IGDBID        *int64   `json:"igdb_id"`
+	AddedAt       string   `json:"added_at"`
+	UpdatedAt     string   `json:"updated_at"`
+	CoverV        string   `json:"cover_v"`  // changes only when the cover image does: the browser cache key for /covers/
+	Poster        *string  `json:"poster"`   // portrait box art for the rankings, a file name under /covers/ (null until made)
+	PosterV       string   `json:"poster_v"` // the browser cache key of the poster
+	Platforms     []string `json:"platforms"`
+	Genres        []string `json:"genres"`
+	Themes        []string `json:"themes"`
+	Players       []string `json:"players"`
+	Years         []int    `json:"years"`   // calendar years played
+	Periods       []string `json:"periods"` // "childhood", "always"
 
 	// IGDB enrichment (empty until `deltabacklog sync-igdb --enrich` has run). Times are minutes.
 	TTBHastily    *int        `json:"ttb_hastily"`
@@ -95,7 +99,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 		args = []any{only}
 		where, linkWhere, playAnd = " WHERE g.id = ?", " WHERE x.game_id = ?", " AND game_id = ?"
 	}
-	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year,
+	rows, err := d.Query(`SELECT g.id, g.title, s.code, o.name, se.name, c.name, g.release_year, g.first_release_date, g.release_date_format,
 			g.vr, g.favorite, g.completed, g.notes, g.cover_file, g.queue_pos, g.igdb_id, g.added_at, g.updated_at, g.cover_updated_at, g.poster_file, g.poster_updated_at,
 			g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely, g.time_to_beat_src
 		FROM game g
@@ -111,7 +115,7 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 	for rows.Next() {
 		var g Game
 		if err := rows.Scan(&g.ID, &g.Title, &g.Status, &g.Ownership, &g.Series, &g.Developer,
-			&g.ReleaseYear, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV, &g.Poster, &g.PosterV,
+			&g.ReleaseYear, &g.ReleaseDate, &g.ReleaseFormat, &g.VR, &g.Favorite, &g.Completed, &g.Notes, &g.Cover, &g.QueuePos, &g.IGDBID, &g.AddedAt, &g.UpdatedAt, &g.CoverV, &g.Poster, &g.PosterV,
 			&g.TTBHastily, &g.TTBNormally, &g.TTBCompletely, &g.TTBSource); err != nil {
 			rows.Close()
 			return nil, err

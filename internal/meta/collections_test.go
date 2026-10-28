@@ -24,14 +24,17 @@ func collectionFake(t *testing.T, queries *[]string) *Client {
 		switch {
 		case strings.Contains(q, "where collections ="): // a DLC and a port slip through the fake: the client must drop them too
 			w.Write([]byte(`[
-			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}]},
-			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"parent_game":10,"collections":[{"id":7,"name":"Zed Series"}]},
+			 {"id":10,"name":"Zed","first_release_date":852076800,"game_type":0,"cover":{"image_id":"co1"},"collections":[{"id":7,"name":"Zed Series"}],
+			  "release_dates":[{"date":852076800,"date_format":0}],"platforms":[{"abbreviation":"PC"},{"name":"Switch"}]},
+			 {"id":11,"name":"Zed II","first_release_date":1104537600,"game_type":8,"parent_game":10,"collections":[{"id":7,"name":"Zed Series"}],"release_dates":[{"date":1104537600,"date_format":7}]},
 			 {"id":15,"name":"Zed III","game_type":9,"parent_game":11,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":16,"name":"Zed Legacy","game_type":4,"parent_game":10,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":17,"name":"Zed Edition","game_type":0,"version_parent":10,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":12,"name":"Zed: DLC","first_release_date":1104537600,"game_type":1,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":13,"name":"Zed (Port)","game_type":11,"collections":[{"id":7,"name":"Zed Series"}]},
 			 {"id":14,"name":"  ","game_type":0}]`))
+		case strings.Contains(q, "fields id,first_release_date"): // ReleaseDates
+			w.Write([]byte(`[{"id":10,"first_release_date":1830211199,"release_dates":[{"date":1830211199,"date_format":2}],"platforms":[{"abbreviation":"PC"}]}]`))
 		case strings.Contains(q, "fields collections.id"):
 			w.Write([]byte(`[{"id":10,"game_type":10,"collections":[{"id":7,"name":"Zed Series"},{"id":8,"name":"Other"}],"parent_game":5},{"id":11,"version_parent":10},{"id":12,"game_type":4,"parent_game":10}]`))
 		default: // one game as a candidate

@@ -423,6 +423,9 @@ func enrichGame(tx *sql.Tx, gameID int64, det meta.Details, found, refresh bool,
 		if err := collections.StoreCollections(tx, gameID, det.Collections); err != nil {
 			return err
 		}
+		if err := collections.SetRelease(tx, gameID, det.Release); err != nil { // the date for the Upcoming page
+			return err
+		}
 		if len(det.Modes) > 0 {
 			if err := replaceLinks(tx, gameID, "game_mode", "game_game_mode", "game_mode_id", det.Modes); err != nil {
 				return err

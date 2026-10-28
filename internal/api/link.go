@@ -58,7 +58,11 @@ func (s *Server) linkAccept(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.linkResult(w, igdblink.Accept(s.DB, in.GameID, in.IGDBID))
+	err := igdblink.Accept(s.DB, in.GameID, in.IGDBID)
+	if err == nil {
+		s.fillReleaseLater(in.GameID, in.IGDBID)
+	}
+	s.linkResult(w, err)
 }
 
 // linkNone records that a game is not on IGDB, so the sync leaves it alone.

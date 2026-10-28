@@ -66,6 +66,33 @@ func TestEnrichKeepsAStoredVersionRoot(t *testing.T) {
 	}
 }
 
+func TestEnrichStoresTheReleaseDate(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	det := hades()
+	det.Release = meta.Release{Date: 1830211199, Format: meta.FormatYear}
+	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
+	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep}); err != nil {
+		t.Fatal(err)
+	}
+	var date, format *int64
+	d.QueryRow(`SELECT first_release_date, release_date_format FROM game WHERE id = ?`, id).Scan(&date, &format)
+	if date == nil || *date != 1830211199 || *format != meta.FormatYear {
+		t.Fatalf("date %v format %v", date, format)
+	}
+	det.Release = meta.Release{} // IGDB took the date back (TBD)
+	f.details[1] = det
+	if _, err := Enrich(context.Background(), d, f, EnrichOptions{Sleep: noSleep, Refresh: true}); err != nil {
+		t.Fatal(err)
+	}
+	date = nil
+	d.QueryRow(`SELECT first_release_date FROM game WHERE id = ?`, id).Scan(&date)
+	if date != nil {
+		t.Errorf("a stale date survived a refresh: %v", *date)
+	}
+}
+
 // collectionSearch adds the collection reads to the enrichment fake.
 type collectionSearch struct {
 	*enrichSearch

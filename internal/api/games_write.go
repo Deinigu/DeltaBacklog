@@ -200,7 +200,8 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var curStatus int64
-	if err := tx.QueryRow("SELECT status_id FROM game WHERE id = ?", id).Scan(&curStatus); errors.Is(err, sql.ErrNoRows) {
+	var curIGDB sql.NullInt64
+	if err := tx.QueryRow("SELECT status_id, igdb_id FROM game WHERE id = ?", id).Scan(&curStatus, &curIGDB); errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {
@@ -253,6 +254,9 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		fail(w, err)
 		return
+	}
+	if in.IGDBID != nil && *in.IGDBID > 0 && (!curIGDB.Valid || curIGDB.Int64 != *in.IGDBID) { // only a new link needs its date
+		s.fillReleaseLater(id, *in.IGDBID)
 	}
 	g, err := LoadGame(s.DB, id)
 	if err != nil {
@@ -438,7 +442,7 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 			// A different (or no) IGDB game: what the enrichment stored for the old one is not this game's. All of it is
 			// IGDB's data, never owner-entered, so it goes; `sync-igdb --enrich` reads the new link.
 			for _, q := range []string{
-				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, igdb_parent_id = NULL WHERE id = ?",
+				"UPDATE game SET igdb_enriched_at = NULL, igdb_series = NULL, igdb_parent_id = NULL, first_release_date = NULL, release_date_format = NULL WHERE id = ?",
 				"DELETE FROM game_collection WHERE game_id = ?",
 				// only IGDB's own times go: times the owner typed or took from HowLongToBeat stay
 				`UPDATE game SET time_to_beat_hastily = NULL, time_to_beat_normally = NULL, time_to_beat_completely = NULL, time_to_beat_src = NULL

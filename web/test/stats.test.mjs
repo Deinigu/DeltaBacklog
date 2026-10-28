@@ -162,3 +162,9 @@ test('a small library or a varied one has no import batch', () => {
   assert.equal(importBatch(many(5, () => ({ updated_at: '2026-01-01T00:00:00Z' }))), null);
   assert.equal(importBatch(many(40, (i) => ({ updated_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }))), null);
 });
+
+test('the stats are about the library: Wishlist games are left out', async () => {
+  const { libraryGames } = await import('../static/js/stats.js');
+  const games = [{ id: 1, status: 'backlog' }, { id: 2, status: 'wishlist' }, { id: 3, status: 'finished' }];
+  assert.deepEqual(libraryGames(games).map((x) => x.id), [1, 3]);
+});

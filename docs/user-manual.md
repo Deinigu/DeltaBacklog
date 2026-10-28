@@ -17,6 +17,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 10. [Covers](#10-covers)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [Series progress](#12-series-progress)
+    - [Wishlist and Upcoming releases](#wishlist-and-upcoming-releases)
 13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
@@ -47,7 +48,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game.
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -128,7 +129,7 @@ Tap a card to open the game.
 ![A game's details](img/game-phone.jpg)
 
 **Quick changes** (at the top, saved at once)
-- **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
+- **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Wishlist, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
 - **★ Favorite** switches the favourite mark.
 - **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
 
@@ -260,6 +261,23 @@ Which IGDB collection belongs to a series is decided by your linked games: the s
 
 ![A series opened, with games that are not in the library](img/series-shelf-phone.jpg)
 
+### Wishlist and Upcoming releases
+
+**Wishlist** is a status (after Backlog) for a game you want but do not have yet. It works like every other status: pick it in a game's details, filter by it, use it in saved views and in the table. The add form starts on **Wishlist** (and leaves *Ownership* empty) when you add a game from the Upcoming page.
+
+**Upcoming** (in the navigation, **More** on a phone) lists the games that are not out yet, grouped by month: **This month**, **Next month**, then the months after. A game IGDB only dates to a quarter or a year sits after the months it covers as **Q3 2027** or **2027**, and is never shown as a specific day. **Later / TBA** holds games with no announced date and releases more than a year and a half away. Each row has the poster, the title, the date, the platforms IGDB lists and where the game comes from. Two kinds of games appear:
+
+- **Your wishlist.** Tap one to open its details.
+- **New games of your series** that are not in your library (the same games as *Not in your library* on the Series page). They have **Add** (the add form pre-filled, status Wishlist) and **Hide** (the same hide list as the Series page, with Undo).
+
+A **Recently released** section at the top shows games that came out in the last 60 days, so a wishlist game that just launched does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
+
+A Wishlist game is not a game of your library yet, so it does not count anywhere that counts your library: not in a series' *n games*, *finished*, *played* or *left to play*, and not in the Stats. On the Series page it still sits in its series' shelf in release order, greyed like a game you do not have and marked **On your wishlist** (tap it for its details). A series with only wishlist games has no tile until you own one of its games.
+
+The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of your wishlist games and of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Wishlist games need an IGDB link to have a date (use **Link IGDB**). Dates are shown as IGDB's calendar date, whatever your time zone.
+
+![The Upcoming page](img/upcoming-phone.jpg)
+
 ## 13. Year in review and rankings
 
 **Year in review** (under **More** on a phone) opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
@@ -311,7 +329,7 @@ The charts have text labels and work in light and dark. Screen readers get the n
 
 Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone it is the dice icon, from 600px wide it also has its name). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
 
-**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
+**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested, Evergreen or on the Wishlist are never offered, unless you filtered to that status on purpose.
 
 **Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
 - **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).

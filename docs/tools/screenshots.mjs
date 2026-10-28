@@ -25,7 +25,7 @@ import { deflateSync, crc32 } from 'node:zlib';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
-const OUT = join(HERE, '..', 'img');
+const OUT = process.env.OUT_DIR || join(HERE, '..', 'img'); // OUT_DIR: write somewhere else (to keep the other images)
 mkdirSync(OUT, { recursive: true });
 
 const freePort = () => new Promise((res, rej) => { const s = createServer(); s.on('error', rej); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => res(port)); }); });
@@ -146,6 +146,9 @@ if (lookups && !process.env.BASE_URL) { // the games of the series' IGDB collect
 await shot(p, 'series-phone');
 await clickText(p, 'a.tile', 'Ace Attorney'); await wait(1200);
 await shot(p, 'series-shelf-phone');
+
+await go(p, '#/upcoming'); await wait(1200); // the wishlist (made-up dates) and the series' new games read above
+await shot(p, 'upcoming-phone');
 
 await go(p, '#/stats');
 await shot(p, 'stats-phone');

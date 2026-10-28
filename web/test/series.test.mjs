@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isFinished, isPlayed, isLeft, buildSeries, withLeft, barShares, progressText, seriesPosition } from '../static/js/series.js';
+import { isFinished, isPlayed, isLeft, buildSeries, withLeft, barShares, progressText, seriesPosition, moveHidden } from '../static/js/series.js';
 
 let n = 0;
 const g = (title, series, o = {}) => ({ id: ++n, title, series, status: 'backlog', release_year: null, years: [], periods: [], ...o });
@@ -148,4 +148,29 @@ test('the poster URL is relative and versioned by the cover image', async () => 
   const { missingPosterURL } = await import('../static/js/api.js');
   assert.equal(missingPosterURL('i7.jpg', 'co1x'), 'covers/i7.jpg?v=co1x');
   assert.equal(missingPosterURL(null, 'x'), null);
+});
+
+test('a Wishlist game is not a game of the series: no total, played or left; shown on the shelf as wished for', () => {
+  const games = [g('Part 1', 'W', { status: 'finished', release_year: 2010 }), g('Part 2', 'W', { status: 'wishlist', release_year: 2026 }), g('Only wished', 'Z', { status: 'wishlist' })];
+  const all = buildSeries(games);
+  assert.deepEqual(all.map((s) => s.key), ['w']); // a series of wishlist games only is not in the library
+  const s = all[0];
+  assert.deepEqual([s.total, s.finished, s.played, s.left, s.noYear], [1, 1, 1, 0, 0]);
+  assert.deepEqual(s.wishlist.map((x) => x.title), ['Part 2']);
+  assert.equal(withLeft(all).length, 0); // nothing left to play: the wished game is not playable yet
+  assert.deepEqual(shelfItems(s, { missing: [] }).map((i) => [i.kind, i.title]), [['owned', 'Part 1'], ['wishlist', 'Part 2']]);
+  assert.match(seriesSummary(s, { missing: [] }), /1 games? · 1 on your wishlist/);
+  assert.equal(seriesPosition(games[1], games), null);
+});
+
+test('moveHidden keeps a hidden game hidden when the index is rebuilt from the answer', () => {
+  const m = { igdb_id: 5, collection_id: 7, title: 'Zed II', year: 2005, parent: 0 };
+  const resp = { owned_roots: [], series: [{ key: 'zeds', collections: [], missing: [m], hidden: [] }] };
+  const games = [g('Zed', 'Zeds')];
+  moveHidden(resp, m, 'hidden');
+  let idx = missingIndex(resp, games);
+  assert.deepEqual([idx.get('zeds').missing.length, idx.get('zeds').hidden.length], [0, 1]);
+  moveHidden(resp, m, 'missing');
+  idx = missingIndex(resp, games);
+  assert.deepEqual([idx.get('zeds').missing.length, idx.get('zeds').hidden.length], [1, 0]);
 });

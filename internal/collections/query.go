@@ -16,6 +16,11 @@ type Game struct {
 	V            string  `json:"v"`      // IGDB's image id of the cover: the cache key of the poster URL
 	Parent       int64   `json:"parent"` // the IGDB game this one is a version of, 0 = none (the browser applies the family rule too)
 	CollectionID int64   `json:"collection_id"`
+	// IGDB's first release date (unix seconds, UTC) and how exact it is (date_format: 0 day, 1 month, 2 year, 3-6
+	// quarter); both null when IGDB has no date (to be announced).
+	Date      *int64  `json:"date"`
+	Format    *int    `json:"format"`
+	Platforms *string `json:"platforms"` // "PC, PS5", null when IGDB lists none
 }
 
 // Collection is a cached IGDB collection of a series.
@@ -63,7 +68,7 @@ func Load(d *sql.DB) ([]Series, error) {
 				return nil, err
 			}
 			s.Collections = append(s.Collections, c)
-			grows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file, coalesce(g.cover_image, ''), g.parent_igdb_id,
+			grows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file, coalesce(g.cover_image, ''), g.parent_igdb_id, g.first_release_date, g.release_date_format, g.platforms,
 					EXISTS (SELECT 1 FROM series_hidden h WHERE h.collection_id = g.collection_id AND h.igdb_id = g.igdb_id)
 				FROM igdb_collection_game g WHERE g.collection_id = ?`, c.ID)
 			if err != nil {
@@ -74,7 +79,7 @@ func Load(d *sql.DB) ([]Series, error) {
 				var year sql.NullInt64
 				var cover sql.NullString
 				var hidden bool
-				if err := grows.Scan(&g.IGDBID, &g.Title, &year, &cover, &g.V, &g.Parent, &hidden); err != nil {
+				if err := grows.Scan(&g.IGDBID, &g.Title, &year, &cover, &g.V, &g.Parent, &g.Date, &g.Format, &g.Platforms, &hidden); err != nil {
 					grows.Close()
 					return nil, err
 				}

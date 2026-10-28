@@ -86,3 +86,76 @@ func TestSeriesCollectionsMigration(t *testing.T) {
 		t.Errorf("%d collection games left after their collection was deleted", n)
 	}
 }
+
+// TestWishlistMigration: a populated library at version 13 keeps its games and statuses in order, gains the Wishlist
+// status after Backlog and the (empty) release date columns.
+func TestWishlistMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := sql.Open("sqlite", FileURI(path)+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := migrationFiles.ReadDir("migrations")
+	var names []string
+	for _, e := range entries {
+		if n, _ := strconv.Atoi(strings.SplitN(e.Name(), "_", 2)[0]); n <= 13 {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		body, _ := migrationFiles.ReadFile("migrations/" + name)
+		if _, err := old.Exec(string(body)); err != nil {
+			t.Fatal(name, err)
+		}
+	}
+	for _, q := range []string{
+		`PRAGMA user_version = 13`,
+		`INSERT INTO game(id, title, title_sort, status_id, igdb_id, release_year) VALUES (1,'Zed','zed',(SELECT id FROM status WHERE code='hold'),100,1997)`,
+		`INSERT INTO game(id, title, title_sort, status_id) VALUES (2,'Done','done',(SELECT id FROM status WHERE code='finished'))`,
+		`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'Zed Series', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, release_year, game_type) VALUES (7, 100, 'Zed', 1997, 0)`,
+	} {
+		if _, err := old.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	old.Close()
+
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	rows, err := d.Query(`SELECT code FROM status ORDER BY sort, id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codes []string
+	for rows.Next() {
+		var c string
+		rows.Scan(&c)
+		codes = append(codes, c)
+	}
+	rows.Close()
+	if got := strings.Join(codes, " "); got != "playing playing_evergreen up_next backlog wishlist hold evergreen finished dropped not_interested" {
+		t.Errorf("status order: %s", got)
+	}
+	var title, status string
+	var year int
+	var date, format sql.NullInt64
+	if err := d.QueryRow(`SELECT g.title, s.code, g.release_year, g.first_release_date, g.release_date_format FROM game g JOIN status s ON s.id = g.status_id WHERE g.id = 1`).
+		Scan(&title, &status, &year, &date, &format); err != nil {
+		t.Fatal(err)
+	}
+	if title != "Zed" || status != "hold" || year != 1997 || date.Valid || format.Valid {
+		t.Errorf("game: %s %s %d %v %v", title, status, year, date, format)
+	}
+	var plat sql.NullString
+	if err := d.QueryRow(`SELECT first_release_date, platforms FROM igdb_collection_game WHERE igdb_id = 100`).Scan(&date, &plat); err != nil || date.Valid || plat.Valid {
+		t.Errorf("collection game: %v %v %v", date, plat, err)
+	}
+	if _, err := d.Exec(`UPDATE game SET release_date_format = 9 WHERE id = 1`); err == nil {
+		t.Error("an unknown date format was accepted")
+	}
+}

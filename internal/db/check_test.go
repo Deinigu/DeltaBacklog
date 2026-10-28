@@ -20,7 +20,7 @@ func TestCheckReadsABackupWithoutChangingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Integrity != "ok" || r.Games != 2 || r.Plays != 3 || r.Views != 5 || r.Version != 13 {
+	if r.Integrity != "ok" || r.Games != 2 || r.Plays != 3 || r.Views != 5 || r.Version != 14 {
 		t.Errorf("report = %+v", r)
 	}
 	after, _ := os.ReadFile(dest)

@@ -6,7 +6,7 @@ import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, s
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import {
-  buildSeries, withLeft, withMissing, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
+  buildSeries, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
 } from './series.js';
 
 // The filters survive going into a series and back (the route re-renders the page).
@@ -104,14 +104,7 @@ export function renderSeries(root, openKey = null) {
   // Keep the answer we hold in step with the server (the index is rebuilt from it on every games-changed), so a hidden
   // game stays hidden and the page redraws without another request.
   function moveTo(m, to) {
-    const from = to === 'hidden' ? 'missing' : 'hidden';
-    for (const e of info.series ?? []) {
-      const i = e[from].findIndex((x) => x.igdb_id === m.igdb_id && x.collection_id === m.collection_id);
-      if (i < 0) continue;
-      const [x] = e[from].splice(i, 1);
-      e[to].push(x);
-      e[to].sort((a, b) => (a.year ?? Infinity) - (b.year ?? Infinity) || a.title.localeCompare(b.title));
-    }
+    moveHidden(info, m, to);
     index = missingIndex(info, store.games);
   }
 
@@ -173,6 +166,14 @@ export function renderSeries(root, openKey = null) {
       else if (state === 'played') box.append(h('i.pmark.pl', { 'aria-hidden': 'true' }, '▶'));
       return h('div.shelf-cell', {},
         h('button.si', { type: 'button', onclick: () => openDrawer(g), 'aria-label': `${g.title}, ${g.release_year ?? 'year unknown'}, ${STATE_LABEL[state]}${st ? `, ${st.label}` : ''}` }, box),
+        h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
+    }
+    if (item.kind === 'wishlist') { // not in the library yet: the missing look, with its own mark
+      const g = item.game;
+      const box = poster(g, '.pst-missing');
+      box.append(h('i.pnew', {}, 'On your wishlist'));
+      return h('div.shelf-cell.missing.wish', {},
+        h('button.si', { type: 'button', onclick: () => openDrawer(g), 'aria-label': `${g.title}, ${g.release_year ?? 'year unknown'}, on your wishlist` }, box),
         h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
     }
     const m = item.game;

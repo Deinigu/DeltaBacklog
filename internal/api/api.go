@@ -40,6 +40,7 @@ type Server struct {
 	hltbOnce   sync.Once
 	posterOnce sync.Once
 	posters    *posters.Queue // background poster worker, created on first use (see posterQ)
+	bg         sync.WaitGroup // background best-effort work (release dates of a new link); tests wait for it
 	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
 
 	cache respCache // the encoded /api/games and /api/facets responses
