@@ -115,7 +115,7 @@ export function renderSeries(root, openKey = null) {
   // ---- the page of tiles ----
   function tile(s) {
     const extra = extraOf(index, s);
-    const games = fanGames(s, hasPoster, 4, (g) => !!imageOf(g));
+    const games = fanGames(s, hasPoster, 4, (g) => !!imageOf(g), (g) => g.igdb_id != null);
     const n = extra.missing.length;
     return h('a.tile', { href: href(s.key), 'aria-label': `${s.name}: ${seriesSummary(s, extra)}` },
       h('span.fan', { 'aria-hidden': 'true', 'data-n': String(games.length) }, games.map((g, i) => {

@@ -181,3 +181,8 @@ test('moveHidden keeps a hidden game hidden when the index is rebuilt from the a
   idx = missingIndex(resp, games);
   assert.deepEqual([idx.get('zeds').missing.length, idx.get('zeds').hidden.length], [1, 0]);
 });
+
+test('the fan takes IGDB-linked posters first, still in release order', () => {
+  const [s] = buildSeries([1, 2, 3, 4, 5].map((y) => g('G' + y, 'X', { release_year: 2000 + y, poster: 'p.jpg', igdb_id: y === 2 || y === 4 ? y : null })));
+  assert.deepEqual(fanGames(s, (x) => !!x.poster, 3, undefined, (x) => x.igdb_id != null).map((x) => x.title), ['G1', 'G2', 'G4']);
+});
