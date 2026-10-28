@@ -30,7 +30,6 @@ export const SORT_FIELDS = {
 // What "no sort chosen" means: the library's natural order.
 export const DEFAULT_SORT = [
   { field: 'status', dir: 'asc' },
-  { field: 'manual', dir: 'asc' },
   { field: 'title', dir: 'asc' },
 ];
 

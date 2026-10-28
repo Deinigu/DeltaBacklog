@@ -4,6 +4,10 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- **Default order is now Status, then Title** (it was Status, Manual order, Title). Views with no sort of their own no longer show your manual queue; the starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged. Add *Manual order* as a sort level to any view that should show your ranking. No migration.
+
 ### Added
 
 - **Steam sync**: a **Steam** page (`#/steam`, More menu on a phone) that reads your Steam library with a Steam Web API key and your SteamID (`STEAM_API_KEY`, `STEAM_ID` in `.env`; your profile's game details must be public). **Not in library** lists the Steam games you do not have, most played first, with **Played** / **Never played** filters and a search box, each with **Add** (the add form, for PC, you pick the status), **Match** (with a game you already have) and **Ignore** (reversible); **Matched** shows how each game was matched (the game's Steam link, an exact title, or you) and lets you fix it. Hours played are stored per game (`playtime_min`, only ever raised by a sync, so a partial or failed read cannot shrink them) and shown as *12 h of ~15 h* next to the time to beat in the game's details, as a **Played** table column and as a sort. **Sync with Steam** is a background run (one request), never on a page load; `deltabacklog sync-steam [--dry-run]` does the same from the command line. A refused key, a private profile or a rate limit is said plainly, and the key and the SteamID never appear in an error, a log or an API answer. `deploy.sh --env` also copies the two settings. Migration 017: `steam_app`, `game.playtime_min`, `game.steam_last_played`. New endpoints `GET /api/steam`, `POST /api/steam/sync`, `PUT /api/steam/apps/{app}/match`, `PUT /api/steam/apps/{app}/ignore`.
@@ -38,6 +42,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 - With the Theme button set against the system theme, scrollbars and form controls now follow the app's theme.
 - Quick add maps the IGDB platform names `NSW` and `PS` the way the IGDB sync does.
 
+- **Series page layout**: a tile shows the game's portrait poster, or its wide cover whole (letterboxed) instead of cropping it; the poster fan fits inside the tile for 1 to 4 posters and prefers real posters; tiles are tighter ("+N not in library" on its own line); on a series' shelf the Add/Hide buttons sit at the bottom of every cell, and the page leaves room for the + button. A series' fan prefers posters of games linked to IGDB; if a poster is wrong (a fuzzy SteamGridDB match for a game that is not linked), open the game and use **Change poster**.
 ### Changed
 - The repository is now a public showcase, not a community project: README status note and "How this was built" section, CONTRIBUTING explains that contributions are not accepted, and the code of conduct, issue forms and pull request template were removed. Dependabot runs monthly with grouped updates.
 - Deploys are stamped with a version from `git describe`; idle connections are closed after 2 minutes; CI fails on unformatted Go code.

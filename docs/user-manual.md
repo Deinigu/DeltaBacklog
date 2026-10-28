@@ -101,7 +101,7 @@ Tap the sort button (the up/down arrows at the right of the search box).
 - **Sort levels.** Games are sorted by the first level. When two games tie, the next level decides, and so on. Each level has a field, an arrow for ascending or descending (↑ / ↓), buttons to move it up or down, and ✕ to remove it. **Add level** adds another one.
 - **Fields you can sort by:** Title, Status, Platform, Series, Release year, Last year played, First year played, Years played (count), Time to beat (shortest first; games without a time last), Date added, Date edited, Favorites first, 100% completed first, and Manual order.
 - Titles sort naturally ("Fallout 2" comes before "Fallout 10"), and games that have no value for a field always go last.
-- **Default order** is: Status, then your Manual order, then Title.
+- **Default order** is: Status, then Title. It does not use your Manual order: to see your own ranking, add **Manual order** as a sort level (the starter *Up next* and *Playing now* views already do).
 - **Group by** splits the list into sections: Status, Platform, Series, Genre, Year played or Ownership. A game that was played in several years appears under each year, and one with several genres under each genre.
 - **Reset** returns to the default order.
 
@@ -169,7 +169,7 @@ The *manual order* is how you rank games yourself, for example the order you pla
 What to know:
 - The order is saved as soon as you move a game.
 - Only the games in the list are moved. Your other games keep their place.
-- One order is shared by all views. A view shows it when it sorts by *Manual order*, which the default order does.
+- One order is shared by all views. A view shows it only when it sorts by *Manual order* (the default order, Status then Title, does not). Reordering always works on your manual order, whatever the view's sort is; to see the result in a view, add *Manual order* to its sort.
 
 ## 8. The table (spreadsheet) layout
 
@@ -239,7 +239,7 @@ The rankings and their PNG use a **portrait poster** of each game, made for you 
 
 ## 12. Series progress
 
-Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a tile: a fan of its posters, its name, a progress bar and *2/4 finished*. Tap a tile to open the series on its own page (the phone's back button returns to the tiles): its games are posters in release order, with a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a poster to open the game's details. A green ✓ on a poster means finished, a ▶ means played; posters of games you have not played yet are a little paler.
+Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a tile: a fan of its posters, its name, a progress bar and *2/4 finished*. Tap a tile to open the series on its own page (the phone's back button returns to the tiles): its games are posters in release order, with a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a poster to open the game's details. A green ✓ on a poster means finished, a ▶ means played; posters of games you have not played yet are a little paler. A tile's fan shows up to four posters, preferring games linked to IGDB. If a game has a wrong poster (for example a game that is not linked to IGDB got a look-alike from SteamGridDB), open the game and tap **Change poster** ([The poster](#the-poster-portrait-picture)). A game with only a wide cover shows it whole on a dark background instead of cropped.
 
 - **Finished** means the game's status is **Finished**.
 - **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
