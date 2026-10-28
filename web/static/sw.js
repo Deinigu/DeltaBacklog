@@ -1,5 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
-const VERSION = 'v48';
+const VERSION = 'v49';
 
 // The app's base path: '/' at the root, '/backlog/' behind a proxy that serves it under that prefix. Every path in
 // this file is relative to it (SHELL_FILES resolve against this script's URL).

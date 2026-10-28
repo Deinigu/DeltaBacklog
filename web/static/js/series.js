@@ -149,8 +149,18 @@ export function shelfItems(s, extra) {
   });
 }
 
-/** Up to `n` games whose pictures make the series' fan on its tile: the first ones in release order that have an image. */
-export function fanGames(s, hasImage, n = 4) {
+/**
+ * Up to `n` games whose pictures make the series' fan on its tile, in release order: the games with a portrait poster
+ * (`hasPoster`); when none has one, the games with any image (`hasImage`, default `hasPoster`); else the first games.
+ * Among the posters, the games `prefer` accepts (linked to IGDB: their poster is IGDB's own cover, not a fuzzy
+ * SteamGridDB match) are taken first; the pick is shown in release order.
+ */
+export function fanGames(s, hasPoster, n = 4, hasImage = hasPoster, prefer = () => false) {
+  const posters = s.games.filter(hasPoster);
+  if (posters.length) {
+    const first = [...posters.filter(prefer), ...posters.filter((g) => !prefer(g))].slice(0, n);
+    return posters.filter((g) => first.includes(g));
+  }
   const withImg = s.games.filter(hasImage);
   return (withImg.length ? withImg : s.games).slice(0, n);
 }
