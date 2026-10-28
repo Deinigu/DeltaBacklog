@@ -99,7 +99,7 @@ Tap the sort button (the up/down arrows at the right of the search box).
 - **Sort levels.** Games are sorted by the first level. When two games tie, the next level decides, and so on. Each level has a field, an arrow for ascending or descending (↑ / ↓), buttons to move it up or down, and ✕ to remove it. **Add level** adds another one.
 - **Fields you can sort by:** Title, Status, Platform, Series, Release year, Last year played, First year played, Years played (count), Time to beat (shortest first; games without a time last), Date added, Date edited, Favorites first, 100% completed first, and Manual order.
 - Titles sort naturally ("Fallout 2" comes before "Fallout 10"), and games that have no value for a field always go last.
-- **Default order** is: Status, then your Manual order, then Title.
+- **Default order** is: Status, then Title. It does not use your Manual order: to see your own ranking, add **Manual order** as a sort level (the starter *Up next* and *Playing now* views already do).
 - **Group by** splits the list into sections: Status, Platform, Series, Genre, Year played or Ownership. A game that was played in several years appears under each year, and one with several genres under each genre.
 - **Reset** returns to the default order.
 
@@ -167,7 +167,7 @@ The *manual order* is how you rank games yourself, for example the order you pla
 What to know:
 - The order is saved as soon as you move a game.
 - Only the games in the list are moved. Your other games keep their place.
-- One order is shared by all views. A view shows it when it sorts by *Manual order*, which the default order does.
+- One order is shared by all views. A view shows it only when it sorts by *Manual order* (the default order, Status then Title, does not). Reordering always works on your manual order, whatever the view's sort is; to see the result in a view, add *Manual order* to its sort.
 
 ## 8. The table (spreadsheet) layout
 
