@@ -55,7 +55,7 @@ func TestSimilarGamesMigration(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM game`).Scan(&games)
 	d.QueryRow(`SELECT count(*) FROM igdb_collection_game`).Scan(&cached)
 	d.QueryRow(`SELECT count(*) FROM series_hidden`).Scan(&hidden)
-	if version != 16 || games != 2 || cached != 1 || hidden != 1 {
+	if version != 17 || games != 2 || cached != 1 || hidden != 1 {
 		t.Errorf("version %d games %d cached %d hidden %d", version, games, cached, hidden)
 	}
 	for _, table := range []string{"similar_game", "similar_link", "similar_fetch", "similar_hidden"} {

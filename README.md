@@ -105,6 +105,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
 | `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the wishlist and backlog). |
+| `STEAM_API_KEY`, `STEAM_ID` | empty | A Steam Web API key and your SteamID64 (or profile name), for the Steam page (owned games and hours played; your profile's game details must be public). |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |
 
 ### Getting the keys (free)

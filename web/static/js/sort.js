@@ -2,7 +2,7 @@
 import { h, icon } from './util.js';
 import { store } from './api.js';
 import { ownershipLabel } from './ownership.js';
-import { ttbMinutes } from './ttb.js';
+import { ttbMinutes, playedMinutes } from './ttb.js';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const lastYear = (g) => (g.years.length ? g.years[g.years.length - 1] : null);
@@ -21,6 +21,7 @@ export const SORT_FIELDS = {
   added:      { label: 'Date added', value: (g) => g.added_at, defDir: 'desc' },
   edited:     { label: 'Date edited', value: (g) => g.updated_at, defDir: 'desc' },
   ttb:        { label: 'Time to beat', value: ttbMinutes, defDir: 'asc' },
+  playtime:   { label: 'Hours played (Steam)', value: playedMinutes, defDir: 'desc' },
   favorite:   { label: 'Favorites first', value: (g) => (g.favorite ? 1 : 0), defDir: 'desc' },
   completed:  { label: '100% completed first', value: (g) => (g.completed ? 1 : 0), defDir: 'desc' },
   manual:     { label: 'Manual order', value: (g) => g.queue_pos, defDir: 'asc' },

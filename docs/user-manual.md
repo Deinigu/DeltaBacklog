@@ -20,6 +20,7 @@ This manual is task by task. For how the program is built, see the [developer ma
     - [Wishlist and Upcoming releases](#wishlist-and-upcoming-releases)
     - [Similar games](#similar-games)
     - [Deals](#deals)
+    - [Steam sync](#steam-sync)
 13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
@@ -305,6 +306,22 @@ A game is matched with IsThereAnyDeal by the Steam link in its details when it h
 **Setting it up.** Create a free API key at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and add `ITAD_API_KEY=<your key>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, then `sudo systemctl restart deltabacklog`). Without it the page says it is not set up and Refresh is off.
 
 ![The Deals page](img/deals-phone.jpg)
+
+### Steam sync
+
+**Steam** (in the navigation, **More** on a phone) reads your Steam library: which games you own and how many hours you played. It does three things: it lists the Steam games your library does not have, so you can add them; it keeps the hours you played in the library; and it shows them next to the time to beat.
+
+**Setting it up.** Create a Steam Web API key at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) and add `STEAM_API_KEY=<your key>` and `STEAM_ID=<your id>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, or `deploy.sh --env .env`), then restart the app. `STEAM_ID` is your SteamID64 (17 digits, shown on your profile page's address or on steamid.io) or your profile name. In Steam, open **Profile → Edit Profile → Privacy Settings** and set **Game details** to **Public**: while it is private Steam sends no games and the page says so. Without the two settings the page says Steam is not set up.
+
+**Syncing.** Opening the page never asks Steam: tap **↻ Sync with Steam** (one request, a few seconds). The page shows what was read last time until then. Hours only go up: a sync that shows less than what is saved changes nothing, and if Steam cannot answer (private profile, wrong key, no connection) nothing is changed and the page says why.
+
+**The review list.** *Not in library* lists the Steam games you have no matching game for, most played first, with the filters **Played** and **Never played** and a search box. Each has **Add** (the usual add form, searching IGDB for the title, with the platform PC; you choose the status), **Match** (it is a game you already have under another name: pick it) and **Ignore** (hides it; the **Ignored** tab brings it back). Nothing is ever added on its own.
+
+**Matches.** A Steam game is matched with a library game by the Steam link in the game's details when it has one, otherwise by its exact title (when two of your games share the title, none is chosen). The **Matched** tab lists them, showing how each was matched: **Change** picks another game, **Not this game** says no game of yours is that Steam game, and **Automatic** (after you chose by hand) goes back to the automatic match. If two Steam games belong to one of yours (a game and its demo), their hours add up.
+
+**Where the hours show.** In a game's details, under **Time to beat**: *12 h of ~15 h played on Steam* (just *12 h* when there is no estimate). In the table there is a **Played** column, and *Hours played (Steam)* is one of the sort options.
+
+![The Steam page](img/steam-phone.jpg)
 
 ## 13. Year in review and rankings
 
