@@ -360,7 +360,7 @@ a.btn.primary { color: var(--accent-text); }
 }
 .fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .fab:active { transform: scale(.94); }
-@media (min-width: 900px) { .fab { right: 28px; bottom: 28px; } }
+@media (min-width: 900px) { .fab { right: 28px; bottom: 28px; } body.has-fab #view { padding-bottom: 96px; } } /* the last row stays clear of the button */
 
 /* ---- add sheet ---- */
 .sheet .headl { display: flex; align-items: center; gap: 10px; }
