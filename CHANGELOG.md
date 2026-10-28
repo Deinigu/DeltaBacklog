@@ -18,6 +18,10 @@ Fixes to how the app works and fits on a phone; the look is unchanged.
 - Empty states are one short sentence with their button (Library: *Clear filters*; Similar and Upcoming: the IGDB refresh; Series, Views and Screenshots: *Open the Library*).
 - Dates on the Series page use the English format like the other pages.
 
+### Changed
+
+- **Default order is now Status, then Title** (it was Status, Manual order, Title). Views with no sort of their own no longer show your manual queue; the starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged. Add *Manual order* as a sort level to any view that should show your ranking. No migration.
+
 ### Added
 
 - **Deals**: a **Deals** page (`#/deals`, More menu on a phone) with the best price right now and the historical low of the games on your Wishlist, in your Backlog and Up next, from IsThereAnyDeal (ITAD). Games on sale come first (biggest cut), then games that are not on sale but sit at or near their low; a **Historical low** or **Near low (within 10%)** badge (only when the low was a real discount or the game is on sale now), the shop, the regular price, the cut, the end date when ITAD gives one, and a **View deal** link to the shop (a new tab). Filter chips for Wishlist / Backlog / Up next, three sorts (biggest discount, closest to the low, lowest price), a *Last checked* note and a country setting (default `ES`, so EUR). A game's details show the same price line, and **Wrong game?** / **Pick the game** to fix a match by searching ITAD by title (or say there is none). Games are matched by their Steam link's app id when they have one, else by an exact title; a game with no exact match is listed apart rather than guessed. Prices are read only by **Refresh prices** (a background run with progress, one at a time, 50 games per request, stops with what it stored on a 429), never on a page load. Needs `ITAD_API_KEY` in `.env` (on the Pi: `/etc/deltabacklog.env`); without it the page says it is not set up. Migration 016: `setting`, `deal_match`, `deal_price`. New endpoints `GET /api/deals`, `POST /api/deals/refresh`, `GET /api/deals/search`, `PUT /api/deals/country`, `PUT /api/games/{id}/deal-match`.
@@ -51,6 +55,7 @@ Fixes to how the app works and fits on a phone; the look is unchanged.
 - With the Theme button set against the system theme, scrollbars and form controls now follow the app's theme.
 - Quick add maps the IGDB platform names `NSW` and `PS` the way the IGDB sync does.
 
+- **Series page layout**: a tile shows the game's portrait poster, or its wide cover whole (letterboxed) instead of cropping it; the poster fan fits inside the tile for 1 to 4 posters and prefers real posters; tiles are tighter ("+N not in library" on its own line); on a series' shelf the Add/Hide buttons sit at the bottom of every cell, and the page leaves room for the + button. A series' fan prefers posters of games linked to IGDB; if a poster is wrong (a fuzzy SteamGridDB match for a game that is not linked), open the game and use **Change poster**.
 ### Changed
 - The repository is now a public showcase, not a community project: README status note and "How this was built" section, CONTRIBUTING explains that contributions are not accepted, and the code of conduct, issue forms and pull request template were removed. Dependabot runs monthly with grouped updates.
 - Deploys are stamped with a version from `git describe`; idle connections are closed after 2 minutes; CI fails on unformatted Go code.
