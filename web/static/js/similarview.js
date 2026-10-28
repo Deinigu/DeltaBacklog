@@ -1,9 +1,8 @@
 // Similar page: games IGDB lists as similar to the games the user finished or marked as a favourite, that the library
-// does not have, ranked by how many of those games suggest them, with Add, Wishlist and Hide. The list is read from the
+// does not have, ranked by how many of those games suggest them, with Add and Hide. The list is read from the
 // server's cache; nothing here asks IGDB unless the owner presses Refresh from IGDB.
 import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
 import { store, similarList, similarRefresh, similarHide, similarUnhide, igdbGame, missingPosterURL } from './api.js';
-import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import { similarIndex, setHiddenFlag, becauseText, isSource } from './similar.js';
 
@@ -57,13 +56,13 @@ export function renderSimilar(root) {
   }
 
   // ---- add / hide ----
-  async function add(s, status, btn) {
+  async function add(s, btn) {
     btn.disabled = true;
     let cand = { igdb_id: s.igdb_id, name: s.title, year: s.year ?? 0, platforms: [], genres: [], themes: [] };
     try { cand = { ...(await igdbGame(s.igdb_id)) }; cand.igdb_parent_id ??= 0; } catch { /* offline or IGDB down: the form opens with what is cached */ }
     btn.disabled = false;
     // igdb_parent_id (the root of its IGDB version chain) is saved with the game, so its other entries stop being suggested at once.
-    openAdd({ candidate: cand, status });
+    openAdd({ candidate: cand, status: 'backlog' });
   }
   async function setHidden(s, hide) {
     try {
@@ -80,24 +79,12 @@ export function renderSimilar(root) {
   }
 
   // ---- the page ----
-  function wishedBody(s, meta) {
-    return h('span.up-body', {}, h('span.up-title', {}, s.title), h('span.up-date', {}, meta),
-      h('span.up-from', {}, h('span.up-tag.own', {}, 'On your wishlist')), h('span.up-from.sim-why', {}, becauseText(s.sourceGames)));
-  }
   function row(s) {
     const meta = s.year ?? 'Year unknown';
-    if (s.game) { // already wished for: open that game
-      return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openDrawer(s.game), 'aria-label': `${s.title}, ${meta}, on your wishlist. ${becauseText(s.sourceGames)}` },
-        poster(s), wishedBody(s, meta)));
-    }
-    if (s.game === null) { // known as wished for only from the server's list
-      return h('li.up-row', {}, h('div.up-open', {}, poster(s), wishedBody(s, meta)));
-    }
     const body = h('span.up-body', {}, h('span.up-title', {}, s.title), h('span.up-date', {}, meta), h('span.up-from.sim-why', {}, becauseText(s.sourceGames)));
-    const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${s.title} to your library`, onclick: () => add(s, 'backlog', addBtn) }, 'Add');
-    const wishBtn = h('button.hide-chip.wish-chip', { type: 'button', 'aria-label': `Add ${s.title} to your wishlist`, onclick: () => add(s, 'wishlist', wishBtn) }, 'Wishlist');
+    const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${s.title} to your library`, onclick: () => add(s, addBtn) }, 'Add');
     return h('li.up-row', {}, h('div.up-open', {}, poster(s), body),
-      h('span.si-actions', {}, addBtn, wishBtn, h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${s.title}`, onclick: () => setHidden(s, true) }, 'Hide')));
+      h('span.si-actions', {}, addBtn, h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${s.title}`, onclick: () => setHidden(s, true) }, 'Hide')));
   }
 
   function refreshBar() {
@@ -111,10 +98,10 @@ export function renderSimilar(root) {
   }
 
   function draw() {
-    const { items, wished, hidden } = index;
+    const { items, hidden } = index;
     const [btn, note] = refreshBar();
     const sources = store.games.filter(isSource).length;
-    const empty = !items.length && !wished.length;
+    const empty = !items.length;
     let emptyText = 'Nothing to suggest right now.';
     if (!sources) emptyText = 'Finish a game, or mark one as a favourite, and link it to IGDB (game details, Edit, Fill from IGDB). Its similar games show up here.';
     else if (loaded && !info.fetched_at) emptyText = info.configured ? 'Nothing was read from IGDB yet.' : 'IGDB is not set up (keys are missing from .env).';
@@ -125,7 +112,6 @@ export function renderSimilar(root) {
       firstRead ? null : h('div.chips', {}, btn),
       note && !firstRead ? h('p.hint', {}, note) : null,
       items.length ? h('ul.up-list', {}, items.map(row)) : null,
-      wished.length ? h('section.up-group', {}, h('h2', {}, 'Already on your wishlist', h('small', {}, ` ${wished.length}`)), h('ul.up-list', {}, wished.map(row))) : null,
       empty ? emptyBox(emptyText, firstRead && btn) : null,
       items.length ? h('p.hint', {}, `${items.length} ${items.length === 1 ? 'suggestion' : 'suggestions'} from ${sources} of your games.`) : null,
       hidden.length ? h('details.hidden-list', {},

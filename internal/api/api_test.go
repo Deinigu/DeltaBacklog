@@ -67,7 +67,7 @@ func TestGamesAndFacets(t *testing.T) {
 	if err := json.NewDecoder(res2.Body).Decode(&facets); err != nil {
 		t.Fatal(err)
 	}
-	if len(facets["status"]) != 10 {
+	if len(facets["status"]) != 9 {
 		t.Errorf("status facets = %v", facets["status"])
 	}
 	if g := facets["genre"]; len(g) == 0 || g[0].Label != "Indie" || g[0].Count != 2 {

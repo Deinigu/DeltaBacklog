@@ -4,7 +4,7 @@ import { matches, activeCount } from './filters.js';
 import { isShort } from './ttb.js';
 
 /** Statuses that are never offered unless the filters ask for them explicitly. */
-export const EXCLUDED_STATUSES = ['finished', 'dropped', 'not_interested', 'evergreen', 'wishlist'];
+export const EXCLUDED_STATUSES = ['finished', 'dropped', 'not_interested', 'evergreen'];
 /** A game counts as "not played recently" when its last calendar year is at least this many years back. */
 export const STALE_YEARS = 2;
 

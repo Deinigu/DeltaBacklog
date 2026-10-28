@@ -21,12 +21,9 @@ export function compareInSeries(a, b) {
 
 const keyOf = (name) => name.trim().toLowerCase();
 
-/** A game on the Wishlist is not in the library yet: it never counts as a game of a series (total, played, left). */
-export const isWishlist = (g) => g.status === 'wishlist';
-
 /**
  * Every series that has at least one game of the library, as
- *  { key, name, games (ordered), wishlist (its Wishlist games, not counted), total, finished, played, left, noYear }
+ *  { key, name, games (ordered), total, finished, played, left, noYear }
  * `noYear` counts the games without a release year (the order is then only partly known).
  * `played` includes the finished games. Series are ordered by name; names that differ only in case are one series.
  */
@@ -36,13 +33,12 @@ export function buildSeries(games) {
     if (!g.series || !g.series.trim()) continue;
     const key = keyOf(g.series);
     let s = map.get(key);
-    if (!s) map.set(key, (s = { key, name: g.series.trim(), games: [], wishlist: [] }));
-    (isWishlist(g) ? s.wishlist : s.games).push(g);
+    if (!s) map.set(key, (s = { key, name: g.series.trim(), games: [] }));
+    s.games.push(g);
   }
-  const out = [...map.values()].filter((s) => s.games.length > 0); // a series of wishlist games only is not in the library
+  const out = [...map.values()];
   for (const s of out) {
     s.games.sort(compareInSeries);
-    s.wishlist.sort(compareInSeries);
     s.total = s.games.length;
     s.finished = s.games.filter(isFinished).length;
     s.played = s.games.filter(isPlayed).length;
@@ -133,24 +129,23 @@ export function moveHidden(resp, m, to) {
 }
 
 /**
- * The items of an opened series in release order: the library's games, the Wishlist games and the games not registered:
- * { kind: 'owned', game }, { kind: 'wishlist', game } or { kind: 'missing', game: {igdb_id, title, year, cover, collection_id} }.
+ * The items of an opened series in release order: the library's games and the games not registered:
+ * { kind: 'owned', game } or { kind: 'missing', game: {igdb_id, title, year, cover, collection_id} }.
  * Same order as compareInSeries (year ascending, unknown last, then title); an owned game comes before a game of
- * the same year and title that is missing or wished for.
+ * the same year and title that is missing.
  */
 export function shelfItems(s, extra) {
   const items = s.games.map((game) => ({ kind: 'owned', game, year: game.release_year, title: game.title }));
-  for (const game of s.wishlist ?? []) items.push({ kind: 'wishlist', game, year: game.release_year, title: game.title });
   for (const m of extra.missing) items.push({ kind: 'missing', game: m, year: m.year, title: m.title });
   return items.sort((a, b) => {
     const ya = a.year ?? Infinity, yb = b.year ?? Infinity;
     if (ya !== yb) return ya < yb ? -1 : 1;
-    return collator.compare(a.title, b.title) || (a.kind === b.kind ? 0 : a.kind === 'owned' ? -1 : b.kind === 'owned' ? 1 : a.kind === 'wishlist' ? -1 : 1);
+    return collator.compare(a.title, b.title) || (a.kind === b.kind ? 0 : a.kind === 'owned' ? -1 : 1);
   });
 }
 
 /**
- * A big series lists dozens of games the library lacks: keep the library's games and the wishlist, and only the first
+ * A big series lists dozens of games the library lacks: keep the library's games, and only the first
  * `limit` games that are missing (release order is kept). Returns { items, hidden } (how many were left out).
  */
 export function collapseMissing(items, limit) {
@@ -184,7 +179,6 @@ export function fanGames(s, hasPoster, n = 4, hasImage = hasPoster, prefer = () 
 export function seriesSummary(s, extra) {
   let t = progressText(s);
   if (s.left) t += ` · ${s.left} left to play`;
-  if (s.wishlist?.length) t += ` · ${s.wishlist.length} on your wishlist`;
   if (extra.missing.length) t += ` · ${extra.missing.length} not in your library`;
   return t;
 }

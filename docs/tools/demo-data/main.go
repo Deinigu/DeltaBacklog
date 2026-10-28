@@ -87,39 +87,6 @@ var games = []game{
 	{"Pokémon Red", "finished", "Borrowed", "Pokémon", "Game Freak", 1996, "Game Boy", "RPG", "Fantasy", "childhood", false, true, false, ""},
 	{"Pokémon Legends: Arceus", "dropped", "Owned", "Pokémon", "Game Freak", 2022, "Switch", "RPG", "Fantasy, Open world", "2022", false, false, false, ""},
 	{"Undertale", "finished", "Owned", "", "Toby Fox", 2015, "PC, Switch", "RPG, Indie", "Comedy, Fantasy", "2016", false, true, true, ""},
-	// The wishlist (see due): games the owner wants but does not have. Not linked to IGDB, so their release dates stay
-	// the made-up ones below, relative to the day the demo is built.
-	{"Phantom Blade Zero", "wishlist", "", "", "S-GAME", 2026, "PC, PS5", "Hack and slash, RPG", "Fantasy", "", false, false, false, "Day-one buy."},
-	{"Professor Layton and the New World of Steam", "wishlist", "", "Professor Layton", "Level-5", 2026, "Switch", "Puzzle, Adventure", "Mystery", "", false, false, false, ""},
-	{"Marvel's Wolverine", "wishlist", "", "", "Insomniac Games", 2027, "PS5", "Adventure, Hack and slash", "Action", "", false, false, false, ""},
-	{"Slay the Spire II", "wishlist", "", "", "Mega Crit", 2026, "PC", "Card game, Roguelike", "Fantasy", "", false, false, false, "Out already: time to move it to the backlog."},
-	{"The Elder Scrolls VI", "wishlist", "", "", "Bethesda Game Studios", 0, "PC", "RPG", "Fantasy, Open world", "", false, false, false, ""},
-}
-
-// due is the made-up IGDB release date of a wishlist game, relative to today: an exact day (n days ahead), a month, a
-// quarter or a year, as precise as IGDB would give it. A negative n is a release in the past.
-var due = map[string]struct {
-	kind string
-	n    int
-}{
-	"Phantom Blade Zero": {"day", 9}, "Professor Layton and the New World of Steam": {"month", 1},
-	"Marvel's Wolverine": {"quarter", 5}, "Slay the Spire II": {"day", -18},
-}
-
-// dueDate turns a due entry into IGDB's shape: unix seconds (UTC) and date_format (0 day, 1 month, 2 year, 3-6 quarter).
-func dueDate(now time.Time, kind string, n int) (int64, int) {
-	t := now.UTC()
-	switch kind {
-	case "month":
-		return time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC).Unix(), 1
-	case "quarter":
-		x := time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC)
-		q := (int(x.Month()) - 1) / 3
-		return time.Date(x.Year(), time.Month(q*3+4), 0, 0, 0, 0, 0, time.UTC).Unix(), 3 + q
-	case "year":
-		return time.Date(t.Year()+n, 12, 31, 0, 0, 0, 0, time.UTC).Unix(), 2
-	}
-	return time.Date(t.Year(), t.Month(), t.Day()+n, 0, 0, 0, 0, time.UTC).Unix(), 0
 }
 
 func split(s string) []string {
@@ -186,11 +153,6 @@ func main() {
 		must(err)
 		id, _ := res.LastInsertId()
 		ids[i] = id
-		if w, ok := due[g.title]; ok {
-			date, format := dueDate(time.Now(), w.kind, w.n)
-			_, err = tx.Exec("UPDATE game SET first_release_date = ?, release_date_format = ? WHERE id = ?", date, format, id)
-			must(err)
-		}
 		for _, l := range []struct{ table, junction, fk, list string }{
 			{"platform", "game_platform", "platform_id", g.platforms},
 			{"genre", "game_genre", "genre_id", g.genres},
@@ -275,7 +237,7 @@ func main() {
 		{"Baldur's Gate 3", "Steam", 5999, 5999, 0, 4799, "GreenManGaming", "2025-07-03T16:00:00Z"},
 		{"Elden Ring", "Steam", 3999, 5999, 33, 2999, "Steam", "2025-11-27T18:00:00Z"},
 		{"Subnautica", "Epic Games Store", 1049, 2999, 65, 749, "Steam", "2024-06-27T17:00:00Z"},
-		{"Phantom Blade Zero", "", 0, 0, 0, 0, "", ""},
+		{"Death Stranding", "", 0, 0, 0, 0, "", ""},
 	} {
 		var gid int64
 		must(tx.QueryRow("SELECT id FROM game WHERE title = ?", f.game).Scan(&gid))
@@ -292,51 +254,6 @@ func main() {
 		_, err := tx.Exec(`INSERT INTO deal_match(game_id, source) SELECT id, 'title' FROM game WHERE title = ?`, g)
 		must(err)
 	}
-	// A made-up Steam library for the Steam page (nothing is read from Steam): minutes played, matched to the demo games
-	// by title, plus games the demo library does not have (the review list) and one the owner ignored.
-	for _, a := range []struct {
-		app           int
-		name          string
-		minutes, last int
-		game, source  string // the library game it is matched to ("" = not in the library)
-		ignored       bool
-	}{
-		{1145360, "Hades", 3120, 1767225600, "Hades", "title", false},
-		{367520, "Hollow Knight", 540, 1759276800, "Hollow Knight", "title", false},
-		{620, "Portal 2", 840, 1704067200, "Portal 2", "title", false},
-		{413150, "Stardew Valley", 5280, 1766534400, "Stardew Valley", "title", false},
-		{632470, "Disco Elysium", 120, 1735689600, "Disco Elysium", "link", false},
-		{1245620, "ELDEN RING", 0, 0, "Elden Ring", "user", false},
-		{1794680, "Vampire Survivors", 2210, 1764547200, "", "", false},
-		{2379780, "Balatro", 1830, 1768435200, "", "", false},
-		{1868140, "DAVE THE DIVER", 940, 1751328000, "", "", false},
-		{1092790, "Inscryption", 610, 1743465600, "", "", false},
-		{1283400, "Tunic", 95, 1706745600, "", "", false},
-		{553420, "TUNIC Demo", 0, 0, "", "", false},
-		{1145350, "Hades II", 0, 0, "", "", false},
-		{1966720, "Lethal Company", 0, 0, "", "", false},
-		{480, "Spacewar", 0, 0, "", "", true},
-		{431960, "Wallpaper Engine", 6800, 1767916800, "", "", true},
-	} {
-		var game, source, last any
-		if a.game != "" {
-			var gid int64
-			must(tx.QueryRow("SELECT id FROM game WHERE title = ?", a.game).Scan(&gid))
-			game, source = gid, a.source
-		}
-		if a.last > 0 {
-			last = a.last
-		}
-		_, err := tx.Exec(`INSERT INTO steam_app(app_id, name, playtime_min, last_played, game_id, source, ignored, seen_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, a.app, a.name, a.minutes, last, game, source, b2i(a.ignored))
-		must(err)
-	}
-	_, err = tx.Exec(`UPDATE game SET playtime_min = (SELECT sum(playtime_min) FROM steam_app WHERE game_id = game.id),
-		steam_last_played = (SELECT max(last_played) FROM steam_app WHERE game_id = game.id)
-		WHERE id IN (SELECT game_id FROM steam_app WHERE game_id IS NOT NULL)`)
-	must(err)
-	_, err = tx.Exec(`INSERT INTO setting(key, value) VALUES ('steam_synced_at', strftime('%Y-%m-%dT%H:%M:%SZ','now'))`)
-	must(err)
 	must(tx.Commit())
 
 	for i, g := range games {
@@ -375,7 +292,7 @@ func main() {
 	pinned := map[string]int64{"Phoenix Wright: Ace Attorney": 1426, "Phoenix Wright: Ace Attorney - Justice for All": 1427, "Phoenix Wright: Ace Attorney - Trials and Tribulations": 1428}
 	if igdb, _ := mc.Configured(); igdb {
 		for i, g := range games {
-			if _, wish := due[g.title]; wish || g.status == "wishlist" || g.title == "Pentiment" || g.title == "Subnautica" {
+			if g.title == "Pentiment" || g.title == "Subnautica" {
 				continue
 			}
 			if id, ok := pinned[g.title]; ok {

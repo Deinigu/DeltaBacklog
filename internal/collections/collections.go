@@ -194,7 +194,7 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	}
 	progress(len(cols))
 
-	// 3. The release dates of the library's own linked games (a wishlist game's date moves, a new one has none yet).
+	// 3. The release dates of the library's own linked games (a date can move, a new game has none yet).
 	if rs, ok := src.(ReleaseSource); ok {
 		if err := refreshReleases(ctx, d, rs, o, rep); err != nil {
 			return rep, err
@@ -608,12 +608,12 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 // release itself, is noticed; older dates are final.
 const dateGraceDays = 90
 
-// refreshReleases stores the release date of the linked games that are on the wishlist, have no date yet or are
-// not out (or only just). The date is IGDB's own data, so it is overwritten; a game IGDB gives no date keeps NULL.
+// refreshReleases stores the release date of the linked games that have no date yet or are not out (or
+// only just). The date is IGDB's own data, so it is overwritten; a game IGDB gives no date keeps NULL.
 func refreshReleases(ctx context.Context, d *sql.DB, rs ReleaseSource, o Options, rep *Report) error {
 	cutoff := time.Now().AddDate(0, 0, -dateGraceDays).Unix()
-	rows, err := d.Query(`SELECT g.id, g.igdb_id FROM game g JOIN status s ON s.id = g.status_id
-		WHERE g.igdb_id IS NOT NULL AND (s.code = 'wishlist' OR g.first_release_date IS NULL OR g.first_release_date > ?) ORDER BY g.id`, cutoff)
+	rows, err := d.Query(`SELECT id, igdb_id FROM game
+		WHERE igdb_id IS NOT NULL AND (first_release_date IS NULL OR first_release_date > ?) ORDER BY id`, cutoff)
 	if err != nil {
 		return err
 	}

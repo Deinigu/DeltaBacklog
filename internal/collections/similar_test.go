@@ -49,20 +49,18 @@ func byID(list *SimilarList) map[int64]Suggestion {
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// Only finished and favourite linked games suggest; what the library owns (with its family) is dropped, the wishlist is
-// reported for the page to mark, and a game suggested by two sources lists both.
+// Only finished and favourite linked games suggest; what the library owns (with its family) is dropped, and a game
+// suggested by two sources lists both.
 func TestSimilarSourcesAndHide(t *testing.T) {
 	d := open(t)
 	a := addGame(t, d, "Finished", "", 1)
 	b := addGame(t, d, "Favourite", "", 2)
 	c := addGame(t, d, "Backlog", "", 3)  // not played: no source
-	w := addGame(t, d, "Wished", "", 4)   // wishlist: no source, and wished for
 	o := addGame(t, d, "Owned HD", "", 9) // the remaster of 8
 	u := addGame(t, d, "Unlinked", "", 0) // not linked: no source
 	play(t, d, a, "finished", false)
 	play(t, d, b, "backlog", true)
 	play(t, d, c, "backlog", false)
-	play(t, d, w, "wishlist", true)
 	play(t, d, o, "backlog", false)
 	play(t, d, u, "finished", false)
 	d.Exec(`UPDATE game SET igdb_parent_id = 8 WHERE id = ?`, o)
@@ -72,12 +70,10 @@ func TestSimilarSourcesAndHide(t *testing.T) {
 		{IGDBID: 8, Name: "Original", Year: 2001, CoverID: "c8"}, // owned through its remaster
 		{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10"},
 		{IGDBID: 12, Name: "Hidden", Year: 2012, CoverID: "c12"},
-		{IGDBID: 4, Name: "Wished", Year: 2022, CoverID: "c4"},
 		{IGDBID: 13, Name: "No image", Year: 2013},
 	}
 	f.similar[2] = []meta.CollectionGame{{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10"}}
 	f.similar[3] = []meta.CollectionGame{{IGDBID: 99, Name: "Never asked", CoverID: "c99"}}
-	f.similar[4] = f.similar[3]
 	opt, fetched := opts(t)
 	if err := HideSimilar(d, 12); err != ErrUnknownSimilar {
 		t.Errorf("hiding what was never suggested: %v", err)
@@ -109,13 +105,10 @@ func TestSimilarSourcesAndHide(t *testing.T) {
 	if !got[12].Hidden {
 		t.Error("game 12 is not flagged hidden")
 	}
-	if _, ok := got[4]; !ok || len(list.WishlistRoots) != 1 || list.WishlistRoots[0] != 4 {
-		t.Errorf("wishlist: suggestion %v roots %v", ok, list.WishlistRoots)
-	}
 	if len(list.OwnedRoots) == 0 || list.FetchedAt == "" {
 		t.Errorf("roots %v fetched %q", list.OwnedRoots, list.FetchedAt)
 	}
-	// posters: the wishlist game is not owned (4) and 10 are downloaded; 12 was hidden by then or not (order), 13 has no image
+	// posters: 10 is downloaded; 12 was hidden by then or not (order), 13 has no image
 	for _, id := range *fetched {
 		if id == 8 || id == 13 || id == 99 {
 			t.Errorf("fetched the poster of %d", id)

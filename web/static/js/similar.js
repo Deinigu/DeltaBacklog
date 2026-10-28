@@ -1,12 +1,12 @@
 // Similar games: IGDB's similar_games of the games the user finished or marked as a favourite, that the library does not
 // have (GET api/similar, read from the server's cache). Pure (no DOM): unit-tested.
-// A source is a library game that is linked to IGDB, not on the Wishlist, and finished or a favourite. A suggestion is
+// A source is a library game that is linked to IGDB and finished or a favourite. A suggestion is
 // ranked by how many sources suggest it, then by how recently the newest of them was played.
 
-import { isFinished, isWishlist } from './series.js';
+import { isFinished } from './series.js';
 
-/** A game the page may take suggestions from: linked to IGDB, not wished for, and finished or a favourite. */
-export const isSource = (g) => g.igdb_id != null && !isWishlist(g) && (isFinished(g) || !!g.favorite);
+/** A game the page may take suggestions from: linked to IGDB and finished or a favourite. */
+export const isSource = (g) => g.igdb_id != null && (isFinished(g) || !!g.favorite);
 
 /** When a source was played last: its latest year played, else 0. A later year, or a game added later, is newer. */
 const recency = (g) => [g.years?.length ? Math.max(...g.years) : 0, g.id ?? 0];
@@ -37,40 +37,30 @@ export function becauseText(sources, n = 3) {
  * Index the answer of GET api/similar against the library as it is now:
  *   items   suggestions the library does not have, not hidden, with at least one source: ranked, each
  *           { ...suggestion, sourceGames } (sourceGames newest first)
- *   wished  the same, but one family member is on the Wishlist: { ...suggestion, sourceGames, game } (game = the wished game)
  *   hidden  the hidden suggestions that are not owned
  * A game counts as owned with its whole family (the root of its version chain), like on the Series page: the server sent
- * the roots it knew (`owned_roots`, `wishlist_roots`), and games added since are matched by IGDB id. Wishlist games are
- * not owned (they are shown as wished for).
+ * the roots it knew (`owned_roots`), and games added since are matched by IGDB id.
  */
 export function similarIndex(resp, games) {
-  const ownedIds = new Set(), wishIds = new Map();
-  for (const g of games) {
-    if (g.igdb_id == null) continue;
-    if (isWishlist(g)) wishIds.set(g.igdb_id, g); else ownedIds.add(g.igdb_id);
-  }
+  const ownedIds = new Set();
+  for (const g of games) if (g.igdb_id != null) ownedIds.add(g.igdb_id);
   const ownedRoots = new Set(resp?.owned_roots ?? []);
-  const wishRoots = new Set(resp?.wishlist_roots ?? []);
   const rootOf = (s) => (s.parent > 0 ? s.parent : s.igdb_id);
   const isOwned = (s) => ownedIds.has(s.igdb_id) || ownedRoots.has(rootOf(s)) || (s.parent > 0 && ownedIds.has(s.parent));
-  // the wished game itself when the library holds one of the family, else `true` when only the server's roots know it
-  const wishedGame = (s) => wishIds.get(s.igdb_id) ?? (s.parent > 0 ? wishIds.get(s.parent) : undefined) ?? (wishRoots.has(rootOf(s)) ? true : undefined);
-  const items = [], wished = [], hidden = [];
+  const items = [], hidden = [];
   for (const s of resp?.suggestions ?? []) {
     if (isOwned(s)) continue;
     const sourceGames = sourcesOf(s, games);
     if (!sourceGames.length) continue;
     const e = { ...s, sourceGames };
     if (s.hidden) { hidden.push(e); continue; }
-    const w = wishedGame(s);
-    if (w) wished.push({ ...e, game: w === true ? null : w }); else items.push(e);
+    items.push(e);
   }
   const rank = (a, b) => b.sourceGames.length - a.sourceGames.length || newer(a.sourceGames[0], b.sourceGames[0])
     || (b.year ?? 0) - (a.year ?? 0) || collator.compare(a.title, b.title) || a.igdb_id - b.igdb_id;
   items.sort(rank);
-  wished.sort(rank);
   hidden.sort((a, b) => collator.compare(a.title, b.title));
-  return { items, wished, hidden };
+  return { items, hidden };
 }
 
 /**
@@ -81,7 +71,7 @@ export function setHiddenFlag(resp, igdbId, hidden) {
   for (const s of resp?.suggestions ?? []) if (s.igdb_id === igdbId) s.hidden = hidden;
 }
 
-/** The suggestions the cache holds for one library game (for the drawer): not owned, not wished for, not hidden, ranked. */
+/** The suggestions the cache holds for one library game (for the drawer): not owned, not hidden, ranked. */
 export function similarFor(resp, games, game, n = 6) {
   if (!isSource(game)) return [];
   return similarIndex(resp, games).items.filter((s) => s.sourceGames.some((g) => g.id === game.id)).slice(0, n);

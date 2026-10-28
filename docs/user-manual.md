@@ -17,10 +17,9 @@ This manual is task by task. For how the program is built, see the [developer ma
 10. [Covers](#10-covers)
 11. [What the little icons mean](#11-what-the-little-icons-mean)
 12. [Series progress](#12-series-progress)
-    - [Wishlist and Upcoming releases](#wishlist-and-upcoming-releases)
+    - [Upcoming releases](#upcoming-releases)
     - [Similar games](#similar-games)
     - [Deals](#deals)
-    - [Steam sync](#steam-sync)
 13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
@@ -51,7 +50,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#wishlist-and-upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
 
 **On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
 
@@ -132,7 +131,7 @@ Tap a card to open the game.
 ![A game's details](img/game-phone.jpg)
 
 **Quick changes** (at the top, saved at once)
-- **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Wishlist, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
+- **Status:** pick Playing, Playing - Evergreen, Up Next, Backlog, Hold, Evergreen, Finished, Dropped or Not Interested. A game that changes status goes to the end of your manual order.
 - **★ Favorite** switches the favourite mark.
 - **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
 
@@ -264,32 +263,24 @@ Which IGDB collection belongs to a series is decided by your linked games: the s
 
 ![A series opened, with games that are not in the library](img/series-shelf-phone.jpg)
 
-### Wishlist and Upcoming releases
+### Upcoming releases
 
-**Wishlist** is a status (after Backlog) for a game you want but do not have yet. It works like every other status: pick it in a game's details, filter by it, use it in saved views and in the table. The add form starts on **Wishlist** (and leaves *Ownership* empty) when you add a game from the Upcoming page.
+**Upcoming** (in the navigation, **More** on a phone) lists the new games of your series that are not in your library and are not out yet, grouped by month: **This month**, **Next month**, then the months after. They are the same games as *Not in your library* on the Series page. A game IGDB only dates to a quarter or a year sits after the months it covers as **Q3 2027** or **2027**, and is never shown as a specific day. **Later / TBA** holds games with no announced date and releases more than a year and a half away. Each row has the poster, the title, the date, the platforms IGDB lists and its series, with **Add** (the add form pre-filled from IGDB; it starts on **Backlog**, pick another status there if you like) and **Hide** (the same hide list as the Series page, with Undo).
 
-**Upcoming** (in the navigation, **More** on a phone) lists the games that are not out yet, grouped by month: **This month**, **Next month**, then the months after. A game IGDB only dates to a quarter or a year sits after the months it covers as **Q3 2027** or **2027**, and is never shown as a specific day. **Later / TBA** holds games with no announced date and releases more than a year and a half away. Each row has the poster, the title, the date, the platforms IGDB lists and where the game comes from. Two kinds of games appear:
+A **Recently released** section at the top shows games that came out in the last 60 days, so a launch does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
 
-- **Your wishlist.** Tap one to open its details.
-- **New games of your series** that are not in your library (the same games as *Not in your library* on the Series page). They have **Add** (the add form pre-filled, status Wishlist) and **Hide** (the same hide list as the Series page, with Undo).
-
-A **Recently released** section at the top shows games that came out in the last 60 days, so a wishlist game that just launched does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
-
-A Wishlist game is not a game of your library yet, so it does not count anywhere that counts your library: not in a series' *n games*, *finished*, *played* or *left to play*, and not in the Stats. On the Series page it still sits in its series' shelf in release order, greyed like a game you do not have and marked **On your wishlist** (tap it for its details). A series with only wishlist games has no tile until you own one of its games.
-
-The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of your wishlist games and of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Wishlist games need an IGDB link to have a date (use **Link IGDB**). Dates are shown as IGDB's calendar date, whatever your time zone.
+The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Dates are shown as IGDB's calendar date, whatever your time zone.
 
 ![The Upcoming page](img/upcoming-phone.jpg)
 
 ### Similar games
 
-**Similar games** (in the navigation, **More** on a phone) suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see section 16). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and three buttons:
+**Similar games** (in the navigation, **More** on a phone) suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see section 16). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and two buttons:
 
 - **Add** opens the add form, pre-filled from IGDB; pick the status you like there.
-- **Wishlist** opens the same form already on the **Wishlist** status.
 - **Hide** removes the game from the list for good (an **Undo** shows for a few seconds). **Hidden** at the bottom of the page lists them, each with **Show again**. This is its own list: hiding a game here does not hide it on the Series page, and the other way round.
 
-The page follows the same ownership rule as the Series page: a game you own is not suggested, and neither is another version of it (a remaster, an expanded edition or a port of a game you have). A remake or a standalone expansion of a game you have still is. A game that is already on your wishlist is listed under **Already on your wishlist**, with no Add button; tap it to open its details.
+The page follows the same ownership rule as the Series page: a game you own is not suggested, and neither is another version of it (a remaster, an expanded edition or a port of a game you have). A remake or a standalone expansion of a game you have still is.
 
 The suggestions are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** to read them (a few requests in the background, with progress; it can be left and takes about a minute for a large library). `sync-igdb --enrich` reads them too. A game's details also show a small **Similar games** row for a finished or favourite game, from the same saved list.
 
@@ -297,7 +288,7 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 ### Deals
 
-**Deals** (in the navigation, **More** on a phone) shows what the games on your **Wishlist**, in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+**Deals** (in the navigation, **More** on a phone) shows what the games in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
 
 Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap **↻ Refresh prices** to read them (a background run with progress). The first run, and any game you add later, needs one or two lookups per game to find it on IsThereAnyDeal (about 0.4 seconds each, so a few minutes for a few hundred games); after that a refresh needs about one request per 50 games. *Last checked* tells you how old they are. Prices are for one country, shown in its currency: **Country** (two letters, `ES` by default) can be changed on the page; the saved prices are then dropped, and you press **Refresh prices** to read them for the new country.
 
@@ -306,22 +297,6 @@ A game is matched with IsThereAnyDeal by the Steam link in its details when it h
 **Setting it up.** Create a free API key at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and add `ITAD_API_KEY=<your key>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, then `sudo systemctl restart deltabacklog`). Without it the page says it is not set up and Refresh is off.
 
 ![The Deals page](img/deals-phone.jpg)
-
-### Steam sync
-
-**Steam** (in the navigation, **More** on a phone) reads your Steam library: which games you own and how many hours you played. It does three things: it lists the Steam games your library does not have, so you can add them; it keeps the hours you played in the library; and it shows them next to the time to beat.
-
-**Setting it up.** Create a Steam Web API key at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) and add `STEAM_API_KEY=<your key>` and `STEAM_ID=<your id>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, or `deploy.sh --env .env`), then restart the app. `STEAM_ID` is your SteamID64 (17 digits, shown on your profile page's address or on steamid.io) or your profile name. In Steam, open **Profile → Edit Profile → Privacy Settings** and set **Game details** to **Public**: while it is private Steam sends no games and the page says so. Without the two settings the page says Steam is not set up.
-
-**Syncing.** Opening the page never asks Steam: tap **↻ Sync with Steam** (one request, a few seconds). The page shows what was read last time until then. Hours only go up: a sync that shows less than what is saved changes nothing, and if Steam cannot answer (private profile, wrong key, no connection) nothing is changed and the page says why.
-
-**The review list.** *Not in library* lists the Steam games you have no matching game for, most played first, with the filters **Played** and **Never played** and a search box. Each has **Add** (the usual add form, searching IGDB for the title, with the platform PC; you choose the status), **Match** (it is a game you already have under another name: pick it) and **Ignore** (hides it; the **Ignored** tab brings it back). Nothing is ever added on its own.
-
-**Matches.** A Steam game is matched with a library game by the Steam link in the game's details when it has one, otherwise by its exact title (when two of your games share the title, none is chosen). The **Matched** tab lists them, showing how each was matched: **Change** picks another game, **Not this game** says no game of yours is that Steam game, and **Automatic** (after you chose by hand) goes back to the automatic match. If two Steam games belong to one of yours (a game and its demo), their hours add up.
-
-**Where the hours show.** In a game's details, under **Time to beat**: *12 h of ~15 h played on Steam* (just *12 h* when there is no estimate). In the table there is a **Played** column, and *Hours played (Steam)* is one of the sort options.
-
-![The Steam page](img/steam-phone.jpg)
 
 ## 13. Year in review and rankings
 
@@ -374,7 +349,7 @@ The charts have text labels and work in light and dark. Screen readers get the n
 
 Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone the buttons sit on their own row under the title, and that row scrolls away while the search box stays at the top). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
 
-**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested, Evergreen or on the Wishlist are never offered, unless you filtered to that status on purpose.
+**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
 
 **Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
 - **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).

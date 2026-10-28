@@ -59,12 +59,12 @@ func TestAddAndRelinkStoreTheReleaseDate(t *testing.T) {
 	e2 := newSeriesEnvWith(t, e.db, dateMeta{candMeta{&fakeMeta{igdb: true}}, &calls})
 
 	e.db.Exec(`UPDATE game SET igdb_id = NULL WHERE title = 'Zed'`) // the fixture game holds IGDB id 100
-	e2.req(t, "POST", "/api/games", `{"title":"Zed Origins","status":"wishlist","igdb_id":100}`, 201)
+	e2.req(t, "POST", "/api/games", `{"title":"Zed Origins","status":"backlog","igdb_id":100}`, 201)
 	if d, f := releaseOf(t, e2, "Zed Origins"); d == nil || *d != 1830211199 || *f != meta.FormatYear {
 		t.Errorf("after add: %v %v", d, f)
 	}
 	// a game linked later gets the date through PATCH
-	e2.req(t, "POST", "/api/games", `{"title":"Other","status":"wishlist"}`, 201)
+	e2.req(t, "POST", "/api/games", `{"title":"Other","status":"backlog"}`, 201)
 	if d, _ := releaseOf(t, e2, "Other"); d != nil {
 		t.Errorf("unlinked game has a date: %v", *d)
 	}
@@ -134,7 +134,7 @@ func TestLateReleaseLookupDoesNotWriteAnOldLinksDate(t *testing.T) {
 		e.db.Exec(`UPDATE game SET igdb_id = NULL WHERE title = 'Zed'`)
 		gate := make(chan struct{})
 		e2 := newSeriesEnvWith(t, e.db, gateMeta{dateMeta{candMeta{&fakeMeta{igdb: true}}, &calls}, gate})
-		e2.req(t, "POST", "/api/games", `{"title":"Late","status":"wishlist","igdb_id":100}`, 201) // lookup of 100 is now waiting
+		e2.req(t, "POST", "/api/games", `{"title":"Late","status":"backlog","igdb_id":100}`, 201) // lookup of 100 is now waiting
 		var id int64
 		e2.db.QueryRow(`SELECT id FROM game WHERE title = 'Late'`).Scan(&id)
 		e2.req(t, "PATCH", "/api/games/"+itoa(id), change, 200)

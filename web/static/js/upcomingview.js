@@ -1,20 +1,15 @@
-// Upcoming page: the games that are not out yet (or just came out), grouped by month. They are the Wishlist games of
-// the library and the games of the user's series that the library lacks (cached from IGDB, see seriesview.js).
+// Upcoming page: the games that are not out yet (or just came out), grouped by month. They are the games of the user's
+// series that the library lacks (cached from IGDB, see seriesview.js).
 // Nothing here asks IGDB on its own: the data is read when the owner presses Refresh from IGDB.
 import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
-import { store, load as reloadGames, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
-import { openDrawer } from './drawer.js';
+import { store, load as reloadGames, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openAdd } from './add.js';
 import { missingIndex, moveHidden, oldestFetch } from './series.js';
 import { buildUpcoming, formatRelease, LOCALE } from './upcoming.js';
 
-const imageOf = (g) => posterURL(g) || coverURL(g);
-
 function poster(item) {
-  const url = item.kind === 'owned' ? imageOf(item.game) : missingPosterURL(item.missing.cover, item.missing.v);
-  const box = h('span.pst' + (item.kind === 'missing' ? '.pst-missing' : ''), {},
-    url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
-  return box;
+  const url = missingPosterURL(item.missing.cover, item.missing.v);
+  return h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
 }
 
 export function renderUpcoming(root) {
@@ -31,7 +26,7 @@ export function renderUpcoming(root) {
     try {
       info = await seriesMissing();
       index = missingIndex(info, store.games);
-    } catch { /* offline or old server: the wishlist part still works */ }
+    } catch { /* offline or old server: the page stays empty */ }
     if (!alive) return;
     draw();
     if (info.refresh?.running) schedulePoll();
@@ -43,7 +38,7 @@ export function renderUpcoming(root) {
       await load();
       if (alive && was.running && !info.refresh.running) {
         const r = info.refresh;
-        try { await reloadGames(); onGames(); } catch { /* offline: the dates of the wishlist show after the next load */ }
+        try { await reloadGames(); onGames(); } catch { /* offline: the dates show after the next load */ }
         toast(r.failed ? `IGDB refresh: ${r.report || 'failed'}` : `IGDB refreshed. ${r.report || ''}`, 5000);
       }
     }, 1500);
@@ -51,7 +46,7 @@ export function renderUpcoming(root) {
   async function refresh() {
     try {
       info.refresh = await seriesRefresh();
-      say('Reading your series and wishlist from IGDB.');
+      say('Reading your series from IGDB.');
     } catch (e) {
       toast(e.message || 'Could not start the refresh');
       return;
@@ -68,7 +63,7 @@ export function renderUpcoming(root) {
     try { cand = { ...(await igdbGame(m.igdb_id)) }; cand.igdb_parent_id ??= 0; } catch { /* offline or IGDB down: the form opens with what is cached */ }
     btn.disabled = false;
     // igdb_parent_id (the root of its IGDB version chain) is saved with the game, so its original stops being listed at once.
-    openAdd({ candidate: { ...cand, series: item.seriesName || cand.series }, status: 'wishlist' });
+    openAdd({ candidate: { ...cand, series: item.seriesName || cand.series } });
   }
   async function setHidden(item, hide) {
     const m = item.missing;
@@ -89,17 +84,12 @@ export function renderUpcoming(root) {
   function row(item, released) {
     const date = item.period ? formatRelease(item.date, item.format) : 'Release date not announced';
     const meta = [released ? `Released ${date}` : date, item.platforms.length ? item.platforms.join(', ') : null].filter(Boolean).join(' · ');
-    const from = item.kind === 'owned'
-      ? h('span.up-tag.own', {}, 'On your wishlist')
-      : h('span.up-tag', {}, 'Not in your library');
+    const from = h('span.up-tag', {}, 'Not in your library');
     const body = h('span.up-body', {},
       h('span.up-title', {}, item.title),
       h('span.up-date', {}, meta),
       h('span.up-from', {}, from, item.seriesName ? h('small', {}, ` · ${item.seriesName}`) : null));
-    if (item.kind === 'owned') {
-      return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openDrawer(item.game), 'aria-label': `${item.title}, ${meta}, on your wishlist` }, poster(item), body));
-    }
-    const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${item.title} to your wishlist`, onclick: () => add(item, addBtn) }, 'Add');
+    const addBtn = h('button.add-chip', { type: 'button', 'aria-label': `Add ${item.title} to your library`, onclick: () => add(item, addBtn) }, 'Add');
     return h('li.up-row', {}, h('div.up-open', {}, poster(item), body),
       h('span.si-actions', {}, addBtn, h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${item.title}`, onclick: () => setHidden(item, true) }, 'Hide')));
   }
@@ -111,7 +101,7 @@ export function renderUpcoming(root) {
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
     const old = oldestFetch(index);
     const note = old ? `Release dates were read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
-      : info.configured ? 'Press Refresh from IGDB to read the release dates of your wishlist and your series.' : '';
+      : info.configured ? 'Press Refresh from IGDB to read the release dates of your series.' : '';
     return [btn, note];
   }
 
@@ -121,12 +111,12 @@ export function renderUpcoming(root) {
     const nothing = !groups.length && !recent.length;
     page.replaceChildren(...[
       h('h1', {}, 'Upcoming'),
-      h('p.hint', {}, 'Games on your wishlist and new games of your series that are not out yet, with release dates from IGDB.'),
+      h('p.hint', {}, 'New games of your series that are not out yet or just came out, and that you do not have, with release dates from IGDB.'),
       nothing && info.configured ? null : h('div.chips', {}, btn),
       note && !(nothing && info.configured) ? h('p.hint', {}, note) : null,
       recent.length ? h('section.up-group', {}, h('h2', {}, 'Recently released'), h('ul.up-list', {}, recent.map((it) => row(it, true)))) : null,
       ...groups.map((g) => h('section.up-group', {}, h('h2', {}, g.label, h('small', {}, ` ${g.items.length}`)), h('ul.up-list', {}, g.items.map((it) => row(it, false))))),
-      nothing ? emptyBox('Nothing is coming up yet. Put a game on your Wishlist, or read your series from IGDB.', info.configured && btn) : null,
+      nothing ? emptyBox('Nothing is coming up yet. Read your series from IGDB to see their new games here.', info.configured && btn) : null,
       total ? h('p.hint', {}, `${total} ${total === 1 ? 'game' : 'games'} to look forward to.`) : null,
     ].filter(Boolean));
   }

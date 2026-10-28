@@ -22,7 +22,7 @@ func (s *Server) similarSource() collections.SimilarSource {
 }
 
 // similarList answers the cached suggestions (never IGDB): the similar games of the finished and favourite games that the
-// library does not have, with the roots the browser needs to keep applying the owned/wishlist rules.
+// library does not have, with the roots the browser needs to keep applying the owned rule.
 func (s *Server) similarList(w http.ResponseWriter, r *http.Request) {
 	list, err := collections.LoadSimilar(s.DB)
 	if err != nil {
@@ -30,7 +30,7 @@ func (s *Server) similarList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"configured": s.igdbConfigured(), "suggestions": list.Suggestions, "owned_roots": list.OwnedRoots,
-		"wishlist_roots": list.WishlistRoots, "fetched_at": list.FetchedAt, "refresh": s.similarJob.status()})
+		"fetched_at": list.FetchedAt, "refresh": s.similarJob.status()})
 }
 
 // similarRefresh starts reading the similar games from IGDB in the background; the answer is the job's status. One run at

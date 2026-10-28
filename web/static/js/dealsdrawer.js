@@ -1,4 +1,4 @@
-// The "Price" row of the game drawer, for a Wishlist, Backlog or Up next game: the best price now and the historical low,
+// The "Price" row of the game drawer, for a Backlog or Up next game: the best price now and the historical low,
 // as the server has cached them (never ITAD on open). Also where a wrong or missing match is fixed. It stays out of the way:
 // nothing is drawn until the cache answers, when ITAD is not set up, or for other statuses.
 import { h, toast } from './util.js';

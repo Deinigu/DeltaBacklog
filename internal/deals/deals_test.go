@@ -198,11 +198,11 @@ func eur(c int64) Money { return Money{c, "EUR"} }
 
 func TestRefreshMatchesAndPrices(t *testing.T) {
 	d := newDB(t)
-	addGame(t, d, 1, "Hollow Knight", "wishlist", "https://store.steampowered.com/app/367520/Hollow_Knight/")
+	addGame(t, d, 1, "Hollow Knight", "backlog", "https://store.steampowered.com/app/367520/Hollow_Knight/")
 	addGame(t, d, 2, "Disco Elysium", "backlog", "")
 	addGame(t, d, 3, "Obscure Thing", "up_next", "")
-	addGame(t, d, 4, "Hades", "finished", "")      // not watched
-	addGame(t, d, 5, "Wrong Name", "wishlist", "") // ITAD answers a different title: no automatic match
+	addGame(t, d, 4, "Hades", "finished", "")     // not watched
+	addGame(t, d, 5, "Wrong Name", "backlog", "") // ITAD answers a different title: no automatic match
 	src := &fakeSource{
 		byApp:   map[int64]Game{367520: {ID: "hk", Title: "Hollow Knight"}},
 		byTitle: map[string]Game{"Disco Elysium": {ID: "de", Title: "Disco Elysium - The Final Cut"}, "Wrong Name": {ID: "zz", Title: "Something Else"}},
@@ -249,7 +249,7 @@ func TestRefreshMatchesAndPrices(t *testing.T) {
 func TestOwnerChoiceWins(t *testing.T) {
 	d := newDB(t)
 	addGame(t, d, 1, "Disco Elysium", "backlog", "")
-	addGame(t, d, 2, "Mystery", "wishlist", "")
+	addGame(t, d, 2, "Mystery", "backlog", "")
 	src := &fakeSource{byTitle: map[string]Game{"Mystery": {ID: "m", Title: "Mystery"}},
 		prices: map[string]Overview{"de": {Current: &Current{Shop: "GOG", Price: eur(100), Regular: eur(200), Cut: 50}}}}
 	if err := SetMatch(d, 1, Game{ID: "de", Title: "Disco Elysium - The Final Cut", Slug: "disco"}); err != nil {
@@ -288,7 +288,7 @@ func TestOwnerChoiceWins(t *testing.T) {
 
 func TestRefreshStopsOnRateLimit(t *testing.T) {
 	d := newDB(t)
-	addGame(t, d, 1, "A", "wishlist", "")
+	addGame(t, d, 1, "A", "backlog", "")
 	src := &fakeSource{byTitle: map[string]Game{"A": {ID: "a", Title: "A"}}, err: &RateLimitError{RetryAfter: time.Second}}
 	rep, err := Refresh(context.Background(), d, src, Options{})
 	if err != nil || !strings.Contains(rep.Stopped, "rate limit") {
@@ -329,7 +329,7 @@ func TestRefreshDoesNotOverwriteWhatTheOwnerDidMeanwhile(t *testing.T) {
 	cheap := Overview{Current: &Current{Shop: "Steam", Price: eur(100), Regular: eur(200), Cut: 50}}
 	setup := func(t *testing.T) (*sql.DB, *hookSource) {
 		d := newDB(t)
-		addGame(t, d, 1, "Alpha", "wishlist", "")
+		addGame(t, d, 1, "Alpha", "backlog", "")
 		src := &hookSource{fakeSource: &fakeSource{byTitle: map[string]Game{"Alpha": {ID: "auto", Title: "Alpha"}},
 			prices: map[string]Overview{"auto": cheap, "picked": {Current: &Current{Shop: "GOG", Price: eur(999), Regular: eur(999)}}}}}
 		return d, src
@@ -425,7 +425,7 @@ func TestRefreshBatchesAndSharedIDs(t *testing.T) {
 		addGame(t, d, i, title, "backlog", "")
 		src.byTitle[title] = Game{ID: title, Title: title}
 	}
-	addGame(t, d, 200, "Twin", "wishlist", "")
+	addGame(t, d, 200, "Twin", "backlog", "")
 	addGame(t, d, 201, "Twin", "backlog", "")
 	src.byTitle["Twin"] = Game{ID: "twin", Title: "Twin"}
 	var last [2]int
@@ -440,7 +440,7 @@ func TestRefreshBatchesAndSharedIDs(t *testing.T) {
 
 func TestCountry(t *testing.T) {
 	d := newDB(t)
-	addGame(t, d, 1, "A", "wishlist", "")
+	addGame(t, d, 1, "A", "backlog", "")
 	if Country(d) != "ES" {
 		t.Fatal("default country")
 	}

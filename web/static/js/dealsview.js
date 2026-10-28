@@ -1,4 +1,4 @@
-// Deals page: the current best price and the historical low of the Wishlist, Backlog and Up next games, from
+// Deals page: the current best price and the historical low of the Backlog and Up next games, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
 import { h, gradientFor, initials, lazyImg, toast } from './util.js';
 import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry } from './api.js';
@@ -116,7 +116,7 @@ export function renderDeals(root) {
     const old = oldestCheck(info);
     const note = !info.configured && !old ? 'IsThereAnyDeal is not set up: add ITAD_API_KEY to .env and restart the app (see the user manual, Deals).'
       : old ? `Last checked ${new Date(old).toLocaleString(LOCALE, { dateStyle: 'medium', timeStyle: 'short' })}.`
-        : 'Press Refresh prices to read the prices of your wishlist and backlog.';
+        : 'Press Refresh prices to read the prices of your backlog and up next games.';
     return [btn, note];
   }
 
@@ -134,14 +134,14 @@ export function renderDeals(root) {
       : null;
     page.replaceChildren(...[
       h('h1', {}, 'Deals'),
-      h('p.hint', {}, 'The best price right now and the historical low of the games on your wishlist, in your backlog and up next, from IsThereAnyDeal.'),
+      h('p.hint', {}, 'The best price right now and the historical low of the games in your backlog and up next, from IsThereAnyDeal.'),
       h('div.chips', {}, btn),
       h('p.hint', {}, note),
       info.configured ? country : null,
       ...controls(),
       rows.length ? h('ul.up-list', {}, rows.map((r) => row(r, r.badge))) : null,
       unsoldHint,
-      !rows.length && info.configured ? h('div.empty', {}, scope ? 'No prices yet. Press Refresh prices.' : 'No games on the wishlist, in the backlog or up next match these filters.') : null,
+      !rows.length && info.configured ? h('div.empty', {}, scope ? 'No prices yet. Press Refresh prices.' : 'No games in the backlog or up next match these filters.') : null,
       waiting.length ? h('p.hint', {}, `${waiting.length} ${waiting.length === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`) : null,
       unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'Open a game to pick the right one by hand.'),

@@ -15,7 +15,7 @@ import (
 // DefaultCountry is the country prices are read for until the owner changes it.
 const DefaultCountry = "ES"
 
-const watchedSQL = `('wishlist', 'backlog', 'up_next')`
+const watchedSQL = `('backlog', 'up_next')`
 
 // retryUnmatched is how long an automatic "no match" is trusted before the search is made again.
 const retryUnmatched = 7 * 24 * time.Hour

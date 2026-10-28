@@ -33,7 +33,7 @@ func TestDealsMigration(t *testing.T) {
 	}
 	for _, q := range []string{
 		`PRAGMA user_version = 15`,
-		`INSERT INTO game(id, title, title_sort, status_id) VALUES (1,'Wished','wished',(SELECT id FROM status WHERE code='wishlist'))`,
+		`INSERT INTO game(id, title, title_sort, status_id) VALUES (1,'Wished','wished',(SELECT id FROM status WHERE code='backlog'))`,
 		`INSERT INTO game(id, title, title_sort, status_id) VALUES (2,'Done','done',(SELECT id FROM status WHERE code='finished'))`,
 	} {
 		if _, err := old.Exec(q); err != nil {
@@ -53,7 +53,7 @@ func TestDealsMigration(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM deal_match`).Scan(&matches)
 	d.QueryRow(`SELECT count(*) FROM deal_price`).Scan(&prices)
 	d.QueryRow(`SELECT count(*) FROM setting`).Scan(&settings)
-	if version != 17 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
+	if version != 18 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
 		t.Fatalf("version %d games %d matches %d prices %d settings %d", version, games, matches, prices, settings)
 	}
 	for _, q := range []string{

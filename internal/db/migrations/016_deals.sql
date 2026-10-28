@@ -1,4 +1,4 @@
--- Deals: current best price and historical low from IsThereAnyDeal (ITAD) for the Wishlist, Backlog and Up next games.
+-- Deals: current best price and historical low from IsThereAnyDeal (ITAD) for the Backlog and Up next games.
 -- Refreshed on demand (Deals page), never on a page load.
 --   setting      small key/value store; 'deals_country' is the ISO country the prices are read for (default ES)
 --   deal_match   the ITAD game id of a library game. itad_id NULL = no match: for source 'user' the owner said so (never

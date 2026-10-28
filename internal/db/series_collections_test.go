@@ -87,9 +87,9 @@ func TestSeriesCollectionsMigration(t *testing.T) {
 	}
 }
 
-// TestWishlistMigration: a populated library at version 13 keeps its games and statuses in order, gains the Wishlist
-// status after Backlog and the (empty) release date columns.
-func TestWishlistMigration(t *testing.T) {
+// TestReleaseDatesMigration: a populated library at version 13 keeps its games and statuses in order and gains the
+// (empty) release date columns.
+func TestReleaseDatesMigration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	old, err := sql.Open("sqlite", FileURI(path)+"?_pragma=foreign_keys(1)")
 	if err != nil {
@@ -138,7 +138,7 @@ func TestWishlistMigration(t *testing.T) {
 		codes = append(codes, c)
 	}
 	rows.Close()
-	if got := strings.Join(codes, " "); got != "playing playing_evergreen up_next backlog wishlist hold evergreen finished dropped not_interested" {
+	if got := strings.Join(codes, " "); got != "playing playing_evergreen up_next backlog hold evergreen finished dropped not_interested" {
 		t.Errorf("status order: %s", got)
 	}
 	var title, status string

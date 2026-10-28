@@ -1,11 +1,10 @@
-// Deals: the prices (from IsThereAnyDeal, cached by the server) of the games on the Wishlist, in the Backlog and Up next.
+// Deals: the prices (from IsThereAnyDeal, cached by the server) of the games in the Backlog and Up next.
 // Pure (no DOM): unit-tested. Amounts are cents of the price's own currency; they are only formatted when shown.
 
 export const LOCALE = 'en-GB'; // the UI text is English, so money and dates are too, whatever the browser's language
 export const NEAR_LOW = 0.10; // "near the historical low": within 10% of it
 /** The statuses that get prices, in the order of the filter chips. */
 export const DEAL_STATUSES = [
-  { code: 'wishlist', label: 'Wishlist' },
   { code: 'backlog', label: 'Backlog' },
   { code: 'up_next', label: 'Up next' },
 ];
@@ -96,7 +95,7 @@ export function oldestCheck(info) {
   return times[0] || null;
 }
 
-/** A game the deals cover: Wishlist, Backlog or Up next. */
+/** A game the deals cover: Backlog or Up next. */
 export const isWatched = (game) => DEAL_STATUSES.some((s) => s.code === game.status);
 
 /** The shop link of a price, only if it is a real web address (it opens in a new tab). */
