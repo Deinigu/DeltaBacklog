@@ -41,6 +41,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 - With the Theme button set against the system theme, scrollbars and form controls now follow the app's theme.
 - Quick add maps the IGDB platform names `NSW` and `PS` the way the IGDB sync does.
 
+- **Series page layout**: a tile shows the game's portrait poster, or its wide cover whole (letterboxed) instead of cropping it; the poster fan fits inside the tile for 1 to 4 posters and prefers real posters; tiles are tighter ("+N not in library" on its own line); on a series' shelf the Add/Hide buttons sit at the bottom of every cell, and the page leaves room for the + button. A series' fan prefers posters of games linked to IGDB; if a poster is wrong (a fuzzy SteamGridDB match for a game that is not linked), open the game and use **Change poster**.
 ### Changed
 - The repository is now a public showcase, not a community project: README status note and "How this was built" section, CONTRIBUTING explains that contributions are not accepted, and the code of conduct, issue forms and pull request template were removed. Dependabot runs monthly with grouped updates.
 - Deploys are stamped with a version from `git describe`; idle connections are closed after 2 minutes; CI fails on unformatted Go code.
