@@ -14,16 +14,20 @@ let onlyLeft = false;
 let onlyNew = false;
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
+const hasPoster = (g) => !!posterURL(g);
 const href = (key) => `#/series/${encodeURIComponent(key)}`;
 const bar = (s) => {
   const sh = barShares(s);
   return h('span.sbar', { 'aria-hidden': 'true' }, h('i.fin', { style: `width:${sh.finished}%` }), h('i.pl', { style: `width:${sh.played}%` }));
 };
 
-/** A 2:3 picture box: the game's poster (or wide cover, centre-cropped), else a coloured placeholder with initials. */
+/** A 2:3 picture box: the game's portrait poster; else its wide cover shown whole (letterboxed, never cropped); else a coloured placeholder with initials. */
 function poster(game, extraClass = '') {
-  const url = imageOf(game);
-  return h('span.pst' + extraClass, {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)));
+  const url = posterURL(game);
+  if (url) return h('span.pst' + extraClass, {}, lazyImg(url));
+  const wide = coverURL(game);
+  if (wide) return h('span.pst.pst-wide' + extraClass, {}, lazyImg(wide));
+  return h('span.pst' + extraClass, {}, h('span.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)));
 }
 
 function stateOf(g) { return isFinished(g) ? 'finished' : isPlayed(g) ? 'played' : 'unplayed'; }
@@ -111,17 +115,17 @@ export function renderSeries(root, openKey = null) {
   // ---- the page of tiles ----
   function tile(s) {
     const extra = extraOf(index, s);
-    const games = fanGames(s, (g) => !!imageOf(g));
+    const games = fanGames(s, hasPoster, 4, (g) => !!imageOf(g));
     const n = extra.missing.length;
     return h('a.tile', { href: href(s.key), 'aria-label': `${s.name}: ${seriesSummary(s, extra)}` },
-      h('span.fan', { 'aria-hidden': 'true' }, games.map((g, i) => {
+      h('span.fan', { 'aria-hidden': 'true', 'data-n': String(games.length) }, games.map((g, i) => {
         const p = poster(g);
         p.style.setProperty('--i', String(i - (games.length - 1) / 2));
         return p;
       })),
       h('span.stitle', {}, s.name),
       bar(s),
-      h('small', {}, `${s.finished}/${s.total} finished`, n ? h('b.newn', {}, ` · +${n} not in your library`) : null));
+      h('small', {}, `${s.finished}/${s.total} finished`, n ? h('b.newn', {}, `+${n} not in library`) : null));
   }
 
   function refreshBar() {

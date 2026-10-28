@@ -113,6 +113,13 @@ test('the fan takes the first games that have a picture', () => {
   assert.equal(fanGames(s, () => true, 2).length, 2);
 });
 
+test('the fan prefers games with a portrait poster over wide covers', () => {
+  const [s] = buildSeries([1, 2, 3].map((y) => g('G' + y, 'X', { release_year: 2000 + y, cover: 'c.jpg', poster: y === 3 ? 'p.jpg' : null })));
+  assert.deepEqual(fanGames(s, (x) => !!x.poster, 4, (x) => !!x.cover).map((x) => x.title), ['G3']);
+  const [t] = buildSeries([1, 2].map((y) => g('H' + y, 'Y', { release_year: 2000 + y, cover: 'c.jpg' })));
+  assert.equal(fanGames(t, (x) => !!x.poster, 4, (x) => !!x.cover).length, 2); // no poster at all: the covers
+});
+
 test('the summary names the games left and the games not in the library', () => {
   const [s] = buildSeries([g('A', 'X', { status: 'finished' }), g('B', 'X')]);
   assert.equal(seriesSummary(s, { missing: [], hidden: [], collections: [] }), '1 finished · 1 played · 2 games · 1 left to play');
