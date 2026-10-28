@@ -5,6 +5,7 @@ import { h, icon } from './util.js';
 export const MORE_PAGES = [
   { path: 'series', label: 'Series', icon: 'series' },
   { path: 'upcoming', label: 'Upcoming', icon: 'upcoming' },
+  { path: 'similar', label: 'Similar games', icon: 'similar' },
   { path: 'stats', label: 'Stats', icon: 'stats' },
   { path: 'years', label: 'Year in review', icon: 'years' },
   { path: 'rankings', label: 'Rankings', icon: 'rankings' },

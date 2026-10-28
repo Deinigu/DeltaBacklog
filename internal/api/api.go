@@ -36,12 +36,15 @@ type Server struct {
 
 	// Collections replaces the IGDB client the Series page reads collections with (tests); nil means Meta.
 	Collections collections.Source
+	// Similar replaces the IGDB client the Similar page reads similar games with (tests); nil means Meta.
+	Similar collections.SimilarSource
 
 	hltbOnce   sync.Once
 	posterOnce sync.Once
 	posters    *posters.Queue // background poster worker, created on first use (see posterQ)
 	bg         sync.WaitGroup // background best-effort work (release dates of a new link); tests wait for it
 	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
+	similarJob seriesJob      // ditto for the Similar page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -99,6 +102,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/series/refresh", s.seriesRefresh)
 	mux.HandleFunc("POST /api/series/hide", s.seriesHide)
 	mux.HandleFunc("POST /api/series/unhide", s.seriesUnhide)
+	mux.HandleFunc("GET /api/similar", s.similarList)
+	mux.HandleFunc("POST /api/similar/refresh", s.similarRefresh)
+	mux.HandleFunc("POST /api/similar/hide", s.similarHide)
+	mux.HandleFunc("POST /api/similar/unhide", s.similarUnhide)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
 	mux.HandleFunc("GET /api/facets", s.facets)

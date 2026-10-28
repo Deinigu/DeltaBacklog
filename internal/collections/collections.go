@@ -124,58 +124,16 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	rep := &Report{}
 
 	// 1. Linked games whose collections and parent game were never read (a game read by the enrichment already is).
-	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE igdb_id IS NOT NULL AND igdb_parent_id IS NULL ORDER BY id`)
-	if err != nil {
-		return rep, err
-	}
-	byIGDB := map[int64][]int64{} // igdb id -> game ids (an IGDB game is linked once, but be safe)
-	var igdbIDs []int64
-	for rows.Next() {
-		var id, igdbID int64
-		if err := rows.Scan(&id, &igdbID); err != nil {
-			rows.Close()
-			return rep, err
-		}
-		if len(byIGDB[igdbID]) == 0 {
-			igdbIDs = append(igdbIDs, igdbID)
-		}
-		byIGDB[igdbID] = append(byIGDB[igdbID], id)
-	}
-	if err := rows.Close(); err != nil {
-		return rep, err
-	}
 	memo := map[int64]int64{} // igdb id -> its parent (0 = none), for the whole run
 	res := resolver{ctx: ctx, o: o, src: src, memo: memo}
-	const batch = 40
-	for start := 0; start < len(igdbIDs); start += batch {
-		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
-		var got map[int64]meta.GameLinks
-		if err := retry429(ctx, o, func() (err error) { got, err = src.GameLinks(ctx, ids); return }); err != nil {
-			return stop(rep, ctx, err)
+	n, err := linkLibrary(ctx, d, res)
+	rep.Linked += n
+	if err != nil {
+		var de dbError
+		if errors.As(err, &de) {
+			return rep, de.err
 		}
-		for id, l := range got {
-			memo[id] = l.ParentID
-		}
-		if err := res.resolve(ctx, ids); err != nil {
-			return stop(rep, ctx, err)
-		}
-		tx, err := d.Begin()
-		if err != nil {
-			return rep, err
-		}
-		for igdbID, l := range got {
-			l.ParentID = res.root(igdbID)
-			for _, gid := range byIGDB[igdbID] {
-				if err := StoreGameLinks(tx, gid, l); err != nil {
-					tx.Rollback()
-					return rep, err
-				}
-				rep.Linked++
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return rep, err
-		}
+		return stop(rep, ctx, err)
 	}
 
 	// 2. The collection(s) of every series (see pickCollections).
@@ -313,6 +271,71 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, o Options) (*Report, er
 	return rep, nil
 }
 
+// dbError marks a database failure among the errors linkLibrary returns (the others come from IGDB).
+type dbError struct{ err error }
+
+func (e dbError) Error() string { return e.err.Error() }
+
+// linkLibrary reads from IGDB the collections and the version root of the linked library games that were never read
+// (igdb_parent_id IS NULL) and stores them. It is a no-op when every root is known. The series refresh and the similar
+// games refresh both start with it, so the family rules hold after either. It returns the number of games stored; res.memo
+// keeps what was learnt about version chains for the rest of the run.
+func linkLibrary(ctx context.Context, d *sql.DB, res resolver) (int, error) {
+	linked := 0
+	rows, err := d.Query(`SELECT id, igdb_id FROM game WHERE igdb_id IS NOT NULL AND igdb_parent_id IS NULL ORDER BY id`)
+	if err != nil {
+		return 0, dbError{err}
+	}
+	byIGDB := map[int64][]int64{} // igdb id -> game ids (an IGDB game is linked once, but be safe)
+	var igdbIDs []int64
+	for rows.Next() {
+		var id, igdbID int64
+		if err := rows.Scan(&id, &igdbID); err != nil {
+			rows.Close()
+			return 0, dbError{err}
+		}
+		if len(byIGDB[igdbID]) == 0 {
+			igdbIDs = append(igdbIDs, igdbID)
+		}
+		byIGDB[igdbID] = append(byIGDB[igdbID], id)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, dbError{err}
+	}
+	const batch = 40
+	for start := 0; start < len(igdbIDs); start += batch {
+		ids := igdbIDs[start:min(start+batch, len(igdbIDs))]
+		var got map[int64]meta.GameLinks
+		if err := retry429(ctx, res.o, func() (err error) { got, err = res.src.GameLinks(ctx, ids); return }); err != nil {
+			return linked, err
+		}
+		for id, l := range got {
+			res.memo[id] = l.ParentID
+		}
+		if err := res.resolve(ctx, ids); err != nil {
+			return linked, err
+		}
+		tx, err := d.Begin()
+		if err != nil {
+			return linked, dbError{err}
+		}
+		for igdbID, l := range got {
+			l.ParentID = res.root(igdbID)
+			for _, gid := range byIGDB[igdbID] {
+				if err := StoreGameLinks(tx, gid, l); err != nil {
+					tx.Rollback()
+					return linked, dbError{err}
+				}
+				linked++
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return linked, dbError{err}
+		}
+	}
+	return linked, nil
+}
+
 // resolver follows the "another version of" links up to their root. memo holds what is known: igdb id -> its parent
 // (0 = none). Entries IGDB lists in no collection (an expanded edition, a port) are asked for on demand.
 type resolver struct {
@@ -448,16 +471,28 @@ func prune(d *sql.DB, coverDir string, used map[int64]bool, fam family) error {
 		if _, err := d.Exec(`UPDATE igdb_collection_game SET cover_file = NULL WHERE collection_id = ? AND igdb_id = ?`, k.col, k.id); err != nil {
 			return err
 		}
-		var n int // the file goes at once when no other row names it (this run made the decision, nothing is mid-download)
-		if coverDir != "" && d.QueryRow(`SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?`, k.file).Scan(&n) == nil && n == 0 {
+		// the file goes at once when no other row names it (this run made the decision, nothing is mid-download)
+		if coverDir != "" && !fileInUse(d, k.file) {
 			os.Remove(filepath.Join(coverDir, filepath.Base(k.file)))
 		}
 	}
+	return sweepPosters(d, coverDir)
+}
+
+// fileInUse reports whether a row of the series cache or of the similar-games cache names the poster file (the two caches
+// share the i<id>.jpg files). A failed query counts as in use: nothing is deleted on a doubt.
+func fileInUse(d *sql.DB, file string) bool {
+	var n int
+	return d.QueryRow(`SELECT (SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?1) + (SELECT count(*) FROM similar_game WHERE cover_file = ?1)`, file).Scan(&n) != nil || n > 0
+}
+
+// sweepPosters removes the poster files in coverDir (i<id>.jpg) that no row of either cache names, unless they are fresh.
+func sweepPosters(d *sql.DB, coverDir string) error {
 	if coverDir == "" {
 		return nil
 	}
 	named := map[string]bool{}
-	frows, err := d.Query(`SELECT DISTINCT cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL`)
+	frows, err := d.Query(`SELECT cover_file FROM igdb_collection_game WHERE cover_file IS NOT NULL UNION SELECT cover_file FROM similar_game WHERE cover_file IS NOT NULL`)
 	if err != nil {
 		return err
 	}
@@ -562,8 +597,7 @@ func store(d *sql.DB, coverDir string, id int64, name string, games []meta.Colle
 		if o[1] == "" || keep[o[1]] {
 			continue
 		}
-		var n int
-		if d.QueryRow(`SELECT count(*) FROM igdb_collection_game WHERE cover_file = ?`, o[1]).Scan(&n) == nil && n == 0 && coverDir != "" {
+		if coverDir != "" && !fileInUse(d, o[1]) {
 			os.Remove(filepath.Join(coverDir, filepath.Base(o[1])))
 		}
 	}

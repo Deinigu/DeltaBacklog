@@ -8,6 +8,7 @@ import { formFromGame, validateForm, buildPatch, applyCandidate, yearsOf } from 
 import { seriesPosition } from './series.js';
 import { ttbSection } from './ttbview.js';
 import { screenshotsSection } from './shotsview.js';
+import { similarSection } from './similardrawer.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
@@ -99,6 +100,7 @@ export function openDrawer(game) {
       fact('VR', game.vr ? 'Yes' : null),
       fact('100% completed', game.completed ? 'Yes' : null)),
     ttb,
+    similarSection(game),
     game.notes && h('div.notes', {}, game.notes),
     storeLinks(game),
     screenshotsSection(game),

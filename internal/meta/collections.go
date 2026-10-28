@@ -126,3 +126,33 @@ func (c *Client) GameCandidate(ctx context.Context, igdbID int64) (Candidate, er
 
 // ErrNoGame means IGDB does not hold the game asked for.
 var ErrNoGame = fmt.Errorf("IGDB has no such game")
+
+// SimilarGames reads IGDB's similar_games of up to ~40 games in one request: for each game IGDB returns, its similar real
+// games (see realGameTypes), as much as the Similar page shows. A game without similar games is present with none.
+func (c *Client) SimilarGames(ctx context.Context, igdbIDs []int64) (map[int64][]CollectionGame, error) {
+	out := map[int64][]CollectionGame{}
+	if len(igdbIDs) == 0 {
+		return out, nil
+	}
+	var games []igdbGame
+	q := fmt.Sprintf("fields similar_games.name,similar_games.first_release_date,similar_games.release_dates.date,similar_games.release_dates.date_format,"+
+		"similar_games.game_type,similar_games.parent_game,similar_games.version_parent,similar_games.cover.image_id; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
+	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
+		return nil, err
+	}
+	for _, g := range games {
+		list := []CollectionGame{}
+		for _, s := range g.SimilarGames {
+			if s.ID <= 0 || !IsRealGameType(s.GameType) || strings.TrimSpace(s.Name) == "" {
+				continue
+			}
+			cg := CollectionGame{IGDBID: s.ID, Name: strings.TrimSpace(s.Name), GameType: s.GameType, ParentID: s.parent(), CoverID: s.Cover.ImageID, Release: s.release()}
+			if s.FirstReleaseDate > 0 {
+				cg.Year = time.Unix(s.FirstReleaseDate, 0).UTC().Year()
+			}
+			list = append(list, cg)
+		}
+		out[g.ID] = list
+	}
+	return out, nil
+}
