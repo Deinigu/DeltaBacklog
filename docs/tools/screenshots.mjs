@@ -163,6 +163,9 @@ if (lookups && !process.env.BASE_URL) { // IGDB's similar games of the finished 
 await wait(1200); // the posters load as they scroll into view
 await shot(p, 'similar-phone');
 
+await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
+await shot(p, 'deals-phone');
+
 await go(p, '#/stats');
 await shot(p, 'stats-phone');
 
