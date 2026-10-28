@@ -1,7 +1,7 @@
 // Upcoming page: the games that are not out yet (or just came out), grouped by month. They are the Wishlist games of
 // the library and the games of the user's series that the library lacks (cached from IGDB, see seriesview.js).
 // Nothing here asks IGDB on its own: the data is read when the owner presses Refresh from IGDB.
-import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
 import { store, load as reloadGames, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
@@ -122,11 +122,11 @@ export function renderUpcoming(root) {
     page.replaceChildren(...[
       h('h1', {}, 'Upcoming'),
       h('p.hint', {}, 'Games on your wishlist and new games of your series that are not out yet, with release dates from IGDB.'),
-      h('div.chips', {}, btn),
-      note ? h('p.hint', {}, note) : null,
+      nothing && info.configured ? null : h('div.chips', {}, btn),
+      note && !(nothing && info.configured) ? h('p.hint', {}, note) : null,
       recent.length ? h('section.up-group', {}, h('h2', {}, 'Recently released'), h('ul.up-list', {}, recent.map((it) => row(it, true)))) : null,
       ...groups.map((g) => h('section.up-group', {}, h('h2', {}, g.label, h('small', {}, ` ${g.items.length}`)), h('ul.up-list', {}, g.items.map((it) => row(it, false))))),
-      nothing ? h('div.empty', {}, 'Nothing is coming up. Set a game’s status to Wishlist, or add series to your library and press Refresh from IGDB.') : null,
+      nothing ? emptyBox('Nothing is coming up yet. Put a game on your Wishlist, or read your series from IGDB.', info.configured && btn) : null,
       total ? h('p.hint', {}, `${total} ${total === 1 ? 'game' : 'games'} to look forward to.`) : null,
     ].filter(Boolean));
   }

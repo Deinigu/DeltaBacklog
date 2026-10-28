@@ -160,6 +160,9 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .card-sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .empty { text-align: center; color: var(--muted); padding: 60px 16px; }
+.empty p { margin: 0; }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+.empty-actions .chip, .empty-actions .btn { min-height: 44px; }
 .skeleton { height: 150px; border-radius: var(--radius); background: linear-gradient(90deg, var(--surface-2), var(--surface), var(--surface-2)); background-size: 200% 100%; animation: sk 1.2s infinite; }
 @keyframes sk { to { background-position: -200% 0; } }
 

@@ -1,17 +1,19 @@
 // Series page: a grid of series tiles (a fan of the series' posters, progress), and each series opened on its own
 // route (#/series/<key>) as a poster shelf in release order. The games of the series' IGDB collection that the
 // library does not have sit in the shelf as "Not in your library", with Add and Hide.
-import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
 import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
+import { LOCALE } from './upcoming.js';
 import {
-  buildSeries, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
+  buildSeries, collapseMissing, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
 } from './series.js';
 
 // The filters survive going into a series and back (the route re-renders the page).
 let onlyLeft = false;
 let onlyNew = false;
+const SHOW_MISSING = 6; // a series with more games that you do not have than this is collapsed behind "Show all"
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
 const href = (key) => `#/series/${encodeURIComponent(key)}`;
@@ -127,11 +129,12 @@ export function renderSeries(root, openKey = null) {
   function refreshBar() {
     const r = info.refresh || {};
     const btn = h('button.chip', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
-      title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
-    r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
+      title: info.configured ? 'Refresh from IGDB' : 'IGDB is not set up (keys are missing from .env)' },
+    r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh');
+    btn.setAttribute('aria-label', 'Refresh from IGDB');
     const old = oldestFetch(index);
-    const note = old ? `Games not in your library were read from IGDB on ${new Date(old).toLocaleDateString()}.`
-      : info.configured ? 'Press Refresh from IGDB to find the games of your series that you do not have yet.' : '';
+    const note = old ? `Missing games read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
+      : info.configured ? 'Press Refresh to read the games of your series that you do not have yet.' : '';
     return [btn, note];
   }
 
@@ -140,18 +143,19 @@ export function renderSeries(root, openKey = null) {
     let shown = onlyLeft ? withLeft(all) : all;
     if (onlyNew) shown = withMissing(shown, index);
     const noYear = all.reduce((n, s) => n + (s.total > 1 ? s.noYear : 0), 0); // a game alone in its series has no order to get wrong
-    const leftBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyLeft), onclick: () => { onlyLeft = !onlyLeft; draw(); } }, 'Games left to play');
-    const newBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyNew), onclick: () => { onlyNew = !onlyNew; draw(); } }, 'Not in your library');
+    const leftBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyLeft), onclick: () => { onlyLeft = !onlyLeft; draw(); } }, 'Left to play');
+    const newBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyNew), onclick: () => { onlyNew = !onlyNew; draw(); } }, 'Not in library');
     const [rbtn, note] = refreshBar();
     page.replaceChildren(...[ // replaceChildren would print a null as the text "null"
       h('h1', {}, 'Series'),
-      h('p.hint', {}, 'How far you are through each series. Open one to see its games in release order, with the ones you do not have yet.'),
+      h('p.hint', {}, 'Progress through each series. Open one for its games in release order.'),
       h('div.chips', {}, leftBtn, newBtn, rbtn),
-      note ? h('p.hint', {}, note) : null,
-      all.length ? h('p.hint', {}, `${shown.length} of ${all.length} series`) : null,
+      all.length || note ? h('p.hint', {}, [all.length ? `${shown.length} of ${all.length} series` : '', note].filter(Boolean).join(' · ')) : null,
       noYear ? h('p.hint', {}, `${noYear} ${noYear === 1 ? 'game has' : 'games have'} no release year, so ${noYear === 1 ? 'its' : 'their'} order is only by title. Use Fill from IGDB in a game’s details to set it.`) : null,
       shown.length ? h('div.series-list.tiles', {}, shown.map(tile))
-        : h('div.empty', {}, all.length ? (onlyNew ? 'No series has a game you do not have yet (or nothing was read from IGDB yet).' : 'Nothing left to play in any series.') : 'No game has a series yet. Set one in a game’s details.'),
+        : !all.length ? emptyBox('No game has a series yet. Set one in a game’s details.', h('a.btn.primary', { href: '#/library' }, 'Open the Library'))
+          : onlyNew ? emptyBox(oldestFetch(index) ? 'No series has a game you do not have yet.' : 'Nothing was read from IGDB yet.', info.configured && !oldestFetch(index) && rbtn)
+            : emptyBox('Nothing left to play in any series.', h('button.chip', { type: 'button', onclick: () => { onlyLeft = false; draw(); } }, 'Show all series')),
     ].filter(Boolean));
   }
 
@@ -186,6 +190,7 @@ export function renderSeries(root, openKey = null) {
       h('span.si-actions', {}, addBtn, h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${m.title} from this series`, onclick: () => hide(m) }, 'Hide')));
   }
 
+  let showAllMissing = false;
   function drawSeries() {
     const s = buildSeries(store.games).find((x) => x.key === openKey);
     const back = h('a.chip.back', { href: '#/series' }, '‹ All series');
@@ -200,9 +205,11 @@ export function renderSeries(root, openKey = null) {
       h('ul', {}, extra.hidden.map((m) => h('li', {}, h('span', {}, m.title, h('small', {}, m.year ? ` (${m.year})` : '')),
         h('button.hide-chip', { type: 'button', 'aria-label': `Show ${m.title} again`, onclick: () => unhide(m) }, 'Show again'))))) : null;
     const [rbtn] = refreshBar();
+    const shelf = showAllMissing ? { items: shelfItems(s, extra), hidden: 0 } : collapseMissing(shelfItems(s, extra), SHOW_MISSING);
     page.replaceChildren(...[back, title, h('p.hint', {}, seriesSummary(s, extra)), bar(s),
       h('div.chips.sv-tools', {}, rbtn),
-      h('div.pgrid', {}, shelfItems(s, extra).map((it) => cell(it, s))),
+      h('div.pgrid', {}, shelf.items.map((it) => cell(it, s))),
+      shelf.hidden ? h('div.chips.sv-more', {}, h('button.chip', { type: 'button', onclick: () => { showAllMissing = true; draw(); } }, `Show all ${extra.missing.length} not in your library (${shelf.hidden} more)`)) : null,
       !extra.collections.length && info.configured ? h('p.hint', {}, 'No IGDB collection is known for this series yet. Link its games to IGDB, then use Refresh from IGDB.') : null,
       hidden].filter(Boolean));
     if (!focused) { focused = true; title.focus({ preventScroll: true }); }

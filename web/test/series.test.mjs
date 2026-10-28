@@ -74,7 +74,7 @@ test('seriesPosition follows release order and hides single-game series', () => 
 });
 
 // ---- not registered games ----
-import { seriesKey, missingIndex, extraOf, withMissing as seriesWithMissing, shelfItems, fanGames, seriesSummary, oldestFetch } from '../static/js/series.js';
+import { collapseMissing, seriesKey, missingIndex, extraOf, withMissing as seriesWithMissing, shelfItems, fanGames, seriesSummary, oldestFetch } from '../static/js/series.js';
 
 const miss = (igdb_id, title, year, o = {}) => ({ igdb_id, title, year, cover: null, collection_id: 7, ...o });
 const answer = (...series) => ({ configured: true, series });
@@ -173,4 +173,12 @@ test('moveHidden keeps a hidden game hidden when the index is rebuilt from the a
   moveHidden(resp, m, 'missing');
   idx = missingIndex(resp, games);
   assert.deepEqual([idx.get('zeds').missing.length, idx.get('zeds').hidden.length], [1, 0]);
+});
+
+test('a big series keeps its own games and the first missing ones, in order', () => {
+  const items = [{ kind: 'owned' }, { kind: 'missing', n: 1 }, { kind: 'wishlist' }, { kind: 'missing', n: 2 }, { kind: 'missing', n: 3 }, { kind: 'owned' }];
+  const c = collapseMissing(items, 2);
+  assert.deepEqual(c.items.map((x) => x.n ?? x.kind), ['owned', 1, 'wishlist', 2, 'owned']);
+  assert.equal(c.hidden, 1);
+  assert.equal(collapseMissing(items, 3).hidden, 0);
 });

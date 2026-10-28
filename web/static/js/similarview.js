@@ -1,7 +1,7 @@
 // Similar page: games IGDB lists as similar to the games the user finished or marked as a favourite, that the library
 // does not have, ranked by how many of those games suggest them, with Add, Wishlist and Hide. The list is read from the
 // server's cache; nothing here asks IGDB unless the owner presses Refresh from IGDB.
-import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
 import { store, similarList, similarRefresh, similarHide, similarUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
@@ -117,15 +117,16 @@ export function renderSimilar(root) {
     const empty = !items.length && !wished.length;
     let emptyText = 'Nothing to suggest right now.';
     if (!sources) emptyText = 'Finish a game, or mark one as a favourite, and link it to IGDB (game details, Edit, Fill from IGDB). Its similar games show up here.';
-    else if (loaded && !info.fetched_at) emptyText = info.configured ? 'Nothing was read yet. Press Refresh from IGDB.' : 'IGDB is not set up (keys are missing from .env).';
+    else if (loaded && !info.fetched_at) emptyText = info.configured ? 'Nothing was read from IGDB yet.' : 'IGDB is not set up (keys are missing from .env).';
+    const firstRead = empty && sources && loaded && !info.fetched_at && info.configured; // the Refresh button sits in the empty state, once
     page.replaceChildren(...[
       h('h1', {}, 'Similar games'),
       h('p.hint', {}, 'Games IGDB lists as similar to the ones you finished or marked as favourites, that you do not have. The more of your games suggest one, the higher it is.'),
-      h('div.chips', {}, btn),
-      note ? h('p.hint', {}, note) : null,
+      firstRead ? null : h('div.chips', {}, btn),
+      note && !firstRead ? h('p.hint', {}, note) : null,
       items.length ? h('ul.up-list', {}, items.map(row)) : null,
       wished.length ? h('section.up-group', {}, h('h2', {}, 'Already on your wishlist', h('small', {}, ` ${wished.length}`)), h('ul.up-list', {}, wished.map(row))) : null,
-      empty ? h('div.empty', {}, emptyText) : null,
+      empty ? emptyBox(emptyText, firstRead && btn) : null,
       items.length ? h('p.hint', {}, `${items.length} ${items.length === 1 ? 'suggestion' : 'suggestions'} from ${sources} of your games.`) : null,
       hidden.length ? h('details.hidden-list', {},
         h('summary', {}, `Hidden (${hidden.length})`),

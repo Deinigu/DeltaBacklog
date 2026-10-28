@@ -1,5 +1,5 @@
 // Manage saved views: open, rename, pin, reorder, duplicate, delete (with undo).
-import { h, toast, askNameDialog } from './util.js';
+import { h, emptyBox, toast, askNameDialog } from './util.js';
 import { stateFromView } from './filters.js';
 import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
@@ -33,7 +33,7 @@ export function renderViews(root) {
   }
 
   function draw() {
-    if (!store.views.length) { list.replaceChildren(h('div.empty', {}, 'No saved views yet.')); return; }
+    if (!store.views.length) { list.replaceChildren(emptyBox('No saved views yet. Filter the Library, then tap Save as view.', h('a.btn.primary', { href: '#/library' }, 'Open the Library'))); return; }
     list.replaceChildren(...store.views.map((v, i) => h('div.vrow', {},
       h('span.emoji', {}, v.icon || '⭐'),
       h('a.name', { href: `#/view/${v.id}`, style: 'text-decoration:none;color:inherit' }, v.name, h('small', {}, summary(v))),

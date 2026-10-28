@@ -2,7 +2,7 @@
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { createTtbFilter } from './ttbfilter.js';
 import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
-import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
+import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -222,7 +222,7 @@ export function renderLibrary(root, opts = {}) {
       }
       if (results.firstChild !== tableBox) { results.replaceChildren(tableBox); tableInst.mounted(); }
       tableInst.setList(list, state.sorts);
-    } else if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
+    } else if (!list.length) results.replaceChildren(emptyBox('No games match these filters.', (activeCount(state) || state.q) && h('button.btn', { type: 'button', onclick: reset }, view ? 'Revert' : 'Clear filters')));
     else if (reordering) {
       // Reordering always works on the manual order of exactly the games shown, whatever the sort is.
       const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);
