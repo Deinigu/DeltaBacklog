@@ -57,14 +57,7 @@ export const isReleased = (p, t) => (p.precision === 'day' ? p.endDay <= t.day :
 const startYM = (p) => p.year * 12 + p.month - 1;
 const endYM = (p) => p.year * 12 + p.endMonth - 1;
 
-/**
- * One list item from a library game (kind 'owned') or a cached IGDB game the library lacks (kind 'missing').
- * Common fields: id, kind, title, date, format, period, platforms (array), seriesName.
- */
-export function ownedItem(g) {
-  return { id: `g${g.id}`, kind: 'owned', title: g.title, date: g.release_date ?? null, format: g.release_format ?? null,
-    period: releasePeriod(g.release_date, g.release_format), platforms: g.platforms ?? [], seriesName: g.series?.trim() || null, game: g };
-}
+/** One list item from a cached IGDB game the library lacks. Fields: id, kind ('missing'), title, date, format, period, platforms (array), seriesName. */
 export function missingItem(m, seriesName) {
   return { id: `i${m.igdb_id}`, kind: 'missing', title: m.title, date: m.date ?? null, format: m.format ?? null,
     period: releasePeriod(m.date, m.format), platforms: m.platforms ? m.platforms.split(',').map((x) => x.trim()).filter(Boolean) : [], seriesName, missing: m };
@@ -74,8 +67,7 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 const byDate = (a, b) => a.period.endDay - b.period.endDay || a.period.startDay - b.period.startDay || collator.compare(a.title, b.title);
 
 /**
- * The Upcoming page: the Wishlist games of the library plus the games of the user's series (index = missingIndex())
- * that the library lacks, split into
+ * The Upcoming page: the games of the user's series (index = missingIndex()) that the library lacks, split into
  *  groups: [{ key, label, items }] in time order: months ("This month", "Next month", "March 2027"), a quarter ("Q3 2027")
  *          or a year ("2027") after the months it covers, and last "Later / TBA" (no date, or starting more than
  *          HORIZON_MONTHS away)
@@ -84,7 +76,7 @@ const byDate = (a, b) => a.period.endDay - b.period.endDay || a.period.startDay 
  */
 export function buildUpcoming(games, index, now = new Date(), { recentDays = RECENT_DAYS, horizon = HORIZON_MONTHS, locale = LOCALE } = {}) {
   const t = today(now);
-  const items = games.filter((g) => g.status === 'wishlist').map(ownedItem);
+  const items = [];
   const names = new Map(buildSeries(games).map((s) => [s.key, s.name]));
   const seen = new Set();
   for (const [key, extra] of index ?? []) {

@@ -183,7 +183,7 @@ export const seriesHide = (collectionId, igdbId) => request('POST', 'api/series/
 export const seriesUnhide = (collectionId, igdbId) => request('POST', 'api/series/unhide', { collection_id: collectionId, igdb_id: igdbId });
 
 // ---- the Similar page: IGDB's similar games of the finished and favourite games (cached by the server) ----
-/** Resolves {configured, suggestions: [{igdb_id, title, year, cover, v, parent, sources, hidden}], owned_roots, wishlist_roots, fetched_at, refresh}. */
+/** Resolves {configured, suggestions: [{igdb_id, title, year, cover, v, parent, sources, hidden}], owned_roots, fetched_at, refresh}. */
 export const similarList = () => request('GET', 'api/similar');
 /** Start reading the similar games from IGDB in the background; poll similarList() for its progress. */
 export const similarRefresh = () => request('POST', 'api/similar/refresh');
@@ -370,7 +370,7 @@ export function hltbSearch(q, year = 0) {
   return request('GET', `api/hltb/search?${p}`);
 }
 
-// ---- the Deals page: prices from IsThereAnyDeal for the Wishlist, Backlog and Up next (cached by the server) ----
+// ---- the Deals page: prices from IsThereAnyDeal for the Backlog and Up next (cached by the server) ----
 /** Resolves {configured, country, matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, fetched_at}], refresh}. Amounts are cents. */
 export const dealsList = () => request('GET', 'api/deals');
 /** Start reading the prices in the background; poll dealsList() for its progress. */
@@ -379,23 +379,5 @@ export const dealsRefresh = () => request('POST', 'api/deals/refresh');
 export const dealsSearch = (title) => request('GET', `api/deals/search?title=${encodeURIComponent(title)}`);
 /** Fix one game's match: {itad_id, title, slug} picks a game, {none: true} says there is none, {reset: true} goes back to automatic. Resolves the dealsList() answer. */
 export const dealsSetMatch = (gameId, body) => request('PUT', `api/games/${gameId}/deal-match`, body);
-// ---- the Steam page: the Steam library and the hours played (cached by the server) ----
-/** Resolves {configured, synced_at, apps: [{app_id, name, playtime_min, last_played, game_id, source, ignored}], refresh: {running, done, total, finished_at, report, failed}}. */
-export const steamList = () => request('GET', 'api/steam');
-/** Start reading the Steam library in the background; poll steamList() for its progress. */
-export const steamSync = () => request('POST', 'api/steam/sync');
-/** Fix one app's match: {game_id} picks a library game, {none: true} says there is none, {reset: true} goes back to automatic. Resolves the steamList() answer. */
-export const steamSetMatch = (appId, body) => request('PUT', `api/steam/apps/${appId}/match`, body);
-/** Hide an app from the review list (ignored: true) or show it again. Resolves the steamList() answer. */
-export const steamIgnore = (appId, ignored) => request('PUT', `api/steam/apps/${appId}/ignore`, { ignored });
-/** Copy the hours played from the server into the games we hold (after a sync or a changed match), then tell the views. */
-export async function refreshHours() {
-  const fresh = await getJSON('api/games');
-  for (const f of fresh) {
-    const g = store.byId.get(f.id);
-    if (g) { g.playtime_min = f.playtime_min; g.steam_last_played = f.steam_last_played; }
-  }
-  gamesChanged();
-}
 /** The country (two letters, such as ES) the prices are read for. Resolves the dealsList() answer. */
 export const dealsSetCountry = (country) => request('PUT', 'api/deals/country', { country });

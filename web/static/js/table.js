@@ -5,7 +5,7 @@ import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
 import { toCSV } from './csv.js';
 import { ownershipIcon } from './ownership.js';
-import { formatTime, ttbMinutes, playedMinutes } from './ttb.js';
+import { formatTime, ttbMinutes } from './ttb.js';
 import { yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 
 const ROW_H = 48; // keep in step with .tr and .thead in styles.css
@@ -32,7 +32,6 @@ export const COLUMNS = [
   { key: 'developer', label: 'Developer', w: 160, kind: 'lookup', text: (g) => g.developer ?? '', options: uniq((g) => (g.developer ? [g.developer] : [])), patch: (v) => ({ developer: v }) },
   { key: 'release_year', label: 'Released', w: 100, kind: 'number', sort: 'release', text: (g) => g.release_year ?? '', patch: (v) => ({ release_year: v }) },
   { key: 'ttb', label: 'Time to beat', w: 120, kind: 'readonly', sort: 'ttb', text: (g) => formatTime(ttbMinutes(g)) },
-  { key: 'playtime', label: 'Played', w: 90, kind: 'readonly', sort: 'playtime', text: (g) => formatTime(playedMinutes(g)) },
   { key: 'ownership', label: 'Ownership', w: 130, kind: 'lookup', text: (g) => g.ownership ?? '', options: uniq((g) => (g.ownership ? [g.ownership] : [])), patch: (v) => ({ ownership: v }) },
   { key: 'players', label: 'Played with', w: 170, kind: 'multi', text: (g) => g.players.join('; '), values: (g) => g.players, options: uniq((g) => g.players), patch: (v) => ({ players: v }) },
   { key: 'favorite', label: 'Favorite', w: 90, kind: 'bool', sort: 'favorite', text: (g) => (g.favorite ? 'yes' : ''), patch: (v) => ({ favorite: v }) },

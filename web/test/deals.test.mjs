@@ -76,14 +76,13 @@ test('a game nobody sells right now still lists, after the ones on sale', () => 
   assert.equal(rows[1].badge, null);
 });
 
-test('only Wishlist, Backlog and Up next; the status chips filter', () => {
-  const w = game('W', 'wishlist'), b = game('B', 'backlog'), u = game('U', 'up_next'), f = game('F', 'finished'), p = game('P', 'playing');
-  const info = { prices: [w, b, u, f, p].map((g) => price(g)), matches: [] };
-  assert.deepEqual(titles(buildDeals([w, b, u, f, p], info).rows).sort(), ['B', 'U', 'W']);
-  assert.deepEqual(titles(buildDeals([w, b, u, f, p], info, { statuses: new Set(['wishlist']) }).rows), ['W']);
-  assert.deepEqual(titles(buildDeals([w, b, u, f, p], info, { statuses: new Set(['wishlist', 'up_next']) }).rows).sort(), ['U', 'W']);
-  assert.deepEqual(titles(buildDeals([w, b, u, f, p], info, { statuses: new Set(['finished']) }).rows), [], 'a status that gets no prices shows nothing');
-  assert.equal(titles(buildDeals([w, b, u], info, { statuses: new Set() }).rows).length, 3, 'an empty selection means all');
+test('only Backlog and Up next; the status chips filter', () => {
+  const b = game('B', 'backlog'), u = game('U', 'up_next'), f = game('F', 'finished'), p = game('P', 'playing');
+  const info = { prices: [b, u, f, p].map((g) => price(g)), matches: [] };
+  assert.deepEqual(titles(buildDeals([b, u, f, p], info).rows).sort(), ['B', 'U']);
+  assert.deepEqual(titles(buildDeals([b, u, f, p], info, { statuses: new Set(['up_next']) }).rows), ['U']);
+  assert.deepEqual(titles(buildDeals([b, u, f, p], info, { statuses: new Set(['finished']) }).rows), [], 'a status that gets no prices shows nothing');
+  assert.equal(titles(buildDeals([b, u], info, { statuses: new Set() }).rows).length, 2, 'an empty selection means all');
 });
 
 test('games without a price are told apart: no match, and matched but not read yet', () => {
@@ -109,7 +108,7 @@ test('lookups, the oldest check and links', () => {
   assert.equal(safeLink('data:text/html,x'), null);
   assert.equal(safeLink('not a url'), null);
   assert.equal(safeLink(null), null);
-  assert.ok(isWatched({ status: 'wishlist' }) && !isWatched({ status: 'finished' }));
+  assert.ok(isWatched({ status: 'backlog' }) && !isWatched({ status: 'finished' }));
 });
 
 test('the price line', () => {

@@ -20,7 +20,6 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
 	"github.com/Deinigu/DeltaBacklog/internal/shots"
-	"github.com/Deinigu/DeltaBacklog/internal/steam"
 	"github.com/Deinigu/DeltaBacklog/web"
 )
 
@@ -116,14 +115,13 @@ func main() {
 		return
 	}
 
-	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "sync-steam" && os.Args[1] != "fetch-posters" && os.Args[1] != "backup" && os.Args[1] != "backup-screenshots" { // a typo must not start the server
+	if len(os.Args) > 1 && os.Args[1] != "sync-igdb" && os.Args[1] != "fetch-posters" && os.Args[1] != "backup" && os.Args[1] != "backup-screenshots" { // a typo must not start the server
 		fmt.Fprint(os.Stderr, "deltabacklog "+version+"\n\n"+
 			"usage: deltabacklog                      serve the app\n"+
 			"       deltabacklog backup <file>         write a copy of the database\n"+
 			"       deltabacklog backup-screenshots [--min-free-gb N] <dir>  copy screenshots missing from <dir> (never deletes)\n"+
 			"       deltabacklog check <file>          verify a database or backup\n"+
 			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n"+
-			"       deltabacklog sync-steam [--dry-run] read the Steam library and the hours played\n"+
 			"       deltabacklog fetch-posters [--dry-run] [--limit N] [--upgrade]  make the portrait posters of the rankings\n")
 		if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
 			return
@@ -141,11 +139,6 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "sync-igdb" {
 		mc := meta.New(meta.Config{IGDBClientID: os.Getenv("IGDB_CLIENT_ID"), IGDBClientSecret: os.Getenv("IGDB_CLIENT_SECRET")})
 		os.Exit(igdblink.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), mc, os.Stdout))
-	}
-
-	// `deltabacklog sync-steam [--dry-run] [--db path]`: read the Steam library and the hours played (see docs/developer-manual.md).
-	if len(os.Args) > 1 && os.Args[1] == "sync-steam" {
-		os.Exit(steam.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), steam.New(os.Getenv("STEAM_API_KEY"), os.Getenv("STEAM_ID")), os.Stdout))
 	}
 
 	// `deltabacklog fetch-posters [--dry-run] [--limit N] [--upgrade] [--db path]`: make the portrait posters of every game
@@ -221,11 +214,8 @@ func main() {
 
 	itad := deals.New(os.Getenv("ITAD_API_KEY"))
 	log.Printf("prices: IsThereAnyDeal %s", onOff(itad.Configured()))
-	stm := steam.New(os.Getenv("STEAM_API_KEY"), os.Getenv("STEAM_ID"))
-	log.Printf("steam: %s", onOff(stm.Configured()))
 	srv := &api.Server{DB: d, CoverDir: filepath.Join(dataDir, "covers"), Meta: mc, ShotDir: shotDir,
 		Deals:       itad,
-		Steam:       stm,
 		ShotMaxFile: envMB("SCREENSHOT_MAX_MB", 25), ShotMaxRequest: envMB("SCREENSHOT_REQUEST_MAX_MB", 200),
 		ShotDecodeBudget: envMB("SCREENSHOTS_DECODE_BUDGET_MB", 48)}
 	if !srv.ShotStorageOK() {

@@ -175,14 +175,6 @@ export function renderSeries(root, openKey = null) {
         h('button.si', { type: 'button', onclick: () => openDrawer(g), 'aria-label': `${g.title}, ${g.release_year ?? 'year unknown'}, ${STATE_LABEL[state]}${st ? `, ${st.label}` : ''}` }, box),
         h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
     }
-    if (item.kind === 'wishlist') { // not in the library yet: the missing look, with its own mark
-      const g = item.game;
-      const box = poster(g, '.pst-missing');
-      box.append(h('i.pnew', {}, 'On your wishlist'));
-      return h('div.shelf-cell.missing.wish', {},
-        h('button.si', { type: 'button', onclick: () => openDrawer(g), 'aria-label': `${g.title}, ${g.release_year ?? 'year unknown'}, on your wishlist` }, box),
-        h('span.si-name', {}, g.title), h('small', {}, g.release_year ?? 'Year unknown'));
-    }
     const m = item.game;
     const url = missingPosterURL(m.cover, m.v);
     const box = h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(m.title)}` }, h('b', {}, m.title)));

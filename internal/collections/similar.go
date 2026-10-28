@@ -31,10 +31,9 @@ type SimilarSource interface {
 // maxSimilarPosters bounds the posters one refresh downloads (the best ranked suggestions first), to spare the Pi.
 const maxSimilarPosters = 300
 
-// sourceSQL selects the library games that suggest others: linked to IGDB, and finished or a favourite. A game on the
-// wishlist is not played, so it is never a source.
+// sourceSQL selects the library games that suggest others: linked to IGDB, and finished or a favourite.
 const sourceSQL = `SELECT g.id, g.igdb_id FROM game g JOIN status s ON s.id = g.status_id
-	WHERE g.igdb_id IS NOT NULL AND s.code <> 'wishlist' AND (s.code = 'finished' OR g.favorite = 1) ORDER BY g.id`
+	WHERE g.igdb_id IS NOT NULL AND (s.code = 'finished' OR g.favorite = 1) ORDER BY g.id`
 
 // RefreshSimilar reads the similar games of the library's finished and favourite games from IGDB and stores them with
 // the posters of the ones the library lacks. It is resumable: a batch that was read stays stored when a later one fails
@@ -264,7 +263,7 @@ func storeSimilar(d *sql.DB, got map[int64][]meta.CollectionGame, res resolver) 
 // library has become to own, and the poster files no row of either cache names. The hide list is kept as it is.
 func pruneSimilar(d *sql.DB, coverDir string, fam family) error {
 	live := `(SELECT g.igdb_id FROM game g JOIN status s ON s.id = g.status_id
-		WHERE g.igdb_id IS NOT NULL AND s.code <> 'wishlist' AND (s.code = 'finished' OR g.favorite = 1))`
+		WHERE g.igdb_id IS NOT NULL AND (s.code = 'finished' OR g.favorite = 1))`
 	for _, q := range []string{
 		`DELETE FROM similar_link WHERE source_igdb_id NOT IN ` + live,
 		`DELETE FROM similar_fetch WHERE source_igdb_id NOT IN ` + live,
@@ -326,15 +325,14 @@ type Suggestion struct {
 
 // SimilarList is what the Similar page needs.
 type SimilarList struct {
-	Suggestions   []Suggestion `json:"suggestions"`
-	OwnedRoots    []int64      `json:"owned_roots"`    // roots of the library's games, wishlist excluded
-	WishlistRoots []int64      `json:"wishlist_roots"` // roots of the games on the wishlist
-	FetchedAt     string       `json:"fetched_at"`     // when the oldest source was read; "" before the first refresh
+	Suggestions []Suggestion `json:"suggestions"`
+	OwnedRoots  []int64      `json:"owned_roots"` // roots of the library's games
+	FetchedAt   string       `json:"fetched_at"`  // when the oldest source was read; "" before the first refresh
 }
 
-// rootsWhere lists the roots of the version chains of the library's linked games whose status matches cond, sorted.
-func rootsWhere(d *sql.DB, cond string) ([]int64, error) {
-	rows, err := d.Query(`SELECT g.igdb_id, coalesce(g.igdb_parent_id, 0) FROM game g JOIN status s ON s.id = g.status_id WHERE g.igdb_id IS NOT NULL AND ` + cond)
+// ownedRoots lists the roots of the version chains of the library's linked games, sorted.
+func ownedRoots(d *sql.DB) ([]int64, error) {
+	rows, err := d.Query(`SELECT igdb_id, coalesce(igdb_parent_id, 0) FROM game WHERE igdb_id IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -355,15 +353,11 @@ func rootsWhere(d *sql.DB, cond string) ([]int64, error) {
 	return out, rows.Err()
 }
 
-// LoadSimilar reads the cached suggestions: every cached game the library does not own (the whole family, wishlist
-// games not counted: those come back as WishlistRoots for the page to mark), hidden ones flagged. One query for the
+// LoadSimilar reads the cached suggestions: every cached game the library does not own (the whole family), hidden
+// ones flagged. One query for the
 // suggestions; the page ranks them.
 func LoadSimilar(d *sql.DB) (*SimilarList, error) {
-	owned, err := rootsWhere(d, `s.code <> 'wishlist'`)
-	if err != nil {
-		return nil, err
-	}
-	wish, err := rootsWhere(d, `s.code = 'wishlist'`)
+	owned, err := ownedRoots(d)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +365,7 @@ func LoadSimilar(d *sql.DB) (*SimilarList, error) {
 	for _, r := range owned {
 		ownedSet[r] = true
 	}
-	out := &SimilarList{Suggestions: []Suggestion{}, OwnedRoots: owned, WishlistRoots: wish}
+	out := &SimilarList{Suggestions: []Suggestion{}, OwnedRoots: owned}
 	rows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file, coalesce(g.cover_image,''), g.parent_igdb_id, g.first_release_date, g.release_date_format,
 			EXISTS (SELECT 1 FROM similar_hidden h WHERE h.igdb_id = g.igdb_id), group_concat(l.source_igdb_id)
 		FROM similar_game g JOIN similar_link l ON l.similar_igdb_id = g.igdb_id GROUP BY g.igdb_id ORDER BY g.igdb_id`)

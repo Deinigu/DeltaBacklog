@@ -57,22 +57,19 @@ func TestCollectionGamesStoreTheirDates(t *testing.T) {
 	}
 }
 
-func TestRefreshReadsDatesOfWishlistAndUndatedGames(t *testing.T) {
+func TestRefreshReadsDatesOfUndatedAndUnreleasedGames(t *testing.T) {
 	d := open(t)
 	now := time.Now()
 	old := now.AddDate(-3, 0, 0).Unix()
 	future := now.AddDate(0, 6, 0).Unix()
-	wish := addGame(t, d, "Wish", "", 500)
 	undated := addGame(t, d, "Undated", "", 501)
 	released := addGame(t, d, "Released long ago", "", 502)
 	soon := addGame(t, d, "Not out yet", "", 503)
 	unlinked := addGame(t, d, "Unlinked", "", 0)
-	d.Exec(`UPDATE game SET status_id = (SELECT id FROM status WHERE code = 'wishlist'), first_release_date = ?, release_date_format = 0 WHERE id = ?`, old, wish)
 	d.Exec(`UPDATE game SET first_release_date = ?, release_date_format = 0 WHERE id = ?`, old, released)
 	d.Exec(`UPDATE game SET first_release_date = ?, release_date_format = 2 WHERE id = ?`, future, soon)
 
 	f := &dateFake{fake: newFake(), dates: map[int64]meta.ReleaseOf{
-		500: {Release: meta.Release{Date: future, Format: meta.FormatMonth}},
 		501: {Release: meta.Release{Date: old, Format: meta.FormatDay}},
 		503: {}, // IGDB now says TBD: the date is cleared
 		502: {Release: meta.Release{Date: now.Unix(), Format: 0}},
@@ -82,16 +79,13 @@ func TestRefreshReadsDatesOfWishlistAndUndatedGames(t *testing.T) {
 	if err != nil || rep.Stopped != "" {
 		t.Fatalf("%+v %v", rep, err)
 	}
-	if len(f.asked) != 1 || len(f.asked[0]) != 3 { // wish, undated, soon; not the long-released one
+	if len(f.asked) != 1 || len(f.asked[0]) != 2 { // undated, soon; not the long-released one
 		t.Errorf("asked %v", f.asked)
 	}
 	get := func(id int64) (date, format *int64) {
 		var dt, fm *int64
 		d.QueryRow(`SELECT first_release_date, release_date_format FROM game WHERE id = ?`, id).Scan(&dt, &fm)
 		return dt, fm
-	}
-	if dt, fm := get(wish); dt == nil || *dt != future || *fm != meta.FormatMonth {
-		t.Errorf("wish: %v %v", dt, fm)
 	}
 	if dt, _ := get(undated); dt == nil || *dt != old {
 		t.Errorf("undated: %v", dt)
@@ -105,18 +99,17 @@ func TestRefreshReadsDatesOfWishlistAndUndatedGames(t *testing.T) {
 	if dt, _ := get(unlinked); dt != nil {
 		t.Errorf("unlinked: %v", dt)
 	}
-	if rep.Dates != 2 {
+	if rep.Dates != 1 {
 		t.Errorf("report %+v", rep)
 	}
 }
 
-// A game on the wishlist is a library game like any other: its whole IGDB version family counts as owned, so the
-// original and the remaster of a wishlisted game are not offered a second time as "not in your library".
-func TestWishlistGameOwnsItsFamily(t *testing.T) {
+// A library game owns its whole IGDB version family, so the original and the remaster of a game are not offered a
+// second time as "not in your library".
+func TestLibraryGameOwnsItsFamily(t *testing.T) {
 	d := open(t)
 	addGame(t, d, "Zed", "Zeds", 100)
-	wish := addGame(t, d, "Zed II (wishlist)", "Zeds", 101)
-	d.Exec(`UPDATE game SET status_id = (SELECT id FROM status WHERE code = 'wishlist') WHERE id = ?`, wish)
+	addGame(t, d, "Zed II", "Zeds", 101)
 	f := newFake()
 	f.games[7] = []meta.CollectionGame{
 		{IGDBID: 100, Name: "Zed", Year: 1997},

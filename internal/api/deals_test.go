@@ -44,7 +44,7 @@ func dealsServer(t *testing.T, src deals.Source) (*httptest.Server, *sql.DB) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	for i, s := range []string{"wishlist", "backlog", "finished"} {
+	for i, s := range []string{"up_next", "backlog", "finished"} {
 		d.Exec(`INSERT INTO game(id, title, title_sort, status_id) VALUES (?, ?, ?, (SELECT id FROM status WHERE code = ?))`, i+1, "Game "+s, s, s)
 	}
 	srv := httptest.NewServer((&Server{DB: d, CoverDir: t.TempDir(), Deals: src}).Handler())

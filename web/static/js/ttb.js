@@ -89,20 +89,6 @@ export function ttbTiles(g) {
 
 export const hasTimes = (g) => TTB_KINDS.some((k) => has(g[k.key]));
 
-/** Minutes played on Steam (the server's `playtime_min`), or null when none (never read, or never played). */
-export const playedMinutes = (g) => (has(g.playtime_min) ? g.playtime_min : null);
-
-/**
- * The hours played, next to the time to beat when there is one: "12 h of ~15 h"; just "12 h" without an estimate; "" when
- * nothing was played. The estimate is the one ttbMinutes picks, so it matches the table and the totals.
- */
-export function playedOfText(g) {
-  const played = playedMinutes(g);
-  if (played === null) return '';
-  const est = ttbMinutes(g);
-  return est === null ? formatTime(played) : `${formatTime(played)} of ~${formatTime(est)}`;
-}
-
 /** Where the times come from, for the small note under them. Times without a recorded source are IGDB's (older data). */
 export function ttbSourceNote(g) {
   if (!hasTimes(g)) return '';

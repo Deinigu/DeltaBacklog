@@ -1,4 +1,4 @@
-// Package deals reads game prices from the IsThereAnyDeal (ITAD) API v2 and keeps them for the Wishlist, Backlog and Up
+// Package deals reads game prices from the IsThereAnyDeal (ITAD) API v2 and keeps them for the Backlog and Up
 // next games. Only the one ITAD host is ever called, with the key in a header (never in a URL, so an error message cannot
 // leak it).
 package deals

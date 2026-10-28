@@ -34,7 +34,7 @@ func TestSimilarGamesMigration(t *testing.T) {
 	for _, q := range []string{
 		`PRAGMA user_version = 14`,
 		`INSERT INTO game(id, title, title_sort, status_id, igdb_id, favorite) VALUES (1,'Zed','zed',(SELECT id FROM status WHERE code='finished'),100,1)`,
-		`INSERT INTO game(id, title, title_sort, status_id) VALUES (2,'Wished','wished',(SELECT id FROM status WHERE code='wishlist'))`,
+		`INSERT INTO game(id, title, title_sort, status_id) VALUES (2,'Wished','wished',(SELECT id FROM status WHERE code='backlog'))`,
 		`INSERT INTO igdb_collection(id, name, fetched_at) VALUES (7, 'Zed Series', '2026-01-01T00:00:00Z')`,
 		`INSERT INTO igdb_collection_game(collection_id, igdb_id, title, game_type, cover_file) VALUES (7, 101, 'Zed II', 0, 'i101.jpg')`,
 		`INSERT INTO series_hidden(collection_id, igdb_id) VALUES (7, 101)`,
@@ -55,7 +55,7 @@ func TestSimilarGamesMigration(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM game`).Scan(&games)
 	d.QueryRow(`SELECT count(*) FROM igdb_collection_game`).Scan(&cached)
 	d.QueryRow(`SELECT count(*) FROM series_hidden`).Scan(&hidden)
-	if version != 17 || games != 2 || cached != 1 || hidden != 1 {
+	if version != 18 || games != 2 || cached != 1 || hidden != 1 {
 		t.Errorf("version %d games %d cached %d hidden %d", version, games, cached, hidden)
 	}
 	for _, table := range []string{"similar_game", "similar_link", "similar_fetch", "similar_hidden"} {

@@ -7,12 +7,11 @@ const game = (title, igdb, o = {}) => ({ id: ++n, title, igdb_id: igdb, status: 
 const done = (title, igdb, years = [], o = {}) => game(title, igdb, { status: 'finished', years, ...o });
 const sugg = (id, title, sources, o = {}) => ({ igdb_id: id, title, year: 2010, cover: null, v: '', parent: 0, date: null, format: null, sources, hidden: false, ...o });
 
-test('sources: linked, not wished for, finished or favourite', () => {
+test('sources: linked, and finished or a favourite', () => {
   assert.ok(isSource(done('A', 1)));
   assert.ok(isSource(game('B', 2, { favorite: true })));
   assert.ok(!isSource(game('C', 3)));
   assert.ok(!isSource(done('D', null)));
-  assert.ok(!isSource(game('E', 5, { status: 'wishlist', favorite: true })));
 });
 
 test('sources of a suggestion come newest first and drop the ones that stopped being sources', () => {
@@ -62,19 +61,6 @@ test('a suggestion that was added since is dropped without a refresh', () => {
   const resp = { suggestions: [sugg(10, 'Later added', [1])] };
   assert.equal(similarIndex(resp, [src]).items.length, 1);
   assert.equal(similarIndex(resp, [src, game('Later added', 10)]).items.length, 0);
-});
-
-test('wishlist games are marked, not suggested', () => {
-  const src = done('Src', 1);
-  const wish = game('Wished', 10, { status: 'wishlist' });
-  const resp = { wishlist_roots: [20], suggestions: [sugg(10, 'Wished', [1]), sugg(21, 'Edition of wished', [1], { parent: 20 }), sugg(11, 'Free', [1])] };
-  const { items, wished } = similarIndex(resp, [src, wish]);
-  assert.deepEqual(items.map((s) => s.title), ['Free']);
-  assert.deepEqual(wished.map((s) => s.title).sort(), ['Edition of wished', 'Wished']);
-  assert.equal(wished.find((s) => s.igdb_id === 10).game, wish);
-  // a wished game that was moved to the backlog is owned and gone
-  wish.status = 'backlog';
-  assert.deepEqual(similarIndex(resp, [src, wish]).wished.map((s) => s.title), ['Edition of wished']);
 });
 
 test('hidden suggestions are listed apart and survive rebuilding the index (games-changed)', () => {

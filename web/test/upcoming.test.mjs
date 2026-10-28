@@ -7,8 +7,9 @@ const NOW = new Date(2026, 9, 27, 12, 0, 0); // 27 Oct 2026, noon on the viewer'
 
 let n = 0;
 const game = (title, o = {}) => ({ id: ++n, title, status: 'backlog', series: null, platforms: [], release_date: null, release_format: null, years: [], periods: [], release_year: null, ...o });
-const wish = (title, date, format, o = {}) => game(title, { status: 'wishlist', release_date: date, release_format: format, ...o });
 const miss = (id, title, o = {}) => ({ igdb_id: id, collection_id: 1, title, year: null, date: null, format: null, platforms: null, cover: null, ...o });
+const wish = (title, date, format, o = {}) => miss(++n, title, { date, format, ...o }); // a cached game of a series the library lacks
+const idx = (...items) => new Map([['s', { missing: items, hidden: [], collections: [] }]]);
 
 test('precision is kept: a year release is "2027", never a day', () => {
   assert.equal(formatRelease(utc(2027, 12, 31), 2, 'en'), '2027');
@@ -42,9 +43,8 @@ test('months: This month, Next month, then named months in time order; Later / T
   const games = [
     wish('Dec', utc(2026, 12, 1), 0), wish('Soon', utc(2026, 10, 30), 0), wish('Nov B', utc(2026, 11, 20), 0), wish('Nov A', utc(2026, 11, 5), 0),
     wish('Unknown', null, null),
-    game('Owned, not wishlist', { release_date: utc(2026, 11, 5), release_format: 0 }),
   ];
-  const { groups, recent } = buildUpcoming(games, new Map(), NOW, { locale: 'en' });
+  const { groups, recent } = buildUpcoming([], idx(...games), NOW, { locale: 'en' });
   assert.deepEqual(groups.map((g) => g.label), ['This month', 'Next month', 'December 2026', 'Later / TBA']);
   assert.deepEqual(groups[1].items.map((i) => i.title), ['Nov A', 'Nov B']);
   assert.deepEqual(groups[3].items.map((i) => i.title), ['Unknown']);
@@ -53,7 +53,7 @@ test('months: This month, Next month, then named months in time order; Later / T
 
 test('a quarter or a year sits after the months it covers; a far release goes to Later', () => {
   const games = [wish('Year', utc(2027, 12, 31), 2), wish('Q1', utc(2027, 3, 31), 3), wish('Mar', utc(2027, 3, 10), 0), wish('Jan', utc(2027, 1, 15), 1), wish('Far', utc(2030, 5, 5), 0)];
-  const { groups } = buildUpcoming(games, new Map(), NOW, { locale: 'en' });
+  const { groups } = buildUpcoming([], idx(...games), NOW, { locale: 'en' });
   assert.deepEqual(groups.map((g) => g.label), ['January 2027', 'March 2027', 'Q1 2027', '2027', 'Later / TBA']);
   assert.deepEqual(groups[4].items.map((i) => i.title), ['Far']);
 });
@@ -66,13 +66,13 @@ test('recently released: the last 60 days, newest first; older ones are not list
     wish('Today', utc(2026, 10, 27), 0),
     wish('Last month', utc(2026, 9, 10), 1), // September is over, its end was 27 days ago
   ];
-  const { groups, recent } = buildUpcoming(games, new Map(), NOW);
+  const { groups, recent } = buildUpcoming([], idx(...games), NOW);
   assert.deepEqual(recent.map((i) => i.title), ['Today', 'Last week', 'Last month', 'Edge']);
   assert.equal(groups.length, 0);
 });
 
-test('games of the series the library lacks join the wishlist; no duplicates; the series name is the userâ€™s', () => {
-  const games = [game('Zed', { series: 'Zeds' }), wish('Wish', utc(2026, 11, 2), 0, { series: 'Zeds' })];
+test('games of the series the library lacks are listed; no duplicates; the series name is the userâ€™s', () => {
+  const games = [game('Zed', { series: 'Zeds' })];
   const index = new Map([
     ['zeds', { missing: [miss(1, 'Zed II', { date: utc(2026, 11, 9), format: 0, platforms: 'PC, PS5' }), miss(2, 'Zed TBA')], hidden: [], collections: [] }],
     ['other', { missing: [miss(2, 'Zed TBA')], hidden: [], collections: [] }],
@@ -80,10 +80,10 @@ test('games of the series the library lacks join the wishlist; no duplicates; th
   const { groups, total } = buildUpcoming(games, index, NOW, { locale: 'en' });
   assert.deepEqual(groups.map((g) => g.label), ['Next month', 'Later / TBA']);
   const next = groups[0].items;
-  assert.deepEqual(next.map((i) => [i.title, i.kind, i.seriesName]), [['Wish', 'owned', 'Zeds'], ['Zed II', 'missing', 'Zeds']]);
-  assert.deepEqual(next[1].platforms, ['PC', 'PS5']);
+  assert.deepEqual(next.map((i) => [i.title, i.kind, i.seriesName]), [['Zed II', 'missing', 'Zeds']]);
+  assert.deepEqual(next[0].platforms, ['PC', 'PS5']);
   assert.deepEqual(groups[1].items.map((i) => i.title), ['Zed TBA']);
-  assert.equal(total, 3);
+  assert.equal(total, 2);
 });
 
 test('time zones: months follow the UTC date of the release, "today" the viewerâ€™s own calendar date', () => {
@@ -93,7 +93,7 @@ test('time zones: months follow the UTC date of the release, "today" the viewerâ
     for (const tz of ['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Asia/Tokyo']) {
       process.env.TZ = tz;
       const now = new Date(2026, 9, 27, 12); // local noon in that zone
-      const { groups } = buildUpcoming(games, new Map(), now, { locale: 'en' });
+      const { groups } = buildUpcoming([], idx(...games), now, { locale: 'en' });
       assert.deepEqual(groups.map((g) => [g.label, g.items.map((i) => i.title)]), [['Next month', ['Last']], ['December 2026', ['First']]], tz);
       assert.equal(formatRelease(utc(2026, 12, 1), 0, 'en'), 'Dec 1, 2026', tz);
     }
@@ -101,7 +101,7 @@ test('time zones: months follow the UTC date of the release, "today" the viewerâ
     process.env.TZ = 'America/Los_Angeles';
     const late = new Date(2026, 9, 31, 23, 30);
     const g2 = [wish('Halloween', utc(2026, 10, 31), 0), wish('Nov', utc(2026, 11, 1), 0)];
-    const r = buildUpcoming(g2, new Map(), late, { locale: 'en' });
+    const r = buildUpcoming([], idx(...g2), late, { locale: 'en' });
     assert.deepEqual(r.recent.map((i) => i.title), ['Halloween']);
     assert.deepEqual(r.groups.map((g) => g.label), ['Next month']);
   } finally {
@@ -112,6 +112,6 @@ test('time zones: months follow the UTC date of the release, "today" the viewerâ
 test('dates are English whatever the browser language: a fixed en-GB locale by default', () => {
   assert.equal(formatRelease(utc(2026, 11, 5), 0), '5 Nov 2026');
   assert.equal(formatRelease(utc(2026, 11, 1), 1), 'November 2026');
-  const { groups } = buildUpcoming([wish('Dec', utc(2026, 12, 1), 0)], new Map(), NOW);
+  const { groups } = buildUpcoming([], idx(wish('Dec', utc(2026, 12, 1), 0)), NOW);
   assert.equal(groups[0].label, 'December 2026');
 });

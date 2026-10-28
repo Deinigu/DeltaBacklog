@@ -4,8 +4,8 @@
 #   deploy/deploy.sh [--seed <dir>] [--env <file>]
 #
 #   --seed <dir>   first install: <dir> holds app.db and covers/ (ignored when the Pi already has a database)
-#   --env <file>   a .env with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, STEAMGRIDDB_API_KEY, ITAD_API_KEY, STEAM_API_KEY,
-#                  STEAM_ID; installed as the service's settings (root only on the Pi). Without it the existing settings are kept.
+#   --env <file>   a .env with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, STEAMGRIDDB_API_KEY, ITAD_API_KEY;
+#                  installed as the service's settings (root only on the Pi). Without it the existing settings are kept.
 #   DEPLOY_HOST    the ssh host name (default: raspberry)
 #
 # Go must be on PATH. Nothing is built or run on the Pi.
@@ -40,7 +40,7 @@ if [ -n "$ENVFILE" ]; then
     echo "LISTEN_ADDR=:8081"
     echo "DATA_DIR=/var/lib/deltabacklog"
     echo "GOMEMLIMIT=96MiB"
-    grep -E '^(IGDB_CLIENT_ID|IGDB_CLIENT_SECRET|STEAMGRIDDB_API_KEY|ITAD_API_KEY|STEAM_API_KEY|STEAM_ID)=' "$ENVFILE" || true
+    grep -E '^(IGDB_CLIENT_ID|IGDB_CLIENT_SECRET|STEAMGRIDDB_API_KEY|ITAD_API_KEY)=' "$ENVFILE" || true
   } > "$OUT/env"
 fi
 

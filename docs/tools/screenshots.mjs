@@ -147,7 +147,7 @@ await shot(p, 'series-phone');
 await clickText(p, 'a.tile', 'Ace Attorney'); await wait(1200);
 await shot(p, 'series-shelf-phone');
 
-await go(p, '#/upcoming'); await wait(1200); // the wishlist (made-up dates) and the series' new games read above
+await go(p, '#/upcoming'); await wait(1200); // the series' new games read above
 await shot(p, 'upcoming-phone');
 
 await go(p, '#/similar');
@@ -165,9 +165,6 @@ await shot(p, 'similar-phone');
 
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
-
-await go(p, '#/steam'); await wait(800); // a made-up Steam library from the demo data (nothing is read from Steam)
-await shot(p, 'steam-phone');
 
 await go(p, '#/stats');
 await shot(p, 'stats-phone');
