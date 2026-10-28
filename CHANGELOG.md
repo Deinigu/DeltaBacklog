@@ -4,6 +4,10 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- **Default order is now Status, then Title** (it was Status, Manual order, Title). Views with no sort of their own no longer show your manual queue; the starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged. Add *Manual order* as a sort level to any view that should show your ranking. No migration.
+
 ### Added
 
 - **Deals**: a **Deals** page (`#/deals`, More menu on a phone) with the best price right now and the historical low of the games on your Wishlist, in your Backlog and Up next, from IsThereAnyDeal (ITAD). Games on sale come first (biggest cut), then games that are not on sale but sit at or near their low; a **Historical low** or **Near low (within 10%)** badge (only when the low was a real discount or the game is on sale now), the shop, the regular price, the cut, the end date when ITAD gives one, and a **View deal** link to the shop (a new tab). Filter chips for Wishlist / Backlog / Up next, three sorts (biggest discount, closest to the low, lowest price), a *Last checked* note and a country setting (default `ES`, so EUR). A game's details show the same price line, and **Wrong game?** / **Pick the game** to fix a match by searching ITAD by title (or say there is none). Games are matched by their Steam link's app id when they have one, else by an exact title; a game with no exact match is listed apart rather than guessed. Prices are read only by **Refresh prices** (a background run with progress, one at a time, 50 games per request, stops with what it stored on a 429), never on a page load. Needs `ITAD_API_KEY` in `.env` (on the Pi: `/etc/deltabacklog.env`); without it the page says it is not set up. Migration 016: `setting`, `deal_match`, `deal_price`. New endpoints `GET /api/deals`, `POST /api/deals/refresh`, `GET /api/deals/search`, `PUT /api/deals/country`, `PUT /api/games/{id}/deal-match`.

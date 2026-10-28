@@ -34,10 +34,29 @@ test('series sorts by name, then title; games without a series go last', () => {
   assert.deepEqual(titles(list, [{ field: 'series', dir: 'asc' }]), ['a1', 'x1', 'x3', 'solo']);
 });
 
-test('default order is status, manual, title', () => {
-  const list = [g('z', { status: 'playing', queue_pos: 2 }), g('y', { status: 'playing', queue_pos: 1 }), g('a', { status: 'backlog', queue_pos: 1 })];
+test('default order is status, then title (manual order is ignored)', () => {
+  const list = [g('z', { status: 'playing', queue_pos: 1 }), g('y', { status: 'playing', queue_pos: 2 }), g('a', { status: 'backlog', queue_pos: 1 })];
   assert.deepEqual(titles(list, []), ['y', 'z', 'a']);
-  assert.ok(DEFAULT_SORT.length === 3);
+  assert.deepEqual(DEFAULT_SORT.map((l) => l.field), ['status', 'title']);
+});
+
+test('an explicit manual order still follows the queue (Up next, Playing now starter views)', () => {
+  const list = [g('b', { queue_pos: 1 }), g('a', { queue_pos: 2 })];
+  assert.deepEqual(titles(list, [{ field: 'manual', dir: 'asc' }]), ['b', 'a']);
+  const mixed = [g('z', { status: 'playing', queue_pos: 1 }), g('y', { status: 'playing', queue_pos: 2 }), g('a', { status: 'backlog', queue_pos: 1 })];
+  assert.deepEqual(titles(mixed, [{ field: 'status', dir: 'asc' }, { field: 'manual', dir: 'asc' }]), ['z', 'y', 'a']);
+});
+
+test('the empty sort is the default, and an empty sort url means the default', () => {
+  const list = [g('b', { status: 'finished' }), g('c', { status: 'playing' }), g('a', { status: 'playing' })];
+  assert.deepEqual(titles(list, parseSort('')), titles(list, DEFAULT_SORT));
+  assert.deepEqual(titles(list, []), ['a', 'c', 'b']);
+});
+
+test('grouping by status keeps title order inside each group by default', () => {
+  const list = [g('z', { status: 'playing', queue_pos: 1 }), g('a', { status: 'playing', queue_pos: 2 })];
+  const groups = groupGames([...list].sort(buildComparator([])), 'status');
+  assert.deepEqual(groups[0].games.map((x) => x.title), ['a', 'z']);
 });
 
 test('favorites first', () => {
