@@ -58,11 +58,13 @@ export function renderRankings(root) {
           h('span.rkc-sub', {}, `${r.games} game${r.games === 1 ? '' : 's'} · ${r.ranked} ranked · ${r.tiers.length} tier${r.tiers.length === 1 ? '' : 's'}`),
           r.description && h('span.rkc-desc', {}, r.description),
           stripes));
-      const btn = (label, glyph, fn, off) => h('button.btn', { type: 'button', 'aria-label': `${label}: ${r.name}`, title: label, disabled: off || null, onclick: fn }, glyph);
+      const btn = (label, glyph, fn, off, cls = '') => h('button.btn' + cls, { type: 'button', 'aria-label': `${label}: ${r.name}`, title: label, disabled: off || null, onclick: fn }, glyph);
+      // The arrows only exist when there is something to reorder; at the ends the missing one leaves its place empty.
+      const arrows = list.length > 1 ? [btn('Move up', '▲', () => move(i, -1), i === 0, '.arrow'), btn('Move down', '▼', () => move(i, 1), i === list.length - 1, '.arrow')] : [];
       return h('article.rkc', {}, card,
         h('div.rkc-actions', {},
-          btn('Move up', '▲', () => move(i, -1), i === 0), btn('Move down', '▼', () => move(i, 1), i === list.length - 1),
-          btn('Rename', 'Rename', () => rename(r)), btn('Duplicate', 'Duplicate', () => duplicate(r)), btn('Delete', 'Delete', () => remove(r))));
+          ...arrows,
+          btn('Rename', 'Rename', () => rename(r)), btn('Duplicate', 'Duplicate', () => duplicate(r)), btn('Delete', 'Delete', () => remove(r), false, '.danger-btn')));
     }));
   }
 
