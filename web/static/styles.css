@@ -632,10 +632,10 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Similar games page and the drawer's row */
 .sim-why { color: var(--text); }
-.sim-page .up-row { flex-wrap: wrap; }
-.sim-page .up-row .si-actions { flex: 1 1 100%; flex-direction: row; padding-left: 64px; }
-.sim-page .up-row .si-actions > * { flex: 1; padding: 0 6px; }
-@media (min-width: 600px) { .sim-page .up-row .si-actions { flex: none; padding-left: 0; } .sim-page .up-row .si-actions > * { flex: none; padding: 0 14px; } }
+.up-page .up-row { flex-wrap: wrap; } /* Upcoming and Similar: on a phone the buttons sit under the text, so every row has the same width */
+.up-page .up-row .si-actions { flex: 1 1 100%; flex-direction: row; padding-left: 64px; }
+.up-page .up-row .si-actions > * { flex: 1; padding: 0 6px; }
+@media (min-width: 600px) { .up-page .up-row .si-actions { flex: none; padding-left: 0; } .up-page .up-row .si-actions > * { flex: none; padding: 0 14px; } }
 .sim-drawer h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .sim-strip { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .sim-strip li { flex: none; width: 76px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
