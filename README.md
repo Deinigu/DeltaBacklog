@@ -104,6 +104,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `PUBLIC_NAME` | empty | Read by `deploy/install.sh` on the Pi, not by the app. `off` turns the friendly address off: `deltabacklog-name.service` is disabled and stopped (no `deltabacklog.local`, no port 80 rules), for an app reached only through a reverse proxy; then also set `LISTEN_ADDR=127.0.0.1:8081`, which `install.sh` keeps. See the [developer manual](docs/developer-manual.md#11-build-and-deploy). |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers. |
+| `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the wishlist and backlog). |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |
 
 ### Getting the keys (free)

@@ -369,3 +369,15 @@ export function hltbSearch(q, year = 0) {
   if (year) p.set('year', String(year));
   return request('GET', `api/hltb/search?${p}`);
 }
+
+// ---- the Deals page: prices from IsThereAnyDeal for the Wishlist, Backlog and Up next (cached by the server) ----
+/** Resolves {configured, country, matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, fetched_at}], refresh}. Amounts are cents. */
+export const dealsList = () => request('GET', 'api/deals');
+/** Start reading the prices in the background; poll dealsList() for its progress. */
+export const dealsRefresh = () => request('POST', 'api/deals/refresh');
+/** ITAD games for a title, for fixing a wrong match. Resolves {games: [{id, slug, title}]}. */
+export const dealsSearch = (title) => request('GET', `api/deals/search?title=${encodeURIComponent(title)}`);
+/** Fix one game's match: {itad_id, title, slug} picks a game, {none: true} says there is none, {reset: true} goes back to automatic. Resolves the dealsList() answer. */
+export const dealsSetMatch = (gameId, body) => request('PUT', `api/games/${gameId}/deal-match`, body);
+/** The country (two letters, such as ES) the prices are read for. Resolves the dealsList() answer. */
+export const dealsSetCountry = (country) => request('PUT', 'api/deals/country', { country });

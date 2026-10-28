@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/collections"
+	"github.com/Deinigu/DeltaBacklog/internal/deals"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
 )
 
@@ -38,6 +39,8 @@ type Server struct {
 	Collections collections.Source
 	// Similar replaces the IGDB client the Similar page reads similar games with (tests); nil means Meta.
 	Similar collections.SimilarSource
+	// Deals is the IsThereAnyDeal client the Deals page reads prices with; nil means the feature is off (tests set a fake).
+	Deals deals.Source
 
 	hltbOnce   sync.Once
 	posterOnce sync.Once
@@ -45,6 +48,7 @@ type Server struct {
 	bg         sync.WaitGroup // background best-effort work (release dates of a new link); tests wait for it
 	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
 	similarJob seriesJob      // ditto for the Similar page
+	dealsJob   seriesJob      // ditto for the Deals page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -106,6 +110,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/similar/refresh", s.similarRefresh)
 	mux.HandleFunc("POST /api/similar/hide", s.similarHide)
 	mux.HandleFunc("POST /api/similar/unhide", s.similarUnhide)
+	mux.HandleFunc("GET /api/deals", s.dealsList)
+	mux.HandleFunc("POST /api/deals/refresh", s.dealsRefresh)
+	mux.HandleFunc("GET /api/deals/search", s.dealsSearch)
+	mux.HandleFunc("PUT /api/deals/country", s.dealsSetCountry)
+	mux.HandleFunc("PUT /api/games/{id}/deal-match", s.dealsSetMatch)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
 	mux.HandleFunc("GET /api/facets", s.facets)

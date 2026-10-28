@@ -15,6 +15,7 @@ import (
 
 	"github.com/Deinigu/DeltaBacklog/internal/api"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
+	"github.com/Deinigu/DeltaBacklog/internal/deals"
 	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
@@ -211,7 +212,10 @@ func main() {
 	igdb, sgdb := mc.Configured()
 	log.Printf("metadata: IGDB %s, SteamGridDB %s", onOff(igdb), onOff(sgdb))
 
+	itad := deals.New(os.Getenv("ITAD_API_KEY"))
+	log.Printf("prices: IsThereAnyDeal %s", onOff(itad.Configured()))
 	srv := &api.Server{DB: d, CoverDir: filepath.Join(dataDir, "covers"), Meta: mc, ShotDir: shotDir,
+		Deals:       itad,
 		ShotMaxFile: envMB("SCREENSHOT_MAX_MB", 25), ShotMaxRequest: envMB("SCREENSHOT_REQUEST_MAX_MB", 200),
 		ShotDecodeBudget: envMB("SCREENSHOTS_DECODE_BUDGET_MB", 48)}
 	if !srv.ShotStorageOK() {
