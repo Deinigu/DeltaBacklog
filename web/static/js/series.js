@@ -150,6 +150,21 @@ export function shelfItems(s, extra) {
 }
 
 /**
+ * A big series lists dozens of games the library lacks: keep the library's games and the wishlist, and only the first
+ * `limit` games that are missing (release order is kept). Returns { items, hidden } (how many were left out).
+ */
+export function collapseMissing(items, limit) {
+  let seen = 0, hidden = 0;
+  const out = items.filter((it) => {
+    if (it.kind !== 'missing') return true;
+    if (seen++ < limit) return true;
+    hidden++;
+    return false;
+  });
+  return { items: out, hidden };
+}
+
+/**
  * Up to `n` games whose pictures make the series' fan on its tile, in release order: the games with a portrait poster
  * (`hasPoster`); when none has one, the games with any image (`hasImage`, default `hasPoster`); else the first games.
  * Among the posters, the games `prefer` accepts (linked to IGDB: their poster is IGDB's own cover, not a fuzzy

@@ -34,6 +34,8 @@ export function renderYear(root, year) {
 
   const body = h('div.year-body');
   root.replaceChildren(h('div.year-page', {}, head, strip, body));
+  const cur = strip.querySelector('[aria-current]'); // the chip of this year is in view, not hidden behind the edge
+  if (cur) strip.scrollLeft = cur.offsetLeft - (strip.clientWidth - cur.offsetWidth) / 2;
 
   if (!total) {
     body.append(h('div.empty', {}, `Nothing is recorded for ${year}.`, h('br'), 'A game counts for a year when it has that year in its “Years played” (moving a game to Playing or Finished adds the current year).'));
@@ -41,7 +43,7 @@ export function renderYear(root, year) {
   }
 
   // ---- summary ----
-  const tile = (g) => h('div.year-stat', {}, h('b', {}, String(g.games.length)), h('span', {}, g.label));
+  const tile = (g) => h('div.year-stat' + (g.games.length ? '' : '.zero'), {}, h('b', {}, String(g.games.length)), h('span', {}, g.label));
   const bars = (title, rows) => {
     const top = rows.slice(0, 6);
     const max = top[0]?.count || 1;

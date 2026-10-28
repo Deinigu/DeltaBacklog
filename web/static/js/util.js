@@ -1,6 +1,12 @@
 // Small DOM and string helpers shared by all views.
 
 /** h('div.card', {onclick}, child, 'text') -> HTMLElement */
+/** An empty state: one short sentence and, next to it, the button that fixes it (never a bare sentence). */
+export function emptyBox(text, ...actions) {
+  const acts = actions.filter(Boolean);
+  return h('div.empty', {}, h('p', {}, text), acts.length ? h('div.empty-actions', {}, ...acts) : null);
+}
+
 export function h(tag, attrs, ...children) {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');

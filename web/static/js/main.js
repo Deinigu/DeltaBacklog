@@ -106,6 +106,7 @@ async function route() {
   }
   const r = resolve(currentPath());
   markActive();
+  syncFab(r.path);
   if (cleanup) { cleanup(); cleanup = null; }
   closeDrawer();
   closeMore(false);
@@ -125,8 +126,15 @@ window.addEventListener('views-changed', buildNav);
 // A game was added or deleted: rebuild the open page (new genres, platforms... must show up as filter chips).
 window.addEventListener('games-reloaded', () => route());
 
-// "+" button: always reachable, above the bottom bar on phones.
-document.body.append(h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add')));
+// "+" button: above the bottom bar on phones, only where the list of games is (Library, saved views and shelves);
+// the other pages have no use for it and it would cover their last row. The "n" key still adds a game everywhere.
+const fab = h('button.fab', { type: 'button', 'aria-label': 'Add a game', title: 'Add a game (n)', onclick: () => openAdd() }, icon('add'));
+document.body.append(fab);
+const showsFab = (path) => path === 'library' || path.startsWith('view/');
+function syncFab(path) {
+  fab.hidden = !showsFab(path);
+  document.body.classList.toggle('has-fab', !fab.hidden);
+}
 document.addEventListener('keydown', (e) => {
   if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('.dialog, .sheet.open, .more-wrap')) {
     e.preventDefault();

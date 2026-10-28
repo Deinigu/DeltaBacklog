@@ -1,4 +1,5 @@
 // App shell cache + runtime caching. Bump VERSION when shell files change.
+
 const VERSION = 'v53';
 
 // The app's base path: '/' at the root, '/backlog/' behind a proxy that serves it under that prefix. Every path in

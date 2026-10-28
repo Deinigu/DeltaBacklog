@@ -2,7 +2,7 @@
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { createTtbFilter } from './ttbfilter.js';
 import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
-import { h, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
+import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -65,7 +65,7 @@ export function renderLibrary(root, opts = {}) {
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const manageBtn = view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views'));
+  const manageBtn = view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views'), h('span.lbl', {}, 'Views'));
   const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, manageBtn);
   // Below 600px Save / Save as… sit in the meta row (next to Revert), so the head stays one row while typing in a view
   const narrow = window.matchMedia('(max-width: 599px)');
@@ -124,7 +124,16 @@ export function renderLibrary(root, opts = {}) {
   input.value = state.q;
 
   // The filter panel sticks below the toolbar, whose height varies (view title row, wrapped pills).
-  const syncToolbar = () => document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+  // --head-h: on phones the title row (plus the 6px above the search row) scrolls away and only the search row stays
+  // pinned (see .toolbar in the CSS). Once pinned the toolbar is "stuck" and its title row is hidden, so no strip of it
+  // shows above the search row (with a safe-area inset that strip would be tall).
+  const syncStuck = () => toolbar.classList.toggle('stuck', narrow.matches && toolbar.getBoundingClientRect().top <= 1 - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h') || '0'));
+  const syncToolbar = () => {
+    document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--head-h', head.offsetHeight + 6 + 'px');
+    syncStuck();
+  };
+  window.addEventListener('scroll', syncStuck, { passive: true });
   const ro = new ResizeObserver(syncToolbar);
   ro.observe(toolbar);
   syncToolbar();
@@ -218,7 +227,7 @@ export function renderLibrary(root, opts = {}) {
       }
       if (results.firstChild !== tableBox) { results.replaceChildren(tableBox); tableInst.mounted(); }
       tableInst.setList(list, state.sorts);
-    } else if (!list.length) results.replaceChildren(h('div.empty', {}, 'No games match these filters.'));
+    } else if (!list.length) results.replaceChildren(emptyBox('No games match these filters.', (activeCount(state) || state.q) && h('button.btn', { type: 'button', onclick: reset }, view ? 'Revert' : 'Clear filters')));
     else if (reordering) {
       // Reordering always works on the manual order of exactly the games shown, whatever the sort is.
       const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);
@@ -311,5 +320,5 @@ export function renderLibrary(root, opts = {}) {
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {
-    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); ro.disconnect(); };
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
 }

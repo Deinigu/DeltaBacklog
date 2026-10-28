@@ -1,5 +1,5 @@
 // The Screenshots page (#/screenshots): every screenshot of the library, by game or newest first.
-import { h, toast, debounce, icon, gradientFor, initials } from './util.js';
+import { h, emptyBox, toast, debounce, icon, gradientFor, initials } from './util.js';
 import { store, coverURL, listAllShots } from './api.js';
 import { openDrawer } from './drawer.js';
 import { PAGE, galleryQuery, groupRuns, remaining, shotsLabel, runLabel, stepAcross, emptyText } from './gallery.js';
@@ -87,7 +87,7 @@ export function renderGallery(root) {
     flat = null;
     if (!list.length) {
       count.textContent = '';
-      body.replaceChildren(h('div.empty', {}, emptyText(f)));
+      body.replaceChildren(emptyBox(emptyText(f), !f.q && !f.year && h('a.btn.primary', { href: '#/library' }, 'Open the Library')));
       more.hidden = true;
       return;
     }

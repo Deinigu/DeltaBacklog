@@ -4,6 +4,20 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Usability
+
+Fixes to how the app works and fits on a phone; the look is unchanged.
+
+- The **+** button is shown only on the Library, saved views and shelves (the `n` key still adds a game anywhere); on a PC its place is kept clear of the last row.
+- Library and views on a phone: the title has its own row (no more "Playing n…"), the buttons under it are labelled (*Surprise me*, *Table*, *Reorder*, *Views*), and only the search row stays pinned while scrolling.
+- The reorder handle and its arrows are 44px wide on phones; the strip of active filters and the Years strip fade at the edge to show they scroll, and the current year is centred.
+- Ranking board: no empty gap under the back link. Rankings list: unusable arrows are hidden (not greyed), **Delete** is red and apart from Rename and Duplicate.
+- Series: the filters and text above the tiles take fewer rows (*Left to play*, *Not in library*, *Refresh*); a series with many games you do not have lists the first six, then **Show all**.
+- Upcoming: **Add** and **Hide** sit under the text on phones, so the rows line up (as on Similar). Similar no longer says "Press Refresh" twice.
+- Stats headline: the caption sits under the number instead of wrapping after it. Years: a zero tile is quiet instead of as loud as a real number.
+- Empty states are one short sentence with their button (Library: *Clear filters*; Similar and Upcoming: the IGDB refresh; Series, Views and Screenshots: *Open the Library*).
+- Dates on the Series page use the English format like the other pages.
+
 ### Changed
 
 - **Default order is now Status, then Title** (it was Status, Manual order, Title). Views with no sort of their own no longer show your manual queue; the starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged. Add *Manual order* as a sort level to any view that should show your ranking. No migration.
