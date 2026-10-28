@@ -53,7 +53,7 @@ Principles that shape every decision:
 ```
 cmd/deltabacklog/   the server and its subcommands (main.go: .env loading, wiring; `check`, `backup`, `backup-screenshots`, `sync-igdb`, `fetch-posters`); guard.go: the request guard (host allow-list, cross-origin, content type)
 cmd/import/         one-off importer from a NocoDB CSV export (also downloads covers)
-internal/db/        open, migrate (embedded migrations/*.sql, 001-017), GetOrCreate, FTS index, TitleSort, NormalizeTheme, backup and check
+internal/db/        open, migrate (embedded migrations/*.sql, 001-018), GetOrCreate, FTS index, TitleSort, NormalizeTheme, backup and check
 internal/importer/  CSV → normalized schema (idempotent)
 internal/api/       HTTP handlers: games, games_write, add (create/delete/cover/lookup), poster (choose a poster), facets, views, rankings, link (IGDB review queue), hltb, screenshots (+ shotlist, shotsweep), series, similar, deals; cache.go (the cached /api/games and /api/facets)
 internal/meta/      IGDB, SteamGridDB and link resolution clients; TitleScore (fuzzy title match); collections.go / release.go: the IGDB reads behind Series, Upcoming and Similar games
@@ -201,7 +201,7 @@ v_game_flat                                    flattened read view (group_concat
 
 JSON in and out. Errors are `{"error": "..."}` with a status code (every handler and the guard; only a path or method no route knows gets Go's plain-text 404/405). Request bodies are size-limited. There is no authentication: the app is for the home network only.
 
-**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415, **except** `POST /api/games/<id>/screenshots`, the one route that takes `multipart/form-data` (`isShotUpload`; every other route still answers 415 to it, and step 2 already refused other sites). Every frontend write must send that header (`send`/`request` in `api.js`, the tier list `PUT` in `yearpage.js`). There is still no authentication; see `SECURITY.md`.
+**Security.** `protect` in `cmd/deltabacklog/guard.go` wraps the root handler (tests in `guard_test.go`). In order: (1) the `Host` header must be an IP literal, `localhost`, `deltabacklog.local`, the machine hostname, `<hostname>.local` or an `ALLOWED_HOSTS` name, else 421 (DNS rebinding); `GET`/`HEAD /healthz` is exempt; (2) `http.CrossOriginProtection` rejects cross-origin unsafe requests with 403 (browsers send `Sec-Fetch-Site`/`Origin`; curl and the app itself pass); (3) POST/PUT/PATCH under `/api/` need `Content-Type: application/json`, else 415, **except** `POST /api/games/<id>/screenshots`, the one route that takes `multipart/form-data` (`isShotUpload`; every other route still answers 415 to it, and step 2 already refused other sites). Every frontend write must send that header (`send`/`request` in `api.js`, the only module that calls `fetch`). There is still no authentication; see `SECURITY.md`.
 
 | Method and path | Purpose |
 |---|---|

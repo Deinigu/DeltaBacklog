@@ -500,7 +500,7 @@ The pages that use other websites keep what they read on the server. **Opening a
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
 | **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of your backlog and up next (about one request per 50 games) | before you buy something |
 
-Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or poster you chose, lowering the hours you played. Adding or linking a game to IGDB does read that one game at once (its details and release date).
+Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or poster you chose, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date).
 
 If a refresh is refused or stopped (too many requests, a wrong key, no connection) the page says why and keeps what it had; try again later.
 

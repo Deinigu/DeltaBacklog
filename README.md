@@ -188,7 +188,7 @@ DeltaBacklog was built by its owner with [Claude Code](https://claude.com/claude
 - **Read-only review.** An Opus agent reviewed each PR without editing it; the owner triaged the findings and they were fixed before merging.
 - **A final review.** At the end an Opus agent reviewed the whole codebase, and its findings were triaged and fixed the same way.
 
-For scale, as of this writing: 11 merged pull requests in this repository (one of them a Dependabot update), 17 database migrations, 50 Go test files and 25 frontend test files. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
+The result is a pull request per feature, a numbered migration for every schema change, and Go and frontend tests for each package and pure module. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
 
 ## Support
 
