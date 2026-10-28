@@ -974,6 +974,8 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .steam-page .up-row .si-actions > * { flex: 1; padding: 0 6px; }
 @media (min-width: 600px) { .steam-page .up-row .si-actions { flex: none; padding-left: 0; } .steam-page .up-row .si-actions > * { flex: none; padding: 0 14px; } }
 .steam-more { margin: 12px 0; min-height: 44px; }
-.steam-error { color: var(--danger, #c0392b); font-weight: 600; }
+.steam-error { color: #b91c1c; font-weight: 600; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .steam-error { color: #f87171; } }
+:root[data-theme="dark"] .steam-error { color: #f87171; }
 .ttb-played { margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
 .ttb-played b { color: var(--text); }

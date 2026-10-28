@@ -438,3 +438,69 @@ func TestNotConfigured(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// A game that loses its automatic match (here: the title becomes shared by two Steam apps) loses those hours too.
+func TestHoursLeaveAGameWhoseAppBecomesAmbiguous(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	if _, err := Sync(ctx, d, &fakeSource{apps: []App{{100, "Portal 2", 100, 0}}}); err != nil {
+		t.Fatal(err)
+	}
+	if h := gameHours(t, d, 2); h.min.Int64 != 100 {
+		t.Fatalf("hours %+v", h)
+	}
+	// Steam now lists a second app with the same title: neither is matched by title any more.
+	if _, err := Sync(ctx, d, &fakeSource{apps: []App{{100, "Portal 2", 100, 0}, {200, "Portal 2", 200, 0}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, app := range []int64{100, 200} {
+		if r := appRow(t, d, app); r.GameID != nil {
+			t.Errorf("app %d is still matched: %+v", app, r)
+		}
+	}
+	if h := gameHours(t, d, 2); h.min.Valid {
+		t.Errorf("the game kept the hours of apps it no longer has: %+v", h)
+	}
+	// Matching one by hand puts only its hours on the game.
+	if err := SetMatch(d, 200, 2); err != nil {
+		t.Fatal(err)
+	}
+	if h := gameHours(t, d, 2); h.min.Int64 != 200 {
+		t.Errorf("hours %+v", h)
+	}
+	// "Match automatically" for an app whose title another app shares stays unmatched.
+	if err := ClearMatch(d, 100); err != nil {
+		t.Fatal(err)
+	}
+	if r := appRow(t, d, 100); r.GameID != nil {
+		t.Errorf("an ambiguous title matched: %+v", r)
+	}
+}
+
+// An app that moves from one game to another (a Steam link was added) takes its hours along, and is not counted twice.
+func TestHoursMoveWithAnAppToAnotherGame(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	src := &fakeSource{apps: []App{{367520, "Hollow Knight", 600, 1700000000}}}
+	if _, err := Sync(ctx, d, src); err != nil {
+		t.Fatal(err)
+	}
+	if h := gameHours(t, d, 1); h.min.Int64 != 600 {
+		t.Fatalf("hours %+v", h)
+	}
+	if _, err := d.Exec(`INSERT INTO game_link(game_id, kind, url) VALUES (3, 'steam', 'https://store.steampowered.com/app/367520/')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(ctx, d, src); err != nil {
+		t.Fatal(err)
+	}
+	if r := appRow(t, d, 367520); gameOf(r) != 3 || *r.Source != "link" {
+		t.Fatalf("the link did not win: %+v", r)
+	}
+	if h := gameHours(t, d, 1); h.min.Valid || h.last.Valid {
+		t.Errorf("the old game kept the hours: %+v", h)
+	}
+	if h := gameHours(t, d, 3); h.min.Int64 != 600 || h.last.Int64 != 1700000000 {
+		t.Errorf("the new game's hours: %+v", h)
+	}
+}

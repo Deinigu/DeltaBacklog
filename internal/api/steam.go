@@ -45,15 +45,16 @@ func (s *Server) steamSync(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusAccepted, j.status())
 		return
 	}
-	j.running, j.done, j.total, j.report, j.failed = true, 0, 0, "", false
+	j.running, j.done, j.total, j.report, j.failed = true, 0, 1, "", false
 	j.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		rep, err := steam.Sync(ctx, s.DB, s.Steam)
+		s.cache.invalidate() // the hours are in the cached /api/games, and a write from this process does not change data_version
 		j.mu.Lock()
 		defer j.mu.Unlock()
-		j.running = false
+		j.running, j.done = false, 1
 		j.finished = time.Now().UTC().Format(time.RFC3339)
 		if err != nil {
 			j.failed, j.report = true, steamMessage(err)
@@ -118,6 +119,7 @@ func (s *Server) steamSetMatch(w http.ResponseWriter, r *http.Request) {
 		s.steamError(w, err)
 		return
 	}
+	s.cache.invalidate()
 	s.steamList(w, r)
 }
 
@@ -138,5 +140,6 @@ func (s *Server) steamIgnore(w http.ResponseWriter, r *http.Request) {
 		s.steamError(w, err)
 		return
 	}
+	s.cache.invalidate()
 	s.steamList(w, r)
 }

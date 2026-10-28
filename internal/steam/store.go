@@ -64,8 +64,9 @@ func Load(d *sql.DB) (*List, error) {
 // libraryIndex finds the library game of a Steam app: by the app id of the game's Steam store link, else by an exact
 // title. A link or title shared by two games matches none of them (the owner picks).
 type libraryIndex struct {
-	byApp   map[int64][]int64
-	byTitle map[string][]int64
+	byApp     map[int64][]int64
+	byTitle   map[string][]int64
+	appTitles map[string]int // how many Steam apps carry each title key (two apps of one title never match by title)
 }
 
 type querier interface {
@@ -78,7 +79,7 @@ func loadIndex(q querier) (*libraryIndex, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	ix := &libraryIndex{byApp: map[int64][]int64{}, byTitle: map[string][]int64{}}
+	ix := &libraryIndex{byApp: map[int64][]int64{}, byTitle: map[string][]int64{}, appTitles: map[string]int{}}
 	for rows.Next() {
 		var id int64
 		var title, link string
@@ -104,7 +105,7 @@ func (ix *libraryIndex) find(appID int64, name string) (int64, string) {
 		return 0, ""
 	}
 	if k := deals.TitleKey(name); k != "" {
-		if ids := ix.byTitle[k]; len(ids) == 1 {
+		if ids := ix.byTitle[k]; len(ids) == 1 && ix.appTitles[k] <= 1 {
 			return ids[0], "title"
 		}
 	}
@@ -176,7 +177,13 @@ func doSync(ctx context.Context, d *sql.DB, src Source, dry bool) (Report, error
 	if err := rows.Close(); err != nil {
 		return rep, err
 	}
+	for _, a := range apps {
+		if k := deals.TitleKey(a.Name); k != "" {
+			ix.appTitles[k]++
+		}
+	}
 	at := now()
+	moved := map[int64]bool{} // games that gained or lost an app to an automatic match change: their hours are recomputed
 	for _, a := range apps {
 		var last any
 		if a.LastPlayed > 0 {
@@ -197,6 +204,19 @@ func doSync(ctx context.Context, d *sql.DB, src Source, dry bool) (Report, error
 			game, source = id, how
 		}
 		if _, err := tx.Exec(`UPDATE steam_app SET game_id = ?, source = ? WHERE app_id = ?`, game, source, a.ID); err != nil {
+			return rep, err
+		}
+		if old := known[a.ID].game; old.Valid && (game == nil || game.(int64) != old.Int64) {
+			moved[old.Int64] = true
+		}
+		if id, ok := game.(int64); ok && (!known[a.ID].game.Valid || known[a.ID].game.Int64 != id) {
+			moved[id] = true
+		}
+	}
+	// A game whose apps changed (an automatic match moved, was lost or became ambiguous) gets its hours from the apps it has
+	// now, like after the owner's change; a game keeping its apps below only ever goes up.
+	for id := range moved {
+		if err := recompute(tx, id); err != nil {
 			return rep, err
 		}
 	}
@@ -295,6 +315,23 @@ func ClearMatch(d *sql.DB, appID int64) error {
 		}
 		ix, err := loadIndex(tx)
 		if err != nil {
+			return err
+		}
+		names, err := tx.Query(`SELECT name FROM steam_app`)
+		if err != nil {
+			return err
+		}
+		for names.Next() {
+			var n string
+			if err := names.Scan(&n); err != nil {
+				names.Close()
+				return err
+			}
+			if k := deals.TitleKey(n); k != "" {
+				ix.appTitles[k]++
+			}
+		}
+		if err := names.Close(); err != nil {
 			return err
 		}
 		var game, source any

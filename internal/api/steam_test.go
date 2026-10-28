@@ -174,3 +174,45 @@ func TestSteamMatchAndIgnoreEndpoints(t *testing.T) {
 func jsonDecode(r interface{ Read([]byte) (int, error) }, v any) error {
 	return json.NewDecoder(r).Decode(v)
 }
+
+// /api/games is cached: the hours written by a sync, a changed match or an ignore must show in the next read.
+func TestSteamChangesReachTheCachedGameList(t *testing.T) {
+	base := steamServer(t, &steamFake{apps: []steam.App{{ID: 367520, Name: "Hollow Knight", Playtime: 125}, {ID: 5, Name: "Stray", Playtime: 30}}})
+	hours := func(title string) any {
+		t.Helper()
+		res, err := http.Get(base + "/api/games")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var games []map[string]any
+		if err := jsonDecode(res.Body, &games); err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range games {
+			if g["title"] == title {
+				return g["playtime_min"]
+			}
+		}
+		t.Fatalf("no game %q", title)
+		return nil
+	}
+	if hours("Hollow Knight") != nil { // fills the cache
+		t.Fatal("hours before any sync")
+	}
+	send(t, "POST", base+"/api/steam/sync", nil)
+	waitSteam(t, base)
+	if h := hours("Hollow Knight"); h != 125.0 {
+		t.Fatalf("after the sync: %v", h)
+	}
+	if code, _ := send(t, "PUT", base+"/api/steam/apps/5/match", map[string]any{"game_id": 1}); code != 200 {
+		t.Fatal(code)
+	}
+	if h := hours("Hollow Knight"); h != 155.0 {
+		t.Errorf("after a match: %v", h)
+	}
+	send(t, "PUT", base+"/api/steam/apps/5/match", map[string]any{"none": true})
+	if h := hours("Hollow Knight"); h != 125.0 {
+		t.Errorf("after unmatching: %v", h)
+	}
+}

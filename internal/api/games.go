@@ -38,16 +38,16 @@ type Game struct {
 	Periods       []string `json:"periods"` // "childhood", "always"
 
 	// IGDB enrichment (empty until `deltabacklog sync-igdb --enrich` has run). Times are minutes.
-	TTBHastily    *int        `json:"ttb_hastily"`
-	TTBNormally   *int        `json:"ttb_normally"`
-	TTBCompletely *int        `json:"ttb_completely"`
-	TTBSource     *string     `json:"ttb_source"` // "igdb", "hltb" or "manual" (null with no time)
+	TTBHastily    *int    `json:"ttb_hastily"`
+	TTBNormally   *int    `json:"ttb_normally"`
+	TTBCompletely *int    `json:"ttb_completely"`
+	TTBSource     *string `json:"ttb_source"` // "igdb", "hltb" or "manual" (null with no time)
 	// Hours played on Steam (minutes; null until a Steam sync matched the game) and the unix time it was last played.
-	PlaytimeMin     *int   `json:"playtime_min"`
-	SteamLastPlayed *int64 `json:"steam_last_played"`
-	Modes         []string    `json:"modes"`
-	Perspectives  []string    `json:"perspectives"`
-	Links         []StoreLink `json:"links"`
+	PlaytimeMin     *int        `json:"playtime_min"`
+	SteamLastPlayed *int64      `json:"steam_last_played"`
+	Modes           []string    `json:"modes"`
+	Perspectives    []string    `json:"perspectives"`
+	Links           []StoreLink `json:"links"`
 }
 
 // StoreLink is a store or official-site page of a game: Kind is "steam", "gog", "epic" or "official".
