@@ -19,6 +19,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 12. [Series progress](#12-series-progress)
     - [Wishlist and Upcoming releases](#wishlist-and-upcoming-releases)
     - [Similar games](#similar-games)
+    - [Deals](#deals)
 13. [Year in review and rankings](#13-year-in-review-and-rankings)
 14. [Stats](#14-stats)
 15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
@@ -292,6 +293,18 @@ The page follows the same ownership rule as the Series page: a game you own is n
 The suggestions are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** to read them (a few requests in the background, with progress; it can be left and takes about a minute for a large library). `sync-igdb --enrich` reads them too. A game's details also show a small **Similar games** row for a finished or favourite game, from the same saved list.
 
 ![The Similar games page](img/similar-phone.jpg)
+
+### Deals
+
+**Deals** (in the navigation, **More** on a phone) shows what the games on your **Wishlist**, in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+
+Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap **↻ Refresh prices** to read them (a background run with progress, a few requests even for a few hundred games). *Last checked* tells you how old they are. Prices are for one country, shown in its currency: **Country** (two letters, `ES` by default) can be changed on the page, and the prices are then read again.
+
+A game is matched with IsThereAnyDeal by the Steam link in its details when it has one, otherwise by its exact title. When there is no exact match the game is listed under **No match on IsThereAnyDeal** instead of guessing. Open it and use **Pick the game** (or **Wrong game?** when the match is wrong): search by title, tap the right game, or choose **No match on IsThereAnyDeal**. Your choice is kept; **Match automatically** gives control back. The same **Price** line appears in a game's details.
+
+**Setting it up.** Create a free API key at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and add `ITAD_API_KEY=<your key>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, then `sudo systemctl restart deltabacklog`). Without it the page says it is not set up and Refresh is off.
+
+![The Deals page](img/deals-phone.jpg)
 
 ## 13. Year in review and rankings
 

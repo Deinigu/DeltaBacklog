@@ -938,3 +938,29 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .up-tag.own { color: var(--accent); }
 .up-row .si-actions { flex: none; flex-direction: column; margin: 0; }
 @media (min-width: 600px) { .up-row .si-actions { flex-direction: row; } }
+
+/* Deals page and the drawer's price row */
+.deals-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.deals-bar select { min-height: 44px; max-width: none; }
+.deals-country { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.deals-country input { width: 4.5em; min-height: 44px; text-transform: uppercase; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.deals-page .up-row { flex-wrap: wrap; }
+.deals-page .up-row .si-actions { flex: 1 1 100%; flex-direction: row; padding-left: 64px; }
+@media (min-width: 600px) { .deals-page .up-row .si-actions { flex: none; padding-left: 0; } }
+.deal-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; }
+.deal-price b { font-size: 16px; }
+.deal-price s { color: var(--muted); }
+.deal-cut { font-weight: 700; color: #16a34a; }
+:root[data-theme="dark"] .deal-cut { color: #4ade80; }
+.deal-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); border: 1px solid var(--accent); }
+.deal-badge.low { background: var(--accent); color: var(--accent-text); }
+.deal-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.deal-drawer h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.deal-drawer .hint { margin: 4px 0; }
+.deal-drawer .deal-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.deal-drawer .deal-actions .btn, .deal-drawer .deal-actions a { min-height: 44px; }
+.deal-fix { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.deal-fix form { display: flex; gap: 6px; }
+.deal-fix input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; background: var(--surface); }
+.deal-cands { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.deal-cands button { width: 100%; min-height: 44px; text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 6px 10px; cursor: pointer; }

@@ -35,7 +35,7 @@ func TestBackupIsAConsistentOpenableCopy(t *testing.T) {
 	b.QueryRow(`SELECT title FROM game`).Scan(&title)
 	b.QueryRow(`SELECT count(*) FROM platform`).Scan(&platforms)
 	b.QueryRow(`PRAGMA user_version`).Scan(&version)
-	if title != "Hades II" || platforms != 2 || version != 15 {
+	if title != "Hades II" || platforms != 2 || version != 16 {
 		t.Errorf("copy has title=%q platforms=%d version=%d", title, platforms, version)
 	}
 
