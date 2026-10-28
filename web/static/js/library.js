@@ -65,7 +65,7 @@ export function renderLibrary(root, opts = {}) {
   const title = view
     ? h('h1', {}, h('span', {}, view.icon ? view.icon + ' ' : ''), view.name)
     : h('h1', {}, 'Library');
-  const manageBtn = view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views'));
+  const manageBtn = view && h('a.btn', { href: '#/views', 'aria-label': 'Manage views' }, icon('views'), h('span.lbl', {}, 'Views'));
   const head = h('div.view-head', {}, title, surpriseBtn, layoutBtn, reorderBtn, manageBtn);
   // Below 600px Save / Save as… sit in the meta row (next to Revert), so the head stays one row while typing in a view
   const narrow = window.matchMedia('(max-width: 599px)');
@@ -124,7 +124,11 @@ export function renderLibrary(root, opts = {}) {
   input.value = state.q;
 
   // The filter panel sticks below the toolbar, whose height varies (view title row, wrapped pills).
-  const syncToolbar = () => document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+  // --head-h: on phones the title row scrolls away and only the search row stays pinned (see .toolbar in the CSS).
+  const syncToolbar = () => {
+    document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--head-h', head.offsetHeight + 'px');
+  };
   const ro = new ResizeObserver(syncToolbar);
   ro.observe(toolbar);
   syncToolbar();
