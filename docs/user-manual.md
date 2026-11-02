@@ -1,32 +1,47 @@
 # DeltaBacklog: user manual
 
-DeltaBacklog is your videogame library on your own Raspberry Pi. You can look at your games, filter them in any way you like, keep lists such as *Playing now* and *Up next*, record the years you played each game, and add new games with their cover and details filled in for you. It is made to be used on a phone first, and it works just as well on a PC.
+DeltaBacklog is your videogame library on your own Raspberry Pi. You can look at your games, filter them in any way you like, keep lists such as *Playing now* and *Up next*, record the years you played each game, and add new games with their cover and details filled in for you. Around the library sit pages that help you decide what to play next and what to buy: series progress, upcoming releases, similar games and deals. It is made to be used on a phone first, and it works just as well on a PC.
 
 This manual is task by task. For how the program is built, see the [developer manual](developer-manual.md).
 
 **Contents**
+
+*Getting started*
 1. [Opening the app and installing it on your phone](#1-opening-the-app-and-installing-it-on-your-phone)
 2. [Finding your way around](#2-finding-your-way-around)
-3. [The Library: cards, search and filters](#3-the-library-cards-search-and-filters)
-4. [Sorting and grouping](#4-sorting-and-grouping)
-5. [Saved views](#5-saved-views)
-6. [Changing a game](#6-changing-a-game)
-7. [Putting games in your own order](#7-putting-games-in-your-own-order)
-8. [The table (spreadsheet) layout](#8-the-table-spreadsheet-layout)
-9. [Adding a game](#9-adding-a-game)
-10. [Covers](#10-covers)
-11. [What the little icons mean](#11-what-the-little-icons-mean)
-12. [Series progress](#12-series-progress)
-    - [Upcoming releases](#upcoming-releases)
-    - [Similar games](#similar-games)
-    - [Deals](#deals)
-13. [Year in review and rankings](#13-year-in-review-and-rankings)
-14. [Stats](#14-stats)
-15. [Surprise me: let the app choose](#15-surprise-me-let-the-app-choose)
-16. [Link your games with IGDB](#16-link-your-games-with-igdb)
-17. [If something looks wrong](#17-if-something-looks-wrong)
-18. [Backups and what is still missing](#18-backups-and-what-is-still-missing)
-19. [Screenshots](#19-screenshots)
+3. [Setting up keys](#3-setting-up-keys)
+
+*Your library*
+
+4. [The Library: cards, search and filters](#4-the-library-cards-search-and-filters)
+5. [Sorting and grouping](#5-sorting-and-grouping)
+6. [Saved views](#6-saved-views)
+7. [Changing a game](#7-changing-a-game)
+8. [Putting games in your own order](#8-putting-games-in-your-own-order)
+9. [The table (spreadsheet) layout](#9-the-table-spreadsheet-layout)
+10. [Surprise me: let the app choose](#10-surprise-me-let-the-app-choose)
+11. [Adding a game](#11-adding-a-game)
+12. [Covers and posters](#12-covers-and-posters)
+13. [What the little icons mean](#13-what-the-little-icons-mean)
+
+*The pages in the More list* (in the order a phone shows them)
+
+14. [Series](#14-series)
+15. [Upcoming releases](#15-upcoming-releases)
+16. [Similar games](#16-similar-games)
+17. [Deals](#17-deals)
+18. [Stats](#18-stats)
+19. [Year in review](#19-year-in-review)
+20. [Rankings](#20-rankings)
+21. [Screenshots](#21-screenshots)
+    (**Views** is described in [section 6](#6-saved-views).)
+22. [Link your games with IGDB](#22-link-your-games-with-igdb)
+
+*Good to know*
+
+23. [Refresh buttons](#23-refresh-buttons)
+24. [If something looks wrong](#24-if-something-looks-wrong)
+25. [Backups and what is still missing](#25-backups-and-what-is-still-missing)
 
 ---
 
@@ -36,7 +51,7 @@ Open **http://deltabacklog.local** in any browser (no port number needed). Use t
 
 If that name does not open (some Android phones cannot find `.local` names), use the Raspberry Pi's number instead, for example `http://<address-of-your-pi>:8081`. Both lead to the same app.
 
-The app can also sit under a sub-path of another address, when a reverse proxy on the Pi publishes it there (for example **http://deltaraspberry.local/backlog/**). Everything works the same; the proxy's name must be in `ALLOWED_HOSTS` (see "unknown host" in [section 17](#17-if-something-looks-wrong)).
+The app can also sit under a sub-path of another address, when a reverse proxy on the Pi publishes it there (for example **http://\<pi-name\>.local/backlog/**, with the slash at the end). Everything works the same; the proxy's name must be in `ALLOWED_HOSTS` (see "unknown host" in [section 24](#24-if-something-looks-wrong)).
 
 To open it with one tap from your phone's home screen, add a shortcut:
 - **Android (Chrome):** open the menu (⋮) and choose **Add to Home screen**.
@@ -50,24 +65,49 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The Library on a phone](img/library-phone.jpg)
 
-**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list with **Series** ([section 12](#12-series-progress)), **Upcoming** ([section 12](#upcoming-releases)), **Similar games** ([section 12](#similar-games)), **Stats** ([14](#14-stats)), **Year in review** ([13](#13-year-in-review-and-rankings)), **Rankings** ([13](#rankings)), **Screenshots** ([19](#the-screenshots-page)) and **Views** (where you manage your views), plus **Link IGDB** ([16](#16-link-your-games-with-igdb)) while there is something to review. It is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
+**On a phone** the bar at the bottom has **Library**, your first two pinned views (for example *Playing now* and *Up next*) and **More**. **More** opens a list of pages, in this order:
 
-**On a PC** the same things are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). Two keys help: press **/** to jump to the search box and **n** to add a game.
+| Page | What it is for | Section |
+|---|---|---|
+| **Series** | how far you are through every series | [14](#14-series) |
+| **Upcoming** | new games of your series that are not out yet | [15](#15-upcoming-releases) |
+| **Similar games** | games you might like, from the ones you finished | [16](#16-similar-games) |
+| **Deals** | what your backlog and up next games cost right now | [17](#17-deals) |
+| **Stats** | numbers about your library | [18](#18-stats) |
+| **Year in review** | what you played in a year | [19](#19-year-in-review) |
+| **Rankings** | tier lists of your games | [20](#20-rankings) |
+| **Screenshots** | every picture of every game | [21](#21-screenshots) |
+| **Views** | manage your saved views | [6](#6-saved-views) |
+| **Link IGDB** | only while there is something to review | [22](#22-link-your-games-with-igdb) |
 
-![The Library on a PC](img/library-desktop.jpg)
-
-The **More** list on a phone:
+**More** is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
 
 ![The More list](img/more-phone.jpg)
 
-## 3. The Library: cards, search and filters
+**On a PC** the same pages are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). The sidebar groups the pages a little differently: Year in review, Rankings, Screenshots, then Series, Upcoming, Similar games, Deals, Stats and Views. Two keys help: press **/** to jump to the search box and **n** to add a game.
+
+![The Library on a PC](img/library-desktop.jpg)
+
+## 3. Setting up keys
+
+The app works without any key: you can add games by hand, filter, sort, rank and keep screenshots. Keys switch on the pages and lookups that talk to other websites. They are set once, by whoever installs the app, in the settings file of the app: `.env` when you run it on a PC, `/etc/deltabacklog.env` on the Raspberry Pi (`deploy.sh --env .env` copies the keys there for you). After changing the file, restart the app (`sudo systemctl restart deltabacklog` on the Pi). The keys are never shown in the app and never leave the server.
+
+| What it switches on | Settings | Where to get it (free) |
+|---|---|---|
+| **IGDB**: looking games up when you add one, **Fill from IGDB**, Link IGDB, time to beat, game modes, store buttons, Series' games you do not have, Upcoming dates, Similar games | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | IGDB belongs to Twitch. Create a Twitch account with two-factor authentication, register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (category *Application Integration*, redirect URL `http://localhost`), then copy the **Client ID** and generate a **Client Secret**. |
+| **SteamGridDB**: more covers and portrait posters | `STEAMGRIDDB_API_KEY` | Sign in at [steamgriddb.com](https://www.steamgriddb.com/), open *Preferences → API* and copy the key. |
+| **IsThereAnyDeal**: the Deals page | `ITAD_API_KEY` | Create an app at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and copy its API key. |
+
+A page whose key is missing says *not set up* and its refresh button is off; nothing else is affected. The sections below that need a key say so in their first line. The IGDB step of linking games you already have is explained in [section 22](#22-link-your-games-with-igdb).
+
+## 4. The Library: cards, search and filters
 
 The Library shows every game as a card.
 
 **What is on a card**
 - The cover, with the game's **status** in the bottom-left corner (and a coloured line under the cover in the same colour).
 - A **★** in the top-right corner for favourites.
-- A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 11](#11-what-the-little-icons-mean)).
+- A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 13](#13-what-the-little-icons-mean)).
 - Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
 
 **Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
@@ -83,7 +123,7 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 - **Tap a third time to clear it.**
 - When you include two or more values in *Platform*, *Genre*, *Theme*, *Game mode*, *Perspective*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
 - At the top are quick switches: **Favorite**, **VR** and **100% completed**.
-- **Time to beat** (once some game has a time) filters by how long a game takes. Tap a quick range (**Under 5 h**, **5-15 h**, **15-40 h**, **Over 40 h**) or type your own in **From** and **Under** (hours: `7.5`, or `45m`; a game passes when it is from the first number up to, but not including, the second). **No time known** works like the other chips: tap once to see only games without a time, again to hide them, a third time to clear it. Next to the range, **Use** picks which time counts: the one shown in the details (the default), **Main story**, **Main + extras** or **Completionist**. Saved views from the old *Short game* switch now read *Time to beat under 10 h*.
+- **Time to beat** (once some game has a time) filters by how long a game takes. Tap a quick range (**Under 5 h**, **5-15 h**, **15-40 h**, **Over 40 h**) or type your own in **From** and **Under** (hours: `7.5`, or `45m`; a game passes when it is from the first number up to, but not including, the second). **No time known** works like the other chips: tap once to see only games without a time, again to hide them, a third time to clear it. Next to the range, **Use** picks which time counts: the one shown in the details (the default), **Main story**, **Main + extras** or **Completionist**.
 - **Game mode** (single player, co-op, multiplayer...) and **Perspective** (first person, third person, isometric...) come from IGDB and appear in the filters as soon as some game has them.
 - The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
 - The active filters appear as pills under the search box. Tap a pill's **✕** to remove it, or **Reset** to clear everything.
@@ -91,7 +131,7 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 
 The address in your browser changes with your filters, so you can bookmark a filtered list.
 
-## 4. Sorting and grouping
+## 5. Sorting and grouping
 
 ![The sort sheet](img/sort-phone.jpg)
 
@@ -104,7 +144,7 @@ Tap the sort button (the up/down arrows at the right of the search box).
 - **Group by** splits the list into sections: Status, Platform, Series, Genre, Year played or Ownership. A game that was played in several years appears under each year, and one with several genres under each genre.
 - **Reset** returns to the default order.
 
-## 5. Saved views
+## 6. Saved views
 
 A **view** is a name for a set of filters, a sort order and a layout, so you can open it with one tap.
 
@@ -124,7 +164,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 
 **Manage views.** Open **Views** (**More** on a phone, or the sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
 
-## 6. Changing a game
+## 7. Changing a game
 
 Tap a card to open the game.
 
@@ -135,14 +175,16 @@ Tap a card to open the game.
 - **★ Favorite** switches the favourite mark.
 - **The year is added for you.** When you set a game to **Playing**, **Playing - Evergreen** or **Finished**, the current year is added to its years played (once).
 
-**What IGDB adds** (after the one-off command in section 16): the game's **Game modes** and **Perspective** appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
+**What IGDB adds** (for games linked to IGDB, see [section 22](#22-link-your-games-with-igdb)): the game's **Game modes** and **Perspective** appear in the details, and buttons for the game's **Steam**, **GOG**, **Epic Games** or **official site** page open in a new tab. These cannot be edited here; they are IGDB's.
 
-**Time to beat.** The details have a **Time to beat** block with three tiles: **Main story**, **Main + extras** and **Completionist**, each with a small bar showing how long it is compared with the longest. A note says where the numbers come from: *from IGDB* (filled in by the command in section 16), *from HowLongToBeat* or *set by you*. The times are not shown on the cards, only here (the **Time to beat** filter, Surprise me's **Quick game** and the backlog hours on Stats still use them).
+**Time to beat.** The details have a **Time to beat** block with three tiles: **Main story**, **Main + extras** and **Completionist**, each with a small bar showing how long it is compared with the longest. A note says where the numbers come from: *from IGDB*, *from HowLongToBeat* or *set by you*. The times are not shown on the cards, only here (the **Time to beat** filter, Surprise me's **Quick game** and the backlog hours on Stats still use them).
 - **✎ Edit times** opens three boxes. Type hours (`7.5`, `7,5`, `12`), hours and minutes (`7h30`, `1:30`) or minutes (`45m`); leave a box empty for no time. **Save** marks the times as *set by you*.
 - **Get from HowLongToBeat** looks the game up by its title and release year and lists the matches with their three times. Tap the right one and its times are saved at once (you can still edit them afterwards). The search box lets you try another title when the game is not found. If HowLongToBeat cannot be reached (it has no official service, and it can be blocked or change without notice) the block says so and nothing else is affected: type the times yourself.
 - Times you set or took from HowLongToBeat are **never replaced** by IGDB's later reads. Games with no time show "No time yet".
 
 ![The time to beat block](img/time-to-beat-phone.jpg)
+
+**Price, series and similar games.** Depending on the game, the details also show a **Price** line from IsThereAnyDeal with **Wrong game?** / **Pick the game** to fix the match ([section 17](#17-deals)), where the game falls in its series (for example **3 of 5 in Ace Attorney**, [section 14](#14-series)), and a small **Similar games** row for a finished or favourite game ([section 16](#16-similar-games)). These read what the pages saved earlier; opening a game never asks any website.
 
 **Edit** changes everything else.
 
@@ -152,9 +194,9 @@ Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, d
 - **Save** keeps your changes. **Cancel** or the ✕ asks before throwing away unsaved edits.
 - **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match).
 
-**Change cover** is explained in [section 10](#10-covers). **Delete game** removes the game for good, after a confirmation: its years, cover and screenshots go with it (the picture files are deleted too) and it cannot be undone.
+**Change cover** and **Change poster** are explained in [section 12](#12-covers-and-posters). **Delete game** removes the game for good, after a confirmation: its years, cover and screenshots go with it (the picture files are deleted too) and it cannot be undone.
 
-## 7. Putting games in your own order
+## 8. Putting games in your own order
 
 The *manual order* is how you rank games yourself, for example the order you plan to play your *Up next* games.
 
@@ -170,7 +212,7 @@ What to know:
 - Only the games in the list are moved. Your other games keep their place.
 - One order is shared by all views. A view shows it only when it sorts by *Manual order* (the default order, Status then Title, does not). Reordering always works on your manual order, whatever the view's sort is; to see the result in a view, add *Manual order* to its sort.
 
-## 8. The table (spreadsheet) layout
+## 9. The table (spreadsheet) layout
 
 Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Cards** to go back. The layout is part of a saved view, so you can keep a table view of your backlog.
 
@@ -184,7 +226,32 @@ Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Ca
 - **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets.
 - On a phone the table scrolls sideways, with the title column kept in place.
 
-## 9. Adding a game
+## 10. Surprise me: let the app choose
+
+Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone the buttons sit on their own row under the title, and that row scrolls away while the search box stays at the top). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
+
+**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested, Evergreen are never offered, unless you filtered to that status on purpose.
+
+**Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
+- **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
+- **VR only**.
+- **Quick game**: games that take under 10 hours to beat. It only appears once some game has a time to beat; games without a time are not offered by it.
+- **Not played recently**: games you never played, or whose last year played is two or more years ago. A game you play "always" never counts.
+
+If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
+
+**The result.** You see the cover, the title, platforms, genres and the years you played it (the time to beat is only in the game details), and three buttons:
+- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
+- **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
+- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).
+
+![Choosing a mood](img/surprise-mood-phone.jpg)
+
+![The result](img/surprise-result-phone.jpg)
+
+The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
+
+## 11. Adding a game
 
 Tap **+**.
 
@@ -198,9 +265,13 @@ Tap **+**.
    - **Cover:** a row of pictures from SteamGridDB appears. The first is chosen. Tap another one, or **No cover**. **Search again** looks again with the title you typed.
 4. **Add to library.** The game is added at the end of your manual order and opens so you can adjust it.
 
-If the game is not found, tap **Add "..." without a lookup** to type everything in yourself. The lookups need keys that are set up once on the Pi (see the [developer manual](developer-manual.md#3-running-it)). Without them you can still add games by hand.
+![The add form](img/add-form-phone.jpg)
 
-## 10. Covers
+If the game is not found, tap **Add "..." without a lookup** to type everything in yourself. The lookups need IGDB and SteamGridDB keys ([section 3](#3-setting-up-keys)); without them you can still add games by hand.
+
+The add form also opens, already filled in, from other pages: **Add** on Similar games, Upcoming and the Series page. You always choose the status, platforms and the rest before **Add to library**; nothing is ever added without you.
+
+## 12. Covers and posters
 
 Open a game and tap **Change cover**.
 
@@ -213,14 +284,14 @@ Open a game and tap **Change cover**.
 
 ### The poster (portrait picture)
 
-The rankings and their PNG use a **portrait poster** of each game, made for you automatically. To choose your own, open a game and tap **Change poster**, or, on a ranking board, tap a game and then the picture button in the bar at the bottom.
+The Series, Upcoming, Similar games and Deals pages and the rankings (and their PNG) use a **portrait poster** of each game, made for you automatically. A wrong poster is the usual thing to fix here: for example a game that is not linked to IGDB can get a look-alike from SteamGridDB. To choose your own, open a game and tap **Change poster**, or, on a ranking board, tap a game and then the picture button in the bar at the bottom.
 
 - **IGDB** shows the official box cover and **SteamGridDB** shows several community portraits. Tap one to use it. Both lists load on their own: if SteamGridDB cannot be reached right now (some providers block it at times) its part says so and the IGDB cover is still there.
 - **Paste an image link** uses a picture from the web. Only links from the same sites as covers (IGDB and SteamGridDB images) are accepted.
 - **Crop of the wide cover** cuts the middle of the game's wide cover into a portrait (no internet needed). **Fetch automatically again** goes back to what the app chooses by itself (IGDB, then SteamGridDB, then the crop) and replaces your pick.
 - A poster you chose stays: the app never replaces it on its own, and changing the wide cover does not change it. The ranking board and the exported PNG show the new poster at once.
 
-## 11. What the little icons mean
+## 13. What the little icons mean
 
 **Ownership** (filters, the table, the game's details and a badge on cards):
 
@@ -236,9 +307,13 @@ The rankings and their PNG use a **portrait poster** of each game, made for you 
 
 **Years played on a card:** 🧒 childhood · ♾️ always played · a dashed **+N** older years not shown.
 
-## 12. Series progress
+## 14. Series
 
-Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a tile: a fan of its posters, its name, a progress bar and *2/4 finished*. Tap a tile to open the series on its own page (the phone's back button returns to the tiles): its games are posters in release order, with a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a poster to open the game's details. A green ✓ on a poster means finished, a ▶ means played; posters of games you have not played yet are a little paler. A tile's fan shows up to four posters, preferring games linked to IGDB. If a game has a wrong poster (for example a game that is not linked to IGDB got a look-alike from SteamGridDB), open the game and tap **Change poster** ([The poster](#the-poster-portrait-picture)). A game with only a wide cover shows it whole on a dark background instead of cropped.
+*Needs IGDB for the games you do not have yet; the progress itself needs nothing.*
+
+Open **Series** in the navigation (**More** on a phone) to see how far you are through every series. Each series is a tile: a fan of its posters, its name, a progress bar and *2/4 finished*. Tap a tile to open the series on its own page (the phone's back button returns to the tiles): its games are posters in release order, with a line such as *3 finished · 4 played · 5 games · 1 left to play*. Tap a poster to open the game's details. A green ✓ on a poster means finished, a ▶ means played; posters of games you have not played yet are a little paler. A tile's fan shows up to four posters, preferring games linked to IGDB. If a game has a wrong poster, open the game and tap **Change poster** ([section 12](#the-poster-portrait-picture)). A game with only a wide cover shows it whole on a dark background instead of cropped.
+
+![The Series page](img/series-phone.jpg)
 
 - **Finished** means the game's status is **Finished**.
 - **Played** means you have started it: it is Finished, or its status is Playing, Playing - Evergreen, Evergreen, Hold or Dropped, or it has any year (or Childhood / Always) in *Played in*. Finished games count as played too.
@@ -247,8 +322,6 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 - **Left to play** (the button at the top) hides series where nothing is left. **Not in library** shows only the series that have a game you do not have yet (see below). Both stay on when you open a series and come back.
 - Games are listed by **release year** (games without a year come last), then by title. There is no "number in the series": the release year puts a game in its place. Games imported from another tool usually have no year yet: open a game, tap **✎ Edit** and **Fill from IGDB…**, and the year is set. The page tells you how many games still have no year.
 - A game's details show where it falls, for example **3 of 5 in Ace Attorney**, only when every game of that series has a release year (otherwise they show *Ace Attorney (5 games)*, because the order would be a guess). It appears only for series with at least two games. A series is every game with the same series name; capital letters do not matter.
-
-![The Series page](img/series-phone.jpg)
 
 ### Games you do not have yet ("Not in your library")
 
@@ -259,58 +332,79 @@ An opened series also shows the games of the same IGDB collection that are not i
 
 Only real games are listed: DLC, expansions, bundles, ports, updates, mods, episodes and seasons are left out; remakes and remasters are kept. Games are matched by their IGDB link, and a game counts as yours with its other IGDB entries (the original and the remaster of a game you own are not listed), so a game you have not linked to IGDB can show up here too (use **Link IGDB** to link your games first).
 
-Which IGDB collection belongs to a series is decided by your linked games: the series *Souls* with Dark Souls linked gets Dark Souls' collection, whatever IGDB calls it. When your games belong to several collections, the one most of them share is used (and, on a tie, the one named like your series). A series with no game linked to IGDB shows nothing. The lists are saved on the server and are **not** read when you open the page. Tap **↻ Refresh from IGDB** to read them (it takes about half a minute for a big library and keeps going if you leave the page); the page says when they were last read. **`deltabacklog sync-igdb --enrich`** refreshes them too. Big series (Pokémon, Mario) can list dozens of games: hide the ones you do not care about.
+Which IGDB collection belongs to a series is decided by your linked games: the series *Souls* with Dark Souls linked gets Dark Souls' collection, whatever IGDB calls it. When your games belong to several collections, the one most of them share is used (and, on a tie, the one named like your series). A series with no game linked to IGDB shows nothing. Big series (Pokémon, Mario) can list dozens of games: hide the ones you do not care about.
+
+The lists are saved on the server and are **not** read when you open the page. Tap **↻ Refresh** to read them from IGDB (it takes about half a minute for a big library and keeps going if you leave the page); the page says when they were last read. See [section 23](#23-refresh-buttons).
 
 ![A series opened, with games that are not in the library](img/series-shelf-phone.jpg)
 
-### Upcoming releases
+## 15. Upcoming releases
 
-**Upcoming** (in the navigation, **More** on a phone) lists the new games of your series that are not in your library and are not out yet, grouped by month: **This month**, **Next month**, then the months after. They are the same games as *Not in your library* on the Series page. A game IGDB only dates to a quarter or a year sits after the months it covers as **Q3 2027** or **2027**, and is never shown as a specific day. **Later / TBA** holds games with no announced date and releases more than a year and a half away. Each row has the poster, the title, the date, the platforms IGDB lists and its series, with **Add** (the add form pre-filled from IGDB; it starts on **Backlog**, pick another status there if you like) and **Hide** (the same hide list as the Series page, with Undo).
+*Needs IGDB for the dates.*
 
-A **Recently released** section at the top shows games that came out in the last 60 days, so a launch does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
 
-The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same button and background run as on the Series page; it also re-reads the dates of games with no date yet). Games you add or link to IGDB get their date at once; **`deltabacklog sync-igdb --enrich`** fills it for the games it reads (run it with `--refresh` once to fill the dates of games enriched before this version). Dates are shown as IGDB's calendar date, whatever your time zone.
+**Upcoming** lists the games that are not out yet, grouped by month: **This month**, **Next month**, then the months after. A game IGDB only dates to a quarter or a year sits after the months it covers as **Q3 2027** or **2027**, and is never shown as a specific day. **Later / TBA** holds games with no announced date and releases more than a year and a half away. Each row has the poster, the title, the date, the platforms IGDB lists and the series it belongs to. The games are the **new games of your series** that are not in your library (the same games as *Not in your library* on the Series page). They have **Add** (the add form pre-filled; you choose the status) and **Hide** (the same hide list as the Series page, with Undo).
+
+A **Recently released** section at the top shows games that came out in the last 60 days, so a new game of a series that just launched does not go unnoticed. Older releases leave the page; a game you own is never listed. Dates are written in English (for example *5 Nov 2026*) whatever your browser's language.
+
+The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same background run as on the Series page). Games you add or link to IGDB get their date at once. Dates are shown as IGDB's calendar date, whatever your time zone.
 
 ![The Upcoming page](img/upcoming-phone.jpg)
 
-### Similar games
+## 16. Similar games
 
-**Similar games** (in the navigation, **More** on a phone) suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see section 16). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and two buttons:
+*Needs IGDB.*
+
+**Similar games** suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see [section 22](#22-link-your-games-with-igdb)). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and two buttons:
 
 - **Add** opens the add form, pre-filled from IGDB; pick the status you like there.
 - **Hide** removes the game from the list for good (an **Undo** shows for a few seconds). **Hidden** at the bottom of the page lists them, each with **Show again**. This is its own list: hiding a game here does not hide it on the Series page, and the other way round.
 
 The page follows the same ownership rule as the Series page: a game you own is not suggested, and neither is another version of it (a remaster, an expanded edition or a port of a game you have). A remake or a standalone expansion of a game you have still is.
 
-The suggestions are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** to read them (a few requests in the background, with progress; it can be left and takes about a minute for a large library). `sync-igdb --enrich` reads them too. A game's details also show a small **Similar games** row for a finished or favourite game, from the same saved list.
+The suggestions are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** to read them (a few requests in the background, with progress; it can be left and takes about a minute for a large library). A game's details also show a small **Similar games** row for a finished or favourite game, from the same saved list.
 
 ![The Similar games page](img/similar-phone.jpg)
 
-### Deals
+## 17. Deals
 
-**Deals** (in the navigation, **More** on a phone) shows what the games in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+*Needs an IsThereAnyDeal key ([section 3](#3-setting-up-keys)). Games are matched through their Steam store link (from IGDB) or exact title.*
 
-Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap **↻ Refresh prices** to read them (a background run with progress). The first run, and any game you add later, needs one or two lookups per game to find it on IsThereAnyDeal (about 0.4 seconds each, so a few minutes for a few hundred games); after that a refresh needs about one request per 50 games. *Last checked* tells you how old they are. Prices are for one country, shown in its currency: **Country** (two letters, `ES` by default) can be changed on the page; the saved prices are then dropped, and you press **Refresh prices** to read them for the new country.
-
-A game is matched with IsThereAnyDeal by the Steam link in its details when it has one, otherwise by its exact title. When there is no exact match the game is listed under **No match on IsThereAnyDeal** instead of guessing. Open it and use **Pick the game** (or **Wrong game?** when the match is wrong): search by title, tap the right game, or choose **No match on IsThereAnyDeal**. Your choice is kept; **Match automatically** gives control back. The same **Price** line appears in a game's details. A game that is matched but that no shop lists right now is named in a short note under the list: it is often an old or delisted entry (for example a game and its *Final Cut*), so open it and tap **Wrong game?**.
-
-**Setting it up.** Create a free API key at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and add `ITAD_API_KEY=<your key>` to `.env` (on the Raspberry Pi: `/etc/deltabacklog.env`, then `sudo systemctl restart deltabacklog`). Without it the page says it is not set up and Refresh is off.
+**Deals** shows what the games in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
 
 ![The Deals page](img/deals-phone.jpg)
 
-## 13. Year in review and rankings
+Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap **↻ Refresh prices** to read them (a background run with progress). The first run, and any game you add later, needs one or two lookups per game to find it on IsThereAnyDeal (about 0.4 seconds each, so a few minutes for a few hundred games); after that a refresh needs about one request per 50 games. *Last checked* tells you how old they are. Prices are for one country, shown in its currency: **Country** (two letters, `ES` by default) can be changed on the page; the saved prices are then dropped, and you press **Refresh prices** to read them for the new country.
 
-**Year in review** (under **More** on a phone) opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
+**Fixing a match.** A game is matched with IsThereAnyDeal by the Steam store link in its details when it has one, otherwise by its exact title. When there is no exact match the game is listed under **No match on IsThereAnyDeal** instead of guessing. Open it and use **Pick the game** (or **Wrong game?** when the match is wrong): search by title, tap the right game, or choose **No match on IsThereAnyDeal**. Your choice is kept; **Match automatically** gives control back. The same **Price** line appears in a game's details. A game that is matched but that no shop lists right now is named in a short note under the list: it is often an old or delisted entry (for example a game and its *Final Cut*), so open it and tap **Wrong game?**.
+
+## 18. Stats
+
+Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
+
+- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the "Main + extras" time of each game, or the closest time known when it has no such time, added up, whatever its source; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
+- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
+- **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
+- **Finished or dropped**: the share of games you finished against dropped.
+
+![The Stats page](img/stats-phone.jpg)
+
+The charts have text labels and work in light and dark. Screen readers get the numbers as a table.
+
+## 19. Year in review
+
+**Year in review** opens the latest year you played something. A game belongs to a year when that year is in its *Years played* (moving a game to Playing or Finished adds the current year by itself). Childhood and "always played" do not count as a year.
 
 - **The page.** The big **‹** and **›** buttons go to the previous and next year (one calendar year at a time, so a year with no games is reachable too; it says nothing was recorded). The strip under the title jumps to any year, with the number of games.
 - **Counts.** Games are grouped by their *current* status: **Finished**, **Dropped**, **Still playing** (Playing and Playing - Evergreen) and **Played** (everything else, for example Evergreen or Backlog). Next to them are the platforms and genres you played that year. Tap any game to open its details.
-- **Rank this year** opens the ranking of that year, or makes it with that year's games waiting to be ranked (see Rankings below).
+- **Rank this year** opens the ranking of that year, or makes it with that year's games waiting to be ranked (see [section 20](#20-rankings)).
 
 ![A year in review](img/year-phone.jpg)
 
-### Rankings
+## 20. Rankings
 
-**Rankings** (under **More** on a phone, in the sidebar on a PC) are lists like the ones you make on TierMaker: as many as you want, each with its **own tiers**, **your own labels** ("Me ha cambiado la vida", "Vaya mierda"...) and colours, and big **poster** pictures of the games. A ranking can hold any set of games: everything you played in 2025, all your RPGs, a hand-picked handful.
+**Rankings** are lists like the ones you make on TierMaker: as many as you want, each with its **own tiers**, **your own labels** ("Me ha cambiado la vida", "Vaya mierda"...) and colours, and big **poster** pictures of the games. A ranking can hold any set of games: everything you played in 2025, all your RPGs, a hand-picked handful.
 
 ![The rankings list](img/rankings-phone.jpg)
 
@@ -331,82 +425,7 @@ On a PC the same board has room for many posters per row:
 
 If you delete a game from the library it leaves every ranking.
 
-## 14. Stats
-
-Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
-
-- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the "Main + extras" time of each game, or the closest time known when it has no such time, added up, whatever its source; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
-- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
-- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
-- **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
-- **Finished or dropped**: the share of games you finished against dropped.
-
-![The Stats page](img/stats-phone.jpg)
-
-The charts have text labels and work in light and dark. Screen readers get the numbers as a table.
-
-## 15. Surprise me: let the app choose
-
-Can't decide what to play? Tap **🎲 Surprise me** at the top of the Library or of any saved view (on a phone the buttons sit on their own row under the title, and that row scrolls away while the search box stays at the top). On a phone, **Save** and **Save as…** sit in the row under the search box (next to **Revert**), so the top row and the view name stay as they are.
-
-**What it picks from.** The games that Library or view is showing right now, including your search and filters. With no filters at all it picks from your **Up next** games, or from **Backlog** if Up next is empty. Games that are Finished, Dropped, Not Interested or Evergreen are never offered, unless you filtered to that status on purpose.
-
-**Your mood (optional).** A sheet opens first. Tap any of these to narrow the pick; the number on each chip is how many games would be left:
-- **Platform** and **Genre**: tap one or more (a game needs to match any of the ones you tap in that row).
-- **VR only**.
-- **Quick game**: games that take under 10 hours to beat, according to IGDB. It only appears once IGDB times exist; games without a time are not offered by it.
-- **Not played recently**: games you never played, or whose last year played is two or more years ago. A game you play "always" never counts.
-
-If nothing fits, **Pick one** is greyed out and says so; remove a choice. Then tap **Pick one**.
-
-**The result.** You see the cover, the title, platforms, genres and the years you played it (the time to beat is only in the game details), and three buttons:
-- **▶ Play it** sets the game to *Playing* (the app records the current year for you) and closes the sheet. An Evergreen game becomes *Playing - Evergreen* instead, and a game you are already playing is left as it is (the button then reads *Already playing*).
-- **Another one** shows a different game. It never shows the same game twice until you have seen them all; then it tells you and offers **Start over**.
-- **Skip** is like *Another one*, and also leaves that game out for the rest of your browser session (until you close the tab). If you skip everything, **Forget my skips** brings back the skipped games that fit this pick (skips from other views stay skipped).
-
-![Choosing a mood](img/surprise-mood-phone.jpg)
-
-![The result](img/surprise-result-phone.jpg)
-
-The **←** button goes back to the mood, and **✕** (or Escape) closes the sheet without changing anything.
-
-## 16. Link your games with IGDB
-
-Games imported from your old table are not yet connected to their page on IGDB, the game database the app uses for covers and details. A one-off command on the Pi, `deltabacklog sync-igdb`, connects them (the steps are in the [developer manual](developer-manual.md#8-external-services); `--dry-run` shows what it would do without changing anything). Restart the app afterwards so it shows the new links. It is safe: it first saves a copy of your library, and it only sets the link. It never changes anything you typed, and the app does not show IGDB's scores.
-
-Most games are linked automatically. The ones the app is not sure about wait for you in **Link IGDB** (an entry in the navigation that only appears while there is something to review).
-
-For each game you see its title, year and platforms, and IGDB's best guesses with the platforms IGDB lists for each (handy when two games share a name) and a percentage that says how closely the title matches. A low percentage means the app found no close match and shows IGDB's top results anyway, in case one is right. **IGDB ↗** opens that game's page on igdb.com:
-- Tap **Link** next to the right guess.
-- **Search IGDB…** lets you look for it yourself; tap the right result.
-- **Not on IGDB** if the game is not there at all (a fan game, a regional title). The app will not ask again.
-- **Skip** leaves it for later; it comes back the next time you open the screen, or with **Review them again**.
-
-![The Link IGDB screen](img/link-phone.jpg)
-
-If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
-
-**Second step: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`, see the developer manual). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed, and it adds what the app did not have: time to beat, game modes, perspectives and store links. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. At the end it also reads the IGDB collections of your series, which feed the *Not in your library* games on the Series page ([section 12](#12-series-progress)). Restart the app afterwards to see the new data.
-
-## 17. If something looks wrong
-
-- **The page looks old after an update.** Reload it twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
-- **"Lookups are not set up".** The IGDB or SteamGridDB key is missing on the Pi. Games can still be added by hand.
-- **A page saying "unknown host".** The app only answers to its own address, `deltabacklog.local`, the Pi's hostname and IP addresses. If you open it by another name (a router name, a Tailscale name, a reverse proxy), add that name to `ALLOWED_HOSTS` in `/etc/deltabacklog.env` on the Pi (for example `ALLOWED_HOSTS=raspberry.lan`) and restart the app with `sudo systemctl restart deltabacklog`.
-- **A cover is missing.** Open the game, tap **Change cover** and pick one. Adding a game never fails because of a cover: if the picture could not be downloaded you are told, and the game is added anyway.
-- **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
-- **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
-
-## 18. Backups and what is still missing
-
-**Backups happen by themselves.** Every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
-
-**Screenshots are backed up too.** Each night the new pictures are copied to a second place, so the originals and the copy are on different disks (if the pictures live on the external drive, the copy goes to the SD card, as long as the SD card keeps 5 GB free). Pictures you delete in the app stay in that copy until you clear it by hand. When the pictures are on the external drive, each night's library copy is also saved on that drive. Details and restore steps are in the developer manual.
-
-**Not built yet:** a full export of everything (the **Export CSV** button of the table, [section 8](#8-the-table-spreadsheet-layout), already saves the games you see).
-
-
-## 19. Screenshots
+## 21. Screenshots
 
 Every game can keep its own pictures, for example your best moments or where you stopped.
 
@@ -428,9 +447,13 @@ Every game can keep its own pictures, for example your best moments or where you
 
 ### The Screenshots page
 
-**Screenshots** (under **More** on a phone, in the sidebar on a PC) shows every picture of every game in one place, so you can browse them without opening each game.
+**Screenshots** shows every picture of every game in one place, so you can browse them without opening each game.
 
 ![The Screenshots page on a phone](img/gallery-phone.jpg)
+
+On a PC the grid is wider:
+
+![The Screenshots page on a PC](img/gallery-desktop.jpg)
 
 - **By game** (the default) puts the pictures under a header with the game's cover and name; tap the header to open the game. **All, newest first** drops the headers and lists everything by date (when the picture was taken, or when you added it if the file does not know). The choice is remembered on this device.
 - **Search** finds a game by name or a picture by its caption. **Year** keeps one year only.
@@ -440,8 +463,63 @@ Every game can keep its own pictures, for example your best moments or where you
 
 ![The viewer on the Screenshots page](img/gallery-viewer-phone.jpg)
 
-**Copy them off the Pi** (optional), from a computer on your network, replacing the address:
+**Copy them off the Pi** (optional), from a computer on your network, replacing the address and folder:
 
 ```sh
-rsync -a pi@deltabacklog.local:/mnt/ventodrive/deltabacklog/screenshots/ ./my-screenshots/
+rsync -a pi@deltabacklog.local:<screenshots-folder>/ ./my-screenshots/
 ```
+
+## 22. Link your games with IGDB
+
+Games imported from your old table are not yet connected to their page on IGDB, the game database the app uses for covers and details. Linking them is what makes the details, Series, Upcoming and Similar games work for the games you already have. Games you add through the app are linked from the start.
+
+**Step 1: link.** A one-off command on the Pi, `deltabacklog sync-igdb`, connects them (the steps are in the [developer manual](developer-manual.md#8-external-services); `--dry-run` shows what it would do without changing anything). Restart the app afterwards so it shows the new links. It is safe: it first saves a copy of your library, and it only sets the link. It never changes anything you typed, and the app does not show IGDB's scores.
+
+Most games are linked automatically. The ones the app is not sure about wait for you in **Link IGDB** (an entry in the navigation that only appears while there is something to review).
+
+For each game you see its title, year and platforms, and IGDB's best guesses with the platforms IGDB lists for each (handy when two games share a name) and a percentage that says how closely the title matches. A low percentage means the app found no close match and shows IGDB's top results anyway, in case one is right. **IGDB ↗** opens that game's page on igdb.com:
+- Tap **Link** next to the right guess.
+- **Search IGDB…** lets you look for it yourself; tap the right result.
+- **Not on IGDB** if the game is not there at all (a fan game, a regional title). The app will not ask again.
+- **Skip** leaves it for later; it comes back the next time you open the screen, or with **Review them again**.
+
+![The Link IGDB screen](img/link-phone.jpg)
+
+If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
+
+**Step 2: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed. It adds what the app did not have: time to beat, game modes, perspectives and store links, and the dates for Upcoming. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. At the end it also reads the IGDB collections of your series and the Similar games lists, which feed the Series, Upcoming and Similar games pages. Restart the app afterwards to see the new data.
+
+## 23. Refresh buttons
+
+The pages that use other websites keep what they read on the server. **Opening a page, a game or the app never asks IGDB or IsThereAnyDeal**: you decide when, with a refresh button. Each refresh runs in the background with a progress count, one at a time, and keeps going if you leave the page; what it already stored stays if it is stopped.
+
+| Page and button | What it reads | When to press it |
+|---|---|---|
+| **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
+| **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
+| **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
+| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of your backlog and up next (about one request per 50 games) | before you buy something |
+
+Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or poster you chose, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date).
+
+If a refresh is refused or stopped (too many requests, a wrong key, no connection) the page says why and keeps what it had; try again later.
+
+## 24. If something looks wrong
+
+- **The page looks old after an update.** Browsers can keep a copy of the app (a "service worker", used when the app is reached over HTTPS or on the same computer). Reload twice (on a PC: Ctrl+Shift+R). If it still looks old, clear the site's data in your browser settings once.
+- **A page says it is "not set up".** The key for that page is missing: IGDB or SteamGridDB for lookups and `ITAD_API_KEY` for Deals. See [section 3](#3-setting-up-keys). Games can still be added by hand.
+- **A page saying "unknown host".** The app only answers to its own address, `deltabacklog.local`, the Pi's hostname and IP addresses. If you open it by another name (a router name, a Tailscale name, a reverse proxy), add that name to `ALLOWED_HOSTS` in `/etc/deltabacklog.env` on the Pi (for example `ALLOWED_HOSTS=raspberry.lan`) and restart the app with `sudo systemctl restart deltabacklog`.
+- **A cover is missing.** Open the game, tap **Change cover** and pick one. Adding a game never fails because of a cover: if the picture could not be downloaded you are told, and the game is added anyway.
+- **A poster is wrong** (Series, Upcoming, Similar games, Deals, rankings). Open the game and tap **Change poster**, pick the right one ([section 12](#the-poster-portrait-picture)). Your pick is kept.
+- **A price is for the wrong game.** Open the game on the Deals page (or its details) and tap **Wrong game?** or **Pick the game** ([section 17](#17-deals)).
+- **A series shows no games I do not have.** Those games need the series' games to be linked to IGDB ([section 22](#22-link-your-games-with-igdb)) and a press of **↻ Refresh** on the Series page.
+- **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
+- **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
+
+## 25. Backups and what is still missing
+
+**Backups happen by themselves.** Every night at 03:30 the Raspberry Pi saves a copy of your library and keeps the last 14 days. Restoring one is described in the [developer manual](developer-manual.md#11-build-and-deploy).
+
+**Screenshots are backed up too.** Each night the new pictures are copied to a second place, so the originals and the copy are on different disks (if the pictures live on the external drive, the copy goes to the SD card, as long as the SD card keeps 5 GB free). Pictures you delete in the app stay in that copy until you clear it by hand. When the pictures are on the external drive, each night's library copy is also saved on that drive. Details and restore steps are in the developer manual.
+
+**Not built yet:** a full export of everything (the **Export CSV** button of the table, [section 9](#9-the-table-spreadsheet-layout), already saves the games you see).
