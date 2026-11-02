@@ -3,7 +3,7 @@
 # DeltaBacklog
 
 **A self-hosted videogame backlog tracker: one small binary, one SQLite file, no cloud, no login.**<br>
-Built for the phone first, just as comfortable on a PC, and light enough for a Raspberry Pi 3B+.
+Browse and filter every game you own, keep lists like *Playing now* and *Up next*, remember which years you played what, and add new games with their cover and details filled in for you. Built for the phone first, just as comfortable on a PC, and light enough for a Raspberry Pi 3B+.
 
 [![CI](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml/badge.svg)](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml)
 [![Go 1.27](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](https://go.dev/)
@@ -50,7 +50,7 @@ Built for the phone first, just as comfortable on a PC, and light enough for a R
 - **One binary, one SQLite file.** No CGO, no frontend build step, no login. The web app is compiled into the binary.
 - **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
 - **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
-- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat run when you press a refresh button; nothing is read when a page opens, and there is no telemetry.
+- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry.
 - **Yours to keep.** Covers and posters are stored next to the database, so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
 
 ## How it works
@@ -101,12 +101,6 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - Type a title and genres, themes, developer, series, release year and a cover come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/). Needs free API keys; everything else works without them.
 - `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen. `--enrich` then fills in the details.
 - `deltabacklog fetch-posters` makes the portrait posters for the whole library in one go (they are otherwise made in the background when a game joins a ranking); you can choose any poster by hand.
-
-**Yours to keep**
-- Covers and posters are stored next to the database, so the app keeps working when those websites do not.
-- Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
-- Works at the root of a host or under a sub-path behind a reverse proxy (for example `/backlog/`), with no setting.
-- A PWA: add it to your home screen (needs HTTPS or `localhost`).
 
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
@@ -263,10 +257,7 @@ The result is a pull request per feature, a numbered migration for every schema 
 
 None. It is shared as-is, with no support and no SLA; use it at your own risk.
 
-> [!WARNING]
-> It is designed for a trusted home network, has no login and no HTTPS, and must not be exposed to the internet ([SECURITY.md](SECURITY.md)).
-
-Security reports are the one inbound channel, privately (see SECURITY.md); other issues and pull requests may be closed without comment ([CONTRIBUTING.md](CONTRIBUTING.md)).
+It is designed for a trusted home network, has no login and no HTTPS, and must not be exposed to the internet (see the [warning in Quick start](#quick-start) and [SECURITY.md](SECURITY.md)). Security reports are the one inbound channel, privately (see SECURITY.md); other issues and pull requests may be closed without comment ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Documentation
 
@@ -281,7 +272,7 @@ Security reports are the one inbound channel, privately (see SECURITY.md); other
 ## Acknowledgements and license
 
 - Built with [Go](https://go.dev/), [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) and plain JavaScript, with [Claude Code](https://claude.com/claude-code) agents (see [How this was built](#how-this-was-built)).
-- Game data and artwork come from [IGDB](https://www.igdb.com/), [SteamGridDB](https://www.steamgriddb.com/), [IsThereAnyDeal](https://isthereanydeal.com) and HowLongToBeat.
+- Game details and artwork come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/), prices from [IsThereAnyDeal](https://isthereanydeal.com) and times to beat from HowLongToBeat.
 - Released under the [MIT License](LICENSE).
 
 IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat data and artwork belong to their owners and are used through their APIs (or, for HowLongToBeat, its public search) under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.
