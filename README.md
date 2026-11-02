@@ -1,19 +1,80 @@
+<div align="center">
+
 # DeltaBacklog
 
+**A self-hosted videogame backlog tracker: one small binary, one SQLite file, no cloud, no login.**<br>
+Browse and filter every game you own, keep lists like *Playing now* and *Up next*, remember which years you played what, and add new games with their cover and details filled in for you. Built for the phone first, just as comfortable on a PC, and light enough for a Raspberry Pi 3B+.
+
 [![CI](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml/badge.svg)](https://github.com/Deinigu/DeltaBacklog/actions/workflows/ci.yml)
+[![Go 1.27](https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![SQLite, no CGO](https://img.shields.io/badge/SQLite-modernc%2C%20no%20CGO-003B57?logo=sqlite&logoColor=white)](https://pkg.go.dev/modernc.org/sqlite)
+[![Vanilla JS PWA](https://img.shields.io/badge/frontend-vanilla%20JS%20PWA-F7DF1E?logo=javascript&logoColor=black)](docs/developer-manual.md)
+[![Raspberry Pi 3B+](https://img.shields.io/badge/Raspberry%20Pi-3B%2B%20(armv7)-C51A4A?logo=raspberrypi&logoColor=white)](#raspberry-pi-install)
 [![License: MIT](https://img.shields.io/github/license/Deinigu/DeltaBacklog)](LICENSE)
-
-> **Personal project, shared as-is.** Not accepting pull requests or feature requests. Fork it freely ([MIT](LICENSE)). No support, no guarantees: see [How this was built](#how-this-was-built) and [Support](#support).
-
-**A self-hosted videogame backlog tracker: one small binary, one SQLite file, no cloud, no login.** Browse and filter every game you own, keep lists like *Playing now* and *Up next*, remember which years you played what, and add new games with their cover and details filled in for you. Built for the phone first, just as comfortable on a PC, and light enough for a Raspberry Pi 3B+.
 
 <p align="center">
   <img src="docs/img/library-phone.jpg" alt="The library on a phone" width="260">
   &nbsp;
   <img src="docs/img/library-desktop.jpg" alt="The library on a PC" width="520">
+  <br>
+  <em>The library on a phone and on a PC. Demo library of well-known games; cover art from IGDB and SteamGridDB, &copy; its respective owners, shown for illustration.</em>
 </p>
 
-<p align="center"><sub>Demo library of well-known games. Cover art from IGDB and SteamGridDB, &copy; its respective owners, shown for illustration.</sub></p>
+</div>
+
+> [!NOTE]
+> **Personal project, shared as-is.** Not accepting pull requests or feature requests. Fork it freely ([MIT](LICENSE)). No support, no guarantees: see [How this was built](#how-this-was-built) and [Support](#support).
+>
+> **Status:** used daily by its author, but young. Prefer a [release](https://github.com/Deinigu/DeltaBacklog/releases) over `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
+
+## Contents
+
+- [Highlights](#highlights)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Raspberry Pi install](#raspberry-pi-install)
+- [Configuration](#configuration)
+- [Commands](#commands)
+- [Backup and restore](#backup-and-restore)
+- [Import from NocoDB (optional)](#import-from-nocodb-optional)
+- [FAQ](#faq)
+- [Ideas](#ideas)
+- [How this was built](#how-this-was-built)
+- [Support](#support)
+- [Documentation](#documentation)
+- [Acknowledgements and license](#acknowledgements-and-license)
+
+## Highlights
+
+- **One binary, one SQLite file.** No CGO, no frontend build step, no login. The web app is compiled into the binary.
+- **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
+- **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
+- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry.
+- **Yours to keep.** Covers and posters are stored next to the database, so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
+
+## How it works
+
+```
+  phone / PC browser (vanilla-JS PWA)
+              |
+              |  REST API
+              v
+  deltabacklog (one Go binary, web/static embedded)
+              |
+              v
+  data/  app.db (SQLite)  +  covers/  +  screenshots/
+
+  optional, only when you press a refresh button:
+  IGDB   SteamGridDB   IsThereAnyDeal   HowLongToBeat
+```
+
+- **One process.** The Go binary serves the web files compiled into it and the REST API; there is no separate frontend server.
+- **Everything in `DATA_DIR`.** `app.db` is the library, `covers/` the images, `screenshots/` your own pictures (they can live elsewhere with `SCREENSHOTS_DIR`).
+- **Filtering happens in the browser,** so the whole library is searched and filtered instantly.
+- **Works anywhere.** At the root of a host or under a sub-path behind a reverse proxy (for example `/backlog/`), with no setting.
+
+The [developer manual](docs/developer-manual.md) has the architecture, data model and every API call.
 
 ## Features
 
@@ -41,25 +102,18 @@
 - `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen. `--enrich` then fills in the details.
 - `deltabacklog fetch-posters` makes the portrait posters for the whole library in one go (they are otherwise made in the background when a game joins a ranking); you can choose any poster by hand.
 
-**Yours to keep**
-- Covers and posters are stored next to the database, so the app keeps working when those websites do not.
-- Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
-- Works at the root of a host or under a sub-path behind a reverse proxy (for example `/backlog/`), with no setting.
-- A PWA: add it to your home screen (needs HTTPS or `localhost`).
-
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
   <img src="docs/img/series-phone.jpg" alt="Series" width="180">
   <img src="docs/img/game-phone.jpg" alt="A game" width="180">
   <img src="docs/img/ranking-phone.jpg" alt="A ranking" width="180">
-</p>
-<p align="center">
+  <br>
   <img src="docs/img/upcoming-phone.jpg" alt="Upcoming releases" width="180">
   <img src="docs/img/similar-phone.jpg" alt="Similar games" width="180">
   <img src="docs/img/deals-phone.jpg" alt="Deals" width="180">
+  <br>
+  <em>Filters, series, a game, a ranking, upcoming releases, similar games and deals.</em>
 </p>
-
-> **Status:** used daily by its author, but young. Prefer a [release](https://github.com/Deinigu/DeltaBacklog/releases) over `main`, and keep backups (see [Backup and restore](#backup-and-restore)). See the [changelog](CHANGELOG.md).
 
 ## Quick start
 
@@ -88,6 +142,7 @@ go build -o deltabacklog ./cmd/deltabacklog
 
 The app starts with an empty library: use the **+** button to add games. The web files are compiled into the binary, so restart the server after changing anything in `web/static`.
 
+> [!WARNING]
 > **Do not put it on the open internet.** There is no login by design. Keep it on your home network, or put a reverse proxy with authentication in front. See [SECURITY.md](SECURITY.md).
 
 ## Raspberry Pi install
@@ -100,7 +155,12 @@ cp .env.example .env                                     # optional: add your ke
 DEPLOY_HOST=<user>@<pi-address> bash deploy/deploy.sh --env .env
 ```
 
-Run it again to update: data and settings are kept, and the database is backed up before a new version starts. To start from an existing library, add `--seed <dir>` (a folder with `app.db` and `covers/`). Open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot). To publish it under a path of a reverse proxy instead (`http://<host>/backlog/`), set `ALLOWED_HOSTS` to the proxy's name and, if the proxy is the only way in, `PUBLIC_NAME=off` and `LISTEN_ADDR=127.0.0.1:8081` in `/etc/deltabacklog.env`. Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
+- **Updating:** run it again. Data and settings are kept, and the database is backed up before a new version starts.
+- **Starting from an existing library:** add `--seed <dir>` (a folder with `app.db` and `covers/`).
+- **Address:** open `http://deltabacklog.local`, or `http://<pi-address>:8081` if your phone cannot resolve `.local` names (some Android versions cannot).
+- **Behind a reverse proxy:** to publish it under a path (`http://<host>/backlog/`), set `ALLOWED_HOSTS` to the proxy's name and, if the proxy is the only way in, `PUBLIC_NAME=off` and `LISTEN_ADDR=127.0.0.1:8081` in `/etc/deltabacklog.env`.
+
+Details, paths and caveats are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
 
 ## Configuration
 
@@ -131,14 +191,14 @@ A page whose key is missing says it is not set up; without any key the app still
 
 ## Commands
 
-```sh
-deltabacklog                       # serve the app
-deltabacklog backup <file>         # write a consistent copy of the database (safe while it runs; never migrates it)
-deltabacklog backup-screenshots <dir>  # copy the screenshot files <dir> does not have yet (never deletes)
-deltabacklog check <file>          # verify a database or backup (read-only)
-deltabacklog sync-igdb [--dry-run] # link games to IGDB (needs the keys); add --enrich to fill in details, times, dates and the Series and Similar games caches
-deltabacklog fetch-posters [--dry-run] [--limit N] # make the ranking posters for every game (IGDB / SteamGridDB keys help)
-```
+| Command | What it does |
+|---|---|
+| `deltabacklog` | Serve the app. |
+| `deltabacklog backup <file>` | Write a consistent copy of the database (safe while it runs; never migrates it). |
+| `deltabacklog backup-screenshots <dir>` | Copy the screenshot files `<dir>` does not have yet (never deletes). |
+| `deltabacklog check <file>` | Verify a database or backup (read-only). |
+| `deltabacklog sync-igdb [--dry-run]` | Link games to IGDB (needs the keys); add `--enrich` to fill in details, times, dates and the Series and Similar games caches. |
+| `deltabacklog fetch-posters [--dry-run] [--limit N]` | Make the ranking posters for every game (IGDB / SteamGridDB keys help). |
 
 ## Backup and restore
 
@@ -149,7 +209,10 @@ deltabacklog backup backup-2026-01-01.db      # a consistent copy, even while th
 deltabacklog check backup-2026-01-01.db       # integrity, schema version and counts
 ```
 
-To restore, stop the server, copy the backup over `app.db`, delete `app.db-wal` and `app.db-shm` next to it, and start the server. On the Raspberry Pi install a backup is written every night to `/var/backups/deltabacklog/` (last 14 kept); the exact restore commands are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
+To restore, stop the server, copy the backup over `app.db`, delete `app.db-wal` and `app.db-shm` next to it, and start the server.
+
+> [!NOTE]
+> On the Raspberry Pi install a backup is written every night to `/var/backups/deltabacklog/` (last 14 kept). The exact restore commands are in the [developer manual](docs/developer-manual.md#11-build-and-deploy).
 
 ## Import from NocoDB (optional)
 
@@ -192,11 +255,13 @@ The result is a pull request per feature, a numbered migration for every schema 
 
 ## Support
 
-None. It is shared as-is, with no support and no SLA; use it at your own risk. It is designed for a trusted home network, has no login and no HTTPS, and must not be exposed to the internet ([SECURITY.md](SECURITY.md)). Security reports are the one inbound channel, privately (see SECURITY.md); other issues and pull requests may be closed without comment ([CONTRIBUTING.md](CONTRIBUTING.md)).
+None. It is shared as-is, with no support and no SLA; use it at your own risk.
+
+It is designed for a trusted home network, has no login and no HTTPS, and must not be exposed to the internet (see the [warning in Quick start](#quick-start) and [SECURITY.md](SECURITY.md)). Security reports are the one inbound channel, privately (see SECURITY.md); other issues and pull requests may be closed without comment ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Documentation
 
-| | |
+| Document | What's in it |
 |---|---|
 | [User manual](docs/user-manual.md) | Every screen with screenshots, setting up keys, the refresh buttons, troubleshooting |
 | [Developer manual](docs/developer-manual.md) | Architecture, data model, every API call, background jobs, frontend modules, testing, deployment |
@@ -204,6 +269,10 @@ None. It is shared as-is, with no support and no SLA; use it at your own risk. I
 | [Security policy](SECURITY.md) | Design limits and how to report a vulnerability |
 | [Contributing](CONTRIBUTING.md) | Why contributions are not accepted, and forking |
 
-## License
+## Acknowledgements and license
 
-[MIT](LICENSE). IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat data and artwork belong to their owners and are used through their APIs (or, for HowLongToBeat, its public search) under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.
+- Built with [Go](https://go.dev/), [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) and plain JavaScript, with [Claude Code](https://claude.com/claude-code) agents (see [How this was built](#how-this-was-built)).
+- Game details and artwork come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/), prices from [IsThereAnyDeal](https://isthereanydeal.com) and times to beat from HowLongToBeat.
+- Released under the [MIT License](LICENSE).
+
+IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat data and artwork belong to their owners and are used through their APIs (or, for HowLongToBeat, its public search) under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.
