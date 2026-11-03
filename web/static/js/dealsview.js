@@ -89,6 +89,8 @@ export function renderDeals(root) {
       const refresh = info.refresh;
       info = { ...(await dealsMute(game.id)), refresh };
     } catch (e) { toast(e.message || 'Could not turn the alerts off'); return; }
+    store.dealsUnseen = info.unseen || 0; // a muted game's alert leaves the count
+    window.dispatchEvent(new Event('deals-unseen'));
     draw();
     say(`Alerts for ${game.title} are off.`);
     toast(`Alerts off for “${game.title}”. Turn them on again in the game’s Price section.`, 4000);

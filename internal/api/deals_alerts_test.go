@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestDealsMuteAndSeen(t *testing.T) {
 
 func TestDealsRefreshWaitsForTheDailyCheck(t *testing.T) {
 	srv, d := dealsServer(t, dealsFake{})
-	release, err := deals.AcquireRun(d) // what `deals-check` holds while it runs
+	release, err := deals.AcquireRun(d, deals.HolderCheck) // what `deals-check` holds while it runs
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,13 +76,19 @@ func TestDealsRefreshWaitsForTheDailyCheck(t *testing.T) {
 		t.Errorf("refresh during the check: %d %v", code, out)
 	}
 	release()
+	// A lock an app run left behind (a restart in the middle of a refresh) is not blamed on the daily check.
+	stale, _ := deals.AcquireRun(d, deals.HolderApp)
+	if code, out := send(t, "POST", srv.URL+"/api/deals/refresh", nil); code != http.StatusConflict || strings.Contains(out["error"].(string), "daily") {
+		t.Errorf("refresh with a leftover lock: %d %v", code, out)
+	}
+	stale()
 	if code, _ := send(t, "POST", srv.URL+"/api/deals/refresh", nil); code != http.StatusAccepted {
 		t.Errorf("refresh after: %d", code)
 	}
 	// ... and the lock is given back when the app's run ends.
 	for i := 0; i < 100; i++ {
 		time.Sleep(20 * time.Millisecond)
-		if r, err := deals.AcquireRun(d); err == nil {
+		if r, err := deals.AcquireRun(d, deals.HolderApp); err == nil {
 			r()
 			return
 		}

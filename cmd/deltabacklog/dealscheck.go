@@ -52,14 +52,41 @@ func runDealsCheck(dbPath string, src deals.Source, notify deals.Notifier, out i
 	return checkDB(d, src, notify, out)
 }
 
-func checkDB(d *sql.DB, src deals.Source, notify deals.Notifier, out io.Writer) int {
-	release, err := deals.AcquireRun(d)
-	if errors.Is(err, deals.ErrBusy) {
-		fmt.Fprintln(out, "skipped: a price refresh is already running")
-		return 0
+// How long the check waits for a refresh that is running (a manual one at the same time of day) before it gives up, and
+// how often it looks. A skipped check would otherwise be lost until tomorrow.
+var (
+	lockWait = 20 * time.Minute
+	lockPoll = 30 * time.Second
+)
+
+// acquire takes the run lock, waiting for lockWait when someone else has it. It reports to out what it does.
+func acquire(d *sql.DB, out io.Writer) (func(), error) {
+	deadline := time.Now().Add(lockWait)
+	announced := false
+	for {
+		release, err := deals.AcquireRun(d, deals.HolderCheck)
+		if err == nil {
+			return release, nil
+		}
+		if !errors.Is(err, deals.ErrBusy) {
+			fmt.Fprintln(out, "cannot start:", err)
+			return nil, err
+		}
+		if !announced {
+			fmt.Fprintln(out, "another price refresh is running: waiting for it to finish")
+			announced = true
+		}
+		if time.Now().Add(lockPoll).After(deadline) {
+			fmt.Fprintf(out, "gave up: a price refresh was still running after %s\n", lockWait)
+			return nil, err
+		}
+		time.Sleep(lockPoll)
 	}
+}
+
+func checkDB(d *sql.DB, src deals.Source, notify deals.Notifier, out io.Writer) int {
+	release, err := acquire(d, out)
 	if err != nil {
-		fmt.Fprintln(out, "cannot start:", err)
 		return 1
 	}
 	defer release()

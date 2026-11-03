@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/deals"
@@ -67,14 +68,22 @@ func TestDealsCheckCommand(t *testing.T) {
 	}
 
 	// While the app's own refresh holds the lock, the check does nothing (and is no failure).
+	lockWait, lockPoll = 60*time.Millisecond, 10*time.Millisecond
+	t.Cleanup(func() { lockWait, lockPoll = 20*time.Minute, 30*time.Second })
 	d, _ = db.Open(path)
-	release, _ := deals.AcquireRun(d)
-	d.Close()
+	defer d.Close()
+	release, _ := deals.AcquireRun(d, deals.HolderApp)
 	out.Reset()
-	if code := runDealsCheck(path, fakeITAD{}, n, &out); code != 0 || !strings.Contains(out.String(), "skipped") {
-		t.Errorf("locked: %d %q", code, out.String())
+	if code := runDealsCheck(path, fakeITAD{}, n, &out); code != 1 || !strings.Contains(out.String(), "waiting") || !strings.Contains(out.String(), "gave up") {
+		t.Errorf("locked for good: %d %q", code, out.String())
 	}
-	_ = release
+	// A refresh that ends while the check waits lets it run (it waits instead of losing the day).
+	lockWait = 5 * time.Second
+	go func() { time.Sleep(50 * time.Millisecond); release() }()
+	out.Reset()
+	if code := runDealsCheck(path, fakeITAD{}, n, &out); code != 0 || !strings.Contains(out.String(), "prices:") {
+		t.Errorf("after the wait: %d %q", code, out.String())
+	}
 }
 
 func TestTelegramFromEnvLogsNoSecrets(t *testing.T) {

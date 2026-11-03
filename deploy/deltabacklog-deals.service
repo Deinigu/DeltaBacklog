@@ -11,8 +11,8 @@ Group=deltabacklog
 EnvironmentFile=/etc/deltabacklog.env
 WorkingDirectory=/var/lib/deltabacklog
 ExecStart=/opt/deltabacklog/deltabacklog deals-check
-# A run is a few minutes of paced requests; the program stops itself after 20 minutes.
-TimeoutStartSec=30min
+# A run is a few minutes of paced requests; the program waits up to 20 minutes for a running refresh and stops itself 20 minutes after it starts.
+TimeoutStartSec=45min
 Nice=10
 IOSchedulingClass=idle
 MemoryMax=96M

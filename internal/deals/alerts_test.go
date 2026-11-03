@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // histSource is the fake ITAD with a price history: lows is the lowest price of the last two years by ITAD id.
@@ -35,16 +36,17 @@ func (h *histSource) LowSince(_ context.Context, id, _ string, since time.Time) 
 }
 
 type sink struct {
-	mu   sync.Mutex
-	sent []string
-	err  error
+	mu     sync.Mutex
+	sent   []string
+	err    error
+	failIf func(text string) bool // fail only the messages it says yes to
 }
 
 func (s *sink) Send(_ context.Context, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.err != nil {
-		return s.err
+	if s.err != nil || (s.failIf != nil && s.failIf(text)) {
+		return errors.New("Telegram could not be reached")
 	}
 	s.sent = append(s.sent, text)
 	return nil
@@ -293,23 +295,39 @@ func TestSeenAndStandingAlerts(t *testing.T) {
 
 func TestRunLock(t *testing.T) {
 	d := newDB(t)
-	release, err := AcquireRun(d)
+	release, err := AcquireRun(d, HolderApp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AcquireRun(d); !errors.Is(err, ErrBusy) {
+	_, err = AcquireRun(d, HolderCheck)
+	var busy *BusyError
+	if !errors.Is(err, ErrBusy) || !errors.As(err, &busy) || busy.Holder != HolderApp {
 		t.Fatalf("second run: %v", err)
 	}
 	release()
-	release2, err := AcquireRun(d)
+	release2, err := AcquireRun(d, HolderCheck)
 	if err != nil {
 		t.Fatalf("after release: %v", err)
 	}
 	release2()
-	// A lock left by a crash is forgotten after 30 minutes.
-	d.Exec(`INSERT INTO setting(key, value) VALUES ('deals_run', ?)`, time.Now().Add(-time.Hour).UTC().Format(timeFmt))
-	if _, err := AcquireRun(d); err != nil {
-		t.Errorf("stale lock: %v", err)
+
+	// A lock left by a crash is forgotten after 30 minutes, and the first holder's late release must not free the lock
+	// of the one that took over.
+	r1, _ := AcquireRun(d, HolderApp)
+	d.Exec(`UPDATE setting SET value = ? || substr(value, 21) WHERE key = 'deals_run'`, time.Now().Add(-time.Hour).UTC().Format(timeFmt))
+	r2, err := AcquireRun(d, HolderCheck)
+	if err != nil {
+		t.Fatalf("stale lock: %v", err)
+	}
+	r1()
+	if _, err := AcquireRun(d, HolderApp); !errors.As(err, &busy) || busy.Holder != HolderCheck {
+		t.Errorf("the first holder freed the second one's lock: %v", err)
+	}
+	r2()
+	if r, err := AcquireRun(d, HolderApp); err != nil {
+		t.Errorf("after the second release: %v", err)
+	} else {
+		r()
 	}
 }
 
@@ -323,22 +341,43 @@ func TestClientLowSince(t *testing.T) {
 			t.Errorf("request %s %s", r.Method, r.URL)
 		}
 		w.Write([]byte(`[
+		 {"timestamp":"2024-10-20T00:00:00Z","shop":{"id":1,"name":"GOG"},"deal":{"price":{"amountInt":900,"currency":"EUR"}}},
+		 {"timestamp":"2024-10-01T00:00:00Z","shop":{"id":1,"name":"GOG"},"deal":{"price":{"amountInt":100,"currency":"EUR"}}},
 		 {"timestamp":"2025-01-01T00:00:00Z","shop":{"id":61,"name":"Steam"},"deal":{"price":{"amount":9.99,"amountInt":999,"currency":"EUR"},"regular":{"amountInt":1999,"currency":"EUR"},"cut":50}},
 		 {"timestamp":"2025-02-01T00:00:00Z","shop":{"id":1,"name":"GOG"},"deal":{"price":{"amount":7.5,"currency":"EUR"},"cut":60}},
 		 {"timestamp":"2025-03-01T00:00:00Z","shop":{"id":1,"name":"GOG"},"deal":null},
 		 {"timestamp":"2025-04-01T00:00:00Z","shop":{"id":1,"name":"GOG"},"deal":{"price":{"amountInt":1200,"currency":"EUR"}}}]`))
 	})
 	since := time.Date(2024, 11, 3, 10, 0, 0, 0, time.UTC)
+	// The 1.00 of 2024-10-01 was replaced by the 9.00 of 2024-10-20 before the window: it does not count. The 9.00 does
+	// (it was the price when the window opened), but 7.50 is lower.
 	low, ok, err := c.LowSince(context.Background(), "g1", "ES", since)
 	if err != nil || !ok || low.Cents != 750 || low.Currency != "EUR" {
 		t.Fatalf("%+v %v %v", low, ok, err)
 	}
-	if q["id"][0] != "g1" || q["country"][0] != "ES" || q["since"][0] != "2024-11-03T10:00:00Z" || len(q["key"]) != 0 {
+	// It asks from eight weeks before the window.
+	if q["id"][0] != "g1" || q["country"][0] != "ES" || q["since"][0] != "2024-09-08T10:00:00Z" || len(q["key"]) != 0 {
 		t.Errorf("query %v", q)
 	}
 	empty := fakeITAD(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`[]`)) })
 	if _, ok, err := empty.LowSince(context.Background(), "g1", "ES", since); ok || err != nil {
 		t.Errorf("empty history: %v %v", ok, err)
+	}
+	// The price in effect when the window opens counts even though it started before it: here it is the lowest.
+	before := fakeITAD(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"timestamp":"2024-10-20T00:00:00Z","deal":{"price":{"amountInt":500,"currency":"EUR"}}},
+		 {"timestamp":"2025-01-01T00:00:00Z","deal":{"price":{"amountInt":999,"currency":"EUR"}}}]`))
+	})
+	if low, ok, _ := before.LowSince(context.Background(), "g1", "ES", since); !ok || low.Cents != 500 {
+		t.Errorf("price running at the start of the window: %+v %v", low, ok)
+	}
+	// Not sold when the window opened (the last change before it has no deal): an earlier low does not count.
+	unsold := fakeITAD(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"timestamp":"2024-10-01T00:00:00Z","deal":{"price":{"amountInt":100,"currency":"EUR"}}},
+		 {"timestamp":"2024-10-20T00:00:00Z","deal":null},{"timestamp":"2025-01-01T00:00:00Z","deal":{"price":{"amountInt":999,"currency":"EUR"}}}]`))
+	})
+	if low, ok, _ := unsold.LowSince(context.Background(), "g1", "ES", since); !ok || low.Cents != 999 {
+		t.Errorf("not sold at the start of the window: %+v %v", low, ok)
 	}
 }
 
@@ -425,15 +464,126 @@ func TestTelegramErrorsNeverHoldTheToken(t *testing.T) {
 	}
 }
 
-func TestCheckStopsOnNotifierFailureButRecords(t *testing.T) {
+func TestNotifierFailureIsRetried(t *testing.T) {
+	d, src := alertDB(t)
+	setPrice(src, "g1", cur(500, 1500, 66), 500) // Alpha
+	setPrice(src, "g2", cur(500, 1500, 66), 500) // Beta
+	ctx := context.Background()
+	// Alpha's message fails; Beta's is still sent (one failure does not stop the others) and the run reports the failure.
+	bad := &sink{failIf: func(text string) bool { return strings.Contains(text, "Alpha") }}
+	res, err := Check(ctx, d, src, bad)
+	if err == nil || strings.Contains(err.Error(), "sekrit") || !res.Sent || len(bad.sent) != 1 || !strings.Contains(bad.sent[0], "Beta") {
+		t.Fatalf("%+v %v %q", res, err, bad.sent)
+	}
+	// The app shows both alerts whatever Telegram did.
+	if l, _ := Load(d); len(l.Alerts) != 2 {
+		t.Errorf("%+v", l.Alerts)
+	}
+	// Next run: nothing is new, and only the undelivered alert is sent.
+	good := &sink{}
+	res, err = Check(ctx, d, src, good)
+	if err != nil || len(res.Alerts) != 0 || len(good.sent) != 1 || !strings.Contains(good.sent[0], "Alpha") {
+		t.Fatalf("retry: %+v %v %q", res, err, good.sent)
+	}
+	// And then nothing more.
+	again := &sink{}
+	if _, err := Check(ctx, d, src, again); err != nil || len(again.sent) != 0 {
+		t.Errorf("sent again: %v %q", err, again.sent)
+	}
+}
+
+func TestUndeliveredAlertIsDroppedWhenTheDealEnds(t *testing.T) {
 	d, src := alertDB(t)
 	setPrice(src, "g1", cur(500, 1500, 66), 500)
-	res, err := Check(context.Background(), d, src, &sink{err: errors.New("Telegram could not be reached")})
-	if err == nil || res.Sent {
-		t.Fatalf("%+v %v", res, err)
+	ctx := context.Background()
+	if _, err := Check(ctx, d, src, &sink{err: errors.New("down")}); err == nil {
+		t.Fatal("no error")
 	}
-	// The app still shows the alert.
-	if l, _ := Load(d); len(l.Alerts) != 1 {
-		t.Errorf("%+v", l.Alerts)
+	// The sale is over by the next run: nothing to tell.
+	setPrice(src, "g1", cur(1500, 1500, 0), 500)
+	good := &sink{}
+	if _, err := Check(ctx, d, src, good); err != nil || len(good.sent) != 0 {
+		t.Errorf("%v %q", err, good.sent)
+	}
+	// Without Telegram the alerts are not queued for a bot set up later.
+	setPrice(src, "g1", cur(400, 1500, 73), 400)
+	Check(ctx, d, src, nil)
+	late := &sink{}
+	if _, err := Check(ctx, d, src, late); err != nil || len(late.sent) != 0 {
+		t.Errorf("queued while Telegram was off: %v %q", err, late.sent)
+	}
+}
+
+func TestStalePricesAndEndedDealsDoNotAlert(t *testing.T) {
+	d, src := alertDB(t)
+	setPrice(src, "g1", cur(500, 1500, 66), 500)
+	ctx := context.Background()
+	// A cache from an earlier refresh, and a refresh that stops at a rate limit before reading anything.
+	if _, err := Refresh(ctx, d, src, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE deal_price SET fetched_at = '2020-01-01T00:00:00Z'`)
+	src.fakeSource.err = &RateLimitError{}
+	sk := &sink{}
+	res, err := Check(ctx, d, src, sk)
+	if err != nil || len(res.Alerts) != 0 || len(sk.sent) != 0 {
+		t.Fatalf("stale price announced: %+v %v %q", res.Alerts, err, sk.sent)
+	}
+	src.fakeSource.err = nil
+
+	// A deal whose end time has passed is not announced, one still running is.
+	past := cur(500, 1500, 66)
+	past.Expiry = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	setPrice(src, "g1", past, 500)
+	if res, _ := Check(ctx, d, src, nil); len(res.Alerts) != 0 {
+		t.Errorf("ended deal announced: %+v", res.Alerts)
+	}
+	soon := cur(500, 1500, 66)
+	soon.Expiry = time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	setPrice(src, "g1", soon, 500)
+	if res, _ := Check(ctx, d, src, nil); len(res.Alerts) != 1 {
+		t.Errorf("running deal not announced: %+v", res.Alerts)
+	}
+}
+
+func TestLongListKeepsLinksWholeAndUnderTheLimit(t *testing.T) {
+	var many []Alert
+	for i := 0; i < 200; i++ {
+		many = append(many, Alert{GameID: int64(i + 1), Title: strings.Repeat("\U0001F3AE", 20), Kind: KindTwoYear, Price: 100, Currency: "EUR", Shop: "Steam", URL: "https://x.example/game/0123456789"})
+	}
+	groups := messageGroups(many)
+	if len(groups) != 1 || len(groups[0].ids) != 200 {
+		t.Fatalf("groups %d", len(groups))
+	}
+	text := groups[0].text
+	if n := utf16Len(text); n > 4096 {
+		t.Errorf("%d UTF-16 units", n)
+	}
+	if !strings.Contains(text, "and ") || !strings.Contains(text, "more: open Deals") {
+		t.Errorf("no note about the rest: %q", text[len(text)-80:])
+	}
+	for _, l := range strings.Split(text, "\n") {
+		if strings.HasPrefix(l, "  https:") && l != "  https://x.example/game/0123456789" {
+			t.Errorf("a cut link: %q", l)
+		}
+	}
+	if !utf8.ValidString(text) {
+		t.Error("invalid UTF-8")
+	}
+}
+
+func TestTelegramUserAgentAndRuneSafeReason(t *testing.T) {
+	var ua string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		w.WriteHeader(400)
+		io.WriteString(w, `{"ok":false,"description":"`+strings.Repeat("\u00e9", 300)+`"}`)
+	}))
+	defer srv.Close()
+	tg, _ := NewTelegram(testToken, testChat)
+	tg.base = srv.URL
+	err := tg.Send(context.Background(), "x")
+	if err == nil || !utf8.ValidString(err.Error()) || ua != "DeltaBacklog" {
+		t.Errorf("%v %q", err, ua)
 	}
 }

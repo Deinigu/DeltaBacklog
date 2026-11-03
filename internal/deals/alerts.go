@@ -2,11 +2,13 @@ package deals
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // The two kinds of alert. The alert rule: the best price right now (on sale) is at or below the historical low
@@ -40,21 +42,47 @@ const (
 // ErrBusy: another price run (the app's Refresh or the daily check) is going on.
 var ErrBusy = errors.New("another price check is running")
 
+// Who holds the run lock.
+const (
+	HolderApp   = "app"
+	HolderCheck = "check"
+)
+
+// BusyError is the error of AcquireRun when the lock is taken; Is(ErrBusy) is true. Holder says who has it ("app" or
+// "check"; empty when unknown). A holder that crashed leaves the lock behind until lockStale has passed.
+type BusyError struct{ Holder string }
+
+func (e *BusyError) Error() string        { return ErrBusy.Error() }
+func (e *BusyError) Is(target error) bool { return target == ErrBusy }
+
+// pendingMax: an alert that did not reach Telegram is retried for this long, then dropped.
+const pendingMax = 3 * 24 * time.Hour
+
 const timeFmt = "2006-01-02T15:04:05Z"
 
 // AcquireRun takes the lock that keeps the app's refresh and `deals-check` from running together. It is a row in the
-// database, so it holds across processes. The returned func gives it back.
-func AcquireRun(d *sql.DB) (release func(), err error) {
+// database, so it holds across processes: "<time> <holder> <random>". A lock older than lockStale (a crash) is taken
+// over. The returned func gives back only this caller's own lock, never one that took over from it.
+func AcquireRun(d *sql.DB, holder string) (release func(), err error) {
+	var nonce [4]byte
+	rand.Read(nonce[:])
+	mine := fmt.Sprintf("%s %s %x", time.Now().UTC().Format(timeFmt), holder, nonce)
 	res, err := d.Exec(`INSERT INTO setting(key, value) VALUES ('deals_run', ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE setting.value < ?`,
-		time.Now().UTC().Format(timeFmt), time.Now().Add(-lockStale).UTC().Format(timeFmt))
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE substr(setting.value, 1, 20) < ?`,
+		mine, time.Now().Add(-lockStale).UTC().Format(timeFmt))
 	if err != nil {
 		return nil, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return nil, ErrBusy
+		var v string
+		d.QueryRow(`SELECT value FROM setting WHERE key = 'deals_run'`).Scan(&v)
+		busy := &BusyError{}
+		if f := strings.Fields(v); len(f) >= 2 {
+			busy.Holder = f[1]
+		}
+		return nil, busy
 	}
-	return func() { d.Exec(`DELETE FROM setting WHERE key = 'deals_run'`) }, nil
+	return func() { d.Exec(`DELETE FROM setting WHERE key = 'deals_run' AND value = ?`, mine) }, nil
 }
 
 // alertKind applies the rule to one price (cents). Only a price that is a discount counts: a game that never left
@@ -84,11 +112,19 @@ type Alert struct {
 	URL      string
 }
 
+// expired reports whether a deal's end time (RFC 3339, empty = none given) has passed.
+func expired(expiry string, now time.Time) bool {
+	t, err := time.Parse(time.RFC3339, expiry)
+	return err == nil && !t.After(now)
+}
+
 // Evaluate applies the rule to the cached prices of the watched games, skips muted games and deals already announced
-// (see Cooldown), records what it returns (unseen in the app) and returns it.
-func Evaluate(d *sql.DB, now time.Time) ([]Alert, error) {
+// (see Cooldown), records what it returns (unseen in the app, and pending for Telegram) and returns it. Only prices read
+// at or after fetchedSince count (a refresh that stopped halfway leaves older prices, whose sale may be over), and never
+// a deal whose end time has passed.
+func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 	rows, err := d.Query(`SELECT p.game_id, g.title, p.currency, coalesce(p.cur_shop, ''), p.cur_price, p.cur_cut, coalesce(p.cur_url, ''),
-		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, '')
+		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, '')
 		FROM deal_price p JOIN game g ON g.id = p.game_id LEFT JOIN deal_alert a ON a.game_id = p.game_id
 		WHERE ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
 	if err != nil {
@@ -100,13 +136,13 @@ func Evaluate(d *sql.DB, now time.Time) ([]Alert, error) {
 		var price, low, low2y, lastPrice *int64
 		var cut *int
 		var muted int
-		var lastAt string
-		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt); err != nil {
+		var lastAt, fetchedAt, expiry string
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt, &fetchedAt, &expiry); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		a.Kind = alertKind(price, cut, low, low2y)
-		if a.Kind == "" || muted == 1 {
+		if a.Kind == "" || muted == 1 || fetchedAt < fetchedSince.UTC().Format(timeFmt) || expired(expiry, now) {
 			continue
 		}
 		a.Price, a.Cut = *price, *cut
@@ -119,9 +155,9 @@ func Evaluate(d *sql.DB, now time.Time) ([]Alert, error) {
 		return nil, err
 	}
 	for _, a := range out {
-		if _, err := d.Exec(`INSERT INTO deal_alert(game_id, last_alert_price, last_alert_kind, last_alert_at, seen) VALUES (?, ?, ?, ?, 0)
+		if _, err := d.Exec(`INSERT INTO deal_alert(game_id, last_alert_price, last_alert_kind, last_alert_at, seen, pending) VALUES (?, ?, ?, ?, 0, 1)
 			ON CONFLICT(game_id) DO UPDATE SET last_alert_price = excluded.last_alert_price, last_alert_kind = excluded.last_alert_kind,
-			last_alert_at = excluded.last_alert_at, seen = 0`, a.GameID, a.Price, a.Kind, now.UTC().Format(timeFmt)); err != nil {
+			last_alert_at = excluded.last_alert_at, seen = 0, pending = 1`, a.GameID, a.Price, a.Kind, now.UTC().Format(timeFmt)); err != nil {
 			return nil, err
 		}
 	}
@@ -257,6 +293,7 @@ type CheckResult struct {
 // needed, applies the alert rule and sends the alerts to notify (nil: only recorded for the app). The caller holds AcquireRun.
 func Check(ctx context.Context, d *sql.DB, src Source, notify Notifier) (CheckResult, error) {
 	var res CheckResult
+	runStart := time.Now()
 	rep, err := Refresh(ctx, d, src, Options{})
 	res.Report = rep
 	if err != nil {
@@ -268,18 +305,71 @@ func Check(ctx context.Context, d *sql.DB, src Source, notify Notifier) (CheckRe
 			return res, err
 		}
 	}
-	if res.Alerts, err = Evaluate(d, now); err != nil {
+	if res.Alerts, err = Evaluate(d, now, runStart); err != nil {
 		return res, err
 	}
-	if notify != nil && len(res.Alerts) > 0 {
-		for _, text := range Messages(res.Alerts) {
-			if err := notify.Send(ctx, text); err != nil {
-				return res, fmt.Errorf("sending the alerts: %w", err)
+	if notify == nil { // no Telegram: the alerts are for the app only, and must not queue up for a bot set up later
+		_, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1`)
+		return res, err
+	}
+	return res, deliver(ctx, d, notify, now, &res)
+}
+
+// deliver sends the alerts that have not reached Telegram yet: the new ones and those an earlier run could not send,
+// while they still stand. A message that fails does not stop the others; its alerts stay pending for the next run.
+func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, res *CheckResult) error {
+	if _, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1 AND last_alert_at < ?`, now.Add(-pendingMax).UTC().Format(timeFmt)); err != nil {
+		return err
+	}
+	pend, err := pendingAlerts(d, now)
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, m := range messageGroups(pend) {
+		if err := notify.Send(ctx, m.text); err != nil {
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		for _, id := range m.ids {
+			if _, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE game_id = ?`, id); err != nil {
+				return err
 			}
 		}
 		res.Sent = true
 	}
-	return res, nil
+	if first != nil {
+		return fmt.Errorf("some alerts were not delivered and are tried again at the next check: %w", first)
+	}
+	return nil
+}
+
+// pendingAlerts lists the alerts that still have to be sent to Telegram and still stand: watched, not muted, the price
+// is still at or below the announced one and its deal has not ended.
+func pendingAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
+	rows, err := d.Query(`SELECT a.game_id, g.title, a.last_alert_kind, p.cur_price, p.currency, coalesce(p.cur_cut, 0), coalesce(p.cur_shop, ''),
+		coalesce(p.cur_url, ''), coalesce(p.cur_expiry, '')
+		FROM deal_alert a JOIN deal_price p ON p.game_id = a.game_id JOIN game g ON g.id = a.game_id
+		WHERE a.pending = 1 AND a.muted = 0 AND a.last_alert_kind IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_price <= a.last_alert_price
+		AND ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Alert
+	for rows.Next() {
+		var a Alert
+		var expiry string
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Kind, &a.Price, &a.Currency, &a.Cut, &a.Shop, &a.URL, &expiry); err != nil {
+			return nil, err
+		}
+		if !expired(expiry, now) {
+			out = append(out, a)
+		}
+	}
+	return out, rows.Err()
 }
 
 // ---------------- messages ----------------
@@ -299,39 +389,69 @@ func (m Money) String() string {
 }
 
 func (a Alert) line() string {
-	s := fmt.Sprintf("%s: %s", a.Title, Money{a.Price, a.Currency})
+	title := a.Title
+	if r := []rune(title); len(r) > 200 {
+		title = string(r[:200]) + "…"
+	}
+	s := fmt.Sprintf("%s: %s", title, Money{a.Price, a.Currency})
 	if a.Shop != "" {
 		s += " at " + a.Shop
 	}
 	return s + " (" + KindLabel(a.Kind) + ")"
 }
 
-// Messages turns the alerts of one run into texts: one per game, or a single list when there are more than three.
-func Messages(alerts []Alert) []string {
+// message is one text for Telegram and the games it tells about.
+type message struct {
+	text string
+	ids  []int64
+}
+
+// utf16Len is how Telegram counts the length of a text (its limit is 4096 units).
+func utf16Len(s string) int { return len(utf16.Encode([]rune(s))) }
+
+// listLimit keeps a list well under Telegram's 4096 UTF-16 units.
+const listLimit = 3900
+
+// messageGroups turns alerts into messages: one per game, or a single list when there are more than three. A list adds
+// whole entries (never a cut link) until the limit and then says how many more there are.
+func messageGroups(alerts []Alert) []message {
 	if len(alerts) == 0 {
 		return nil
 	}
 	if len(alerts) <= maxSingles {
-		out := make([]string, len(alerts))
+		out := make([]message, len(alerts))
 		for i, a := range alerts {
-			out[i] = "Price alert\n" + a.line()
+			out[i] = message{text: "Price alert\n" + a.line(), ids: []int64{a.GameID}}
 			if a.URL != "" {
-				out[i] += "\n" + a.URL
+				out[i].text += "\n" + a.URL
 			}
 		}
 		return out
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Price alert: %d games\n", len(alerts))
-	for _, a := range alerts {
-		b.WriteString("\n• " + a.line())
+	m := message{text: fmt.Sprintf("Price alert: %d games\n", len(alerts))}
+	for i, a := range alerts {
+		item := "\n• " + a.line()
 		if a.URL != "" {
-			b.WriteString("\n  " + a.URL)
+			item += "\n  " + a.URL
 		}
+		if utf16Len(m.text)+utf16Len(item) > listLimit {
+			m.text += fmt.Sprintf("\n…and %d more: open Deals in the app", len(alerts)-i)
+			for _, rest := range alerts[i:] {
+				m.ids = append(m.ids, rest.GameID)
+			}
+			return []message{m}
+		}
+		m.text += item
+		m.ids = append(m.ids, a.GameID)
 	}
-	text := b.String()
-	if r := []rune(text); len(r) > 4000 { // Telegram's limit is 4096
-		text = string(r[:4000]) + "…"
+	return []message{m}
+}
+
+// Messages is the text of each message messageGroups makes.
+func Messages(alerts []Alert) []string {
+	var out []string
+	for _, m := range messageGroups(alerts) {
+		out = append(out, m.text)
 	}
-	return []string{text}
+	return out
 }

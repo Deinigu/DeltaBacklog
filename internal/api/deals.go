@@ -75,10 +75,15 @@ func (s *Server) dealsRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The daily `deals-check` is another process: a row in the database keeps the two apart.
-	release, err := deals.AcquireRun(s.DB)
+	release, err := deals.AcquireRun(s.DB, deals.HolderApp)
 	if errors.Is(err, deals.ErrBusy) {
 		j.mu.Unlock()
-		writeErr(w, http.StatusConflict, "The daily price check is running right now. Try again in a few minutes.", nil)
+		msg := "The daily price check is running right now. Try again in a few minutes."
+		var busy *deals.BusyError
+		if errors.As(err, &busy) && busy.Holder != deals.HolderCheck {
+			msg = "A price refresh was left running (the app may have restarted during one). It clears itself within 30 minutes: try again then."
+		}
+		writeErr(w, http.StatusConflict, msg, nil)
 		return
 	}
 	if err != nil {

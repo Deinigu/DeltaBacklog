@@ -70,6 +70,7 @@ func (t *Telegram) Send(ctx context.Context, text string) error {
 		return errors.New("bad address")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "DeltaBacklog")
 	resp, err := t.hc.Do(req)
 	if err != nil {
 		var ue *url.Error
@@ -94,8 +95,8 @@ func (t *Telegram) Send(ctx context.Context, text string) error {
 	}
 	json.Unmarshal(data, &reply)
 	if d := strings.TrimSpace(reply.Description); d != "" {
-		if len(d) > 200 {
-			d = d[:200] + "…"
+		if r := []rune(d); len(r) > 200 { // runes: a cut must not split a character
+			d = string(r[:200]) + "…"
 		}
 		return fmt.Errorf("Telegram answered HTTP %d: %s", resp.StatusCode, d)
 	}

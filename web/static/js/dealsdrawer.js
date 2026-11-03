@@ -2,7 +2,7 @@
 // as the server has cached them (never ITAD on open). Also where a wrong or missing match is fixed. It stays out of the way:
 // nothing is drawn until the cache answers, when ITAD is not set up, or for other statuses.
 import { h, toast } from './util.js';
-import { dealsList, dealsSearch, dealsSetMatch, dealsMute, dealsUnmute } from './api.js';
+import { store, dealsList, dealsSearch, dealsSetMatch, dealsMute, dealsUnmute } from './api.js';
 import { alertOf, isMuted, ALERT_LABEL, badgeOf, BADGE_LABEL, formatMoney, formatDate, isWatched, matchOf, priceOf, priceLine, safeLink } from './deals.js';
 
 export function dealsSection(game) {
@@ -43,6 +43,8 @@ export function dealsSection(game) {
     const muted = isMuted(info, game.id);
     try {
       info = await (muted ? dealsUnmute(game.id) : dealsMute(game.id));
+      store.dealsUnseen = info.unseen || 0;
+      window.dispatchEvent(new Event('deals-unseen'));
       toast(muted ? 'Price alerts are on for this game.' : 'Price alerts are off for this game.', 3000);
       window.dispatchEvent(new Event('deals-changed'));
     } catch (e) {
