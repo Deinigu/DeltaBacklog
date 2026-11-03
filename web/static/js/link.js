@@ -3,6 +3,7 @@
 import { h, toast } from './util.js';
 import { store, linkQueue, linkAccept, linkNone } from './api.js';
 import { pickCandidate } from './add.js';
+import { relinkPrompt } from './relinkprompt.js';
 import { scoreTone, candidateLabel, remaining, without, progressText, gameMeta } from './linkqueue.js';
 
 export function renderLink(root) {
@@ -33,17 +34,18 @@ export function renderLink(root) {
     if (alive) draw(true);
   }
 
-  function accept(it, igdbId) {
+  function accept(it, igdbId, name) {
     return act(async () => {
       await linkAccept(it.game_id, igdbId);
       items = without(items, it.game_id);
       toast(`Linked “${it.title}”`);
+      relinkPrompt({ id: it.game_id }, name); // offers to fill the game's details from the IGDB game
     }, it);
   }
 
   async function search(it) {
     const c = await pickCandidate({ query: it.title, excludeId: it.game_id });
-    if (c) await accept(it, c.igdb_id);
+    if (c) await accept(it, c.igdb_id, c.name);
   }
 
   function none(it) {
@@ -55,7 +57,7 @@ export function renderLink(root) {
   }
 
   function candidate(it, c) {
-    return h('button.link-cand', { type: 'button', onclick: () => accept(it, c.igdb_id) },
+    return h('button.link-cand', { type: 'button', onclick: () => accept(it, c.igdb_id, c.name) },
       h('span.link-cand-main', {}, h('span.link-cand-name', {}, candidateLabel(c)),
         c.platforms?.length ? h('span.link-cand-sub', {}, c.platforms.join(', ')) : null),
       h('span.link-score', { class: scoreTone(c.score), title: 'How closely the title matches' }, `${c.score}%`),

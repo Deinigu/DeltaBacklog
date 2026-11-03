@@ -79,13 +79,14 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | **Screenshots** | every picture of every game | [21](#21-screenshots) |
 | **Views** | manage your saved views | [6](#6-saved-views) |
 | **Hidden** | everything you hid, with Show again | [17](#the-hidden-page) |
+| **Needs attention** | games that need a fix: no link, cover, poster, time or platform... | [22](#needs-attention) |
 | **Link IGDB** | only while there is something to review | [22](#22-link-your-games-with-igdb) |
 
 **More** is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
 
 ![The More list](img/more-phone.jpg)
 
-**On a PC** the same pages are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). The sidebar groups the pages a little differently: Year in review, Rankings, Screenshots, then Series, Upcoming, Similar games, Deals, Stats, Views and Hidden. Two keys help: press **/** to jump to the search box and **n** to add a game.
+**On a PC** the same pages are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). The sidebar groups the pages a little differently: Year in review, Rankings, Screenshots, then Series, Upcoming, Similar games, Deals, Stats, Views, Hidden and Needs attention. Two keys help: press **/** to jump to the search box and **n** to add a game.
 
 ![The Library on a PC](img/library-desktop.jpg)
 
@@ -193,7 +194,7 @@ Tap a card to open the game.
 
 Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, developer, release year, ownership, the years played, who you played with, VR, 100% completed and notes. Tap a list (like *Genres*) to open a sheet where you tick values and can type a new one. For **Played in** the list offers the years from the earliest one in your library to this year; type any other year (4 digits, from 1970 to 2100) to add it, or the periods *Childhood* and *Always*.
 - **Save** keeps your changes. **Cancel** or the ✕ asks before throwing away unsaved edits.
-- **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match).
+- **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match). After saving a new link the app offers to update the rest of the details from the new game: see [Update the details after linking](#update-the-details-after-linking).
 
 **Change cover** and **Change poster** are explained in [section 12](#12-covers-and-posters). **Delete game** removes the game for good, after a confirmation: its years, cover and screenshots go with it (the picture files are deleted too) and it cannot be undone.
 
@@ -502,6 +503,28 @@ For each game you see its title, year and platforms, and IGDB's best guesses wit
 ![The Link IGDB screen](img/link-phone.jpg)
 
 If IGDB's game is already linked to another game in your library you are told which one, and nothing changes. A game that already has a link (for example linked on another device) is never re-linked from this screen.
+
+### Update the details after linking
+
+Whenever a game gets a new IGDB link (**Link** on this screen, or **Fill from IGDB…** in a game's details and then **Save**) a small card asks *Linked to “Name”. Update details from it?* It is also shown by the **Link…** and **Confirm** buttons of the Needs attention page below.
+- **Fill empty fields** (the default) only fills what is empty: genres, themes, developer, series, release year and date, game modes, perspectives and the time to beat, and the platform only when it is empty and IGDB lists exactly one that your library already has.
+- **Replace all…** first shows a list of what would change (*Genres: Action → Indie, Roguelike*) and replaces only after you tap **Replace**. A series is only replaced by a series your library already has, and platforms are never replaced.
+- **Not now** closes the card; the details stay as they are.
+
+Your status, ownership, notes, years played, favourite, covers and any poster you chose are never touched, and a time to beat you typed or took from HowLongToBeat is kept. After an update a message offers **Undo**, which puts back the genres, themes, developer, series, year and platform and says which ones it restored. Game modes, perspectives, the release date and IGDB's times come from the new game and stay. IGDB's times are taken from the new game as a set, so a game never keeps one time from the old IGDB game and another from the new one. It needs the IGDB keys; without them the card says so.
+
+### Needs attention
+
+**Needs attention** (More menu on a phone, sidebar on a PC) lists the games that need a fix, in groups you can open and close, each with how many games it holds:
+- **Not linked to IGDB**: **Link…** searches IGDB for the game; **Not on IGDB** settles it for good (the app never asks again, and the game leaves the list). Games you already marked that way are not listed.
+- **Uncertain IGDB match**: the sync found a likely match but was not sure. **Confirm** keeps the top suggestion (shown with its percentage), **Change…** lets you pick another, and *Review them one by one* opens the Link IGDB screen.
+- **No cover** and **No poster, or only a crop of the cover**: open the cover or the poster picker. A poster you chose yourself is never listed.
+- **No time to beat**: only for games in Backlog, Up Next and Playing; **Find time** opens the HowLongToBeat search in the game's details. **Find times for all** at the top of the group searches HowLongToBeat for every game in it, one after the other (about a second apart; a progress bar shows how far it is, **Stop** ends it). It saves a time only when it is sure: the same title (ignoring capitals and punctuation) and, when both are known, the same release year, with a single such game on HowLongToBeat. The other games stay in the list marked *Needs a manual pick*; use **Find time** on them. It never changes a game that already has a time, and skips the games you ignored here. At the end it says, for example, *Found times for 12 games; 5 need a manual pick.* The run goes on in the app's server if you leave the page; open the page again to see how it is doing.
+- **No platform**, **No release year**, **No ownership** and **No genres**: open the game's edit form at that field.
+
+Tap a game's name to open its details. **Ignore** hides the game from that one list only (a *Undo* message appears; **Show n ignored** brings the hidden ones back, each with **Stop ignoring**). Opening the page never contacts IGDB: it works from the games already loaded in the app. The list updates as you fix things.
+
+![Needs attention](img/attention-phone.jpg)
 
 **Step 2: the details.** After the games are linked, a second command reads each linked game from IGDB (`deltabacklog sync-igdb --enrich`). Run its `--dry-run` first: it only prints what it would do. It saves a copy of your library first, too. It **only fills empty fields** (release year, genres, themes, developer, and the platform only when IGDB lists exactly one and your library already has that platform; it never adds a platform). A **series** is only filled when IGDB's collection matches a series you already have, or when two or more of your games share it, because IGDB gives almost every single game a collection named after itself; the command's report lists the ones it left out, so nothing you typed is ever changed. It adds what the app did not have: time to beat, game modes, perspectives and store links, and the dates for Upcoming. Still no scores. If you later link a game to another IGDB game, or unlink it, its IGDB time, modes, perspective and store buttons are removed; run the command again to read the new ones. A series you remove from a game stays removed. Running the command again with `--refresh` only updates the IGDB data (times, modes, perspectives, store buttons) and leaves everything else as it is. At the end it also reads the IGDB collections of your series and the Similar games lists, which feed the Series, Upcoming and Similar games pages. Restart the app afterwards to see the new data.
 
