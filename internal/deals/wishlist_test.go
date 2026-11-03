@@ -364,7 +364,7 @@ func TestWishlistAlerts(t *testing.T) {
 	if err != nil || len(res.Alerts) != 1 || res.Alerts[0].AppID != 10 || res.Alerts[0].GameID != 0 || res.Alerts[0].Kind != KindHistorical || !res.Sent {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if len(sk.sent) != 1 || !strings.Contains(sk.sent[0], "Hollow Knight") || !strings.Contains(sk.sent[0], "historical low") || !strings.Contains(sk.sent[0], "[wishlist]") || !strings.Contains(sk.sent[0], "https://shop.example/x") {
+	if len(sk.sent) != 1 || !strings.Contains(sk.sent[0], "Hollow Knight") || !strings.Contains(sk.sent[0], "Historical low") || !strings.Contains(sk.sent[0], "Wishlist") || !strings.Contains(sk.sent[0], "https://shop.example/x") {
 		t.Errorf("message: %q", sk.sent)
 	}
 	l, _ := Load(d)
@@ -478,7 +478,7 @@ func TestWishlistAndLibraryAlertsShareMessages(t *testing.T) {
 	// Many alerts go out as one list that marks every wishlist game it carries as sent.
 	ms := messageGroups([]Alert{{GameID: 1, Title: "A", Price: 1, Currency: "EUR"}, {AppID: 7, Title: "B", Price: 1, Currency: "EUR"},
 		{AppID: 8, Title: "C", Price: 1, Currency: "EUR"}, {GameID: 2, Title: "D", Price: 1, Currency: "EUR"}})
-	if len(ms) != 1 || len(ms[0].ids) != 2 || len(ms[0].wish) != 2 || !strings.Contains(ms[0].text, "[wishlist]") {
+	if len(ms) != 1 || len(ms[0].ids) != 2 || len(ms[0].wish) != 2 || !strings.Contains(ms[0].text, "💙") {
 		t.Errorf("list: %+v", ms)
 	}
 }

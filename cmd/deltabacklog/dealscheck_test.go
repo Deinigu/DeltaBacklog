@@ -39,7 +39,7 @@ func (fakeITAD) Overview(_ context.Context, ids []string, _ string) (map[string]
 
 type collect struct{ sent []string }
 
-func (c *collect) Send(_ context.Context, s string) error { c.sent = append(c.sent, s); return nil }
+func (c *collect) Send(_ context.Context, s, _ string) error { c.sent = append(c.sent, s); return nil }
 
 func TestDealsCheckCommand(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.db")
@@ -130,7 +130,7 @@ func TestDealsCheckReadsTheWishlist(t *testing.T) {
 	d.Close()
 	n := &collect{}
 	var out bytes.Buffer
-	if code := runDealsCheck(path, fakeITAD{}, oneWish{}, n, &out); code != 0 || !strings.Contains(out.String(), "Wishlist: 1 game priced") || len(n.sent) != 1 || !strings.Contains(n.sent[0], "[wishlist]") {
+	if code := runDealsCheck(path, fakeITAD{}, oneWish{}, n, &out); code != 0 || !strings.Contains(out.String(), "Wishlist: 1 game priced") || len(n.sent) != 1 || !strings.Contains(n.sent[0], "Wishlist") {
 		t.Fatalf("check: %d %q %q", code, out.String(), n.sent)
 	}
 }

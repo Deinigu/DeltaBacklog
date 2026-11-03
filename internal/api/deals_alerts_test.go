@@ -19,7 +19,7 @@ type sinkNotifier struct {
 	err  error
 }
 
-func (s *sinkNotifier) Send(_ context.Context, text string) error {
+func (s *sinkNotifier) Send(_ context.Context, text, _ string) error {
 	if s.err != nil {
 		return s.err
 	}
