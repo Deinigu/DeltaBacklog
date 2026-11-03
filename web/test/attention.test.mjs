@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, TTB_STATUSES } from '../static/js/attention.js';
+import { syncLine, problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, TTB_STATUSES } from '../static/js/attention.js';
 
 const ok = (o = {}) => ({ id: 1, title: 'A', status: 'finished', cover: 'c.jpg', poster: 'p.jpg', poster_src: 'igdb', poster_user: false, igdb_id: 5, igdb_not_found: false,
   platforms: ['PC'], genres: ['RPG'], release_year: 2020, ownership: 'Owned', ttb_normally: 600, ...o });
@@ -57,4 +57,10 @@ test('uncertain rows carry the top proposal', () => {
   const g = buildGroups([ok({ id: 1, igdb_id: null }), ok({ id: 2, title: 'B', igdb_id: null })], q);
   assert.equal(g.find((x) => x.key === 'uncertain').rows[0].candidate.igdb_id, 9);
   assert.deepEqual(g.find((x) => x.key === 'unlinked').rows.map((r) => r.game.id), [2]);
+});
+
+test('the bulk lookup line shows progress, then the report', () => {
+  assert.equal(syncLine(null), '');
+  assert.equal(syncLine({ running: true, done: 3, total: 12 }), 'Looking up times: 3 of 12');
+  assert.equal(syncLine({ running: false, report: 'Found times for 2 games; 1 need a manual pick.' }), 'Found times for 2 games; 1 need a manual pick.');
 });

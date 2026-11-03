@@ -715,6 +715,11 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .att-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .att-actions .btn { min-height: 44px; }
 .att-ignore { color: var(--muted); }
+.att-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 14px 8px; }
+.att-sync .btn { min-height: 44px; }
+.att-sync-line { color: var(--muted); font-size: 13px; }
+.att-sync-line.bad { color: #ef4444; }
+.att-sync progress { width: 100%; }
 .relink-prompt { padding: 12px 14px; margin: 0 0 12px; border-radius: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .relink-prompt.floating { position: fixed; z-index: 80; left: 16px; right: 16px; bottom: calc(var(--nav-h) + var(--safe-b) + 12px); max-width: 520px; margin: 0 auto; box-shadow: var(--shadow); background: var(--surface); }
 @media (min-width: 900px) { .relink-prompt.floating { left: 226px; bottom: 24px; margin: 0; } }

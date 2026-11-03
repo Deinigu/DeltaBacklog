@@ -322,6 +322,22 @@ export async function attentionIgnore(group, gameId, ignore = true) {
   return (await request('POST', 'api/attention/ignore', { group, game_id: gameId, ignore })).ignored || {};
 }
 
+// ---- bulk HowLongToBeat lookup (Needs attention) ----
+/** The run's state: {running, done, total, found, manual:[game ids needing a hand pick], report, failed}. */
+export const ttbSyncStatus = () => request('GET', 'api/ttb/sync');
+export const ttbSyncStart = () => request('POST', 'api/ttb/sync', {});
+export const ttbSyncCancel = () => request('POST', 'api/ttb/sync/cancel', {});
+
+/** Reload the games the server changed on its own (a finished background run) into the store. */
+export async function refreshGames() {
+  const fresh = await getJSON('api/games');
+  for (const f of fresh) {
+    const g = store.byId.get(f.id);
+    if (g) { Object.assign(g, f); indexGame(g); }
+  }
+  gamesChanged();
+}
+
 // ---- rankings ----
 /** Portrait box art for the rankings (null until the server has made it); poster_v is its cache key. */
 export function posterURL(g) {

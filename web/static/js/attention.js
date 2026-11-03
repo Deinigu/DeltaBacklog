@@ -67,6 +67,13 @@ export function buildGroups(games, queue = [], ignored = {}, showIgnored = false
   return GROUPS.map((def) => ({ ...def, rows: rows.get(def.key), ignoredCount: hidden.get(def.key) })).filter((g) => g.rows.length > 0);
 }
 
+/** The line shown while the bulk time lookup runs: "Looking up times: 3 of 12", or the final report. */
+export function syncLine(st) {
+  if (!st) return '';
+  if (st.running) return `Looking up times: ${st.done} of ${st.total}`;
+  return st.report || '';
+}
+
 /** How many problems are open (ignored ones not counted). */
 export const totalOpen = (groups) => groups.reduce((n, g) => n + g.rows.filter((r) => !r.ignored).length, 0);
 

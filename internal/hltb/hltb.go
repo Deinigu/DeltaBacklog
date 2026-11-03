@@ -241,6 +241,16 @@ func minutes(seconds int) int {
 	return max(1, (seconds+30)/60)
 }
 
+// Confident reports whether c is the game called title (released in year, 0 = unknown): the same title once
+// normalised (case, punctuation and spaces ignored) and, when both years are known, the same year. Anything less is
+// a guess, and the bulk lookup never saves a guess.
+func Confident(title string, year int, c Candidate) bool {
+	if norm(title) == "" || norm(c.Name) != norm(title) {
+		return false
+	}
+	return year == 0 || c.Year == 0 || year == c.Year
+}
+
 func norm(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {

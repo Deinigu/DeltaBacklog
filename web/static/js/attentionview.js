@@ -2,11 +2,11 @@
 // attention.js (pure); this file builds the DOM and opens the right screen. Nothing here reads the network on its own:
 // the list comes from the games already loaded, plus the IGDB review queue and the ignore list (both local API calls).
 import { h, toast, toastAction } from './util.js';
-import { store, linkQueue, linkAccept, attentionIgnored, attentionIgnore } from './api.js';
+import { store, linkQueue, linkAccept, attentionIgnored, attentionIgnore, ttbSyncStatus, ttbSyncStart, ttbSyncCancel, refreshGames } from './api.js';
 import { pickCandidate, openCoverPicker, openPosterPicker } from './add.js';
 import { openDrawer } from './drawer.js';
 import { relinkPrompt } from './relinkprompt.js';
-import { buildGroups, totalOpen, ignoredTotal } from './attention.js';
+import { buildGroups, totalOpen, ignoredTotal, syncLine } from './attention.js';
 
 /** What each group's main button says and does. `run(game, row, ctx)` may return a promise. */
 const FIXES = {
@@ -28,6 +28,8 @@ export function renderAttention(root) {
   let alive = true;
   const open = new Set(); // group keys the person opened (the first group starts open)
   let firstDraw = true;
+  let sync = null; // the bulk HowLongToBeat run: {running, done, total, found, manual, report, failed}
+  let poll = 0;
 
   const body = h('div.att-body');
   root.replaceChildren(h('div.manage.att-page', {}, h('h1', {}, 'Needs attention'), body));
@@ -36,7 +38,44 @@ export function renderAttention(root) {
     const [q, ig] = await Promise.all([linkQueue().catch(() => []), attentionIgnored().catch(() => ({}))]);
     queue = q;
     ignored = ig;
+    sync = await ttbSyncStatus().catch(() => null);
+    if (sync?.running) watch();
     if (alive) draw();
+  }
+
+  // The run lives on the server; ask how it is doing once a second while it runs, then reload the games it changed.
+  function watch() {
+    clearInterval(poll);
+    poll = setInterval(async () => {
+      const st = await ttbSyncStatus().catch(() => null);
+      if (!alive || !st) return;
+      const was = sync?.running;
+      sync = st;
+      if (!st.running) { clearInterval(poll); if (was) await refreshGames().catch(() => {}); }
+      draw();
+    }, 1000);
+  }
+
+  async function startSync() {
+    try { sync = await ttbSyncStart(); } catch { toast('Could not start the lookup'); return; }
+    watch();
+    draw();
+  }
+  async function stopSync() {
+    try { sync = await ttbSyncCancel(); } catch { toast('Could not stop the lookup'); }
+    draw();
+  }
+
+  function syncBar(group) {
+    const open = group.rows.filter((r) => !r.ignored).length;
+    if (!open && !sync?.report) return null;
+    const line = syncLine(sync);
+    return h('div.att-sync', {},
+      sync?.running
+        ? h('button.btn', { type: 'button', onclick: stopSync }, 'Stop')
+        : open ? h('button.btn.primary', { type: 'button', onclick: startSync }, 'Find times for all') : null,
+      line && h('span.att-sync-line', { role: 'status', class: sync?.failed ? 'bad' : '' }, line),
+      sync?.running ? h('progress', { max: String(sync.total || 1), value: String(sync.done), 'aria-label': 'Progress' }) : null);
   }
 
   const ctx = {
@@ -71,7 +110,7 @@ export function renderAttention(root) {
     const label = typeof fix.label === 'function' ? fix.label(row) : fix.label;
     const st = store.statusByCode.get(g.status);
     const sub = [row.candidate && `IGDB suggests “${row.candidate.name}”${row.candidate.year ? ` (${row.candidate.year})` : ''} · ${row.candidate.score}%`,
-      row.note, st && st.label, g.platforms.join(', '), g.release_year].filter(Boolean).join(' · ');
+      row.note || (group.key === 'no_ttb' && sync?.manual?.includes(g.id) ? 'Needs a manual pick' : ''), st && st.label, g.platforms.join(', '), g.release_year].filter(Boolean).join(' · ');
     const main = row.ignored
       ? h('button.btn', { type: 'button', onclick: () => setIgnored(group.key, g, false) }, 'Stop ignoring')
       : h('button.btn.primary', { type: 'button', onclick: () => fix.run(g, row, ctx) }, label);
@@ -88,6 +127,7 @@ export function renderAttention(root) {
     const d = h('details.att-group', { open: open.has(group.key) || (firstDraw && i === 0) },
       h('summary', {}, h('span.att-gtitle', {}, group.title), h('span.att-count', {}, String(n)),
         group.ignoredCount && !showIgnored ? h('span.att-ign-n', {}, `${group.ignoredCount} ignored`) : null),
+      group.key === 'no_ttb' ? syncBar(group) : null,
       group.hint ? h('p.hint', {}, group.hint, group.key === 'uncertain' ? [' ', h('a', { href: '#/link' }, 'Review them one by one')] : null) : null,
       h('ul.att-list', {}, group.rows.map((r) => rowEl(group, r))));
     d.addEventListener('toggle', () => { if (d.open) open.add(group.key); else open.delete(group.key); });
@@ -121,5 +161,5 @@ export function renderAttention(root) {
   window.addEventListener('games-reloaded', onGames);
   draw();
   load();
-  return () => { alive = false; window.removeEventListener('games-changed', onGames); window.removeEventListener('games-reloaded', onGames); };
+  return () => { alive = false; clearInterval(poll); window.removeEventListener('games-changed', onGames); window.removeEventListener('games-reloaded', onGames); };
 }

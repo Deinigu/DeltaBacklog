@@ -49,6 +49,7 @@ type Server struct {
 	seriesJob  seriesJob      // the background "Refresh from IGDB" of the Series page
 	similarJob seriesJob      // ditto for the Similar page
 	dealsJob   seriesJob      // ditto for the Deals page
+	ttbJob     ttbJob         // the "Find times for all" HowLongToBeat run of the Needs attention page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -125,6 +126,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/link/none", s.linkNone)
 	mux.HandleFunc("POST /api/games/{id}/igdb-details", s.igdbDetails)
 	mux.HandleFunc("GET /api/attention/ignored", s.attentionIgnored)
+	mux.HandleFunc("GET /api/ttb/sync", s.ttbSyncStatus)
+	mux.HandleFunc("POST /api/ttb/sync", s.ttbSyncStart)
+	mux.HandleFunc("POST /api/ttb/sync/cancel", s.ttbSyncCancel)
 	mux.HandleFunc("POST /api/attention/ignore", s.attentionIgnore)
 	mux.HandleFunc("GET /api/views", s.listViews)
 	mux.HandleFunc("POST /api/views", s.createView)
