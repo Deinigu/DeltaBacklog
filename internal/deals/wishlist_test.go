@@ -480,3 +480,50 @@ func TestWishlistAndLibraryAlertsShareMessages(t *testing.T) {
 		t.Errorf("list: %+v", ms)
 	}
 }
+
+// A remake with the same name as a library game is a different game: the library game's Steam link or ITAD match
+// tells them apart, so the title alone does not hide it.
+func TestSameNameRemakeStaysOnTheWishlist(t *testing.T) {
+	d := newDB(t)
+	src := wishSource()
+	src.byApp[60] = Game{ID: "re4-remake", Title: "Resident Evil 4"}
+	src.byApp[61] = Game{ID: "doom-new", Title: "Doom"}
+	src.byApp[62] = Game{ID: "prey-new", Title: "Prey"}
+	for _, id := range []string{"re4-remake", "doom-new", "prey-new"} {
+		src.prices[id] = Overview{Current: cur(900, 2000, 55)}
+	}
+	wl := &fakeWish{entries: entries(60, 61, 62)}
+	if _, err := Refresh(context.Background(), d, src, Options{Wishlist: wl}); err != nil {
+		t.Fatal(err)
+	}
+	addGame(t, d, 1, "Resident Evil 4", "finished", "https://store.steampowered.com/app/254700/Resident_Evil_4/") // the 2005 game, with its own link
+	addGame(t, d, 2, "Doom", "backlog", "")
+	d.Exec(`INSERT INTO deal_match(game_id, itad_id, source) VALUES (2, 'doom-1993', 'title')`) // matched to the old one
+	addGame(t, d, 3, "Prey", "finished", "")                                                    // nothing to tell them apart: the title decides
+	got := wishRowsOf(t, d)
+	if len(got) != 2 || got[60].AppID == 0 || got[61].AppID == 0 {
+		t.Fatalf("remakes with a library namesake that has a link or a match stay: %+v", got)
+	}
+}
+
+// With STEAM_ID removed, the wishlist left in the database neither alerts nor goes to Telegram.
+func TestRemovedSteamIDSilencesTheWishlist(t *testing.T) {
+	d := newDB(t)
+	src := wishSource()
+	wl := &fakeWish{entries: entries(10)}
+	ctx := context.Background()
+	if _, err := CheckWith(ctx, d, src, wl, nil); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE wish_item SET last_alert_price = 500, last_alert_kind = 'historical', last_alert_at = ?, seen = 0, pending = 1 WHERE appid = 10`, time.Now().UTC().Format(timeFmt))
+	sk := &sink{}
+	res, err := CheckWith(ctx, d, src, nil, sk)
+	if err != nil || len(res.Alerts) != 0 || len(sk.sent) != 0 {
+		t.Fatalf("%+v %v %v", res, err, sk.sent)
+	}
+	var pending int
+	d.QueryRow(`SELECT pending FROM wish_item`).Scan(&pending)
+	if pending != 0 {
+		t.Error("a pending wishlist alert must be dropped when no wishlist is set up")
+	}
+}

@@ -17,7 +17,7 @@ import (
 var ErrUnknownWish = errors.New("unknown wishlist game")
 
 // libKeys is what identifies a library game to a wishlist game: its Steam app id (from the Steam link), its ITAD id (from
-// the Deals match) or its title (normalised). Any one of them makes the wishlist game "already in the library", whatever the
+// the Deals match) or, for a game that has neither, its title (normalised). Any one of them makes the wishlist game "already in the library", whatever the
 // library game's status is: that is what makes the entry vanish after "Add to library", even for an Owned game.
 type libKeys struct {
 	apps   map[int64]bool
@@ -27,7 +27,11 @@ type libKeys struct {
 
 func loadLibKeys(d *sql.DB) (libKeys, error) {
 	k := libKeys{apps: map[int64]bool{}, itad: map[string]bool{}, titles: map[string]bool{}}
-	rows, err := d.Query(`SELECT title FROM game`)
+	// The title only identifies a library game that has nothing better: a game with a Steam link or an ITAD match is told
+	// apart by those, so a remake that shares its name with a game in the library (Resident Evil 4) is not hidden by it.
+	rows, err := d.Query(`SELECT g.title FROM game g
+		WHERE NOT EXISTS (SELECT 1 FROM game_link l WHERE l.game_id = g.id AND l.kind = 'steam')
+		AND NOT EXISTS (SELECT 1 FROM deal_match m WHERE m.game_id = g.id AND m.itad_id IS NOT NULL)`)
 	if err != nil {
 		return k, err
 	}
@@ -402,9 +406,11 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 		progress()
 	}
 	// What was matched may now be a library game (same ITAD id): look again before reading prices.
+	before := len(active)
 	if active, err = activeWish(d); err != nil {
 		return rep, err
 	}
+	total -= before - len(active) // games that turned out to be in the library are not priced here
 	byID := map[string][]int64{}
 	var ids []string
 	for _, r := range active {

@@ -36,7 +36,10 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	unseen := l.Wish.Unseen
+	unseen := 0
+	if s.Wishlist != nil { // leftovers of a removed STEAM_ID are not counted: the page cannot show them
+		unseen = l.Wish.Unseen
+	}
 	for _, a := range l.Alerts {
 		if !a.Seen {
 			unseen++

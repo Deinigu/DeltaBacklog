@@ -123,7 +123,7 @@ func expired(expiry string, now time.Time) bool {
 // (see Cooldown), records what it returns (unseen in the app, and pending for Telegram) and returns it. Only prices read
 // at or after fetchedSince count (a refresh that stopped halfway leaves older prices, whose sale may be over), and never
 // a deal whose end time has passed.
-func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
+func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Alert, error) {
 	rows, err := d.Query(`SELECT p.game_id, g.title, p.currency, coalesce(p.cur_shop, ''), p.cur_price, p.cur_cut, coalesce(p.cur_url, ''),
 		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, '')
 		FROM deal_price p JOIN game g ON g.id = p.game_id LEFT JOIN deal_alert a ON a.game_id = p.game_id
@@ -152,9 +152,11 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	wish, err := evaluateWish(d, now, fetchedSince)
-	if err != nil {
-		return nil, err
+	var wish []Alert // the wishlist only when a Steam wishlist is set up: with STEAM_ID removed, its leftovers stay silent
+	if withWishlist {
+		if wish, err = evaluateWish(d, now, fetchedSince); err != nil {
+			return nil, err
+		}
 	}
 	for _, a := range out {
 		if _, err := d.Exec(`INSERT INTO deal_alert(game_id, last_alert_price, last_alert_kind, last_alert_at, seen, pending) VALUES (?, ?, ?, ?, 0, 1)
@@ -246,7 +248,7 @@ func MarkSeen(d *sql.DB) error {
 // fillTwoYearLows reads the two-year low of the games that may need it. ITAD's overview has the all-time low only, so
 // the price history is asked, one call per game, only for a game that is on sale above its historical low (at the low
 // the alert is "historical low" anyway) and whose two-year low was not read within a week. A rate limit ends the step.
-func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time) error {
+func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time, withWishlist bool) error {
 	rows, err := d.Query(`SELECT p.game_id, m.itad_id, p.currency FROM deal_price p
 		JOIN deal_match m ON m.game_id = p.game_id JOIN game g ON g.id = p.game_id
 		WHERE `+watchedSQL+` AND m.itad_id IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_cut > 0
@@ -295,6 +297,9 @@ func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.
 			return err
 		}
 	}
+	if !withWishlist {
+		return nil
+	}
 	return fillWishTwoYearLows(ctx, d, hs, now)
 }
 
@@ -324,11 +329,11 @@ func CheckWith(ctx context.Context, d *sql.DB, src Source, wl WishlistSource, no
 	}
 	now := time.Now()
 	if hs, ok := src.(HistorySource); ok && rep.Stopped == "" {
-		if err := fillTwoYearLows(ctx, d, hs, now); err != nil {
+		if err := fillTwoYearLows(ctx, d, hs, now, wl != nil); err != nil {
 			return res, err
 		}
 	}
-	if res.Alerts, err = Evaluate(d, now, runStart); err != nil {
+	if res.Alerts, err = Evaluate(d, now, runStart, wl != nil); err != nil {
 		return res, err
 	}
 	if notify == nil { // no Telegram: the alerts are for the app only, and must not queue up for a bot set up later
@@ -338,12 +343,12 @@ func CheckWith(ctx context.Context, d *sql.DB, src Source, wl WishlistSource, no
 		_, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1`)
 		return res, err
 	}
-	return res, deliver(ctx, d, notify, now, &res)
+	return res, deliver(ctx, d, notify, now, wl != nil, &res)
 }
 
 // deliver sends the alerts that have not reached Telegram yet: the new ones and those an earlier run could not send,
 // while they still stand. A message that fails does not stop the others; its alerts stay pending for the next run.
-func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, res *CheckResult) error {
+func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, withWishlist bool, res *CheckResult) error {
 	if _, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1 AND last_alert_at < ?`, now.Add(-pendingMax).UTC().Format(timeFmt)); err != nil {
 		return err
 	}
@@ -354,11 +359,15 @@ func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, res
 	if err != nil {
 		return err
 	}
-	wishPend, err := pendingWishAlerts(d, now)
-	if err != nil {
+	if withWishlist {
+		wishPend, err := pendingWishAlerts(d, now)
+		if err != nil {
+			return err
+		}
+		pend = append(pend, wishPend...)
+	} else if _, err := d.Exec(`UPDATE wish_item SET pending = 0 WHERE pending = 1`); err != nil {
 		return err
 	}
-	pend = append(pend, wishPend...)
 	var first error
 	for _, m := range messageGroups(pend) {
 		if err := notify.Send(ctx, m.text); err != nil {
