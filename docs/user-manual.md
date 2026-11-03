@@ -78,7 +78,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | **Rankings** | tier lists of your games | [20](#20-rankings) |
 | **Screenshots** | every picture of every game | [21](#21-screenshots) |
 | **Views** | manage your saved views | [6](#6-saved-views) |
-| **Hidden** | everything you hid, with Show again | [17](#17-deals) |
+| **Hidden** | everything you hid, with Show again | [17](#the-hidden-page) |
 | **Link IGDB** | only while there is something to review | [22](#22-link-your-games-with-igdb) |
 
 **More** is highlighted while you are on one of those pages. The round **+** button adds a game; it is shown on the Library, your saved views and shelves (Playing now, Up next), not on the other pages (the **n** key adds a game from anywhere).
@@ -332,7 +332,7 @@ Open **Series** in the navigation (**More** on a phone) to see how far you are t
 An opened series also shows the games of the same IGDB collection that are not in your library, in release order among yours. They appear greyed, with a dashed outline, the label **Not in your library**, and two buttons. When the series has more than six of them, only the first six are listed, with **Show all** under the games to see the rest:
 
 - **Add** opens the add form already filled in from IGDB (genres, developer, release year, cover, and the series name you use). You choose the status, platforms and the rest, then **Add to library**. The game then disappears from the not-in-your-library list by itself.
-- **Hide** removes the game from this list for good (for example a spin-off you will never play). A message offers **Undo**; hidden games are listed under **Hidden (n)** at the bottom of the series, each with **Show again**. Everything you hid on Series, Similar games and Deals is also on the **Hidden** page ([section 17](#17-deals)).
+- **Hide** removes the game from this list for good (for example a spin-off you will never play). A message offers **Undo**; hidden games are listed under **Hidden (n)** at the bottom of the series, each with **Show again**. Everything you hid on Series, Similar games and Deals is also on the **Hidden** page ([section 17](#the-hidden-page)).
 
 Only real games are listed: DLC, expansions, bundles, ports, updates, mods, episodes and seasons are left out; remakes and remasters are kept. Games are matched by their IGDB link, and a game counts as yours with its other IGDB entries (the original and the remaster of a game you own are not listed), so a game you have not linked to IGDB can show up here too (use **Link IGDB** to link your games first).
 
@@ -353,6 +353,8 @@ A **Recently released** section at the top shows games that came out in the last
 
 The dates come from IGDB and are saved on the server. Opening the page never asks IGDB: tap **↻ Refresh from IGDB** (the same background run as on the Series page). Games you add or link to IGDB get their date at once. Dates are shown as IGDB's calendar date, whatever your time zone.
 
+**Hide** on a row takes the game off Upcoming and the Series page (they share one list); it is also listed on the [Hidden page](#the-hidden-page), under Series, where **Show again** brings it back.
+
 ![The Upcoming page](img/upcoming-phone.jpg)
 
 ## 16. Similar games
@@ -362,7 +364,7 @@ The dates come from IGDB and are saved on the server. Opening the page never ask
 **Similar games** suggests games you do not have yet, taken from IGDB's own "similar games" lists of the games you **finished** or marked as a **favourite** (a game must be linked to IGDB for that, see [section 22](#22-link-your-games-with-igdb)). The more of your games suggest a game, the higher it sits; between two games with the same count, the one suggested by the game you played most recently comes first. Each row has the poster, the title, the year and *Because you played X, Y and Z* (up to three of your games, then *and 2 more*), and two buttons:
 
 - **Add** opens the add form, pre-filled from IGDB; pick the status you like there.
-- **Hide** removes the game from the list for good (an **Undo** shows for a few seconds). **Hidden** at the bottom of the page lists them, each with **Show again**. This is its own list: hiding a game here does not hide it on the Series page, and the other way round. The **Hidden** page ([section 17](#17-deals)) lists them together with the games hidden elsewhere.
+- **Hide** removes the game from the list for good (an **Undo** shows for a few seconds). **Hidden** at the bottom of the page lists them, each with **Show again**. This is its own list: hiding a game here does not hide it on the Series page, and the other way round. The **Hidden** page ([section 17](#the-hidden-page)) lists them together with the games hidden elsewhere.
 
 The page follows the same ownership rule as the Series page: a game you own is not suggested, and neither is another version of it (a remaster, an expanded edition or a port of a game you have). A remake or a standalone expansion of a game you have still is.
 
@@ -380,15 +382,17 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 **Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Show again** to bring one back.
 
-**The Hidden page.** **Hidden** (**More** on a phone, near the bottom, or the sidebar) is one list of everything you hid: **Deals**, **Similar games** and **Series**, each group with its count (a group with nothing hidden is not shown). A row has the cover, the title, where it came from (*Because you played X* for a suggestion, the series name for a series game) and the date it was hidden. **Show again** puts the game back on its page and offers **Undo**. The Hidden (N) lists on those pages stay as they are. The page reads only what is saved on the server, so opening it never asks IGDB or IsThereAnyDeal.
-
-![The Hidden page](img/hidden-phone.jpg)
-
 ![The Deals page](img/deals-phone.jpg)
 
 Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap **↻ Refresh prices** to read them (a background run with progress). The first run, and any game you add later, needs one or two lookups per game to find it on IsThereAnyDeal (about 0.4 seconds each, so a few minutes for a few hundred games); after that a refresh needs about one request per 50 games. *Last checked* tells you how old they are. Prices are for one country, shown in its currency: **Country** (two letters, `ES` by default) can be changed on the page; the saved prices are then dropped, and you press **Refresh prices** to read them for the new country.
 
 **Fixing a match.** A game is matched with IsThereAnyDeal by the Steam store link in its details when it has one, otherwise by its exact title. When there is no exact match the game is listed under **No match on IsThereAnyDeal** instead of guessing. Open it and use **Pick the game** (or **Wrong game?** when the match is wrong): search by title, tap the right game, or choose **No match on IsThereAnyDeal**. Your choice is kept; **Match automatically** gives control back. The same **Price** line appears in a game's details. A game that is matched but that no shop lists right now is named in a short note under the list: it is often an old or delisted entry (for example a game and its *Final Cut*), so open it and tap **Wrong game?**.
+
+### The Hidden page
+
+**Hidden** (**More** on a phone, near the bottom, or the sidebar) is one list of everything you hid: **Deals**, **Similar games** and **Series** (also what you hid on Upcoming), each group with its count (a group with nothing hidden is not shown). A row has the cover, the title, where it came from (*Because you played X* for a suggestion, your series name for a series game) and the date it was hidden. **Show again** puts the game back on its page and offers **Undo**. The Hidden (N) lists on those pages stay as they are. The page reads only what is saved on the server, so opening it never asks IGDB or IsThereAnyDeal.
+
+![The Hidden page](img/hidden-phone.jpg)
 
 ## 18. Stats
 

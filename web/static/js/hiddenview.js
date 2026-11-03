@@ -2,14 +2,14 @@
 // Hidden lists stay where they are; this is the overview. It reads the database only (GET api/hidden): no IGDB or
 // IsThereAnyDeal call when it opens.
 import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
-import { hiddenList, dealsHide, dealsUnhide, similarHide, similarUnhide, seriesHide, seriesUnhide, coverURL, missingPosterURL } from './api.js';
+import { hiddenList, dealsHide, dealsUnhide, similarHide, similarUnhide, seriesHide, seriesUnhide, coverURL, posterURL, missingPosterURL } from './api.js';
 import { groupHidden, hiddenCount, withoutItem } from './hidden.js';
 
 const SHOW = { deals: ({ id }) => dealsUnhide(id), similar: ({ igdb_id }) => similarUnhide(igdb_id), series: ({ collection_id, igdb_id }) => seriesUnhide(collection_id, igdb_id) };
 const HIDE = { deals: ({ id }) => dealsHide(id), similar: ({ igdb_id }) => similarHide(igdb_id), series: ({ collection_id, igdb_id }) => seriesHide(collection_id, igdb_id) };
 
 function poster(it) {
-  const url = it.kind === 'deals' ? coverURL({ cover: it.cover, cover_v: it.v }) : missingPosterURL(it.cover, it.v);
+  const url = it.kind === 'deals' ? (posterURL({ poster: it.poster, poster_v: it.poster_v }) || coverURL({ cover: it.cover, cover_v: it.v })) : missingPosterURL(it.cover, it.v);
   return h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(it.title)}` }, initials(it.title)));
 }
 

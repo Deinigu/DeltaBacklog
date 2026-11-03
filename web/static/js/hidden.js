@@ -23,10 +23,10 @@ export function hiddenOn(iso, locale = 'en-GB') {
   return Number.isNaN(t) ? '' : `Hidden on ${new Date(t).toLocaleDateString(locale)}`;
 }
 
-/** One row: { key, kind, id, title, year, cover, v, note, when, ref } (ref: what the unhide call needs). */
+/** One row: { key, kind, id, title, year, cover, v, poster, poster_v (Deals only), note, when, ref } (ref: what the unhide call needs). */
 function rows(kind, list) {
   return (list ?? []).map((g) => {
-    if (kind === 'deals') return { key: `deals:${g.id}`, kind, id: g.id, title: g.title, year: null, cover: g.cover ?? null, v: g.cover_v ?? '', note: 'Not shown on Deals', when: hiddenOn(g.hidden_at), ref: { id: g.id } };
+    if (kind === 'deals') return { key: `deals:${g.id}`, kind, id: g.id, title: g.title, year: null, cover: g.cover ?? null, v: g.cover_v ?? '', poster: g.poster ?? null, poster_v: g.poster_v ?? '', note: 'Not shown on Deals', when: hiddenOn(g.hidden_at), ref: { id: g.id } };
     if (kind === 'similar') return { key: `similar:${g.igdb_id}`, kind, id: g.igdb_id, title: g.title, year: g.year ?? null, cover: g.cover ?? null, v: g.v ?? '', note: becauseTitles(g.because), when: hiddenOn(g.hidden_at), ref: { igdb_id: g.igdb_id } };
     return { key: `series:${g.collection_id}:${g.igdb_id}`, kind, id: g.igdb_id, title: g.title, year: g.year ?? null, cover: g.cover ?? null, v: g.v ?? '', note: g.series ? `Series: ${g.series}` : 'Series', when: hiddenOn(g.hidden_at), ref: { collection_id: g.collection_id, igdb_id: g.igdb_id } };
   });

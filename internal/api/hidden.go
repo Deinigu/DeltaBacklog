@@ -14,6 +14,8 @@ type hiddenDeal struct {
 	Title    string  `json:"title"`
 	Cover    *string `json:"cover"`
 	CoverV   string  `json:"cover_v"`
+	Poster   *string `json:"poster"`
+	PosterV  string  `json:"poster_v"`
 	HiddenAt string  `json:"hidden_at"`
 }
 
@@ -52,7 +54,7 @@ func hiddenDeals(d *sql.DB) ([]hiddenDeal, error) {
 	for i, id := range l.Hidden {
 		ids[i] = id
 	}
-	rows, err := d.Query(`SELECT g.id, g.title, g.cover_file, coalesce(g.cover_updated_at, ''), h.hidden_at FROM game g JOIN deal_hidden h ON h.game_id = g.id
+	rows, err := d.Query(`SELECT g.id, g.title, g.cover_file, coalesce(g.cover_updated_at, ''), g.poster_file, coalesce(g.poster_updated_at, ''), h.hidden_at FROM game g JOIN deal_hidden h ON h.game_id = g.id
 		WHERE g.id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")+`) ORDER BY h.hidden_at DESC, g.title_sort`, ids...)
 	if err != nil {
 		return nil, err
@@ -60,7 +62,7 @@ func hiddenDeals(d *sql.DB) ([]hiddenDeal, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var g hiddenDeal
-		if err := rows.Scan(&g.ID, &g.Title, &g.Cover, &g.CoverV, &g.HiddenAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Title, &g.Cover, &g.CoverV, &g.Poster, &g.PosterV, &g.HiddenAt); err != nil {
 			return nil, err
 		}
 		out = append(out, g)

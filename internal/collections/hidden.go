@@ -16,7 +16,7 @@ type HiddenSimilar struct {
 	Because  []string `json:"because"` // titles of the library games that suggested it (finished or favourite, linked to IGDB)
 }
 
-// HiddenSeries is a game hidden on the Series page, with the name of the IGDB collection it was hidden from.
+// HiddenSeries is a game hidden on the Series page, with the owner's series name (the key the Series page groups by).
 type HiddenSeries struct {
 	CollectionID int64   `json:"collection_id"`
 	IGDBID       int64   `json:"igdb_id"`
@@ -39,19 +39,24 @@ func LoadHiddenSimilar(d *sql.DB) ([]HiddenSimilar, error) {
 	if err != nil {
 		return nil, err
 	}
-	titles := map[int64]string{} // IGDB id -> title of the library's source games
-	rows, err := d.Query(`SELECT g.igdb_id, g.title FROM (` + sourceSQL + `) x JOIN game g ON g.id = x.id`)
+	type src struct {
+		title string
+		year  int64 // latest year played, 0 = none
+		id    int64
+	}
+	srcs := map[int64]src{} // IGDB id -> the library's source game
+	rows, err := d.Query(`SELECT g.igdb_id, g.title, coalesce((SELECT max(p.year) FROM play p WHERE p.game_id = g.id), 0), g.id FROM (` + sourceSQL + `) x JOIN game g ON g.id = x.id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
-		var t string
-		if err := rows.Scan(&id, &t); err != nil {
+		var s src
+		if err := rows.Scan(&id, &s.title, &s.year, &s.id); err != nil {
 			return nil, err
 		}
-		titles[id] = t
+		srcs[id] = s
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -62,15 +67,25 @@ func LoadHiddenSimilar(d *sql.DB) ([]HiddenSimilar, error) {
 			continue
 		}
 		h := HiddenSimilar{IGDBID: s.IGDBID, Title: s.Title, Year: s.Year, Cover: s.Cover, V: s.V, HiddenAt: at[[2]int64{s.IGDBID, 0}], Because: []string{}}
-		for _, src := range s.Sources {
-			if t, ok := titles[src]; ok {
-				h.Because = append(h.Because, t)
+		var from []src
+		for _, id := range s.Sources {
+			if x, ok := srcs[id]; ok {
+				from = append(from, x)
 			}
 		}
-		if len(h.Because) == 0 {
+		if len(from) == 0 {
 			continue // the Similar page does not list it either
 		}
-		sort.Strings(h.Because)
+		// newest first, like the Similar page: the latest year played, then the game added last
+		sort.Slice(from, func(i, j int) bool {
+			if from[i].year != from[j].year {
+				return from[i].year > from[j].year
+			}
+			return from[i].id > from[j].id
+		})
+		for _, x := range from {
+			h.Because = append(h.Because, x.title)
+		}
 		out = append(out, h)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -94,13 +109,9 @@ func LoadHiddenSeries(d *sql.DB) ([]HiddenSeries, error) {
 	}
 	out := []HiddenSeries{}
 	for _, s := range all {
-		names := map[int64]string{}
-		for _, c := range s.Collections {
-			names[c.ID] = c.Name
-		}
 		for _, g := range s.Hidden {
 			out = append(out, HiddenSeries{CollectionID: g.CollectionID, IGDBID: g.IGDBID, Title: g.Title, Year: g.Year, Cover: g.Cover, V: g.V,
-				Series: names[g.CollectionID], HiddenAt: at[[2]int64{g.CollectionID, g.IGDBID}]})
+				Series: s.Key, HiddenAt: at[[2]int64{g.CollectionID, g.IGDBID}]})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
