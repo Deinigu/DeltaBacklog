@@ -6,6 +6,13 @@
 import { buildSeries } from './series.js';
 
 const DAY_MS = 86400000;
+/** "3 Nov 2026" for a date or timestamp, like every other date in the app ('' when absent or unreadable). */
+export function formatDay(value, locale = 'en-GB') {
+  const t = value ? new Date(value) : null;
+  if (!t || Number.isNaN(t.getTime())) return '';
+  return t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export const LOCALE = 'en-GB'; // the UI text is English, so dates are too, whatever the browser's language
 export const RECENT_DAYS = 60;
 export const HORIZON_MONTHS = 18; // a release starting later than this goes under "Later / TBA"

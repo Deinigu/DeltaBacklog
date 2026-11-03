@@ -3,6 +3,7 @@ package collections
 import (
 	"database/sql"
 	"sort"
+	"strings"
 )
 
 // HiddenSimilar is a hidden Similar games suggestion with what the Hidden page shows about it.
@@ -16,7 +17,7 @@ type HiddenSimilar struct {
 	Because  []string `json:"because"` // titles of the library games that suggested it (finished or favourite, linked to IGDB)
 }
 
-// HiddenSeries is a game hidden on the Series page, with the owner's series name (the key the Series page groups by).
+// HiddenSeries is a game hidden on the Series page, with the owner's series name as written (not the lower-cased key the Series page groups by).
 type HiddenSeries struct {
 	CollectionID int64   `json:"collection_id"`
 	IGDBID       int64   `json:"igdb_id"`
@@ -97,6 +98,26 @@ func LoadHiddenSimilar(d *sql.DB) ([]HiddenSimilar, error) {
 	return out, nil
 }
 
+// seriesNames maps a series key to the name the owner wrote (the oldest spelling when two differ only in case).
+func seriesNames(d *sql.DB) (map[string]string, error) {
+	rows, err := d.Query(`SELECT name FROM series ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		if _, ok := out[Key(n)]; !ok {
+			out[Key(n)] = strings.TrimSpace(n)
+		}
+	}
+	return out, rows.Err()
+}
+
 // LoadHiddenSeries lists the games hidden on the Series page that are still not owned, from the cache only.
 func LoadHiddenSeries(d *sql.DB) ([]HiddenSeries, error) {
 	all, err := Load(d)
@@ -107,11 +128,19 @@ func LoadHiddenSeries(d *sql.DB) ([]HiddenSeries, error) {
 	if err != nil {
 		return nil, err
 	}
+	names, err := seriesNames(d)
+	if err != nil {
+		return nil, err
+	}
 	out := []HiddenSeries{}
 	for _, s := range all {
+		name := names[s.Key]
+		if name == "" {
+			name = s.Key
+		}
 		for _, g := range s.Hidden {
 			out = append(out, HiddenSeries{CollectionID: g.CollectionID, IGDBID: g.IGDBID, Title: g.Title, Year: g.Year, Cover: g.Cover, V: g.V,
-				Series: s.Key, HiddenAt: at[[2]int64{g.CollectionID, g.IGDBID}]})
+				Series: name, HiddenAt: at[[2]int64{g.CollectionID, g.IGDBID}]})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
