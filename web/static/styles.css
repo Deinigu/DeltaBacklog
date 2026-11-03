@@ -1155,10 +1155,18 @@ button.up-open { cursor: pointer; border-radius: 8px; }
   .dl-sheet { border-radius: 16px; margin: auto; }
 }
 @media (min-width: 1200px) {
-  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 96px 96px 44px; }
-  .dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 96px 96px 96px 44px; }
+  /* Shop from 1200px; Ends and Added only from 1440px, so the name keeps room for a full title. */
+  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 44px; }
   .dl-plain .dl-row, .dl-plain.dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 44px; }
-  .dl-shop, .dl-ends, .dl-added { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dl-h-shop, .dl-h-ends, .dl-h-added { display: block; }
-  .dl-plain .dl-shop, .dl-plain .dl-ends, .dl-plain .dl-added { display: none; }
+  .dl-shop { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-h-shop { display: block; }
+  .dl-plain .dl-shop { display: none; }
+}
+@media (min-width: 1440px) {
+  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 96px 44px; }
+  .dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 96px 96px 44px; }
+  .dl-plain .dl-row, .dl-plain.dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 44px; }
+  .dl-ends, .dl-added { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-h-ends, .dl-h-added { display: block; }
+  .dl-plain .dl-ends, .dl-plain .dl-added { display: none; }
 }

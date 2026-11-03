@@ -10,10 +10,12 @@ const DAY_MS = 86400000;
 export function formatDay(value, locale = 'en-GB') {
   const t = value ? new Date(value) : null;
   if (!t || Number.isNaN(t.getTime())) return '';
-  return t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  return noSept(t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
 }
 
 export const LOCALE = 'en-GB'; // the UI text is English, so dates are too, whatever the browser's language
+/** Newer ICU writes en-GB September as "Sept"; every other short month has three letters, so use "Sep" too. */
+export const noSept = (s) => s.replace(/\bSept\b/, 'Sep');
 export const RECENT_DAYS = 60;
 export const HORIZON_MONTHS = 18; // a release starting later than this goes under "Later / TBA"
 
@@ -49,7 +51,7 @@ export function formatRelease(date, format, locale = LOCALE) {
     case 'year': return String(p.year);
     case 'quarter': return `Q${p.quarter} ${p.year}`;
     case 'month': return monthName(p.year, p.month, locale);
-    default: return new Intl.DateTimeFormat(locale, { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date * 1000));
+    default: return noSept(new Intl.DateTimeFormat(locale, { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date * 1000)));
   }
 }
 
