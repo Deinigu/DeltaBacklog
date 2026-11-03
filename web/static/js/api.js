@@ -189,6 +189,8 @@ export const seriesUnhide = (collectionId, igdbId) => request('POST', 'api/serie
 export const similarList = () => request('GET', 'api/similar');
 /** Start reading the similar games from IGDB in the background; poll similarList() for its progress. */
 export const similarRefresh = () => request('POST', 'api/similar/refresh');
+/** Resolves everything the owner hid, from the database only: {deals: [{id, title, cover, cover_v, poster, poster_v, hidden_at}], similar: [{igdb_id, title, year, cover, v, because: [titles], hidden_at}], series: [{collection_id, igdb_id, title, year, cover, v, series, hidden_at}]}. */
+export const hiddenList = () => request('GET', 'api/hidden');
 export const similarHide = (igdbId) => request('POST', 'api/similar/hide', { igdb_id: igdbId });
 export const similarUnhide = (igdbId) => request('POST', 'api/similar/unhide', { igdb_id: igdbId });
 /** One IGDB game as a quick-add candidate (the Add button of a game the library does not have). */
