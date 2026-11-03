@@ -533,3 +533,23 @@ func TestSweepSkipsFreshFiles(t *testing.T) {
 		t.Error("a fresh unnamed poster file was swept")
 	}
 }
+
+// The Hidden page names the series as the owner wrote it ("Ace Attorney"), not the lower-cased key the Series page groups by.
+func TestHiddenSeriesUsesTheOwnersSeriesName(t *testing.T) {
+	d := open(t)
+	addGame(t, d, "Zed", "The Zeds", 100)
+	o, _ := opts(t)
+	if _, err := Refresh(context.Background(), d, newFake(), o); err != nil {
+		t.Fatal(err)
+	}
+	if err := Hide(d, 7, 102); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadHiddenSeries(d)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got[0].Series != "The Zeds" {
+		t.Errorf("series = %q, want the name as written", got[0].Series)
+	}
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { releasePeriod, formatRelease, isReleased, today, buildUpcoming } from '../static/js/upcoming.js';
+import { releasePeriod, formatRelease, isReleased, today, buildUpcoming, formatDay } from '../static/js/upcoming.js';
 
 const utc = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
 const NOW = new Date(2026, 9, 27, 12, 0, 0); // 27 Oct 2026, noon on the viewer's clock
@@ -114,4 +114,12 @@ test('dates are English whatever the browser language: a fixed en-GB locale by d
   assert.equal(formatRelease(utc(2026, 11, 1), 1), 'November 2026');
   const { groups } = buildUpcoming([], idx(wish('Dec', utc(2026, 12, 1), 0)), NOW);
   assert.equal(groups[0].label, 'December 2026');
+});
+
+test('formatDay writes dates like the rest of the app: 3 Nov 2026, never 03/11/2026', () => {
+  assert.equal(formatDay('2026-11-03T16:56:00Z'), '3 Nov 2026');
+  assert.equal(formatDay('2026-03-04T10:00:00Z'), '4 Mar 2026');
+  assert.equal(formatDay(Date.UTC(2026, 0, 9, 12)), '9 Jan 2026');
+  assert.equal(formatDay(''), '');
+  assert.equal(formatDay('nonsense'), '');
 });

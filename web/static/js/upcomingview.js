@@ -5,7 +5,7 @@ import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from 
 import { store, load as reloadGames, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openAdd } from './add.js';
 import { missingIndex, moveHidden, oldestFetch } from './series.js';
-import { buildUpcoming, formatRelease, LOCALE } from './upcoming.js';
+import { buildUpcoming, formatRelease, formatDay, LOCALE } from './upcoming.js';
 
 function poster(item) {
   const url = missingPosterURL(item.missing.cover, item.missing.v);
@@ -100,7 +100,7 @@ export function renderUpcoming(root) {
       title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
     const old = oldestFetch(index);
-    const note = old ? `Release dates were read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
+    const note = old ? `Release dates were read from IGDB on ${formatDay(old)}.`
       : info.configured ? 'Press Refresh from IGDB to read the release dates of your series.' : '';
     return [btn, note];
   }

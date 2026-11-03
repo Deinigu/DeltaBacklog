@@ -5,7 +5,7 @@ import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from 
 import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
-import { LOCALE } from './upcoming.js';
+import { formatDay } from './upcoming.js';
 import {
   buildSeries, collapseMissing, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
 } from './series.js';
@@ -136,7 +136,7 @@ export function renderSeries(root, openKey = null) {
       title: info.configured ? 'Refresh from IGDB' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh');
     const old = oldestFetch(index);
-    const note = old ? `Missing games read from IGDB on ${new Date(old).toLocaleDateString(LOCALE)}.`
+    const note = old ? `Missing games read from IGDB on ${formatDay(old)}.`
       : info.configured ? 'Press Refresh to read the games of your series that you do not have yet.' : '';
     return [btn, note];
   }

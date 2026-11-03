@@ -5,6 +5,7 @@ import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from 
 import { store, similarList, similarRefresh, similarHide, similarUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openAdd } from './add.js';
 import { similarIndex, setHiddenFlag, becauseText, isSource } from './similar.js';
+import { formatDay } from './upcoming.js';
 
 function poster(s) {
   const url = missingPosterURL(s.cover, s.v);
@@ -92,7 +93,7 @@ export function renderSimilar(root) {
     const btn = h('button.chip', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
       title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
-    const note = info.fetched_at ? `Read from IGDB on ${new Date(info.fetched_at).toLocaleDateString('en-GB')}.`
+    const note = info.fetched_at ? `Read from IGDB on ${formatDay(info.fetched_at)}.`
       : info.configured ? 'Press Refresh from IGDB to find games similar to the ones you finished or marked as favourites.' : '';
     return [btn, note];
   }

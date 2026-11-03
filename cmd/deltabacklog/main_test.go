@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -32,6 +34,27 @@ func TestDotEnvAppliesGOMEMLIMIT(t *testing.T) {
 	loadDotEnv(path)
 	if got := debug.SetMemoryLimit(-1); got != 96<<20 {
 		t.Errorf("memory limit = %d, want %d", got, 96<<20)
+	}
+}
+
+func TestDotEnvSkipsEmptyValues(t *testing.T) {
+	old := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(old)
+	t.Setenv("GOMEMLIMIT", "")
+	t.Setenv("T_EMPTY_KEY", "")
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	defer log.SetOutput(os.Stderr)
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("GOMEMLIMIT=\nT_EMPTY_KEY=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loadDotEnv(path)
+	if logged.Len() != 0 {
+		t.Errorf("an empty GOMEMLIMIT logged %q", logged.String())
+	}
+	if got := debug.SetMemoryLimit(-1); got != old {
+		t.Errorf("memory limit changed to %d", got)
 	}
 }
 

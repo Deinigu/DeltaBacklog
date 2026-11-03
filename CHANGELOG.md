@@ -58,6 +58,9 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ### Fixed
 
+- The **Hidden** page names a hidden series game's series as you wrote it (*Ace Attorney*), not the lower-cased key (*ace attorney*).
+- The "read on" dates of the Series, Upcoming and Similar games pages and the "Hidden on" dates now use the same English format as the rest of the app (*3 Nov 2026*), not the browser's (*03/11/2026*).
+- An empty value in `.env` (such as `GOMEMLIMIT=`, as in `.env.example`) is skipped instead of logging "ignoring GOMEMLIMIT" at start-up.
 - IGDB search no longer misses well-known games buried among their sequels, bundles and DLC (God of War 2005 and Portal 2007 were not offered). It now fetches 50 hits plus all (up to 200) games named exactly like the query, shows the best 12 with exact names first (DLC and mods last; then the game on most stores; then main game before remake and port; then older; at most 6 namesakes so sequels still show), and understands a year in the query (`God of War 2005`, `Portal (2007)`) as a hint. `sync-igdb` uses the same search and sees every namesake, so it never links on a shortened list. All IGDB requests of one process are paced to 4 per second in one place.
 - The ranking editor no longer rebuilds the whole board every few seconds while posters are being made (it flashed, and could swallow a tap on a tier name, so renaming or deleting a tier seemed not to work): new posters are swapped in tile by tile, and a redraw is held back while a tier sheet is open. The rankings list shows Rename, Duplicate and Delete as words.
 - Leaving the library and then resizing the window across 600px (or rotating a phone) no longer rewrites the address to `#/library` while another page is shown: the library now removes its screen-width listener when it closes.

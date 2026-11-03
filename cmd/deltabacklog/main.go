@@ -49,7 +49,7 @@ func loadDotEnv(path string) {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
-		if !ok || k == "" || os.Getenv(k) != "" {
+		if !ok || k == "" || v == "" || os.Getenv(k) != "" { // an empty value (as in .env.example) means "not set": nothing to apply or to parse
 			continue
 		}
 		os.Setenv(k, v)
