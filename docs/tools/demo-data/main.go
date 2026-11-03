@@ -50,15 +50,15 @@ var games = []game{
 	{"Outer Wilds", "playing", "Owned", "", "Mobius Digital", 2019, "PC, PS4", "Adventure, Puzzle", "Open world, Science fiction", "2025,2026", false, true, false, "Do not read anything about it first."},
 	{"Hades", "playing", "Owned", "", "Supergiant Games", 2020, "PC, Switch", "Roguelike, Hack and slash", "Fantasy", "2024,2025", false, true, false, ""},
 	{"Stardew Valley", "playing_evergreen", "Owned", "", "ConcernedApe", 2016, "PC, Switch", "Simulator, RPG", "Farming, Fantasy", "2019,2021,2024", false, true, false, "Cozy autumn game."},
-	{"Hollow Knight", "up_next", "Owned", "", "Team Cherry", 2017, "PC, Switch", "Metroidvania, Platform", "Fantasy, Dark", "", false, false, false, ""},
-	{"Disco Elysium", "up_next", "Owned", "", "ZA/UM", 2019, "PC", "RPG, Adventure", "Mystery, Drama", "", false, false, false, ""},
-	{"Celeste", "up_next", "Owned", "", "Maddy Makes Games", 2018, "PC, Switch", "Platform, Indie", "Drama", "", false, false, false, ""},
+	{"Hollow Knight", "up_next", "Borrowed", "", "Team Cherry", 2017, "PC, Switch", "Metroidvania, Platform", "Fantasy, Dark", "", false, false, false, ""},
+	{"Disco Elysium", "up_next", "Borrowed", "", "ZA/UM", 2019, "PC", "RPG, Adventure", "Mystery, Drama", "", false, false, false, ""},
+	{"Celeste", "up_next", "Family share", "", "Maddy Makes Games", 2018, "PC, Switch", "Platform, Indie", "Drama", "", false, false, false, ""},
 	{"Return of the Obra Dinn", "up_next", "Owned", "", "Lucas Pope", 2018, "PC", "Puzzle, Adventure", "Mystery, Historical", "", false, false, false, ""},
-	{"Baldur's Gate 3", "backlog", "Owned", "Baldur's Gate", "Larian Studios", 2023, "PC", "RPG, Strategy", "Fantasy", "", false, false, false, "Wait for a quiet month."},
-	{"Elden Ring", "backlog", "Owned", "Souls", "FromSoftware", 2022, "PC, PS5", "RPG, Hack and slash", "Fantasy, Open world", "", false, false, false, ""},
-	{"Cyberpunk 2077", "backlog", "Owned", "", "CD Projekt Red", 2020, "PC", "RPG, Shooter", "Science fiction, Open world", "", false, false, false, ""},
+	{"Baldur's Gate 3", "backlog", "Nope", "Baldur's Gate", "Larian Studios", 2023, "PC", "RPG, Strategy", "Fantasy", "", false, false, false, "Wait for a quiet month."},
+	{"Elden Ring", "backlog", "Borrowed", "Souls", "FromSoftware", 2022, "PC, PS5", "RPG, Hack and slash", "Fantasy, Open world", "", false, false, false, ""},
+	{"Cyberpunk 2077", "backlog", "Nope", "", "CD Projekt Red", 2020, "PC", "RPG, Shooter", "Science fiction, Open world", "", false, false, false, ""},
 	{"Death Stranding", "backlog", "Free to play", "", "Kojima Productions", 2019, "PC, PS4", "Adventure", "Science fiction, Open world", "", false, false, false, ""},
-	{"Subnautica", "backlog", "Owned", "Subnautica", "Unknown Worlds", 2018, "PC", "Adventure, Simulator", "Survival, Open world", "", false, false, false, ""},
+	{"Subnautica", "backlog", "Family share", "Subnautica", "Unknown Worlds", 2018, "PC", "Adventure, Simulator", "Survival, Open world", "", false, false, false, ""},
 	{"Pentiment", "backlog", "Family share", "", "Obsidian Entertainment", 2022, "PC", "Adventure, RPG", "Historical, Mystery", "", false, false, false, ""},
 	{"Slay the Spire", "evergreen", "Owned", "", "Mega Crit", 2019, "PC, Switch", "Card game, Roguelike", "Fantasy", "2020,2022,2024", false, false, false, ""},
 	{"Rocket League", "evergreen", "Free to play", "", "Psyonix", 2015, "PC", "Sport, Racing", "Sports", "2017,2018,2019", false, false, false, ""},
@@ -224,7 +224,8 @@ func main() {
 		must(err)
 	}
 	// Made-up prices for the Deals page (nothing is read from IsThereAnyDeal): cents of EUR. Hollow Knight sits at its
-	// historical low, Celeste near it; Baldur's Gate 3 has no deal; Cyberpunk has no match; the rest wait.
+	// historical low, Celeste near it; Baldur's Gate 3 has no deal; Cyberpunk has no match; Pentiment waits; Elden Ring is hidden.
+	// Only games that are not owned and not played are on Deals, so these are Borrowed, Family share or Nope (Pirated games are not listed).
 	for _, f := range []struct {
 		game, shop       string
 		price, regular   int
@@ -237,7 +238,7 @@ func main() {
 		{"Baldur's Gate 3", "Steam", 5999, 5999, 0, 4799, "GreenManGaming", "2025-07-03T16:00:00Z"},
 		{"Elden Ring", "Steam", 3999, 5999, 33, 2999, "Steam", "2025-11-27T18:00:00Z"},
 		{"Subnautica", "Epic Games Store", 1049, 2999, 65, 749, "Steam", "2024-06-27T17:00:00Z"},
-		{"Death Stranding", "", 0, 0, 0, 0, "", ""},
+		{"Pentiment", "", 0, 0, 0, 0, "", ""},
 	} {
 		var gid int64
 		must(tx.QueryRow("SELECT id FROM game WHERE title = ?", f.game).Scan(&gid))
@@ -250,6 +251,8 @@ func main() {
 			VALUES (?, 'EUR', ?, ?, ?, ?, 'https://example.org/deal', ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, gid, f.shop, f.price, f.regular, f.cut, f.low, f.lowShop, f.lowDate)
 		must(err)
 	}
+	_, err = tx.Exec(`INSERT INTO deal_hidden(game_id, hidden_at) SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ','now') FROM game WHERE title = 'Elden Ring'`)
+	must(err)
 	for _, g := range []string{"Cyberpunk 2077"} {
 		_, err := tx.Exec(`INSERT INTO deal_match(game_id, source) SELECT id, 'title' FROM game WHERE title = ?`, g)
 		must(err)
