@@ -82,6 +82,19 @@ type Source interface {
 	Overview(ctx context.Context, ids []string, country string) (map[string]Overview, error)
 }
 
+// BulkSource is the optional batch lookup: many Steam app ids in one request. The real Client has it; the wishlist uses it
+// so that matching 130 games costs one or two requests, not 130 (which used up the key's rate limit before any price was read).
+type BulkSource interface {
+	// LookupAppIDs maps Steam app ids to ITAD game ids; an id ITAD does not know is absent from the result. At most MaxLookupBatch ids.
+	LookupAppIDs(ctx context.Context, appIDs []int64) (map[int64]string, error)
+}
+
+// MaxLookupBatch is how many app ids one bulk lookup asks for (the API takes up to 200).
+const MaxLookupBatch = 200
+
+// steamShopID is IsThereAnyDeal's id of the Steam shop.
+const steamShopID = 61
+
 // MaxBatch is how many games one Overview call asks for.
 const MaxBatch = 50
 
@@ -102,7 +115,14 @@ type Client struct {
 
 	paceMu sync.Mutex
 	next   time.Time
+
+	// sleep is time.After; tests replace it so a Retry-After does not make them wait.
+	sleep func(time.Duration) <-chan time.Time
 }
+
+// maxRetryWait is the longest Retry-After the client waits out (once) before trying a request again; a longer one stops
+// the run, which carries on at the next refresh.
+const maxRetryWait = 15 * time.Second
 
 // New returns a client for the real API. An empty key disables it.
 func New(key string) *Client {
@@ -139,8 +159,44 @@ func (c *Client) pace(ctx context.Context) error {
 	}
 }
 
-// call sends one request and decodes the JSON answer into out.
+// call sends one request and decodes the JSON answer into out. A 429 whose Retry-After is short (maxRetryWait or less) is
+// waited out once, respecting ctx, and the request is sent again; otherwise the RateLimitError is returned.
 func (c *Client) call(ctx context.Context, method, path string, query url.Values, body any, out any) error {
+	err := c.callOnce(ctx, method, path, query, body, out)
+	var rl *RateLimitError
+	if !errors.As(err, &rl) || rl.RetryAfter <= 0 || rl.RetryAfter > maxRetryWait {
+		return err
+	}
+	sleep := c.sleep
+	if sleep == nil {
+		sleep = time.After
+	}
+	select {
+	case <-sleep(rl.RetryAfter):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return c.callOnce(ctx, method, path, query, body, out)
+}
+
+// retryAfter reads a Retry-After header: seconds, or an HTTP date. 0 when absent, invalid or in the past.
+func retryAfter(v string, now time.Time) time.Duration {
+	v = strings.TrimSpace(v)
+	if n, err := strconv.Atoi(v); err == nil {
+		if n > 0 {
+			return time.Duration(n) * time.Second
+		}
+		return 0
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return (d + time.Second - 1).Truncate(time.Second) // rounded up to whole seconds
+		}
+	}
+	return 0
+}
+
+func (c *Client) callOnce(ctx context.Context, method, path string, query url.Values, body any, out any) error {
 	if !c.Configured() {
 		return ErrNotConfigured
 	}
@@ -183,11 +239,7 @@ func (c *Client) call(ctx context.Context, method, path string, query url.Values
 	defer res.Body.Close()
 	switch {
 	case res.StatusCode == http.StatusTooManyRequests:
-		e := &RateLimitError{}
-		if n, err := strconv.Atoi(strings.TrimSpace(res.Header.Get("Retry-After"))); err == nil && n > 0 {
-			e.RetryAfter = time.Duration(n) * time.Second
-		}
-		return e
+		return &RateLimitError{RetryAfter: retryAfter(res.Header.Get("Retry-After"), time.Now())}
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
 		return errors.New("IsThereAnyDeal refused the API key")
 	case res.StatusCode != http.StatusOK:
@@ -210,6 +262,31 @@ func isLoopback(host string) bool { return host == "127.0.0.1" || host == "::1" 
 
 func (c *Client) LookupAppID(ctx context.Context, appID int64) (Game, bool, error) {
 	return c.lookup(ctx, url.Values{"appid": {strconv.FormatInt(appID, 10)}})
+}
+
+// LookupAppIDs is POST /lookup/id/shop/61/v1: the body is ["app/<id>", ...], the answer maps each to an ITAD game id or null.
+func (c *Client) LookupAppIDs(ctx context.Context, appIDs []int64) (map[int64]string, error) {
+	if len(appIDs) == 0 {
+		return map[int64]string{}, nil
+	}
+	if len(appIDs) > MaxLookupBatch {
+		return nil, fmt.Errorf("at most %d apps per call", MaxLookupBatch)
+	}
+	body := make([]string, len(appIDs))
+	for i, id := range appIDs {
+		body[i] = "app/" + strconv.FormatInt(id, 10)
+	}
+	var out map[string]*string
+	if err := c.call(ctx, http.MethodPost, "/lookup/id/shop/"+strconv.Itoa(steamShopID)+"/v1", nil, body, &out); err != nil {
+		return nil, err
+	}
+	res := make(map[int64]string, len(out))
+	for _, id := range appIDs {
+		if v := out["app/"+strconv.FormatInt(id, 10)]; v != nil && *v != "" {
+			res[id] = *v
+		}
+	}
+	return res, nil
 }
 
 func (c *Client) LookupTitle(ctx context.Context, title string) (Game, bool, error) {

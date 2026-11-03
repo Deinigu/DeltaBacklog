@@ -3,9 +3,11 @@ package deals
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -525,5 +527,196 @@ func TestRemovedSteamIDSilencesTheWishlist(t *testing.T) {
 	d.QueryRow(`SELECT pending FROM wish_item`).Scan(&pending)
 	if pending != 0 {
 		t.Error("a pending wishlist alert must be dropped when no wishlist is set up")
+	}
+}
+
+// ---------------- bulk matching, rate limits and budgets ----------------
+
+// bulkSource is the fake ITAD with the bulk app-id lookup: known maps app ids to ITAD ids; the call number failAt (0-based,
+// -1 = never) answers a rate limit.
+type bulkSource struct {
+	*histSource
+	known  map[int64]string
+	chunks [][]int64
+	failAt int
+	failed error // what the failing call answers (default: a rate limit)
+}
+
+func (b *bulkSource) LookupAppIDs(_ context.Context, ids []int64) (map[int64]string, error) {
+	if len(ids) > MaxLookupBatch {
+		return nil, errors.New("too many ids")
+	}
+	b.chunks = append(b.chunks, ids)
+	if len(b.chunks)-1 == b.failAt {
+		if b.failed != nil {
+			return nil, b.failed
+		}
+		return nil, &RateLimitError{RetryAfter: 4 * time.Minute}
+	}
+	out := map[int64]string{}
+	for _, id := range ids {
+		if v, ok := b.known[id]; ok {
+			out[id] = v
+		}
+	}
+	return out, nil
+}
+
+// namedWish is a wishlist that also names its games (like Steam).
+type namedWish struct {
+	*fakeWish
+	calls [][]int64
+}
+
+func (n *namedWish) Titles(_ context.Context, ids []int64) (map[int64]string, error) {
+	n.calls = append(n.calls, ids)
+	out := map[int64]string{}
+	for _, id := range ids {
+		out[id] = "Game " + strconv.FormatInt(id, 10)
+	}
+	return out, nil
+}
+
+func manyApps(n int) (*bulkSource, *namedWish) {
+	src := &bulkSource{histSource: wishSource(), known: map[int64]string{}, failAt: -1}
+	var ids []int64
+	for i := int64(1000); i < int64(1000+n); i++ {
+		ids = append(ids, i)
+		if i%10 != 9 { // one in ten is unknown to ITAD
+			src.known[i] = "bulk-" + strconv.FormatInt(i, 10)
+			src.prices["bulk-"+strconv.FormatInt(i, 10)] = Overview{Current: cur(900, 2000, 55)}
+		}
+	}
+	return src, &namedWish{fakeWish: &fakeWish{entries: entries(ids...)}}
+}
+
+func TestBulkMatchingUsesFewRequests(t *testing.T) {
+	d := newDB(t)
+	src, wl := manyApps(450)
+	rep, err := Refresh(context.Background(), d, src, Options{Wishlist: wl})
+	if err != nil || rep.Stopped != "" || rep.WishGames != 450 || rep.WishPriced != 405 || rep.WishUnmatched != 45 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if src.lookups != 0 {
+		t.Errorf("no per-game lookup: %d", src.lookups)
+	}
+	if len(src.chunks) != 3 || len(src.chunks[0]) != 200 || len(src.chunks[2]) != 50 {
+		t.Errorf("lookup chunks: %d", len(src.chunks))
+	}
+	if len(wl.calls) != 5 || len(wl.calls[0]) != 100 {
+		t.Errorf("title calls: %d", len(wl.calls))
+	}
+	items := wishRowsOf(t, d)
+	if it := items[1000]; it.Title != "Game 1000" || it.ITADID != "bulk-1000" || it.Price == nil {
+		t.Errorf("item: %+v", it)
+	}
+	if it := items[1009]; it.Title != "Game 1009" || it.ITADID != "" || !it.Matched || it.Price != nil {
+		t.Errorf("unknown to ITAD: %+v", it)
+	}
+	// Known games are neither named nor looked up again.
+	src.chunks, wl.calls = nil, nil
+	if _, err := Refresh(context.Background(), d, src, Options{Wishlist: wl}); err != nil || len(src.chunks) != 0 || len(wl.calls) != 0 {
+		t.Errorf("second run: %v chunks %d titles %d", err, len(src.chunks), len(wl.calls))
+	}
+}
+
+func TestRateLimitInTheMatchStepStillPricesWhatIsMatched(t *testing.T) {
+	d := newDB(t)
+	src, wl := manyApps(450)
+	src.failAt = 1 // the second chunk of 200 is refused
+	rep, err := Refresh(context.Background(), d, src, Options{Wishlist: wl})
+	if err != nil || !strings.Contains(rep.Stopped, "rate limit") {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if rep.WishPriced != 180 || rep.WishUnmatched != 20 {
+		t.Fatalf("the first chunk is matched and priced: %+v", rep)
+	}
+	if !strings.Contains(rep.String(), "Wishlist: 180 of 430 priced; the rest next run, 20 without a match.") {
+		t.Errorf("report: %s", rep)
+	}
+	var waiting int
+	d.QueryRow(`SELECT count(*) FROM wish_item WHERE matched_at IS NULL`).Scan(&waiting)
+	if waiting != 250 {
+		t.Errorf("games not looked up yet: %d", waiting)
+	}
+	// The next run carries on with the 250 left, in two requests.
+	src.failAt, src.chunks = -1, nil
+	rep, err = Refresh(context.Background(), d, src, Options{Wishlist: wl})
+	if err != nil || rep.Stopped != "" || rep.WishPriced != 405 || len(src.chunks) != 2 || len(src.chunks[0])+len(src.chunks[1]) != 250 {
+		t.Fatalf("%+v %v chunks %d", rep, err, len(src.chunks))
+	}
+}
+
+func TestRateLimitOnTheFirstLookupKeepsTheWishlist(t *testing.T) {
+	d := newDB(t)
+	src, wl := manyApps(30)
+	src.failAt = 0 // refused at once: nothing matched, nothing priced, and the run says so
+	rep, err := Refresh(context.Background(), d, src, Options{Wishlist: wl})
+	if err != nil || rep.Stopped == "" || rep.WishPriced != 0 || rep.WishUnmatched != 0 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if l, _ := Load(d); len(l.Wish.Items) != 30 || l.Wish.Items[0].Title != "Game 1000" {
+		t.Errorf("the games are stored and named even when matching was refused: %d", len(l.Wish.Items))
+	}
+}
+
+func TestTwoYearLowsStayWithinTheBudget(t *testing.T) {
+	d := newDB(t)
+	src := &histSource{fakeSource: &fakeSource{byTitle: map[string]Game{}, prices: map[string]Overview{}}, lows: map[string]int64{}}
+	for i := 1; i <= 20; i++ {
+		title := "Lib " + strconv.Itoa(i)
+		id := "lib" + strconv.Itoa(i)
+		addGame(t, d, int64(i), title, "backlog", "")
+		src.byTitle[title] = Game{ID: id, Title: title}
+		setPrice(src, id, cur(700, 1500, 53), 600) // on sale above its historical low: needs the history
+	}
+	if _, err := Check(context.Background(), d, src, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(src.calls) != HistoryBudget {
+		t.Fatalf("history calls: %d, want %d", len(src.calls), HistoryBudget)
+	}
+	// The next run reads the rest.
+	src.calls = nil
+	if _, err := Check(context.Background(), d, src, nil); err != nil || len(src.calls) != 5 {
+		t.Errorf("second run: %v %d", err, len(src.calls))
+	}
+}
+
+func TestClientBulkLookupAndSteamTitles(t *testing.T) {
+	ctx := context.Background()
+	c := fakeITAD(t, func(w http.ResponseWriter, r *http.Request) {
+		var body []string
+		json.NewDecoder(r.Body).Decode(&body)
+		if r.Method != http.MethodPost || r.URL.Path != "/lookup/id/shop/61/v1" || len(body) != 3 || body[0] != "app/367520" {
+			t.Errorf("request %s %s %v", r.Method, r.URL, body)
+		}
+		w.Write([]byte(`{"app/367520":"u-hk","app/1145360":null,"app/5":""}`))
+	})
+	got, err := c.LookupAppIDs(ctx, []int64{367520, 1145360, 5})
+	if err != nil || len(got) != 1 || got[367520] != "u-hk" {
+		t.Fatalf("%v %v", got, err)
+	}
+	if got, err := c.LookupAppIDs(ctx, nil); err != nil || len(got) != 0 {
+		t.Errorf("empty: %v %v", got, err)
+	}
+	if _, err := c.LookupAppIDs(ctx, make([]int64, MaxLookupBatch+1)); err == nil {
+		t.Error("an oversized batch must be refused")
+	}
+
+	var gotInput string
+	s := steamClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotInput = r.URL.Query().Get("input_json")
+		if r.URL.Path != "/IStoreBrowseService/GetItems/v1/" || strings.Contains(r.URL.RawQuery, testSteamID) {
+			t.Errorf("request %s", r.URL)
+		}
+		w.Write([]byte(`{"response":{"store_items":[{"id":10,"success":1,"name":" Hollow Knight "},{"id":20,"success":2},{"id":30,"success":1,"name":""}]}}`))
+	})
+	names, err := s.Titles(ctx, []int64{10, 20, 30})
+	if err != nil || len(names) != 1 || names[10] != "Hollow Knight" || !strings.Contains(gotInput, `"appid":10`) {
+		t.Fatalf("%v %v %q", names, err, gotInput)
+	}
+	if _, err := s.Titles(ctx, make([]int64, MaxTitleBatch+1)); err == nil {
+		t.Error("an oversized batch must be refused")
 	}
 }

@@ -398,24 +398,37 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 		}
 	}
 	progress()
-	for _, r := range todo {
-		if err := matchWish(ctx, d, src, r); err != nil {
-			return stop(err)
+	nameWishGames(ctx, d, opt.Wishlist, active)
+	// Matching, in bulk when the source can. A rate limit here only ends the matching: what is matched is still priced
+	// below, and the games not looked up yet wait for the next run.
+	var cut error
+	if bulk, ok := src.(BulkSource); ok {
+		cut = matchWishBulk(ctx, d, bulk, todo, func(n int) { done += n; progress() })
+	} else {
+		for _, r := range todo {
+			if cut = matchWish(ctx, d, src, r); cut != nil {
+				break
+			}
+			done++
+			progress()
 		}
-		done++
-		progress()
 	}
+	// Whatever ended the matching (a rate limit, a timeout, an error of the lookup), what is matched is still priced below
+	// and the problem is reported at the end.
 	// What was matched may now be a library game (same ITAD id): look again before reading prices.
 	before := len(active)
 	if active, err = activeWish(d); err != nil {
 		return rep, err
 	}
 	total -= before - len(active) // games that turned out to be in the library are not priced here
+	rep.WishGames = len(active)
 	byID := map[string][]int64{}
 	var ids []string
 	for _, r := range active {
 		if r.itadID == "" {
-			rep.WishUnmatched++
+			if r.matched != "" {
+				rep.WishUnmatched++
+			}
 			done++
 			continue
 		}
@@ -448,7 +461,79 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 		}
 		progress()
 	}
+	if cut != nil {
+		if isStop(cut) {
+			return stop(cut)
+		}
+		rep.Stopped = "matching the wishlist failed: " + cut.Error() // the lookup's errors are fixed texts, never the key
+	}
 	return rep, nil
+}
+
+// isStop: an error that ends a run with what it has saved (a rate limit, a timeout or a cancel), not a failure.
+func isStop(err error) bool {
+	var rl *RateLimitError
+	return errors.As(err, &rl) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
+
+// nameWishGames gives the games that still carry the placeholder title the name Steam has for them, one request per
+// MaxTitleBatch games. A source that cannot name games, or an error, leaves the placeholder; a game Steam cannot name
+// (delisted, region-locked) keeps "Steam app <id>" and is asked about again at the next run (one cheap Steam request).
+func nameWishGames(ctx context.Context, d *sql.DB, wl WishlistSource, active []wishRow) {
+	ts, ok := wl.(TitleSource)
+	if !ok {
+		return
+	}
+	var need []int64
+	for _, r := range active {
+		if !r.titled {
+			need = append(need, r.appid)
+		}
+	}
+	for len(need) > 0 {
+		n := min(len(need), MaxTitleBatch)
+		names, err := ts.Titles(ctx, need[:n])
+		need = need[n:]
+		if err != nil {
+			return
+		}
+		for id, name := range names {
+			if _, err := d.Exec(`UPDATE wish_item SET title = ? WHERE appid = ? AND title = ?`, name, id, placeholderTitle(id)); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// matchWishBulk looks up the ITAD ids of the games in todo with the bulk endpoint, MaxLookupBatch per request. It stops at the
+// first error and returns it; what earlier chunks found is saved. counted is told how many games each chunk settled.
+func matchWishBulk(ctx context.Context, d *sql.DB, bulk BulkSource, todo []wishRow, counted func(int)) error {
+	for len(todo) > 0 {
+		n := min(len(todo), MaxLookupBatch)
+		chunk := todo[:n]
+		todo = todo[n:]
+		ids := make([]int64, len(chunk))
+		for i, r := range chunk {
+			ids[i] = r.appid
+		}
+		found, err := bulk.LookupAppIDs(ctx, ids)
+		if err != nil {
+			return err
+		}
+		for _, r := range chunk {
+			if itad, ok := found[r.appid]; ok {
+				// The title (from Steam) stays; a game Steam could not name keeps the placeholder.
+				_, err = d.Exec(`UPDATE wish_item SET itad_id = ?, matched_at = ? WHERE appid = ?`, itad, now(), r.appid)
+			} else {
+				_, err = d.Exec(`UPDATE wish_item SET itad_id = NULL, matched_at = ? WHERE appid = ?`, now(), r.appid)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		counted(len(chunk))
+	}
+	return nil
 }
 
 // saveWishPrice is savePrice for a wishlist game: it does nothing (and says false) unless the game is still on the
@@ -529,7 +614,7 @@ func pendingWishAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 
 // fillWishTwoYearLows is fillTwoYearLows for the wishlist: the price history is read only for a game on sale above its
 // historical low whose two-year low was not read within a week.
-func fillWishTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time) error {
+func fillWishTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time, budget *int) error {
 	active, err := activeWish(d)
 	if err != nil {
 		return err
@@ -550,6 +635,10 @@ func fillWishTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now t
 	}
 	country := Country(d)
 	for _, r := range todo {
+		if *budget <= 0 {
+			return nil
+		}
+		*budget--
 		low, ok, err := hs.LowSince(ctx, r.itadID, country, now.Add(-HistoryWindow))
 		if err != nil {
 			var rl *RateLimitError
@@ -578,6 +667,9 @@ func (r Report) wishString() string {
 		return " " + r.WishNote
 	case r.WishGames > 0:
 		s := fmt.Sprintf(" Wishlist: %d %s priced", r.WishPriced, plural(r.WishPriced, "game", "games"))
+		if rest := r.WishGames - r.WishPriced - r.WishUnmatched; rest > 0 { // a rate limit cut the run short
+			s = fmt.Sprintf(" Wishlist: %d of %d priced; the rest next run", r.WishPriced, r.WishGames-r.WishUnmatched)
+		}
 		if r.WishUnmatched > 0 {
 			s += fmt.Sprintf(", %d without a match", r.WishUnmatched)
 		}

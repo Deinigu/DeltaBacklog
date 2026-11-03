@@ -89,3 +89,77 @@ func TestLiveHistory(t *testing.T) {
 		t.Errorf("the two-year low %s is below the all-time low %s", low, ov[g.ID].Low.Price)
 	}
 }
+
+// TestLiveWishlist reads the real Steam wishlist of STEAM_ID, names its games and matches them with ITAD in bulk (one
+// request per 200 games, not one per game), then reads the prices of the matched ones. It prints counts only, never the
+// SteamID or the key. Run: set -a; . ./.env; set +a; export STEAM_ID=...; DELTABACKLOG_LIVE=1 go test ./internal/deals -run TestLiveWishlist -v
+func TestLiveWishlist(t *testing.T) {
+	if os.Getenv("DELTABACKLOG_LIVE") == "" {
+		t.Skip("set DELTABACKLOG_LIVE=1 to call the real services")
+	}
+	c := New(os.Getenv("ITAD_API_KEY"))
+	steam, err := NewSteam(os.Getenv("STEAM_ID"))
+	if err != nil || steam == nil || !c.Configured() {
+		t.Skip("ITAD_API_KEY or a valid STEAM_ID is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	entries, err := steam.Wishlist(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, e := range entries {
+		ids = append(ids, e.AppID)
+	}
+	names := map[int64]string{}
+	requests := 0
+	for rest := ids; len(rest) > 0; {
+		n := min(len(rest), MaxTitleBatch)
+		got, err := steam.Titles(ctx, rest[:n])
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range got {
+			names[k] = v
+		}
+		rest, requests = rest[n:], requests+1
+	}
+	t.Logf("wishlist: %d games, %d named in %d Steam requests", len(ids), len(names), requests)
+	matched := map[int64]string{}
+	requests = 0
+	for rest := ids; len(rest) > 0; {
+		n := min(len(rest), MaxLookupBatch)
+		got, err := c.LookupAppIDs(ctx, rest[:n])
+		if err != nil {
+			t.Fatalf("bulk lookup: %v (a rate limit? wait a few minutes and run again)", err)
+		}
+		for k, v := range got {
+			matched[k] = v
+		}
+		rest, requests = rest[n:], requests+1
+	}
+	t.Logf("matched %d of %d with ITAD in %d requests", len(matched), len(ids), requests)
+	var itad []string
+	for _, v := range matched {
+		itad = append(itad, v)
+	}
+	priced, requests := 0, 0
+	for rest := itad; len(rest) > 0; {
+		n := min(len(rest), MaxBatch)
+		res, err := c.Overview(ctx, rest[:n], "ES")
+		if err != nil {
+			t.Fatalf("overview: %v", err)
+		}
+		for _, o := range res {
+			if o.Current != nil {
+				priced++
+			}
+		}
+		rest, requests = rest[n:], requests+1
+	}
+	t.Logf("%d with a price now, read in %d requests", priced, requests)
+	if len(matched) == 0 {
+		t.Error("nothing matched")
+	}
+}
