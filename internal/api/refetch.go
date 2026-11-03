@@ -66,9 +66,37 @@ func (s *Server) igdbDetails(w http.ResponseWriter, r *http.Request) {
 // attentionIgnoredKey is the setting that holds the games the owner told the Needs attention page to ignore.
 const attentionIgnoredKey = "attention_ignored"
 
-// attentionIgnored answers {"ignored": {"<group>": [game ids]}}: the games hidden from each group of the page.
+// attentionGroups are the groups of the Needs attention page (web/static/js/attention.js GROUPS): the only keys accepted.
+var attentionGroups = map[string]bool{"unlinked": true, "uncertain": true, "no_cover": true, "poster": true, "no_ttb": true,
+	"no_platform": true, "no_year": true, "no_ownership": true, "no_genres": true}
+
+// attentionIgnored answers {"ignored": {"<group>": [game ids]}}: the games hidden from each group of the page. Ids of
+// games that no longer exist are left out.
 func (s *Server) attentionIgnored(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"ignored": s.loadIgnored()})
+	out := s.loadIgnored()
+	exists := map[int64]bool{}
+	if rows, err := s.DB.Query("SELECT id FROM game"); err == nil {
+		for rows.Next() {
+			var id int64
+			rows.Scan(&id)
+			exists[id] = true
+		}
+		rows.Close()
+	}
+	for g, ids := range out {
+		keep := ids[:0:0]
+		for _, id := range ids {
+			if exists[id] {
+				keep = append(keep, id)
+			}
+		}
+		if len(keep) == 0 {
+			delete(out, g)
+		} else {
+			out[g] = keep
+		}
+	}
+	writeJSON(w, map[string]any{"ignored": out})
 }
 
 func (s *Server) loadIgnored() map[string][]int64 {
@@ -88,7 +116,7 @@ func (s *Server) attentionIgnore(w http.ResponseWriter, r *http.Request) {
 		Ignore bool   `json:"ignore"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.GameID <= 0 || in.Group == "" || len(in.Group) > 40 {
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.GameID <= 0 || !attentionGroups[in.Group] {
 		writeErr(w, http.StatusBadRequest, "invalid body", nil)
 		return
 	}

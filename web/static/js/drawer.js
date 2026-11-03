@@ -256,6 +256,6 @@ export function openDrawer(game, opts = {}) {
   open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb };
   if (opts.relink) relinkPrompt(game, opts.relink.name, relinkMount);
   if (opts.edit) startEdit(opts.edit);
-  else if (opts.ttb) readView.querySelector('.ttb-actions .btn:last-child')?.click();
+  else if (opts.ttb) readView.querySelector('.ttb-actions [data-act="hltb"]')?.click();
   else drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
 }

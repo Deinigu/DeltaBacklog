@@ -147,7 +147,7 @@ func TestBulkHLTBCancel(t *testing.T) {
 	postJSON(t, srv.URL+"/api/ttb/sync/cancel", map[string]any{})
 	st := waitIdle(t, s)
 	s.bg.Wait()
-	if !st.Failed || !strings.HasPrefix(st.Report, "Stopped.") || st.Done >= st.Total {
+	if st.Failed || !strings.HasPrefix(st.Report, "Stopped.") || st.Done >= st.Total {
 		t.Errorf("cancelled run = %+v", st)
 	}
 }

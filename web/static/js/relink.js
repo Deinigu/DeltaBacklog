@@ -23,5 +23,15 @@ export function errorText(e) {
   }
 }
 
+const UNDO_LABELS = { genres: 'genres', themes: 'themes', developer: 'developer', series: 'series', release_year: 'year', platforms: 'platforms' };
+
+/** The toast after Undo: only what is really put back ("Put back: genres, developer and year"). */
+export function undoText(undo) {
+  const names = Object.keys(undo || {}).map((k) => UNDO_LABELS[k]).filter(Boolean);
+  if (!names.length) return 'Nothing to put back';
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  return `Put back: ${list}. Game modes and times from IGDB stay`;
+}
+
 /** A patch that undoes an applied update is worth offering only when something it restores changed. */
 export const hasUndo = (undo) => !!undo && Object.keys(undo).length > 0;

@@ -2,7 +2,7 @@
 // attention.js (pure); this file builds the DOM and opens the right screen. Nothing here reads the network on its own:
 // the list comes from the games already loaded, plus the IGDB review queue and the ignore list (both local API calls).
 import { h, toast, toastAction } from './util.js';
-import { store, linkQueue, linkAccept, attentionIgnored, attentionIgnore, ttbSyncStatus, ttbSyncStart, ttbSyncCancel, refreshGames } from './api.js';
+import { store, linkQueue, linkAccept, linkNone, loadLinkPending, attentionIgnored, attentionIgnore, ttbSyncStatus, ttbSyncStart, ttbSyncCancel, refreshGames } from './api.js';
 import { pickCandidate, openCoverPicker, openPosterPicker } from './add.js';
 import { openDrawer } from './drawer.js';
 import { relinkPrompt } from './relinkprompt.js';
@@ -83,10 +83,23 @@ export function renderAttention(root) {
       try {
         await linkAccept(game.id, cand.igdb_id);
         queue = queue.filter((q) => q.game_id !== game.id);
+        loadLinkPending(); // the navigation's "Link IGDB" count
         toast(`Linked “${game.title}”`);
         relinkPrompt(game, cand.name);
       } catch (e) {
         toast(e.status === 409 ? e.message : 'Could not link the game. Check the connection and try again');
+      }
+      draw();
+    },
+    async notOnIGDB(game) {
+      try {
+        await linkNone(game.id);
+        game.igdb_not_found = true;
+        queue = queue.filter((q) => q.game_id !== game.id);
+        loadLinkPending();
+        toast(`“${game.title}” marked as not on IGDB`);
+      } catch (e) {
+        toast(e.status === 409 ? 'That game is linked to IGDB already' : 'Could not save that. Try again');
       }
       draw();
     },
@@ -116,10 +129,12 @@ export function renderAttention(root) {
       : h('button.btn.primary', { type: 'button', onclick: () => fix.run(g, row, ctx) }, label);
     const extra = !row.ignored && group.fix === 'confirm' && row.candidate
       ? h('button.btn', { type: 'button', onclick: () => ctx.linkByHand(g) }, 'Change…') : null;
+    const absent = !row.ignored && (group.fix === 'link' || group.fix === 'confirm')
+      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, 'Not on IGDB') : null;
     const skip = row.ignored ? null : h('button.btn.att-ignore', { type: 'button', 'aria-label': `Ignore “${g.title}” in this list`, onclick: () => setIgnored(group.key, g, true) }, 'Ignore');
     return h('li.att-row' + (row.ignored ? '.is-ignored' : ''), {},
       h('button.att-name', { type: 'button', onclick: () => openDrawer(g) }, h('span.att-title', {}, g.title), sub && h('span.att-sub', {}, sub)),
-      h('div.att-actions', {}, main, extra, skip));
+      h('div.att-actions', {}, main, extra, absent, skip));
   }
 
   function groupEl(group, i) {

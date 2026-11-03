@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -114,18 +115,74 @@ func TestAttentionIgnoreRoundTrip(t *testing.T) {
 	if got := get(); len(got) != 0 {
 		t.Fatalf("starts empty: %v", got)
 	}
-	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_poster", "game_id": 3, "ignore": true})
-	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_poster", "game_id": 3, "ignore": true})
-	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_year", "game_id": 4, "ignore": true})
+	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "poster", "game_id": 1, "ignore": true})
+	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "poster", "game_id": 1, "ignore": true})
+	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_year", "game_id": 2, "ignore": true})
+	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_year", "game_id": 999, "ignore": true}) // a game that does not exist
 	got := get()
-	if l := got["no_poster"].([]any); len(l) != 1 || l[0] != float64(3) || len(got["no_year"].([]any)) != 1 {
+	if l := got["poster"].([]any); len(l) != 1 || l[0] != float64(1) || len(got["no_year"].([]any)) != 1 {
 		t.Errorf("ignored = %v", got)
 	}
-	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_poster", "game_id": 3, "ignore": false})
-	if got := get(); got["no_poster"] != nil || got["no_year"] == nil {
+	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "poster", "game_id": 1, "ignore": false})
+	if got := get(); got["poster"] != nil || got["no_year"] == nil {
 		t.Errorf("after un-ignore = %v", got)
 	}
 	if res, _ := postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "", "game_id": 3}); res.StatusCode != 400 {
 		t.Errorf("empty group: %d", res.StatusCode)
+	}
+	if res, _ := postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "made_up", "game_id": 1, "ignore": true}); res.StatusCode != 400 {
+		t.Errorf("unknown group: %d", res.StatusCode)
+	}
+}
+
+// The undo the endpoint hands back is a PATCH body: applying it puts the owner's old values back.
+func TestIGDBDetailsUndoRoundTrip(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, _, err := importer.Import(d, strings.NewReader(csvData), importer.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	d.QueryRow("SELECT id FROM game WHERE title = 'Hades II'").Scan(&id)
+	d.Exec("UPDATE game SET igdb_id = 7, release_year = 1999 WHERE id = ?", id)
+	m := &detailsMeta{fakeMeta: fakeMeta{igdb: true}, details: map[int64]meta.Details{7: {IGDBID: 7, Year: 2024, Developer: "Supergiant Games", Genres: []string{"Roguelike"}}}}
+	srv := httptest.NewServer((&Server{DB: d, CoverDir: t.TempDir(), Meta: m}).Handler())
+	defer srv.Close()
+	game := func() map[string]any {
+		res, err := http.Get(srv.URL + "/api/games")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var all []map[string]any
+		json.NewDecoder(res.Body).Decode(&all)
+		for _, g := range all {
+			if g["id"] == float64(id) {
+				return g
+			}
+		}
+		return nil
+	}
+	before := game()
+	_, out := postJSON(t, srv.URL+"/api/games/"+itoa(id)+"/igdb-details", map[string]any{"mode": "replace", "apply": true})
+	if g := game(); g["release_year"] != float64(2024) || g["developer"] != "Supergiant Games" {
+		t.Fatalf("not applied: %v", g)
+	}
+	b, _ := json.Marshal(out["undo"])
+	req, _ := http.NewRequest("PATCH", srv.URL+"/api/games/"+itoa(id), strings.NewReader(string(b)))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil || res.StatusCode != 200 {
+		t.Fatalf("undo patch %s: %v %v", b, res, err)
+	}
+	res.Body.Close()
+	after := game()
+	for _, k := range []string{"release_year", "developer", "genres", "themes", "series", "platforms"} {
+		if b1, b2 := fmt.Sprint(before[k]), fmt.Sprint(after[k]); b1 != b2 {
+			t.Errorf("%s: %s before, %s after undo", k, b1, b2)
+		}
 	}
 }

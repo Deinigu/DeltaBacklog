@@ -136,3 +136,86 @@ func TestRefetchErrors(t *testing.T) {
 		t.Error("an IGDB failure must be an error")
 	}
 }
+
+func TestRefetchKeepsHowLongToBeatTimes(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	d.Exec("UPDATE game SET time_to_beat_hastily = 90, time_to_beat_normally = 120, time_to_beat_src = 'hltb' WHERE id = ?", id)
+	f := &fakeEnricher{details: map[int64]meta.Details{1: hades()}, ttb: map[int64]meta.TimeToBeat{1: {Normally: 72000, Completely: 150000}}}
+	for _, replace := range []bool{false, true} {
+		if _, err := Refetch(context.Background(), d, f, id, replace, true); err != nil {
+			t.Fatal(err)
+		}
+		var h, n, c *int
+		var src string
+		d.QueryRow("SELECT time_to_beat_hastily, time_to_beat_normally, time_to_beat_completely, time_to_beat_src FROM game WHERE id = ?", id).Scan(&h, &n, &c, &src)
+		if h == nil || *h != 90 || n == nil || *n != 120 || c != nil || src != "hltb" {
+			t.Errorf("replace=%v: HowLongToBeat times changed: %v %v %v %q", replace, h, n, c, src)
+		}
+	}
+}
+
+// The times of the old IGDB game must not survive next to the new game's: IGDB's three times are written as a set.
+func TestRefetchTimesComeFromOneGame(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	d.Exec("UPDATE game SET time_to_beat_hastily = 100, time_to_beat_normally = 200, time_to_beat_completely = 300, time_to_beat_src = 'igdb' WHERE id = ?", id)
+	f := &fakeEnricher{details: map[int64]meta.Details{1: hades()}, ttb: map[int64]meta.TimeToBeat{1: {Normally: 72000}}}
+	if _, err := Refetch(context.Background(), d, f, id, false, true); err != nil {
+		t.Fatal(err)
+	}
+	var h, n, c *int
+	d.QueryRow("SELECT time_to_beat_hastily, time_to_beat_normally, time_to_beat_completely FROM game WHERE id = ?", id).Scan(&h, &n, &c)
+	if h != nil || n == nil || *n != 1200 || c != nil {
+		t.Errorf("times = %v %v %v, want only the normal time of the new game", h, n, c)
+	}
+}
+
+func TestRefetchPreviewShowsTheReleaseDate(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	det := hades()
+	det.Release = meta.Release{Date: 1589241600, Format: 0} // 2020-05-12
+	f := &fakeEnricher{details: map[int64]meta.Details{1: det}}
+	res, err := Refetch(context.Background(), d, f, id, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	for _, c := range res.Changes {
+		if c.Field == "release_date" {
+			got = c.New
+		}
+	}
+	if got != "2020-05-12" {
+		t.Errorf("release date line = %q in %+v", got, res.Changes)
+	}
+}
+
+// Replace never writes what is the owner's: status, ownership, favourite, notes, years played, cover and poster.
+func TestRefetchLeavesTheOwnersFieldsAlone(t *testing.T) {
+	d := openDB(t)
+	id := addGame(t, d, "Hades")
+	link(t, d, id, 1)
+	oid, _ := db.GetOrCreate(d, "ownership", "Owned")
+	d.Exec("UPDATE game SET ownership_id = ?, favorite = 1, vr = 1, completed = 1, notes = 'n', cover_file = 'c.jpg', poster_file = 'p.jpg', poster_user = 1 WHERE id = ?", oid, id)
+	d.Exec("INSERT INTO play(game_id, year) VALUES (?, 2021)", id)
+	var before [9]string
+	read := func() (out [9]string) {
+		d.QueryRow(`SELECT (SELECT code FROM status WHERE id = status_id), coalesce(ownership_id, ''), favorite, vr, completed, notes, coalesce(cover_file, ''),
+			coalesce(poster_file, '') || poster_user, (SELECT group_concat(year) FROM play WHERE game_id = game.id) FROM game WHERE id = ?`, id).
+			Scan(&out[0], &out[1], &out[2], &out[3], &out[4], &out[5], &out[6], &out[7], &out[8])
+		return
+	}
+	before = read()
+	f := &fakeEnricher{details: map[int64]meta.Details{1: hades()}}
+	if _, err := Refetch(context.Background(), d, f, id, true, true); err != nil {
+		t.Fatal(err)
+	}
+	if after := read(); after != before {
+		t.Errorf("owner's fields changed: %v -> %v", before, after)
+	}
+}

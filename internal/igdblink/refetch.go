@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 )
@@ -41,7 +42,7 @@ type detailsSnapshot struct {
 	year                                           sql.NullInt64
 	ttb                                            [3]sql.NullInt64
 	ttbSrc                                         sql.NullString
-	release                                        sql.NullInt64
+	release, releaseFmt                            sql.NullInt64
 }
 
 func namesOf(tx *sql.Tx, query string, id int64) ([]string, error) {
@@ -78,9 +79,9 @@ func snapshot(tx *sql.Tx, id int64) (s detailsSnapshot, err error) {
 	}
 	var dev, ser sql.NullString
 	err = tx.QueryRow(`SELECT c.name, se.name, g.release_year, g.time_to_beat_hastily, g.time_to_beat_normally, g.time_to_beat_completely,
-			g.time_to_beat_src, g.first_release_date
+			g.time_to_beat_src, g.first_release_date, g.release_date_format
 		FROM game g LEFT JOIN company c ON c.id = g.developer_id LEFT JOIN series se ON se.id = g.series_id WHERE g.id = ?`, id).
-		Scan(&dev, &ser, &s.year, &s.ttb[0], &s.ttb[1], &s.ttb[2], &s.ttbSrc, &s.release)
+		Scan(&dev, &ser, &s.year, &s.ttb[0], &s.ttb[1], &s.ttb[2], &s.ttbSrc, &s.release, &s.releaseFmt)
 	s.developer, s.series = dev.String, ser.String
 	return s, err
 }
@@ -105,6 +106,23 @@ func intText(v sql.NullInt64) string {
 	return fmt.Sprint(v.Int64)
 }
 
+// releaseText writes IGDB's first release date as precisely as IGDB knows it (format: 0 day, 1 month, 2 year, 3-6 a quarter).
+func releaseText(unix, format sql.NullInt64) string {
+	if !unix.Valid {
+		return ""
+	}
+	t := time.Unix(unix.Int64, 0).UTC()
+	switch f := format.Int64; {
+	case f == 1:
+		return t.Format("2006-01")
+	case f == 2:
+		return t.Format("2006")
+	case f >= 3 && f <= 6:
+		return fmt.Sprintf("%d Q%d", t.Year(), f-2)
+	}
+	return t.Format("2006-01-02")
+}
+
 func listText(l []string) string { return strings.Join(l, ", ") }
 
 // diffSnapshots lists the fields that differ.
@@ -120,6 +138,7 @@ func diffSnapshots(a, b detailsSnapshot) (changes []FieldChange, undo map[string
 	add("developer", "Developer", a.developer, b.developer)
 	add("series", "Series", a.series, b.series)
 	add("release_year", "Released", intText(a.year), intText(b.year))
+	add("release_date", "Release date", releaseText(a.release, a.releaseFmt), releaseText(b.release, b.releaseFmt))
 	add("platforms", "Platforms", listText(a.platforms), listText(b.platforms))
 	add("modes", "Game modes", listText(a.modes), listText(b.modes))
 	add("perspectives", "Perspective", listText(a.perspectives), listText(b.perspectives))
@@ -234,6 +253,14 @@ func Refetch(ctx context.Context, d *sql.DB, e Enricher, gameID int64, replace, 
 	}
 	if err := enrichGame(tx, gameID, *det, true, false, ttb, &EnrichReport{}); err != nil {
 		return nil, err
+	}
+	// IGDB's own times (or none yet) follow the new game as a set: enrichGame keeps an old value that the new game
+	// lacks (coalesce), which would leave times from two different games. Hand-set and HowLongToBeat times stay.
+	if h, n, c := timesToBeat(ttb); h != nil || n != nil || c != nil {
+		if _, err := tx.Exec(`UPDATE game SET time_to_beat_hastily = ?, time_to_beat_normally = ?, time_to_beat_completely = ?, time_to_beat_src = 'igdb'
+			WHERE id = ? AND (time_to_beat_src IS NULL OR time_to_beat_src = 'igdb')`, h, n, c, gameID); err != nil {
+			return nil, err
+		}
 	}
 	after, err := snapshot(tx, gameID)
 	if err != nil {

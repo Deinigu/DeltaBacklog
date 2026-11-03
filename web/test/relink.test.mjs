@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { changeText, appliedText, errorText, hasUndo } from '../static/js/relink.js';
+import { changeText, appliedText, errorText, hasUndo, undoText } from '../static/js/relink.js';
 
 test('a change reads as field: old → new', () => {
   assert.equal(changeText({ label: 'Genres', old: 'Action', new: 'Indie, Roguelike' }), 'Genres: Action → Indie, Roguelike');
@@ -24,4 +24,10 @@ test('undo is offered only with something to restore', () => {
   assert.equal(hasUndo({}), false);
   assert.equal(hasUndo(null), false);
   assert.equal(hasUndo({ developer: '' }), true);
+});
+
+test('the undo toast names what came back', () => {
+  assert.match(undoText({ genres: [], developer: '', release_year: 1999 }), /^Put back: genres, developer and year/);
+  assert.match(undoText({ series: 'x' }), /^Put back: series\./);
+  assert.equal(undoText({}), 'Nothing to put back');
 });

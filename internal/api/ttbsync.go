@@ -113,7 +113,8 @@ func (s *Server) runTTBSync(ctx context.Context, todo []ttbGame) {
 	j := &s.ttbJob
 	client := s.hltbClient()
 	failedSearches, consecutive := 0, 0
-	stopped := ""
+	stopped := ""  // the owner pressed Stop
+	siteDown := "" // why the run gave up on the site
 loop:
 	for i, g := range todo {
 		if ctx.Err() != nil {
@@ -137,7 +138,7 @@ loop:
 				failedSearches++
 				consecutive++
 				if consecutive >= 3 || errors.Is(err, hltb.ErrChanged) {
-					stopped = err.Error() + ". Stopped."
+					siteDown = err.Error() + ". Stopped."
 					break loop
 				}
 			default:
@@ -146,6 +147,9 @@ loop:
 					saved, err := s.saveHLTBTimes(g.id, c)
 					if err != nil {
 						log.Printf("time to beat of game %d: %v", g.id, err)
+					}
+					if saved {
+						s.cache.invalidate() // other clients see the new time at once, not at the end of the run
 					}
 					j.mu.Lock()
 					if saved {
@@ -163,6 +167,8 @@ loop:
 		j.done = i + 1
 		j.mu.Unlock()
 	}
+	// Drop the cached games before the run reads as finished: the page reloads them the moment it sees that.
+	s.cache.invalidate()
 	j.mu.Lock()
 	j.running = false
 	j.cancel = nil
@@ -171,12 +177,13 @@ loop:
 	if failedSearches > 0 {
 		j.report += fmt.Sprintf(" %s could not be searched.", gamesText(failedSearches))
 	}
-	if stopped != "" {
-		j.failed = true
+	if siteDown != "" {
+		j.failed = true // only a site failure is an error; Stop is the owner's choice
+		j.report = siteDown + " " + j.report
+	} else if stopped != "" {
 		j.report = stopped + " " + j.report
 	}
 	j.mu.Unlock()
-	s.cache.invalidate()
 }
 
 func gamesText(n int) string {
