@@ -52,3 +52,11 @@ test('the muted line', () => {
   assert.equal(lowLine({ low_price: 749, currency: 'EUR', low_shop: 'GOG' }), 'Lowest €7.49 · GOG');
   assert.equal(lowLine({ low_price: null }), 'No price history');
 });
+
+import { checkedLabel } from '../static/js/deals.js';
+test('checked label: the time today, the day and time before', () => {
+  const now = new Date(2026, 10, 3, 18, 0);
+  assert.equal(checkedLabel(new Date(2026, 10, 3, 16, 56).toISOString(), now), '16:56');
+  assert.equal(checkedLabel(new Date(2026, 9, 27, 9, 5).toISOString(), now), '27 Oct 09:05');
+  assert.equal(checkedLabel('garbage', now), '');
+});

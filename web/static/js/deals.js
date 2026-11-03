@@ -45,6 +45,14 @@ export function formatMoney(cents, currency, locale = LOCALE) {
   }
 }
 
+/** "16:56" for a time today, "27 Oct" for an earlier day; '' when invalid. Used next to the refresh button ("checked 16:56"). */
+export function checkedLabel(iso, now = new Date(), locale = LOCALE) {
+  const t = iso ? new Date(iso) : null;
+  if (!t || Number.isNaN(t.getTime())) return '';
+  if (t.toDateString() === now.toDateString()) return t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  return t.toLocaleDateString(locale, { day: 'numeric', month: 'short' }) + ' ' + t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
 /** "27 Nov 2025" for an ITAD timestamp; '' when absent or invalid. */
 export function formatDate(iso, locale = LOCALE) {
   const t = iso ? new Date(iso) : null;

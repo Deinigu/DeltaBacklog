@@ -104,7 +104,7 @@ if (!process.env.BASE_URL) {
 process.on('exit', () => { if (server) server.kill(); if (tmp) { try { rmSync(tmp, { recursive: true, force: true }); } catch {} } });
 
 if (process.env.BASE_URL) lookups = true; // your own server: assume it has keys
-const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+const browser = await puppeteer.launch({ args: ['--no-sandbox'], executablePath: process.env.CHROME_PATH || undefined });
 const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
 
 async function page(width, height, mobile) {
@@ -169,7 +169,7 @@ await shot(p, 'similar-phone');
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
 if (!process.env.BASE_URL) { // the Wishlist section (the demo server has a made-up STEAM_ID)
-  await clickText(p, 'button.chip', 'Wishlist'); await wait(600);
+  await clickText(p, '.dl-seg button', 'Wishlist'); await wait(600);
   await shot(p, 'deals-wishlist-phone');
 }
 
@@ -302,6 +302,9 @@ await go(p, '#/library?sort=status:asc,last_year:desc,title:asc');
 await shot(p, 'library-desktop');
 await go(p, '#/library?layout=table&sort=title:asc');
 await shot(p, 'table-desktop');
+await go(p, '#/deals'); await wait(1200);
+if (!process.env.BASE_URL) { await clickText(p, '.dl-seg button', 'Wishlist'); await wait(600); }
+await shot(p, 'deals-desktop');
 await go(p, '#/screenshots');
 await shot(p, 'gallery-desktop');
 await go(p, '#/stats');
