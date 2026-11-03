@@ -96,6 +96,11 @@ func savePosterLimit(r io.Reader, dir, name string, limit int64) (string, error)
 	if err != nil {
 		return "", err
 	}
+	return savePosterRaw(raw, dir, name, limit, 1)
+}
+
+// savePosterRaw is savePosterLimit for an image already in memory with EXIF orientation o (see saveCoverRaw).
+func savePosterRaw(raw []byte, dir, name string, limit int64, o int) (string, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
 		return "", fmt.Errorf("%w: %w: decode: %v", ErrBadImage, ErrCorrupt, err)
@@ -104,9 +109,17 @@ func savePosterLimit(r io.Reader, dir, name string, limit int64) (string, error)
 		return "", fmt.Errorf("%w: %w (%dx%d)", ErrBadImage, ErrTooManyPixels, cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
-	raw = nil
 	if err != nil {
 		return "", fmt.Errorf("%w: %w: decode: %v", ErrBadImage, ErrCorrupt, err)
+	}
+	if o >= 2 { // keep about twice the poster width in the 2:3 part that will be cropped
+		img = prescaleOrient(img, o, func(ow, oh int) float64 {
+			cw := min(ow, oh*2/3)
+			if cw < 1 {
+				return 1
+			}
+			return min(1, float64(2*PosterWidth)/float64(cw))
+		})
 	}
 	src := posterCrop(img.Bounds())
 	if src.Dx() < 16 || src.Dy() < 16 {

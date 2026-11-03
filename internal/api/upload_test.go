@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Deinigu/DeltaBacklog/internal/covers"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
@@ -322,5 +323,134 @@ func TestRelinkStaleWriteGuard(t *testing.T) {
 	// started for a link that is already gone: no lookup at all
 	if _, err := m.Relink(context.Background(), id, 10); err != posters.ErrStale {
 		t.Errorf("Relink for an old link = %v", err)
+	}
+}
+
+// exifJPEG makes a w x h JPEG (left half red, right half blue) that says it must be turned by orientation o.
+func exifJPEG(w, h, o int) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if x < w/2 {
+				img.Set(x, y, color.RGBA{255, 0, 0, 255})
+			} else {
+				img.Set(x, y, color.RGBA{0, 0, 255, 255})
+			}
+		}
+	}
+	var b bytes.Buffer
+	jpeg.Encode(&b, img, &jpeg.Options{Quality: 95})
+	raw := b.Bytes()
+	tiff := []byte{'M', 'M', 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, byte(o), 0, 0, 0, 0, 0, 0}
+	seg := append([]byte("Exif\x00\x00"), tiff...)
+	app1 := append([]byte{0xFF, 0xE1, byte((len(seg) + 2) >> 8), byte((len(seg) + 2) & 0xFF)}, seg...)
+	return append(append(append([]byte{}, raw[:2]...), app1...), raw[2:]...)
+}
+
+func storedSize(t *testing.T, path string) (w, h int, img image.Image) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	img, err = jpeg.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return img.Bounds().Dx(), img.Bounds().Dy(), img
+}
+
+func redish(c color.Color) bool { r, _, b, _ := c.RGBA(); return r > b }
+
+// A photo that says "turn me 90 degrees" is stored upright, as cover and as poster.
+func TestUploadAppliesExifOrientation(t *testing.T) {
+	e := newAddEnv(t)
+	url, id := newPosterGame(t, e)
+	src := exifJPEG(200, 100, 6) // landscape pixels, shown portrait: the left (red) side is the top
+
+	if res, b := upload(t, url+"/cover/upload", "file", "p.jpg", src); res.StatusCode != 200 {
+		t.Fatalf("cover = %d %s", res.StatusCode, b)
+	}
+	w, h, img := storedSize(t, filepath.Join(e.coverDir, strconv.FormatInt(id, 10)+".jpg"))
+	if w != 100 || h != 200 {
+		t.Fatalf("cover is %dx%d, want 100x200 (turned upright)", w, h)
+	}
+	if !redish(img.At(50, 20)) || redish(img.At(50, 180)) {
+		t.Error("the cover is not red on top and blue below")
+	}
+
+	if res, b := upload(t, url+"/poster/upload", "file", "p.jpg", exifJPEG(600, 400, 8)); res.StatusCode != 200 {
+		t.Fatalf("poster = %d %s", res.StatusCode, b)
+	}
+	w, h, img = storedSize(t, filepath.Join(e.coverDir, covers.PosterName(id)))
+	if w != 300 || h != 450 { // the whole upright picture (400 wide, 600 tall) is 2:3
+		t.Errorf("poster is %dx%d", w, h)
+	}
+	if redish(img.At(w/2, 20)) || !redish(img.At(w/2, h-20)) { // orientation 8: the left (red) side is the bottom
+		t.Error("the poster is not blue on top and red below")
+	}
+}
+
+// An image that is within the pixel limit but needs more memory to decode than the budget is refused (like a screenshot).
+func TestUploadDecodeBudget(t *testing.T) {
+	e := newAddEnv(t)
+	url, id := newPosterGame(t, e)
+	e.server.ShotDecodeBudget = 1 << 20
+	for _, kind := range []string{"/cover/upload", "/poster/upload"} {
+		res, body := upload(t, url+kind, "file", "a.png", upPNG(1200, 1000)) // ~4.8 MB to decode
+		if res.StatusCode != 413 || !strings.Contains(string(body), "too large to process") {
+			t.Errorf("%s over budget = %d %s", kind, res.StatusCode, body)
+		}
+	}
+	if file, _, _, _ := posterRow(t, e, id); file != "" {
+		t.Errorf("a refused upload made a poster: %q", file)
+	}
+	if res, b := upload(t, url+"/cover/upload", "file", "a.png", upPNG(100, 100)); res.StatusCode != 200 {
+		t.Errorf("a small image within budget = %d %s", res.StatusCode, b)
+	}
+}
+
+// IGDB failing for now must not leave the previous link's poster for good: the poster worker tries again.
+func TestRelinkTemporaryFailureIsRetried(t *testing.T) {
+	e := newAddEnv(t)
+	url, id := newPosterGame(t, e)
+	e.meta.igdbCover = e.images.URL + "/portrait.png"
+	do(t, "POST", url+"/poster", `{"url":"`+e.images.URL+`/portrait.png"}`)
+	do(t, "POST", url+"/poster", `{"auto":true}`) // an automatic poster, as after a first link
+	e.meta.failFirst = 1
+	patchIGDB(t, e, url, 901)
+	for i := 0; i < 300; i++ {
+		if _, src, _, _ := posterRow(t, e, id); src == "igdb" {
+			if e.meta.failFirst != 0 {
+				t.Fatal("the failure was never hit")
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("the poster worker never made the new poster")
+}
+
+// An automatic poster made for an old link must not overwrite the poster of a newer one, whichever maker it is.
+func TestMakeStaleWriteGuard(t *testing.T) {
+	e := newAddEnv(t)
+	_, id := newPosterGame(t, e)
+	e.db.Exec(`UPDATE game SET igdb_id = 10 WHERE id = ?`, id)
+	e.meta.igdbCover = e.images.URL + "/portrait.png"
+	m := &posters.Maker{DB: e.db, Dir: e.coverDir, Src: e.meta, Allowed: func(string) bool { return true },
+		Fetch: func(u, dir string, gameID int64) (string, error) {
+			e.db.Exec(`UPDATE game SET igdb_id = 11 WHERE id = ?`, gameID)
+			return covers.SavePoster(bytes.NewReader(upPNG(600, 900)), dir, gameID)
+		}}
+	if _, err := m.Make(context.Background(), id); err != posters.ErrStale {
+		t.Errorf("Make = %v, want ErrStale", err)
+	}
+	e.db.Exec(`UPDATE game SET igdb_id = 10 WHERE id = ?`, id)
+	if _, err := m.Remake(context.Background(), id); err != posters.ErrStale {
+		t.Errorf("Remake = %v, want ErrStale", err)
+	}
+	if file, _, _, _ := posterRow(t, e, id); file != "" {
+		t.Errorf("a stale result wrote %q", file)
 	}
 }

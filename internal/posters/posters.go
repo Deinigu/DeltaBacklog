@@ -173,24 +173,24 @@ func (m *Maker) makeFor(ctx context.Context, id int64, force bool, needIGDB int6
 	if force {
 		mode = commitIfUnchanged
 	}
-	return src, m.commit(id, scratch, name, src, false, mode, g.posterAt, needIGDB)
+	return src, m.commit(id, scratch, name, src, false, mode, g.posterAt, g.igdbID)
 }
 
 // ChooseUpload makes the poster of a game from an image the user sent (the raw bytes, checked and cropped like every
 // poster) and marks it as theirs. The old poster stays when the image is refused.
-func (m *Maker) ChooseUpload(id int64, raw []byte) error {
+func (m *Maker) ChooseUpload(id int64, raw []byte, budget int64) error {
 	scratch, err := m.scratch()
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(scratch)
-	name, err := covers.SavePosterUpload(raw, scratch, id)
+	name, err := covers.SavePosterUpload(raw, scratch, id, budget)
 	if err != nil {
 		return err
 	}
 	// poster_src has no value for "from the user's device"; like a link to another host it is recorded as 'sgdb'.
 	// Only poster_user decides whether the automatic makers may replace it.
-	return m.commit(id, scratch, name, "sgdb", true, commitAlways, "", 0)
+	return m.commit(id, scratch, name, "sgdb", true, commitAlways, "", sql.NullInt64{})
 }
 
 // Choose makes the poster of a game from an image the user picked (url, checked against the allow-list and fetched
@@ -212,7 +212,7 @@ func (m *Maker) Choose(id int64, url string) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, sourceOf(url), true, commitAlways, "", 0)
+	return m.commit(id, scratch, name, sourceOf(url), true, commitAlways, "", sql.NullInt64{})
 }
 
 // ChooseCrop makes the poster a centre crop of the game's wide cover (no network) and marks it as the user's.
@@ -233,7 +233,7 @@ func (m *Maker) ChooseCrop(id int64) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, "crop", true, commitAlways, "", 0)
+	return m.commit(id, scratch, name, "crop", true, commitAlways, "", sql.NullInt64{})
 }
 
 // ErrNotAllowed means the URL is not on the host allow-list.
@@ -269,7 +269,7 @@ const (
 // poster_updated_at the maker read first (commitIfUnchanged).
 // The file only moves after the UPDATE took, so a refused result never overwrites the user's image. mu orders the
 // UPDATE and the rename inside this process.
-func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int, seen string, needIGDB int64) error {
+func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int, seen string, igdb sql.NullInt64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	flag := 0
@@ -286,9 +286,9 @@ func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int,
 		args = append(args, seen)
 	}
 	where := `id = ? AND (` + guard + `)`
-	if needIGDB > 0 {
-		where += ` AND igdb_id = ?`
-		args = append(args, needIGDB)
+	if mode != commitAlways { // an automatic result belongs to the link it was made for: dropped if the link changed meanwhile
+		where += ` AND igdb_id IS ?`
+		args = append(args, igdb)
 	}
 	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_user = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
 		WHERE `+where, args...)
@@ -298,8 +298,9 @@ func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int,
 	if n, _ := res.RowsAffected(); n == 0 {
 		var one int
 		if m.DB.QueryRow(`SELECT 1 FROM game WHERE id = ?`, id).Scan(&one) == nil {
-			if needIGDB > 0 {
-				return ErrStale // or the user chose a poster meanwhile; either way this result is not wanted
+			var cur sql.NullInt64
+			if m.DB.QueryRow(`SELECT igdb_id FROM game WHERE id = ?`, id).Scan(&cur) == nil && mode != commitAlways && cur != igdb {
+				return ErrStale
 			}
 			return ErrUserPoster
 		}
@@ -365,6 +366,32 @@ func (q *Queue) Add(ids ...int64) {
 		q.mu.Lock()
 		q.pending[id] = true
 		q.mu.Unlock()
+		select {
+		case q.ch <- id:
+		default:
+			q.mu.Lock()
+			delete(q.pending, id)
+			q.mu.Unlock()
+		}
+	}
+}
+
+// Requeue hands games that already have a poster to the worker again (a relink whose lookup failed for now): unlike
+// Add it does not wait for a missing poster, and it forgets an earlier failure. The worker still never replaces a
+// poster the user chose.
+func (q *Queue) Requeue(ids ...int64) {
+	q.start()
+	for _, id := range ids {
+		q.mu.Lock()
+		delete(q.failed, id)
+		skip := q.pending[id]
+		if !skip {
+			q.pending[id] = true
+		}
+		q.mu.Unlock()
+		if skip {
+			continue
+		}
 		select {
 		case q.ch <- id:
 		default:

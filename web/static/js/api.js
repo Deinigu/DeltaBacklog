@@ -2,6 +2,8 @@
 // Every URL is relative (api/..., covers/...), resolved against the page, so the app also works under a reverse-proxy sub-path.
 import { norm } from './util.js';
 import { slotOrder } from './order.js';
+import { prepareImage } from './imageprep.js';
+import { sizeProblem, sentence } from './uploadcheck.js';
 
 export const store = {
   games: [],
@@ -252,12 +254,15 @@ export async function setPoster(id, body) {
  * Rejects with an Error whose message is the server's reason (wrong type, too big, damaged).
  */
 export async function uploadImage(id, kind, file) {
+  const blob = await prepareImage(file, kind); // shrunk and turned upright in the browser (see imageprep.js)
+  const tooBig = sizeProblem(blob);
+  if (tooBig) throw new Error(tooBig);
   const fd = new FormData();
-  fd.append('file', file, file.name || 'image');
+  fd.append('file', blob, blob === file ? file.name || 'image' : 'image.jpg');
   const res = await fetch(`api/games/${id}/${kind}/upload`, { method: 'POST', body: fd }); // the browser sets the multipart boundary
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data?.error || (res.status === 413 ? 'That image is too large' : `Upload failed (${res.status})`));
+    const err = new Error(sentence(data?.error || (res.status === 413 ? 'that image is too large' : `upload failed (${res.status})`)));
     err.status = res.status;
     throw err;
   }

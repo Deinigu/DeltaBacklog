@@ -15,6 +15,7 @@ import (
 	_ "image/gif"
 	_ "image/png"
 
+	"github.com/Deinigu/DeltaBacklog/internal/shots"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
@@ -80,6 +81,12 @@ func saveCover(r io.Reader, dir string, gameID int64, limit int64) (string, erro
 	if err != nil {
 		return "", err
 	}
+	return saveCoverRaw(raw, dir, gameID, limit, 1)
+}
+
+// saveCoverRaw is saveCover for an image already in memory (no second copy is made) whose EXIF orientation is o
+// (1 = upright): the picture is turned upright after it was scaled down, so only a small bitmap is rotated.
+func saveCoverRaw(raw []byte, dir string, gameID int64, limit int64, o int) (string, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
 		return "", fmt.Errorf("%w: decode: %v", ErrCorrupt, err)
@@ -88,9 +95,11 @@ func saveCover(r io.Reader, dir string, gameID int64, limit int64) (string, erro
 		return "", fmt.Errorf("%w (%dx%d)", ErrTooManyPixels, cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
-	raw = nil
 	if err != nil {
 		return "", fmt.Errorf("%w: decode: %v", ErrCorrupt, err)
+	}
+	if o >= 2 {
+		img = prescaleOrient(img, o, func(ow, oh int) float64 { return min(1, float64(MaxWidth)/float64(ow)) })
 	}
 	b := img.Bounds()
 	if b.Dx() > MaxWidth {
@@ -117,4 +126,21 @@ func saveCover(r io.Reader, dir string, gameID int64, limit int64) (string, erro
 		return "", err
 	}
 	return name, os.Rename(tmp, filepath.Join(dir, name))
+}
+
+// prescaleOrient scales img down by the factor want(w, h) asks for (w x h is the size once upright), then turns it
+// upright (EXIF orientation o), so the rotation only ever touches a small bitmap.
+func prescaleOrient(img image.Image, o int, want func(w, h int) float64) image.Image {
+	b := img.Bounds()
+	ow, oh := b.Dx(), b.Dy()
+	if o >= 5 {
+		ow, oh = oh, ow
+	}
+	if f := want(ow, oh); f < 1 {
+		w, h := max(1, int(float64(b.Dx())*f)), max(1, int(float64(b.Dy())*f))
+		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+		img = dst
+	}
+	return shots.Orient(img, o)
 }

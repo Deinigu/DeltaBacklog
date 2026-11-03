@@ -281,17 +281,17 @@ Open a game and tap **Change cover**.
 - The search box starts with the game's title. Type another title and tap **Search** when the automatic match is the wrong game.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
-- **Upload from device** uses a picture from your own phone or computer (on a phone it opens the photo picker or the camera). JPEG, PNG or WebP, up to 10 MB and 40 megapixels; the app says so when a file is the wrong type, too big or damaged. The picture is shrunk and saved on the Pi like any other cover, and nothing ever replaces it on its own.
+- **Upload from device** uses a picture from your own phone or computer (on a phone it opens the photo picker or the camera). JPEG, PNG or WebP. A big photo is shrunk (and turned the right way up) on your phone before it is sent, so a camera photo is fine; the app says so when a file is the wrong type, too big or damaged. The picture is shrunk and saved on the Pi like any other cover, and nothing ever replaces it on its own.
 
 ### The poster (portrait picture)
 
 The Series, Upcoming, Similar games and Deals pages and the rankings (and their PNG) use a **portrait poster** of each game, made for you automatically. A wrong poster is the usual thing to fix here: for example a game that is not linked to IGDB can get a look-alike from SteamGridDB. To choose your own, open a game and tap **Change poster**, or, on a ranking board, tap a game and then the picture button in the bar at the bottom.
 
 - **IGDB** shows the official box cover and **SteamGridDB** shows several community portraits. Tap one to use it. Both lists load on their own: if SteamGridDB cannot be reached right now (some providers block it at times) its part says so and the IGDB cover is still there.
-- **Upload from device** uses a portrait picture from your own phone or computer (JPEG, PNG or WebP, up to 10 MB and 40 megapixels). The middle of the picture is cut to a 2:3 poster, so choose one that is already tall.
+- **Upload from device** uses a portrait picture from your own phone or computer (JPEG, PNG or WebP; photos are shrunk and turned upright first). The middle of the picture is cut to a 2:3 poster, so choose one that is already tall.
 - **Paste an image link** uses a picture from the web. Only links from the same sites as covers (IGDB and SteamGridDB images) are accepted.
 - **Crop of the wide cover** cuts the middle of the game's wide cover into a portrait (no internet needed). **Fetch automatically again** goes back to what the app chooses by itself (IGDB, then SteamGridDB, then the crop) and replaces your pick.
-- **Linking the game to another IGDB game updates the poster.** When you change a game's IGDB link (in its details or on the Link screen), the app fetches the new game's poster by itself (IGDB, then SteamGridDB, then the crop) and replaces the old one. Removing the link leaves the poster as it is.
+- **Linking the game to another IGDB game updates the poster.** When you change a game's IGDB link (in its details or on the Link screen), the app fetches the new game's poster by itself (IGDB, then SteamGridDB, then the crop) and replaces the old one. If IGDB cannot be reached at that moment, the app tries again by itself a little later. Removing the link leaves the poster as it is.
 - A poster you chose or uploaded stays: the app never replaces it on its own, also not when the IGDB link changes, and changing the wide cover does not change it. The ranking board and the exported PNG show the new poster at once.
 
 ## 13. What the little icons mean

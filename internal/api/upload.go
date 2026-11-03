@@ -74,6 +74,8 @@ func uploadFailed(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusUnsupportedMediaType, "that file is not a JPEG, PNG or WebP image", nil)
 	case errors.Is(err, covers.ErrTooManyPixels):
 		writeErr(w, http.StatusRequestEntityTooLarge, "that image has more than 40 megapixels", nil)
+	case errors.Is(err, covers.ErrTooCostly):
+		writeErr(w, http.StatusRequestEntityTooLarge, "that image is too large to process here; send a smaller version", nil)
 	case errors.Is(err, covers.ErrCorrupt):
 		writeErr(w, http.StatusUnprocessableEntity, "that image is damaged and could not be read", nil)
 	case errors.Is(err, covers.ErrBadImage): // a poster crop that would be smaller than 16 px
@@ -95,7 +97,7 @@ func (s *Server) uploadCover(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := covers.SaveUpload(raw, s.CoverDir, id)
+	name, err := covers.SaveUpload(raw, s.CoverDir, id, s.decodeBudget())
 	if err != nil {
 		if !uploadFailed(w, err) {
 			fail(w, err)
@@ -121,7 +123,7 @@ func (s *Server) uploadPoster(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := s.posterQ().M.ChooseUpload(id, raw)
+	err := s.posterQ().M.ChooseUpload(id, raw, s.decodeBudget())
 	switch {
 	case err == nil:
 	case errors.Is(err, sql.ErrNoRows):
@@ -158,7 +160,11 @@ func (s *Server) relinkPosterLater(gameID, igdbID int64) {
 		switch {
 		case err == nil:
 			s.cache.invalidate()
-		case errors.Is(err, posters.ErrUserPoster), errors.Is(err, posters.ErrStale), errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, posters.ErrTemporary):
+			// IGDB or SteamGridDB failed for now: the old link's poster must not stay for good. The poster worker
+			// tries again (with its own pause and back-off) and still never replaces a poster the user chose.
+			s.posterQ().Requeue(gameID)
+		case errors.Is(err, posters.ErrUserPoster), errors.Is(err, posters.ErrStale), errors.Is(err, posters.ErrNoSource), errors.Is(err, sql.ErrNoRows):
 			// the user's poster stays, or the link or the game changed meanwhile: nothing to do
 		default:
 			log.Printf("poster of game %d after linking IGDB game %d: %v", gameID, igdbID, err)

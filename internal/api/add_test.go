@@ -40,6 +40,7 @@ type fakeMeta struct {
 	posters     []meta.CoverOption // SearchPosters answer
 	igdbPosters []meta.CoverOption // IGDBPosters answer
 	sgdbErr     error              // SearchPosters error
+	failFirst   int                // the next n IGDBCoverURL calls fail
 }
 
 func (f *fakeMeta) Configured() (bool, bool) { return f.igdb, f.sgdb }
@@ -55,6 +56,10 @@ func (f *fakeMeta) IGDBImages(_ context.Context, id int64, title string) ([]meta
 	return f.images, nil
 }
 func (f *fakeMeta) IGDBCoverURL(_ context.Context, id int64) (string, error) {
+	if f.failFirst > 0 { // a lookup that fails for now, then works
+		f.failFirst--
+		return "", errors.New("igdb is busy")
+	}
 	return f.igdbCover, f.posterErr
 }
 func (f *fakeMeta) SteamGridPortrait(_ context.Context, title string) (string, error) {

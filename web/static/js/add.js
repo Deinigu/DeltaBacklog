@@ -2,7 +2,7 @@
 // Also the IGDB match picker and the cover and poster pickers used by the game drawer and the ranking board.
 import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog } from './util.js';
 import { store, lookup, coverSearch, createGame, setCover, setPoster, uploadImage } from './api.js';
-import { uploadProblem } from './uploadcheck.js';
+import { uploadProblem, PICK_TYPES } from './uploadcheck.js';
 import { openDrawer } from './drawer.js';
 import { mapPlatforms, defaultPlatforms } from './platforms.js';
 import { unique, field, text, ensureDatalist, listRow, statusSelect, ownershipSelect, yearsRow, notesField, toggleRow } from './form.js';
@@ -310,21 +310,22 @@ function openImagePicker(game, kind) {
   // A poster shows both sources at once, each in its own section: IGDB answers fast and is never held up by SteamGridDB.
   const sections = [SOURCES[1], SOURCES[0]].map((s) => ({ s, head: h('h3.pp-head', {}, s.label), status: h('p.hint', {}), grid: h('div.cover-grid.poster') }));
   // "Upload from device": on a phone the file input opens the photo picker or the camera.
-  const fileInput = h('input', { type: 'file', accept: 'image/*', hidden: true, 'aria-hidden': 'true', tabindex: '-1' });
+  const fileInput = h('input', { type: 'file', accept: PICK_TYPES, hidden: true, 'aria-hidden': 'true', tabindex: '-1' });
+  const upStatus = h('p.hint', { role: 'status' }); // its own line: a search result can never overwrite an upload's message
   const uploadButton = h('button.btn', { type: 'button', onclick: () => fileInput.click() }, 'Upload from device');
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
     fileInput.value = ''; // the same file can be picked again after an error
     if (!file) return;
     const problem = uploadProblem(file);
-    if (problem) { status.textContent = problem; return; }
+    if (problem) { upStatus.textContent = problem; return; }
     if (ui.sheet.classList.contains('busy')) return;
     ui.sheet.classList.add('busy');
     ui.body.inert = true;
-    status.textContent = 'Uploading…';
+    upStatus.textContent = 'Preparing and uploading…';
     try { await uploadImage(game.id, kind, file); toast(poster ? 'Poster updated' : 'Cover updated'); ui.close(); } catch (e) {
       ui.body.inert = false; ui.sheet.classList.remove('busy'); ui.sheet.focus({ preventScroll: true });
-      status.textContent = e.status ? `${e.message}.` : 'Could not upload that image.';
+      upStatus.textContent = e.message ? `${e.message.replace(/\.$/, '')}.` : 'Could not upload that image.';
     }
   });
   const tools = h('div.cover-tools', {}, h('div.search.pick-search', {}, icon('search'), input), h('button.btn', { type: 'button', onclick: () => load() }, 'Search'));
@@ -338,11 +339,12 @@ function openImagePicker(game, kind) {
         h('button.btn', { type: 'button', disabled: hasCover ? null : true, title: hasCover ? '' : 'This game has no wide cover to crop', onclick: () => apply({ crop: true }, 'Poster cropped from the cover') }, 'Crop of the wide cover'),
         h('button.btn', { type: 'button', onclick: () => apply({ auto: true }, 'Poster fetched again') }, 'Fetch automatically again'),
         uploadButton, fileInput),
+      upStatus,
       h('div.cover-tools', {}, h('div.search.pick-search', {}, link), h('button.btn', { type: 'button', onclick: useLink }, 'Use link')),
       tools, status,
       ...sections.flatMap((x) => [x.head, x.status, x.grid]));
   } else {
-    ui.body.replaceChildren(h('div.pp-actions', {}, uploadButton, fileInput), h('div.mode', { role: 'group', 'aria-label': 'Cover source' }, ...tabs), tools, status, grid);
+    ui.body.replaceChildren(h('div.pp-actions', {}, uploadButton, fileInput), upStatus, h('div.mode', { role: 'group', 'aria-label': 'Cover source' }, ...tabs), tools, status, grid);
   }
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); load(); } });
 

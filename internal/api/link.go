@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -58,10 +59,14 @@ func (s *Server) linkAccept(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var before sql.NullInt64
+	s.DB.QueryRow("SELECT igdb_id FROM game WHERE id = ?", in.GameID).Scan(&before)
 	err := igdblink.Accept(s.DB, in.GameID, in.IGDBID)
 	if err == nil {
 		s.fillReleaseLater(in.GameID, in.IGDBID)
-		s.relinkPosterLater(in.GameID, in.IGDBID)
+		if !before.Valid || before.Int64 != in.IGDBID { // a repeated accept of the same link changes nothing
+			s.relinkPosterLater(in.GameID, in.IGDBID)
+		}
 	}
 	s.linkResult(w, err)
 }

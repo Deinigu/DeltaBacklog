@@ -250,7 +250,7 @@ func TestRealHandlerChain(t *testing.T) {
 		t.Errorf("same-origin json: got %d, want 201", got)
 	}
 	if n := count(); n != 1 {
-		t.Errorf("%d games after the same-origin POST, want 3", n)
+		t.Errorf("%d games after the same-origin POST, want 1", n)
 	}
 	res, err := http.Get(srv.URL + "/")
 	if err != nil || res.StatusCode != 200 {
