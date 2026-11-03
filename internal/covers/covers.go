@@ -66,24 +66,31 @@ func FetchStrict(url, dir string, gameID int64) (string, error) {
 // on the Pi (32-bit ARM) a plain int overflows for a header that claims a huge image.
 const maxPixels = 16_000_000
 
-func tooLarge(w, h int) bool { return w <= 0 || h <= 0 || int64(w)*int64(h) > maxPixels }
+func tooLarge(w, h int) bool { return tooLargeFor(w, h, maxPixels) }
+
+func tooLargeFor(w, h int, limit int64) bool { return w <= 0 || h <= 0 || int64(w)*int64(h) > limit }
 
 // Save decodes an image from r, scales it down and writes dir/<gameID>.jpg.
 func Save(r io.Reader, dir string, gameID int64) (string, error) {
+	return saveCover(r, dir, gameID, maxPixels)
+}
+
+func saveCover(r io.Reader, dir string, gameID int64, limit int64) (string, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
 	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("decode: %w", err)
+		return "", fmt.Errorf("%w: decode: %v", ErrCorrupt, err)
 	}
-	if tooLarge(cfg.Width, cfg.Height) {
-		return "", fmt.Errorf("image too large (%dx%d)", cfg.Width, cfg.Height)
+	if tooLargeFor(cfg.Width, cfg.Height, limit) {
+		return "", fmt.Errorf("%w (%dx%d)", ErrTooManyPixels, cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
+	raw = nil
 	if err != nil {
-		return "", fmt.Errorf("decode: %w", err)
+		return "", fmt.Errorf("%w: decode: %v", ErrCorrupt, err)
 	}
 	b := img.Bounds()
 	if b.Dx() > MaxWidth {

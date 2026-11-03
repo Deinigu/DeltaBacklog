@@ -44,11 +44,16 @@ func isIP(h string) bool {
 	return err == nil
 }
 
-// isShotUpload is the one route that takes a multipart body: POST /api/games/<id>/screenshots.
-func isShotUpload(r *http.Request) bool {
+// isUpload is a route that takes a multipart body: POST /api/games/<id>/screenshots, and the image uploads
+// POST /api/games/<id>/cover/upload and /poster/upload.
+func isUpload(r *http.Request) bool {
 	p := r.URL.Path
-	return r.Method == http.MethodPost && strings.HasPrefix(p, "/api/games/") && strings.HasSuffix(p, "/screenshots") &&
-		strings.Count(p, "/") == 4
+	if r.Method != http.MethodPost || !strings.HasPrefix(p, "/api/games/") {
+		return false
+	}
+	n := strings.Count(p, "/")
+	return (n == 4 && strings.HasSuffix(p, "/screenshots")) ||
+		(n == 5 && (strings.HasSuffix(p, "/cover/upload") || strings.HasSuffix(p, "/poster/upload")))
 }
 
 // jsonErr answers in the API's error shape, {"error": "..."}.
@@ -86,8 +91,8 @@ func protect(next http.Handler, allowed map[string]bool) http.Handler {
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-				if err == nil && mt == "multipart/form-data" && isShotUpload(r) {
-					// the screenshot upload; the cross-origin check above already refused other sites
+				if err == nil && mt == "multipart/form-data" && isUpload(r) {
+					// an upload; the cross-origin check above already refused other sites
 				} else if err != nil || mt != "application/json" {
 					jsonErr(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 					return

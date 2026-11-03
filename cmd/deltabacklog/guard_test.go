@@ -250,7 +250,7 @@ func TestRealHandlerChain(t *testing.T) {
 		t.Errorf("same-origin json: got %d, want 201", got)
 	}
 	if n := count(); n != 1 {
-		t.Errorf("%d games after the same-origin POST, want 1", n)
+		t.Errorf("%d games after the same-origin POST, want 3", n)
 	}
 	res, err := http.Get(srv.URL + "/")
 	if err != nil || res.StatusCode != 200 {
@@ -270,7 +270,15 @@ func TestMultipartOnlyForScreenshotUpload(t *testing.T) {
 	if got := do(h, "POST", "/api/games/12/screenshots", "127.0.0.1:8081", ct, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "http://evil.example"}); got != 403 {
 		t.Errorf("cross-site upload: %d", got)
 	}
-	for _, p := range []string{"/api/games", "/api/games/12", "/api/games/12/cover", "/api/games/12/screenshots/order", "/api/games/1/2/screenshots", "/api/views"} {
+	for _, p := range []string{"/api/games/12/cover/upload", "/api/games/12/poster/upload"} {
+		if got := do(h, "POST", p, "127.0.0.1:8081", ct, same); got != 204 {
+			t.Errorf("image upload %s: %d", p, got)
+		}
+		if got := do(h, "POST", p, "127.0.0.1:8081", ct, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "http://evil.example"}); got != 403 {
+			t.Errorf("cross-site %s: %d", p, got)
+		}
+	}
+	for _, p := range []string{"/api/games", "/api/games/12", "/api/games/12/cover/uploadx", "/api/games/1/2/cover/upload", "/api/games/12/poster/upload/x", "/api/games/12/cover", "/api/games/12/screenshots/order", "/api/games/1/2/screenshots", "/api/views"} {
 		if got := do(h, "POST", p, "127.0.0.1:8081", ct, same); got != 415 {
 			t.Errorf("multipart to %s: %d, want 415", p, got)
 		}
@@ -278,7 +286,7 @@ func TestMultipartOnlyForScreenshotUpload(t *testing.T) {
 	if got := do(h, "PATCH", "/api/games/12/screenshots", "127.0.0.1:8081", ct, same); got != 415 {
 		t.Errorf("PATCH multipart: %d", got)
 	}
-	if *hits != 1 {
-		t.Errorf("%d requests reached the handler, want 1", *hits)
+	if *hits != 3 {
+		t.Errorf("%d requests reached the handler, want 3", *hits)
 	}
 }

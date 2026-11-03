@@ -247,6 +247,27 @@ export async function setPoster(id, body) {
   return g;
 }
 
+/**
+ * Use an image from the device as the wide cover (kind 'cover') or the portrait poster (kind 'poster').
+ * Rejects with an Error whose message is the server's reason (wrong type, too big, damaged).
+ */
+export async function uploadImage(id, kind, file) {
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'image');
+  const res = await fetch(`api/games/${id}/${kind}/upload`, { method: 'POST', body: fd }); // the browser sets the multipart boundary
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || (res.status === 413 ? 'That image is too large' : `Upload failed (${res.status})`));
+    err.status = res.status;
+    throw err;
+  }
+  const g = store.byId.get(id);
+  if (g) { Object.assign(g, data); indexGame(g); }
+  gamesChanged(id);
+  fetch('api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new image
+  return g;
+}
+
 // ---- Link with IGDB (review queue of the IGDB sync) ----
 
 /** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score, platforms, slug}]}]. */

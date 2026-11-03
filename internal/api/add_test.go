@@ -77,6 +77,7 @@ type addEnv struct {
 	meta     *fakeMeta
 	coverDir string
 	images   *httptest.Server
+	server   *Server // tests wait for its background work (server.bg)
 }
 
 func newAddEnv(t *testing.T) *addEnv {
@@ -115,7 +116,7 @@ func newAddEnv(t *testing.T) *addEnv {
 	s := &Server{DB: d, CoverDir: coverDir, Meta: fm, CoverHosts: []string{strings.TrimPrefix(images.URL, "http://")}, PosterPause: time.Millisecond}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return &addEnv{db: d, srv: srv, meta: fm, coverDir: coverDir, images: images}
+	return &addEnv{db: d, srv: srv, meta: fm, coverDir: coverDir, images: images, server: s}
 }
 
 func TestLookup(t *testing.T) {

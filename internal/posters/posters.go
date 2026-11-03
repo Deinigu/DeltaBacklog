@@ -77,13 +77,32 @@ func (m *Maker) Make(ctx context.Context, id int64) (string, error) { return m.m
 // one was really found (otherwise the old poster stays). The poster is automatic from then on.
 func (m *Maker) Remake(ctx context.Context, id int64) (string, error) { return m.make(ctx, id, true) }
 
+// ErrStale means the game was linked to another IGDB game than the one a relink was started for: nothing is written.
+var ErrStale = errors.New("the IGDB link changed meanwhile")
+
+// Relink makes a fresh automatic poster for a game that was just linked to the IGDB game igdbID: the IGDB cover of
+// the new game, else SteamGridDB, else the crop (the usual order). A poster the user chose or uploaded is kept
+// (ErrUserPoster). The result is only written while the game is still linked to igdbID (ErrStale otherwise), so a
+// slow lookup for an old link can never overwrite the poster of a newer one.
+func (m *Maker) Relink(ctx context.Context, id, igdbID int64) (string, error) {
+	return m.makeFor(ctx, id, false, igdbID)
+}
+
 func (m *Maker) make(ctx context.Context, id int64, force bool) (string, error) {
+	return m.makeFor(ctx, id, force, 0)
+}
+
+// makeFor is make; needIGDB > 0 additionally requires the game to be linked to that IGDB game when the poster goes in.
+func (m *Maker) makeFor(ctx context.Context, id int64, force bool, needIGDB int64) (string, error) {
 	g, err := m.row(id)
 	if err != nil {
 		return "", err
 	}
 	if g.posterUser && !force {
 		return "", ErrUserPoster
+	}
+	if needIGDB > 0 && (!g.igdbID.Valid || g.igdbID.Int64 != needIGDB) {
+		return "", ErrStale
 	}
 	// The slow part (lookups, downloads) runs without the lock, into a scratch folder of its own; the lock is only
 	// taken to decide whether the result may still go in (see commit).
@@ -154,7 +173,24 @@ func (m *Maker) make(ctx context.Context, id int64, force bool) (string, error) 
 	if force {
 		mode = commitIfUnchanged
 	}
-	return src, m.commit(id, scratch, name, src, false, mode, g.posterAt)
+	return src, m.commit(id, scratch, name, src, false, mode, g.posterAt, needIGDB)
+}
+
+// ChooseUpload makes the poster of a game from an image the user sent (the raw bytes, checked and cropped like every
+// poster) and marks it as theirs. The old poster stays when the image is refused.
+func (m *Maker) ChooseUpload(id int64, raw []byte) error {
+	scratch, err := m.scratch()
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	name, err := covers.SavePosterUpload(raw, scratch, id)
+	if err != nil {
+		return err
+	}
+	// poster_src has no value for "from the user's device"; like a link to another host it is recorded as 'sgdb'.
+	// Only poster_user decides whether the automatic makers may replace it.
+	return m.commit(id, scratch, name, "sgdb", true, commitAlways, "", 0)
 }
 
 // Choose makes the poster of a game from an image the user picked (url, checked against the allow-list and fetched
@@ -176,7 +212,7 @@ func (m *Maker) Choose(id int64, url string) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, sourceOf(url), true, commitAlways, "")
+	return m.commit(id, scratch, name, sourceOf(url), true, commitAlways, "", 0)
 }
 
 // ChooseCrop makes the poster a centre crop of the game's wide cover (no network) and marks it as the user's.
@@ -197,7 +233,7 @@ func (m *Maker) ChooseCrop(id int64) error {
 	if err != nil {
 		return err
 	}
-	return m.commit(id, scratch, name, "crop", true, commitAlways, "")
+	return m.commit(id, scratch, name, "crop", true, commitAlways, "", 0)
 }
 
 // ErrNotAllowed means the URL is not on the host allow-list.
@@ -233,7 +269,7 @@ const (
 // poster_updated_at the maker read first (commitIfUnchanged).
 // The file only moves after the UPDATE took, so a refused result never overwrites the user's image. mu orders the
 // UPDATE and the rename inside this process.
-func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int, seen string) error {
+func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int, seen string, needIGDB int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	flag := 0
@@ -249,14 +285,22 @@ func (m *Maker) commit(id int64, scratch, name, src string, user bool, mode int,
 		guard = `poster_user = 0 OR poster_updated_at = ?`
 		args = append(args, seen)
 	}
+	where := `id = ? AND (` + guard + `)`
+	if needIGDB > 0 {
+		where += ` AND igdb_id = ?`
+		args = append(args, needIGDB)
+	}
 	res, err := m.DB.Exec(`UPDATE game SET poster_file = ?, poster_src = ?, poster_user = ?, poster_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-		WHERE id = ? AND (`+guard+`)`, args...)
+		WHERE `+where, args...)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		var one int
 		if m.DB.QueryRow(`SELECT 1 FROM game WHERE id = ?`, id).Scan(&one) == nil {
+			if needIGDB > 0 {
+				return ErrStale // or the user chose a poster meanwhile; either way this result is not wanted
+			}
 			return ErrUserPoster
 		}
 		return sql.ErrNoRows // the game was deleted meanwhile
