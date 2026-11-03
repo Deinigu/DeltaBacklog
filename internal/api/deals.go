@@ -48,11 +48,26 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 	// "wishlist" is null when no STEAM_ID is set up (the page shows no wishlist section).
 	var wish any
 	if s.Wishlist != nil {
+		s.fillWishImages(l.Wish.Items)
+		s.fillWishImages(l.Wish.Hidden)
 		wish = l.Wish
 	}
-	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "country": l.Country, "matches": l.Matches, "prices": l.Prices,
+	libImages, err := deals.LibraryImages(s.DB, deals.ImageSubdir(s.CoverDir))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "lib_images": libImages, "country": l.Country, "matches": l.Matches, "prices": l.Prices,
 		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen, "wishlist": wish,
 		"telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
+}
+
+// fillWishImages sets the local picture of each wishlist game that has one (the files the refresh downloaded).
+func (s *Server) fillWishImages(items []deals.WishItem) {
+	dir := deals.ImageSubdir(s.CoverDir)
+	for i := range items {
+		items[i].Image = deals.ImageName(dir, items[i].AppID)
+	}
 }
 
 // dealsWishHide hides a wishlist game from Deals (PUT) or shows it again (DELETE); the answer is the new list.

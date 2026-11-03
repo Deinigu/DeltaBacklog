@@ -294,6 +294,11 @@ func main() {
 		} else {
 			title = "Steam app " + strconv.FormatInt(w.appid, 10)
 		}
+		if w.matched { // the picture a real refresh would download from Steam (the demo has no network): a generated one in the same cache folder
+			steamDir := filepath.Join(*dataDir, "covers", "steam")
+			must(os.MkdirAll(steamDir, 0o755))
+			must(os.WriteFile(filepath.Join(steamDir, strconv.FormatInt(w.appid, 10)+".jpg"), cover(w.title), 0o644))
+		}
 		_, err := tx.Exec(`INSERT INTO wish_item(appid, itad_id, title, added_at, seen_at, matched_at) VALUES (?, ?, ?, '2025-05-01T10:00:00Z',
 			strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, w.appid, itad, title)
 		must(err)

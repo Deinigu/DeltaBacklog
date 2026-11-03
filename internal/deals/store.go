@@ -289,14 +289,15 @@ func SameTitle(a, b string) bool {
 }
 
 type libGame struct {
-	id    int64
-	title string
-	appID int64 // Steam app id from the game's Steam link, 0 when none
+	id      int64
+	title   string
+	appID   int64 // Steam app id from the game's Steam link, 0 when none
+	noCover bool  // the game has no cover of its own
 }
 
 // watchedGames lists the games that get prices, with their Steam app id.
 func watchedGames(d *sql.DB) ([]libGame, error) {
-	rows, err := d.Query(`SELECT g.id, g.title, coalesce(l.url, '') FROM game g
+	rows, err := d.Query(`SELECT g.id, g.title, coalesce(l.url, ''), coalesce(g.cover_file, '') = '' FROM game g
 		LEFT JOIN game_link l ON l.game_id = g.id AND l.kind = 'steam'
 		WHERE ` + watchedSQL + ` ORDER BY g.id`)
 	if err != nil {
@@ -307,7 +308,7 @@ func watchedGames(d *sql.DB) ([]libGame, error) {
 	for rows.Next() {
 		var g libGame
 		var link string
-		if err := rows.Scan(&g.id, &g.title, &link); err != nil {
+		if err := rows.Scan(&g.id, &g.title, &link, &g.noCover); err != nil {
 			return nil, err
 		}
 		if m := steamApp.FindStringSubmatch(link); m != nil {
@@ -371,6 +372,7 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 		return rep, err
 	}
 	rep.Games = len(games)
+	syncLibImages(ctx, opt.Wishlist, games)
 	matches, err := loadMatches(d)
 	if err != nil {
 		return rep, err

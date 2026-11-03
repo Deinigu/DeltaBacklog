@@ -152,7 +152,7 @@ func main() {
 
 	// `deltabacklog deals-check`: refresh the Deals prices and send the price alerts (the daily timer; see the developer manual).
 	if len(os.Args) > 1 && os.Args[1] == "deals-check" {
-		os.Exit(runDealsCheck(filepath.Join(dataDir, "app.db"), deals.New(os.Getenv("ITAD_API_KEY")), steamFromEnv(), telegramFromEnv(), os.Stdout))
+		os.Exit(runDealsCheck(filepath.Join(dataDir, "app.db"), deals.New(os.Getenv("ITAD_API_KEY")), steamFromEnv(filepath.Join(dataDir, "covers")), telegramFromEnv(), os.Stdout))
 	}
 
 	// `deltabacklog backup <file>`: write a consistent copy of the database and exit (used by the nightly timer and
@@ -224,7 +224,7 @@ func main() {
 	log.Printf("alerts: Telegram %s", onOff(notify != nil))
 	srv := &api.Server{DB: d, Notify: notify, CoverDir: filepath.Join(dataDir, "covers"), Meta: mc, ShotDir: shotDir,
 		Deals:       itad,
-		Wishlist:    steamFromEnv(),
+		Wishlist:    steamFromEnv(filepath.Join(dataDir, "covers")),
 		ShotMaxFile: envMB("SCREENSHOT_MAX_MB", 25), ShotMaxRequest: envMB("SCREENSHOT_REQUEST_MAX_MB", 200),
 		ShotDecodeBudget: envMB("SCREENSHOTS_DECODE_BUDGET_MB", 48)}
 	if !srv.ShotStorageOK() {

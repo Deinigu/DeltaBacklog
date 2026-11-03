@@ -57,6 +57,10 @@ type Steam struct {
 
 	// BaseURL is overridable in tests; only the real host and loopback addresses are ever called.
 	BaseURL string
+	// ImageBase is where the asset names of GetItems are served (DefaultImageBase when empty). Images is the local copy of
+	// those pictures (nil: no wishlist images).
+	ImageBase string
+	Images    *ImageCache
 }
 
 // NewSteam returns a client for the wishlist of a SteamID64. An empty id gives (nil, nil): the wishlist is off.
@@ -141,8 +145,36 @@ func (c *Steam) Wishlist(ctx context.Context) ([]WishEntry, error) {
 // Titles names apps through Steam's keyless IStoreBrowseService/GetItems (one request for up to MaxTitleBatch apps). The
 // request holds app ids only, never the SteamID.
 func (c *Steam) Titles(ctx context.Context, appIDs []int64) (map[int64]string, error) {
+	items, err := c.getItems(ctx, appIDs, map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	names := map[int64]string{}
+	for _, it := range items {
+		if it.Success == 1 && strings.TrimSpace(it.Name) != "" {
+			names[it.ID] = strings.TrimSpace(it.Name)
+		}
+	}
+	return names, nil
+}
+
+// storeItem is the part of a GetItems answer the app reads.
+type storeItem struct {
+	ID      int64  `json:"id"`
+	Success int    `json:"success"`
+	Name    string `json:"name"`
+	Assets  *struct {
+		URLFormat    string `json:"asset_url_format"`
+		SmallCapsule string `json:"small_capsule"`
+		MainCapsule  string `json:"main_capsule"`
+		Header       string `json:"header"`
+	} `json:"assets"`
+}
+
+// getItems is one IStoreBrowseService/GetItems request for up to MaxTitleBatch apps; request is its data_request.
+func (c *Steam) getItems(ctx context.Context, appIDs []int64, request map[string]any) ([]storeItem, error) {
 	if len(appIDs) == 0 {
-		return map[int64]string{}, nil
+		return nil, nil
 	}
 	if len(appIDs) > MaxTitleBatch {
 		return nil, fmt.Errorf("at most %d apps per call", MaxTitleBatch)
@@ -158,7 +190,7 @@ func (c *Steam) Titles(ctx context.Context, appIDs []int64) (map[int64]string, e
 		IDs     []id           `json:"ids"`
 		Context map[string]any `json:"context"`
 		Request map[string]any `json:"data_request"`
-	}{Context: map[string]any{"language": "english", "country_code": "US"}, Request: map[string]any{}}
+	}{Context: map[string]any{"language": "english", "country_code": "US"}, Request: request}
 	for _, a := range appIDs {
 		in.IDs = append(in.IDs, id{a})
 	}
@@ -187,23 +219,13 @@ func (c *Steam) Titles(ctx context.Context, appIDs []int64) (map[int64]string, e
 	}
 	var out struct {
 		Response struct {
-			Items []struct {
-				ID      int64  `json:"id"`
-				Success int    `json:"success"`
-				Name    string `json:"name"`
-			} `json:"store_items"`
+			Items []storeItem `json:"store_items"`
 		} `json:"response"`
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
 		return nil, errors.New("Steam answered something that is not JSON")
 	}
-	names := map[int64]string{}
-	for _, it := range out.Response.Items {
-		if it.Success == 1 && strings.TrimSpace(it.Name) != "" {
-			names[it.ID] = strings.TrimSpace(it.Name)
-		}
-	}
-	return names, nil
+	return out.Response.Items, nil
 }
 
 // placeholderTitle is what a wishlist game is called until ITAD tells its name.
