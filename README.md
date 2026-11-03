@@ -50,7 +50,7 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
 - **One binary, one SQLite file.** No CGO, no frontend build step, no login. The web app is compiled into the binary.
 - **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
 - **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
-- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's daily price check for Deals (and its optional Telegram alerts).
+- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat and, if you set `STEAM_ID`, your public Steam wishlist (`api.steampowered.com`) are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's daily price check for Deals, which can also send your price alerts to Telegram (`api.telegram.org`) if you set up a bot.
 - **Yours to keep.** Covers and posters are stored next to the database (or upload your own), so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
 - **Tidy as it grows.** A **Needs attention** page lists the games that lack a link, cover, poster, time or platform with a one-tap fix, and a **Hidden** page keeps everything you hid in one place.
 
@@ -66,8 +66,11 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
               v
   data/  app.db (SQLite)  +  covers/  +  screenshots/
 
-  optional, only when you press a refresh button:
+  optional, only when you press a refresh button
+  (or on the Pi, the daily price check):
   IGDB   SteamGridDB   IsThereAnyDeal   HowLongToBeat
+  Steam wishlist (api.steampowered.com)
+  Telegram alerts (api.telegram.org)
 ```
 
 - **One process.** The Go binary serves the web files compiled into it and the REST API; there is no separate frontend server.
@@ -111,10 +114,11 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
   <img src="docs/img/series-phone.jpg" alt="Series" width="180">
   <img src="docs/img/game-phone.jpg" alt="A game" width="180">
-  <img src="docs/img/ranking-phone.jpg" alt="A ranking" width="180">
   <br>
+  <img src="docs/img/ranking-phone.jpg" alt="A ranking" width="180">
   <img src="docs/img/upcoming-phone.jpg" alt="Upcoming releases" width="180">
   <img src="docs/img/similar-phone.jpg" alt="Similar games" width="180">
+  <br>
   <img src="docs/img/deals-phone.jpg" alt="Deals" width="180">
   <img src="docs/img/stats-phone.jpg" alt="Stats" width="180">
   <img src="docs/img/attention-phone.jpg" alt="Needs attention" width="180">
@@ -246,9 +250,9 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Does it work offline?** The app and your covers are served from your own machine. Lookups need internet. The offline cache of the installed PWA needs HTTPS (browsers do not allow service workers on plain `http://` outside `localhost`).
 
-**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, when you press the refresh button (and once a day on the Pi, for the alerts); HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
+**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, when you press the refresh button (and once a day on the Pi, for the alerts); your public Steam wishlist is read from `api.steampowered.com` at the same moments when `STEAM_ID` is set; HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
 
-**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above, to the services you set up keys for; no page reads them just by being opened.
+**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above (IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat, the Steam wishlist at `api.steampowered.com` and Telegram messages at `api.telegram.org`), to the services you set up; they happen when you press a refresh button or search, or in the Pi's daily price check, and no page reads them just by being opened.
 
 ## Ideas
 
@@ -286,7 +290,7 @@ It is designed for a trusted home network, has no login and no HTTPS, and must n
 ## Acknowledgements and license
 
 - Built with [Go](https://go.dev/), [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) and plain JavaScript, with [Claude Code](https://claude.com/claude-code) agents (see [How this was built](#how-this-was-built)).
-- Game details and artwork come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/), prices from [IsThereAnyDeal](https://isthereanydeal.com) and times to beat from HowLongToBeat.
+- Game details and artwork come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/), prices from [IsThereAnyDeal](https://isthereanydeal.com), your optional wishlist from Steam, alerts through Telegram and times to beat from HowLongToBeat.
 - Released under the [MIT License](LICENSE).
 
 IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat data and artwork belong to their owners and are used through their APIs (or, for HowLongToBeat, its public search) under their terms; the repository ships no cover files. The screenshots in `docs/img` show cover art from IGDB and SteamGridDB, &copy; its respective owners, for illustration only; the app downloads covers at runtime, for your own use, into your own data folder.

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to DeltaBacklog are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it has a first release. Dates are when the pull request was merged.
+All notable changes to DeltaBacklog are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it has a first release. Dates are when the pull request was merged. Pull request numbers before 2026-10-10 refer to the earlier private repository.
 
 ## [Unreleased]
 
@@ -36,13 +36,13 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 - **A fuller Stats page**: summary tiles and jump buttons; estimated hours spent on finished games (by year, genre and platform) and left in Up next and Backlog (with your own hours a week); games played and finished per year; finished against dropped by genre and platform (groups of 5+); the 10 shortest games waiting; library by ownership, platform and decade; series completed. Every estimate says how many games it rests on.
 - **Default order is now Status, then Title** (it was Status, Manual order, Title). The starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged; add *Manual order* as a sort level to any view that should show your ranking. No migration.
 - **Usability pass** (the look is unchanged):
-  - The **+** button is shown only on the Library, saved views and shelves (the `n` key still adds a game anywhere).
+  - The **+** button is shown only on the Library, saved views and shelves (the `n` key still adds a game anywhere); on a PC its place is kept clear of the last row.
   - Library and views on a phone: the title has its own row, the buttons under it are labelled (*Surprise me*, *Table*, *Reorder*, *Views*), and only the search row stays pinned while scrolling.
-  - The reorder handle and its arrows are 44px wide on phones; the strips of active filters and years fade at the edge to show they scroll.
+  - The reorder handle and its arrows are 44px wide on phones; the strips of active filters and years fade at the edge to show they scroll, and the current year is centred.
   - Rankings: no empty gap under the back link; unusable arrows are hidden, **Delete** is red and apart from Rename and Duplicate.
   - Series: the filters above the tiles take fewer rows; a series with many games you do not have lists the first six, then **Show all**. A tile shows the portrait poster, or the wide cover whole instead of cropping it.
-  - Upcoming: **Add** and **Hide** sit under the text on phones. Empty states are one short sentence with their button. Dates on the Series page use the English format like the other pages.
-- The years-played picker offers the years from the earliest year in your library to this year instead of going back to 1990; older years can still be typed (a year outside 1970-2100 now says so). The add form asks before discarding details you typed.
+  - Upcoming: **Add** and **Hide** sit under the text on phones. Similar no longer says "Press Refresh" twice. Years: a zero tile is quiet instead of as loud as a real number. Empty states are one short sentence with their button. Dates on the Series page use the English format like the other pages.
+- The years-played picker offers the years from the earliest year in your library to this year (the last 10 while the library has none) instead of going back to 1990; older years can still be typed (a year outside 1970-2100 now says so). The add form asks before discarding details you typed.
 - **Documentation pass**: the user manual and the developer manual were reorganised into one coherent set (one "Setting up keys" section, a "Refresh buttons" overview, the pages in the order the app shows them, updated troubleshooting, and the migrations, API, background jobs, modules and deploy sections brought up to date), the README and `.env.example` list every feature and setting, and every screenshot is regenerated from the demo library in the dark theme.
 - The repository is now a public showcase, not a community project: README status note and "How this was built" section, CONTRIBUTING explains that contributions are not accepted, and the code of conduct, issue forms and pull request template were removed. Dependabot runs monthly with grouped updates.
 - Deploys are stamped with a version from `git describe`; idle connections are closed after 2 minutes; CI fails on unformatted Go code.
