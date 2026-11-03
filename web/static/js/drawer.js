@@ -10,6 +10,7 @@ import { ttbSection } from './ttbview.js';
 import { screenshotsSection } from './shotsview.js';
 import { similarSection } from './similardrawer.js';
 import { dealsSection } from './dealsdrawer.js';
+import { relinkPrompt, closeRelinkPrompt } from './relinkprompt.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
 
 let open = null;
@@ -71,10 +72,15 @@ async function requestClose() {
   closeDrawer();
 }
 
-export function openDrawer(game) {
+/**
+ * opts.relink {name}: the game was just linked to the IGDB game `name`: offer to update its details from it.
+ * opts.edit 'Platforms'…: open straight in edit mode at that field (the Needs attention page). opts.ttb: open the HowLongToBeat search.
+ */
+export function openDrawer(game, opts = {}) {
   // Redrawing an open drawer (after a save) keeps the element that opened the first one
   const opener = open ? open.opener : document.activeElement;
   closeDrawer();
+  closeRelinkPrompt();
   const st = store.statusByCode.get(game.status);
   const url = coverURL(game);
 
@@ -107,11 +113,12 @@ export function openDrawer(game) {
     storeLinks(game),
     screenshotsSection(game),
     h('div.drawer-actions', {},
-      h('button.btn.primary', { type: 'button', onclick: startEdit }, '✎ Edit'),
+      h('button.btn.primary', { type: 'button', onclick: () => startEdit() }, '✎ Edit'),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
       h('button.btn', { type: 'button', onclick: () => openPosterPicker(game) }, 'Change poster'),
       h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete game')));
   const editView = h('div.editview', { hidden: true });
+  const relinkMount = h('div.relink-mount');
 
   const scrim = h('div.scrim.show', { onclick: requestClose });
   scrim.style.zIndex = 55;
@@ -121,7 +128,7 @@ export function openDrawer(game) {
     h('div.cover', {},
       url ? h('img', { src: url, alt: '' }) : h('div.ph', { style: `background:${gradientFor(game.title)}` }, initials(game.title)),
       st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
-    h('div.drawer-body', {}, title, quick, readView, editView));
+    h('div.drawer-body', {}, title, quick, relinkMount, readView, editView));
 
   async function remove() {
     const ok = await confirmDialog({ title: `Delete “${game.title}”?`, message: 'This removes the game, its years played, its cover and all its screenshots (the picture files are deleted too). It cannot be undone.', confirm: 'Delete' });
@@ -134,8 +141,9 @@ export function openDrawer(game) {
   }
 
   // ---------------------------------------------------------------- edit mode
-  function startEdit() {
+  function startEdit(focusLabel = null) {
     let f = formFromGame(game);
+    let linkedName = '';
     const isDirty = () => Object.keys(buildPatch(game, f)).length > 0;
     if (open) open.isDirty = isDirty;
 
@@ -173,6 +181,7 @@ export function openDrawer(game) {
       const c = await pickCandidate({ query: f.title, excludeId: game.id });
       if (!c) return;
       f = applyCandidate(f, c);
+      linkedName = c.name;
       render();
       toast('Filled from IGDB. Review it, then save.');
     }
@@ -187,7 +196,8 @@ export function openDrawer(game) {
       try {
         await patchGame(game.id, patch);
         toast('Saved');
-        openDrawer(game); // redraw with the new values
+        // a changed link (not an unlink) offers to update the details from the new IGDB game
+        openDrawer(game, patch.igdb_id ? { relink: { name: linkedName || 'the IGDB game' } } : {}); // redraw with the new values
       } catch (e) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
@@ -220,7 +230,10 @@ export function openDrawer(game) {
     editView.hidden = false;
     drawer.classList.add('editing');
     drawer.querySelector('.drawer-body').scrollTop = 0;
-    editView.querySelector('input')?.focus({ preventScroll: true });
+    const target = focusLabel && [...editView.querySelectorAll('.frow')].find((r) => r.querySelector('.flabel')?.textContent === focusLabel);
+    const control = target?.querySelector('.listbtn, select, input') || editView.querySelector('input');
+    if (control?.classList.contains('listbtn')) control.click(); // a list field opens its picker
+    else control?.focus({ preventScroll: true });
   }
 
   const onKey = (e) => {
@@ -241,5 +254,8 @@ export function openDrawer(game) {
   window.addEventListener('games-changed', onGames);
   document.body.append(scrim, drawer);
   open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb };
-  drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
+  if (opts.relink) relinkPrompt(game, opts.relink.name, relinkMount);
+  if (opts.edit) startEdit(opts.edit);
+  else if (opts.ttb) readView.querySelector('.ttb-actions .btn:last-child')?.click();
+  else drawer.focus({ preventScroll: true }); // keyboard and screen reader users start inside the dialog, not behind it
 }
