@@ -51,7 +51,8 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
 - **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
 - **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
 - **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's daily price check for Deals (and its optional Telegram alerts).
-- **Yours to keep.** Covers and posters are stored next to the database, so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
+- **Yours to keep.** Covers and posters are stored next to the database (or upload your own), so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
+- **Tidy as it grows.** A **Needs attention** page lists the games that lack a link, cover, poster, time or platform with a one-tap fix, and a **Hidden** page keeps everything you hid in one place.
 
 ## How it works
 
@@ -86,7 +87,7 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 **Track what you play**
 - **Years played** on every card, plus 🧒 childhood and ♾️ always; starting or finishing a game records the year for you.
 - Your own **queue order** (drag to rank), ownership badges (🏴‍☠️ 🆓 🤝), platforms, VR, favorites and notes.
-- **Time to beat** from IGDB or HowLongToBeat, editable by hand, with a filter and a sort.
+- **Time to beat** from IGDB or HowLongToBeat (one game, or **Find times for all** for the whole backlog), editable by hand, with a filter and a sort.
 - **Surprise me** picks a random game from what you are looking at, with filters, and never repeats.
 - **Screenshots** per game: upload from your phone or computer, view full screen, caption, reorder, download the original. A page shows them all. Originals are kept untouched, with a small thumbnail for the grid; they can live on an external drive and are backed up nightly.
 
@@ -95,12 +96,16 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
 - **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com), with an alert when a game reaches its historical low or its lowest price in 2 years (in the app, and on your phone through a Telegram bot if you set one up). Your public Steam wishlist can be listed there too (set `STEAM_ID`), kept apart from your library.
-- A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
+- A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (hours finished and left, played and finished per year, finished against dropped, library by ownership, platform and decade, series completed).
+
+**Keep the library clean**
+- **Needs attention**: the games with no IGDB link, an uncertain match, no cover or poster, no time to beat, no platform, year, ownership or genres, in groups with a fix on every row (and **Ignore** for the ones you do not care about).
+- **Hidden**: one list of everything you hid on Deals, Similar games and Series, each with *Show again*.
 
 **Add games quickly (optional lookups)**
 - Type a title and genres, themes, developer, series, release year and a cover come from [IGDB](https://www.igdb.com/) and [SteamGridDB](https://www.steamgriddb.com/). Needs free API keys; everything else works without them.
-- `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen. `--enrich` then fills in the details.
-- `deltabacklog fetch-posters` makes the portrait posters for the whole library in one go (they are otherwise made in the background when a game joins a ranking); you can choose any poster by hand.
+- `deltabacklog sync-igdb` links an existing library to IGDB; uncertain matches wait in a review screen. `--enrich` then fills in the details. When you relink a single game later, the app offers to update its details too (fill empty fields, or replace all, with a preview and Undo).
+- `deltabacklog fetch-posters` makes the portrait posters for the whole library in one go (they are otherwise made in the background when a game joins a ranking); you can choose any poster by hand or upload your own cover or poster from your phone.
 
 <p align="center">
   <img src="docs/img/filters-phone.jpg" alt="Filters" width="180">
@@ -111,8 +116,10 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
   <img src="docs/img/upcoming-phone.jpg" alt="Upcoming releases" width="180">
   <img src="docs/img/similar-phone.jpg" alt="Similar games" width="180">
   <img src="docs/img/deals-phone.jpg" alt="Deals" width="180">
+  <img src="docs/img/stats-phone.jpg" alt="Stats" width="180">
+  <img src="docs/img/attention-phone.jpg" alt="Needs attention" width="180">
   <br>
-  <em>Filters, series, a game, a ranking, upcoming releases, similar games and deals.</em>
+  <em>Filters, series, a game, a ranking, upcoming releases, similar games, deals, stats and the Needs attention page.</em>
 </p>
 
 ## Quick start
@@ -147,11 +154,11 @@ The app starts with an empty library: use the **+** button to add games. The web
 
 ## Raspberry Pi install
 
-DeltaBacklog is built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use). The deploy script cross-compiles on your PC, uploads over `ssh` and installs a systemd service that starts at boot, a nightly backup timer and the friendly address `http://deltabacklog.local`.
+DeltaBacklog is built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use). The deploy script cross-compiles on your PC, uploads over `ssh` and installs a systemd service that starts at boot, a nightly backup timer, a daily price-check timer for Deals and the friendly address `http://deltabacklog.local`.
 
 ```sh
 # on your PC, in the cloned repo, with Go installed and passwordless ssh + sudo on the Pi (Raspberry Pi OS / Debian)
-cp .env.example .env                                     # optional: add your keys (IGDB, SteamGridDB, IsThereAnyDeal)
+cp .env.example .env                                     # optional: add your keys (IGDB, SteamGridDB, IsThereAnyDeal, and STEAM_ID / Telegram if you want them)
 DEPLOY_HOST=<user>@<pi-address> bash deploy/deploy.sh --env .env
 ```
 
@@ -188,6 +195,8 @@ Settings are environment variables. A `.env` file in the working directory is lo
 - **IGDB**: IGDB is owned by Twitch. Create a Twitch account with two-factor authentication, register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (category *Application Integration*, redirect URL `http://localhost`), then copy the **Client ID** and generate a **Client Secret**. Details: [IGDB API docs](https://api-docs.igdb.com/#account-creation).
 - **SteamGridDB**: sign in at [steamgriddb.com](https://www.steamgriddb.com/), open *Preferences → API* and copy your key.
 - **IsThereAnyDeal** (Deals page): create an app at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and copy its API key.
+- **Steam wishlist** (optional, no key): your 17-digit SteamID64, from *Account details* in Steam or [steamid.io](https://steamid.io), and a public wishlist (*Edit Profile → Privacy Settings → Game details: Public*).
+- **Telegram** (optional, price alerts on your phone): make a bot with [@BotFather](https://t.me/BotFather), copy its token, message the bot once and read your chat id from `getUpdates` (the user manual has the steps). Deals then has a **Send test message** button.
 
 A page whose key is missing says it is not set up; without any key the app still works and games are added by hand. The [user manual](docs/user-manual.md#3-setting-up-keys) has the same steps. To check keys against the real services: `set -a; . ./.env; set +a; DELTABACKLOG_LIVE=1 go test ./internal/meta -run TestLive -v`.
 
@@ -253,6 +262,8 @@ DeltaBacklog was built by its owner with [Claude Code](https://claude.com/claude
 - **One agent per feature.** Sonnet agents implemented each feature on its own `features/<name>` branch and pull request.
 - **Read-only review.** An Opus agent reviewed each PR without editing it; the owner triaged the findings and they were fixed before merging.
 - **A final review.** At the end an Opus agent reviewed the whole codebase, and its findings were triaged and fixed the same way.
+
+**For scale:** 21 merged pull requests, 21 numbered migrations, 62 Go test files and 30 frontend test files (`web/test`), all run by `go test ./...` and `node --test web/test/*.test.mjs`.
 
 The result is a pull request per feature, a numbered migration for every schema change, and Go and frontend tests for each package and pure module. The [merged pull requests](https://github.com/Deinigu/DeltaBacklog/pulls?q=is%3Apr+is%3Amerged) are the evidence; they were not curated.
 

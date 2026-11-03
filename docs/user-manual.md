@@ -34,8 +34,8 @@ This manual is task by task. For how the program is built, see the [developer ma
 19. [Year in review](#19-year-in-review)
 20. [Rankings](#20-rankings)
 21. [Screenshots](#21-screenshots)
-    (**Views** is described in [section 6](#6-saved-views).)
-22. [Link your games with IGDB](#22-link-your-games-with-igdb)
+    (**Views** is described in [section 6](#6-saved-views); **Hidden** in [section 17](#the-hidden-page); **Needs attention** and **Link IGDB** in [section 22](#22-link-your-games-with-igdb).)
+22. [Link your games with IGDB, and Needs attention](#22-link-your-games-with-igdb)
 
 *Good to know*
 
@@ -86,7 +86,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 
 ![The More list](img/more-phone.jpg)
 
-**On a PC** the same pages are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). The sidebar groups the pages a little differently: Year in review, Rankings, Screenshots, then Series, Upcoming, Similar games, Deals, Stats, Views, Hidden and Needs attention. Two keys help: press **/** to jump to the search box and **n** to add a game.
+**On a PC** the same pages are in the left sidebar, with every pinned view and every page listed directly (there is no *More*). The sidebar groups the pages a little differently: Year in review, Rankings, Screenshots, then Series, Upcoming, Similar games, Deals, Stats, Views, Hidden and Needs attention, with Link IGDB at the end while there is something to review. Two keys help: press **/** to jump to the search box and **n** to add a game.
 
 ![The Library on a PC](img/library-desktop.jpg)
 
@@ -99,8 +99,8 @@ The app works without any key: you can add games by hand, filter, sort, rank and
 | **IGDB**: looking games up when you add one, **Fill from IGDB**, Link IGDB, time to beat, game modes, store buttons, Series' games you do not have, Upcoming dates, Similar games | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | IGDB belongs to Twitch. Create a Twitch account with two-factor authentication, register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (category *Application Integration*, redirect URL `http://localhost`), then copy the **Client ID** and generate a **Client Secret**. |
 | **SteamGridDB**: more covers and portrait posters | `STEAMGRIDDB_API_KEY` | Sign in at [steamgriddb.com](https://www.steamgriddb.com/), open *Preferences → API* and copy the key. |
 | **IsThereAnyDeal**: the Deals page | `ITAD_API_KEY` | Create an app at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and copy its API key. |
-| **Steam wishlist**: the Wishlist section of Deals (optional) | `STEAM_ID` | Your 17-digit SteamID64, the long number of your account. In Steam, click your name at the top right, choose *Account details* and copy the number under your account name (*Steam ID*), or look your profile up on [steamid.io](https://steamid.io). No Steam key is needed, but your wishlist must be public ([section 17](#17-deals)). |
-| **Telegram**: price alerts on your phone (optional) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Talk to [@BotFather](https://t.me/BotFather) on Telegram to make a bot and copy its token (it looks like `123456789:ABC…`), then send your bot a message and use the number of your chat as the chat id (`-100…` for a group, or `@channelname`). If you already run a bot for another service (for example the Raspberry Dashboard), you can reuse its token and chat id. |
+| **Steam wishlist**: the Wishlist section of Deals (optional) | `STEAM_ID` | Your 17-digit SteamID64, the long number of your account. In Steam, click your name at the top right, choose *Account details* and copy the number under your account name (*Steam ID*), or look your profile up on [steamid.io](https://steamid.io). No Steam key is needed, but your wishlist must be public: in Steam open *your name → View my profile → Edit Profile → Privacy Settings* and set **Game details** to **Public** (more in [section 17](#17-deals)). |
+| **Telegram**: price alerts on your phone (optional) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Talk to [@BotFather](https://t.me/BotFather) on Telegram to make a bot and copy its token (it looks like `123456789:ABC…`), then send your bot any message and open `https://api.telegram.org/bot<your token>/getUpdates` in a browser: the number after `"chat":{"id":` is your chat id (`-100…` for a group; a channel can use `@channelname`). Do not share that address, it contains your token. Once both are set, **Deals** shows **Send test message** ([section 17](#17-deals)). If you already run a bot for another service (for example the Raspberry Dashboard), you can reuse its token and chat id. |
 
 A page whose key is missing says *not set up* and its refresh button is off; nothing else is affected. The sections below that need a key say so in their first line. The IGDB step of linking games you already have is explained in [section 22](#22-link-your-games-with-igdb).
 
@@ -569,9 +569,11 @@ The pages that use other websites keep what they read on the server. **Opening a
 | **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
 | **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
-| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something. The Pi also does this once a day by itself (the daily check, [section 17](#17-deals)) |
+| **Needs attention** → **Find times for all** | HowLongToBeat (no key): a time to beat for the games of the *No time to beat* group, one search at a time, saved only when the match is certain | when many games lack a time; the ones it cannot be sure of stay for you ([section 22](#needs-attention)) |
+| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something |
+| **The daily price check** (no button) | the same prices as **↻ Refresh prices**, read by a timer on the Raspberry Pi at about 08:00, which also sends the price alerts (and the Telegram messages) | nothing to press: open **Deals** to see the result ([section 17](#17-deals)). On a PC run `deltabacklog deals-check` |
 
-Things that never happen on their own: reading a website when a page opens (the one scheduled read is the Pi's daily price check, [section 17](#17-deals)), adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own.
+Things that never happen on their own: reading a website when a page opens (the one scheduled read is the Pi's daily price check in the table above), adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own. Searching HowLongToBeat for one game (**Get from HowLongToBeat**, **Find time**) happens only when you press it.
 
 If a refresh is refused or stopped (too many requests, a wrong key, no connection) the page says why and keeps what it had; try again later.
 
@@ -582,8 +584,10 @@ If a refresh is refused or stopped (too many requests, a wrong key, no connectio
 - **A page saying "unknown host".** The app only answers to its own address, `deltabacklog.local`, the Pi's hostname and IP addresses. If you open it by another name (a router name, a Tailscale name, a reverse proxy), add that name to `ALLOWED_HOSTS` in `/etc/deltabacklog.env` on the Pi (for example `ALLOWED_HOSTS=raspberry.lan`) and restart the app with `sudo systemctl restart deltabacklog`.
 - **A cover is missing.** Open the game, tap **Change cover** and pick one. Adding a game never fails because of a cover: if the picture could not be downloaded you are told, and the game is added anyway.
 - **A poster is wrong** (Series, Upcoming, Similar games, Deals, rankings). Open the game and tap **Change poster**, pick the right one ([section 12](#the-poster-portrait-picture)). Your pick is kept.
+- **I pressed Send test message and nothing arrived.** Deals only shows the button when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set. If it says Telegram refused, check the token (from @BotFather) and that you sent your bot a message first, or added it to the group; the chat id is a number (`-100…` for a group). Edit the settings file, restart the app and try again. The alerts are still in the app, and an alert that could not be sent is tried again at the next daily check.
 - **A price is for the wrong game.** Open the game on the Deals page (or its details) and tap **Wrong game?** or **Pick the game** ([section 17](#17-deals)).
 - **The Wishlist button is missing, or it is empty.** The button only appears when `STEAM_ID` is set (17 digits; a wrong one is ignored and the app log says so, without showing it), and the list fills when you press **↻ Refresh prices**. If it says the wishlist is empty or not public, see *Making your wishlist public* in [section 17](#17-deals).
+- **An uploaded cover or poster is refused.** The picture must be a JPEG, PNG or WebP of at most 10 MB and 40 megapixels. A phone photo is shrunk first, so *too large* usually means a huge or unusual file (a very big progressive JPEG or a 16-bit PNG): open it in a photo app, export it as a normal JPEG and try again. The message also says when the file is the wrong type or damaged.
 - **A series shows no games I do not have.** Those games need the series' games to be linked to IGDB ([section 22](#22-link-your-games-with-igdb)) and a press of **↻ Refresh** on the Series page.
 - **A change did not save.** You see a message at the bottom. The game goes back to how it was, so try again.
 - **I added the same game twice.** The add form warns you when a game with the same title or IGDB link is already there. Open the extra copy and use **Delete game**.
