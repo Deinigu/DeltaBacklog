@@ -82,6 +82,19 @@ type Source interface {
 	Overview(ctx context.Context, ids []string, country string) (map[string]Overview, error)
 }
 
+// BulkSource is the optional batch lookup: many Steam app ids in one request. The real Client has it; the wishlist uses it
+// so that matching 130 games costs one or two requests, not 130 (which used up the key's rate limit before any price was read).
+type BulkSource interface {
+	// LookupAppIDs maps Steam app ids to ITAD game ids; an id ITAD does not know is absent from the result. At most MaxLookupBatch ids.
+	LookupAppIDs(ctx context.Context, appIDs []int64) (map[int64]string, error)
+}
+
+// MaxLookupBatch is how many app ids one bulk lookup asks for (the API takes up to 200).
+const MaxLookupBatch = 200
+
+// steamShopID is IsThereAnyDeal's id of the Steam shop.
+const steamShopID = 61
+
 // MaxBatch is how many games one Overview call asks for.
 const MaxBatch = 50
 
@@ -210,6 +223,31 @@ func isLoopback(host string) bool { return host == "127.0.0.1" || host == "::1" 
 
 func (c *Client) LookupAppID(ctx context.Context, appID int64) (Game, bool, error) {
 	return c.lookup(ctx, url.Values{"appid": {strconv.FormatInt(appID, 10)}})
+}
+
+// LookupAppIDs is POST /lookup/id/shop/61/v1: the body is ["app/<id>", ...], the answer maps each to an ITAD game id or null.
+func (c *Client) LookupAppIDs(ctx context.Context, appIDs []int64) (map[int64]string, error) {
+	if len(appIDs) == 0 {
+		return map[int64]string{}, nil
+	}
+	if len(appIDs) > MaxLookupBatch {
+		return nil, fmt.Errorf("at most %d apps per call", MaxLookupBatch)
+	}
+	body := make([]string, len(appIDs))
+	for i, id := range appIDs {
+		body[i] = "app/" + strconv.FormatInt(id, 10)
+	}
+	var out map[string]*string
+	if err := c.call(ctx, http.MethodPost, "/lookup/id/shop/"+strconv.Itoa(steamShopID)+"/v1", nil, body, &out); err != nil {
+		return nil, err
+	}
+	res := make(map[int64]string, len(out))
+	for _, id := range appIDs {
+		if v := out["app/"+strconv.FormatInt(id, 10)]; v != nil && *v != "" {
+			res[id] = *v
+		}
+	}
+	return res, nil
 }
 
 func (c *Client) LookupTitle(ctx context.Context, title string) (Game, bool, error) {

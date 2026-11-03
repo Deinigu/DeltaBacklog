@@ -35,6 +35,8 @@ const (
 	historyTTL = 7 * 24 * time.Hour
 	// maxSingles: more alerts than this in one run go out as one message.
 	maxSingles = 3
+	// HistoryBudget: the most price-history requests (two-year lows) one run makes, library and wishlist together.
+	HistoryBudget = 15
 	// lockStale: a run that left its lock behind (a crash) is forgotten after this long. Longer than the 20 minutes a run may take.
 	lockStale = 30 * time.Minute
 )
@@ -249,6 +251,7 @@ func MarkSeen(d *sql.DB) error {
 // the price history is asked, one call per game, only for a game that is on sale above its historical low (at the low
 // the alert is "historical low" anyway) and whose two-year low was not read within a week. A rate limit ends the step.
 func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time, withWishlist bool) error {
+	budget := HistoryBudget
 	rows, err := d.Query(`SELECT p.game_id, m.itad_id, p.currency FROM deal_price p
 		JOIN deal_match m ON m.game_id = p.game_id JOIN game g ON g.id = p.game_id
 		WHERE `+watchedSQL+` AND m.itad_id IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_cut > 0
@@ -276,6 +279,10 @@ func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.
 	}
 	country := Country(d)
 	for _, j := range todo {
+		if budget <= 0 {
+			return nil // the rest next run: the history calls never starve the price steps of the next one
+		}
+		budget--
 		low, ok, err := hs.LowSince(ctx, j.itad, country, now.Add(-HistoryWindow))
 		if err != nil {
 			var rl *RateLimitError
@@ -300,7 +307,7 @@ func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.
 	if !withWishlist {
 		return nil
 	}
-	return fillWishTwoYearLows(ctx, d, hs, now)
+	return fillWishTwoYearLows(ctx, d, hs, now, &budget)
 }
 
 // ---------------- the daily check ----------------
