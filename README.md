@@ -94,7 +94,7 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
-- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (pirated, borrowed, family share), from [IsThereAnyDeal](https://isthereanydeal.com).
+- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com).
 - A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
 
 **Add games quickly (optional lookups)**

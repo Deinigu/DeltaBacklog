@@ -147,7 +147,7 @@ export function renderDeals(root) {
     const hiddenList = hiddenGames(store.games, info);
     const empty = scopeOf(info).size ? 'No games match these filters.'
       : hiddenList.length ? 'All your deals games are hidden. Show them again below.'
-      : 'Deals shows games you don’t own and haven’t played yet: in the backlog or up next, with no years played, and ownership Pirated, Borrowed, Family Share, Nope or empty.';
+      : 'Deals shows games you don’t own and haven’t played yet: in the backlog or up next, with no years played, and ownership Borrowed, Family Share, Nope or empty.';
     // Matched, but no shop sells it: often the match is an old or delisted entry (a game and its "Final Cut"), so say where to look.
     const unsold = rows.filter((r) => r.p.price == null).map((r) => r.game.title);
     const unsoldHint = unsold.length

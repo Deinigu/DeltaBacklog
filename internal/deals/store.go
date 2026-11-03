@@ -17,7 +17,7 @@ const DefaultCountry = "ES"
 
 // NotOwned lists the ownership names that count as "you don't own it" (ownership is a lookup table of names, matched
 // without regard to case). A game with no ownership counts too; Owned and Free to play never do.
-var NotOwned = []string{"Pirated", "Borrowed", "Family Share", "Nope"}
+var NotOwned = []string{"Borrowed", "Family Share", "Nope"}
 
 // eligibleSQL is the one rule for the games Deals covers, as a condition on a `game g` row: the game is in the Backlog or
 // Up next, has no play rows (no year and no period), and is not owned (see NotOwned). Hiding is applied on top of it.

@@ -12,7 +12,7 @@ func TestScopeOwnership(t *testing.T) {
 	for _, o := range []string{"Owned", "Pirated", "Borrowed", "Free to play", "Family Share", "Nope"} {
 		d.Exec(`INSERT OR IGNORE INTO ownership(name) VALUES (?)`, o)
 	}
-	want := map[string]bool{"Owned": false, "Pirated": true, "Borrowed": true, "Free to play": false, "Family Share": true, "Nope": true, "": true}
+	want := map[string]bool{"Owned": false, "Pirated": false, "Borrowed": true, "Free to play": false, "Family Share": true, "Nope": true, "": true}
 	ids := map[string]int64{}
 	var n int64
 	for o := range want {
@@ -24,7 +24,7 @@ func TestScopeOwnership(t *testing.T) {
 		}
 	}
 	// The name is matched without regard to case.
-	d.Exec(`UPDATE ownership SET name = 'PIRATED' WHERE name = 'Pirated'`)
+	d.Exec(`UPDATE ownership SET name = 'NOPE' WHERE name = 'Nope'`)
 	l, err := Load(d)
 	if err != nil {
 		t.Fatal(err)

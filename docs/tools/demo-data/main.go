@@ -50,11 +50,11 @@ var games = []game{
 	{"Outer Wilds", "playing", "Owned", "", "Mobius Digital", 2019, "PC, PS4", "Adventure, Puzzle", "Open world, Science fiction", "2025,2026", false, true, false, "Do not read anything about it first."},
 	{"Hades", "playing", "Owned", "", "Supergiant Games", 2020, "PC, Switch", "Roguelike, Hack and slash", "Fantasy", "2024,2025", false, true, false, ""},
 	{"Stardew Valley", "playing_evergreen", "Owned", "", "ConcernedApe", 2016, "PC, Switch", "Simulator, RPG", "Farming, Fantasy", "2019,2021,2024", false, true, false, "Cozy autumn game."},
-	{"Hollow Knight", "up_next", "Pirated", "", "Team Cherry", 2017, "PC, Switch", "Metroidvania, Platform", "Fantasy, Dark", "", false, false, false, ""},
+	{"Hollow Knight", "up_next", "Borrowed", "", "Team Cherry", 2017, "PC, Switch", "Metroidvania, Platform", "Fantasy, Dark", "", false, false, false, ""},
 	{"Disco Elysium", "up_next", "Borrowed", "", "ZA/UM", 2019, "PC", "RPG, Adventure", "Mystery, Drama", "", false, false, false, ""},
-	{"Celeste", "up_next", "Pirated", "", "Maddy Makes Games", 2018, "PC, Switch", "Platform, Indie", "Drama", "", false, false, false, ""},
+	{"Celeste", "up_next", "Family share", "", "Maddy Makes Games", 2018, "PC, Switch", "Platform, Indie", "Drama", "", false, false, false, ""},
 	{"Return of the Obra Dinn", "up_next", "Owned", "", "Lucas Pope", 2018, "PC", "Puzzle, Adventure", "Mystery, Historical", "", false, false, false, ""},
-	{"Baldur's Gate 3", "backlog", "Pirated", "Baldur's Gate", "Larian Studios", 2023, "PC", "RPG, Strategy", "Fantasy", "", false, false, false, "Wait for a quiet month."},
+	{"Baldur's Gate 3", "backlog", "Nope", "Baldur's Gate", "Larian Studios", 2023, "PC", "RPG, Strategy", "Fantasy", "", false, false, false, "Wait for a quiet month."},
 	{"Elden Ring", "backlog", "Borrowed", "Souls", "FromSoftware", 2022, "PC, PS5", "RPG, Hack and slash", "Fantasy, Open world", "", false, false, false, ""},
 	{"Cyberpunk 2077", "backlog", "Nope", "", "CD Projekt Red", 2020, "PC", "RPG, Shooter", "Science fiction, Open world", "", false, false, false, ""},
 	{"Death Stranding", "backlog", "Free to play", "", "Kojima Productions", 2019, "PC, PS4", "Adventure", "Science fiction, Open world", "", false, false, false, ""},
@@ -225,7 +225,7 @@ func main() {
 	}
 	// Made-up prices for the Deals page (nothing is read from IsThereAnyDeal): cents of EUR. Hollow Knight sits at its
 	// historical low, Celeste near it; Baldur's Gate 3 has no deal; Cyberpunk has no match; Pentiment waits; Elden Ring is hidden.
-	// Only games that are not owned and not played are on Deals, so these are Pirated, Borrowed, Family share or Nope.
+	// Only games that are not owned and not played are on Deals, so these are Borrowed, Family share or Nope (Pirated games are not listed).
 	for _, f := range []struct {
 		game, shop       string
 		price, regular   int
