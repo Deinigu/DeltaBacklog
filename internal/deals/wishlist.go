@@ -174,6 +174,7 @@ type WishItem struct {
 	Price   *PriceData `json:"price"`
 	Alert   *WishAlert `json:"alert"`
 	Muted   bool       `json:"muted"`
+	Image   string     `json:"image"` // file under /covers/ ("steam/123.jpg"), "" until downloaded (the API fills it; see ImageName)
 }
 
 // Wishlist is the section: the games shown, the hidden ones, and what the last read said.
@@ -399,6 +400,7 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 	}
 	progress()
 	nameWishGames(ctx, d, opt.Wishlist, active)
+	syncWishImages(ctx, opt.Wishlist, active)
 	// Matching, in bulk when the source can. A rate limit here only ends the matching: what is matched is still priced
 	// below, and the games not looked up yet wait for the next run.
 	var cut error
@@ -503,6 +505,20 @@ func nameWishGames(ctx context.Context, d *sql.DB, wl WishlistSource, active []w
 			}
 		}
 	}
+}
+
+// syncWishImages brings the pictures of the active games into the local cache (a few batched requests, only for the games
+// that have no picture yet). A source without pictures, or an error, leaves the coloured initials.
+func syncWishImages(ctx context.Context, wl WishlistSource, active []wishRow) {
+	is, ok := wl.(ImageSource)
+	if !ok {
+		return
+	}
+	ids := make([]int64, 0, len(active))
+	for _, r := range active {
+		ids = append(ids, r.appid)
+	}
+	is.SyncImages(ctx, ids)
 }
 
 // matchWishBulk looks up the ITAD ids of the games in todo with the bulk endpoint, MaxLookupBatch per request. It stops at the

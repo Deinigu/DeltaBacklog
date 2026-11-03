@@ -140,15 +140,15 @@ func TestSteamFromEnvNeverLogsTheID(t *testing.T) {
 	log.SetOutput(&logged)
 	defer log.SetOutput(os.Stderr)
 	t.Setenv("STEAM_ID", "")
-	if steamFromEnv() != nil {
+	if steamFromEnv(t.TempDir()) != nil {
 		t.Error("no STEAM_ID, no wishlist")
 	}
 	t.Setenv("STEAM_ID", "not-an-id-123")
-	if steamFromEnv() != nil || strings.Contains(logged.String(), "not-an-id-123") || !strings.Contains(logged.String(), "17-digit") {
+	if steamFromEnv(t.TempDir()) != nil || strings.Contains(logged.String(), "not-an-id-123") || !strings.Contains(logged.String(), "17-digit") {
 		t.Errorf("bad id: %q", logged.String())
 	}
 	t.Setenv("STEAM_ID", "76561198000000000")
-	if steamFromEnv() == nil || strings.Contains(logged.String(), "76561198000000000") {
+	if steamFromEnv(t.TempDir()) == nil || strings.Contains(logged.String(), "76561198000000000") {
 		t.Errorf("good id: %q", logged.String())
 	}
 }

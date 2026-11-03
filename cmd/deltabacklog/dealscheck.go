@@ -34,7 +34,7 @@ func telegramFromEnv() deals.Notifier {
 
 // steamFromEnv builds the wishlist reader from STEAM_ID (the 17-digit SteamID64). It returns nil (no wishlist section) when
 // it is not set or malformed; the log never holds the value.
-func steamFromEnv() deals.WishlistSource {
+func steamFromEnv(coverDir string) deals.WishlistSource {
 	s, err := deals.NewSteam(os.Getenv("STEAM_ID"))
 	if err != nil {
 		log.Print("Steam wishlist off: STEAM_ID must be a 17-digit SteamID64")
@@ -43,6 +43,7 @@ func steamFromEnv() deals.WishlistSource {
 	if s == nil {
 		return nil
 	}
+	s.Images = deals.NewImageCache(deals.ImageSubdir(coverDir)) // wishlist pictures, served from /covers/steam/
 	return s
 }
 

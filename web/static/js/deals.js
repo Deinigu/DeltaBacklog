@@ -15,6 +15,26 @@ export const SORTS = [
   { key: 'price', label: 'Lowest price' },
 ];
 
+/** Every way the list can be ordered: the phone's select shows them all, the desktop table's headers sort by the column ones. */
+export const SORT_KEYS = [
+  ...SORTS,
+  { key: 'name', label: 'Name' },
+  { key: 'lowest', label: 'Lowest ever' },
+  { key: 'shop', label: 'Shop' },
+  { key: 'ends', label: 'Ends soonest' },
+  { key: 'added', label: 'Recently added', wish: true },
+];
+/** The columns of the desktop table, left to right (image and actions have no header sort). `wish`: only the wishlist has it. */
+export const COLUMNS = [
+  { key: 'name', label: 'Name' },
+  { key: 'cut', label: 'Discount' },
+  { key: 'price', label: 'Price' },
+  { key: 'lowest', label: 'Lowest ever' },
+  { key: 'shop', label: 'Shop' },
+  { key: 'ends', label: 'Ends' },
+  { key: 'added', label: 'Added', wish: true },
+];
+
 /** "€7.49". Falls back to "7.49 XYZ" for a currency code the browser does not know. */
 export function formatMoney(cents, currency, locale = LOCALE) {
   if (cents == null) return '';
@@ -69,6 +89,51 @@ const COMPARE = {
   price: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
 };
 
+const missing = (v) => v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v));
+/** A comparator on a value of the row; rows without a value always go last, whichever way the list is turned. */
+const byValue = (get, cmp, dir) => (a, b) => {
+  const x = get(a), y = get(b);
+  if (missing(x) || missing(y)) return missing(x) - missing(y);
+  return dir * cmp(x, y);
+};
+const num = (x, y) => x - y;
+const text = (x, y) => String(x).localeCompare(String(y), 'en');
+const when = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+
+/**
+ * The comparator of rows (each with `p`, the price) for a sort key; titleOf reads a row's title. dir 1 is the key's natural order
+ * (biggest discount first, cheapest first, A to Z, ends soonest, added most recently), -1 the reverse. Ties fall back to the title.
+ */
+export function rowSorter(key, dir, titleOf) {
+  const d = dir === -1 ? -1 : 1;
+  const get = {
+    name: [titleOf, text],
+    price: [(r) => r.p.price, num],
+    lowest: [(r) => r.p.low_price, num],
+    shop: [(r) => r.p.shop, text],
+    ends: [(r) => (r.p.price != null && r.p.expiry && formatDate(r.p.expiry) ? r.p.expiry : null), when],
+    added: [(r) => r.item?.added_at, (x, y) => when(y, x)],
+  }[key];
+  const legacy = COMPARE[key] || COMPARE.cut;
+  const main = get ? byValue(get[0], get[1], d) : (a, b) => d * legacy(a.p, b.p);
+  return (a, b) => main(a, b) || text(titleOf(a), titleOf(b));
+}
+
+/** The small tags of a row, as [{text, cls}]: the price badge, the standing alert (not twice when both say "historical low"), New. */
+export function tagsOf(badge, alert, isNew) {
+  const tags = [];
+  if (badge) tags.push({ text: BADGE_LABEL[badge], cls: badge === 'low' ? 'low' : 'near' });
+  if (alert && !(badge === 'low' && alert.kind === 'historical')) tags.push({ text: ALERT_LABEL[alert.kind] || 'Price alert', cls: 'alert' });
+  if (alert && isNew) tags.push({ text: 'New', cls: 'new' });
+  return tags;
+}
+
+/** "Lowest €7.49 · GOG" for the muted line of a row; 'No price history' without one. */
+export function lowLine(p) {
+  if (p.low_price == null) return 'No price history';
+  return `Lowest ${formatMoney(p.low_price, p.currency)}${p.low_shop ? ` · ${p.low_shop}` : ''}`;
+}
+
 /**
  * What the Deals page lists.
  *  games    the library (store.games); info  the server's answer {matches, prices, watched}
@@ -76,7 +141,7 @@ const COMPARE = {
  * Returns {rows, unmatched, waiting}: rows are games with a cached price (a row has `p`, the price, and `badge`), unmatched
  * are games ITAD has no match for, waiting are matched games whose prices have not been read yet.
  */
-export function buildDeals(games, info, { statuses = null, sort = 'cut', alertsOnly = false } = {}) {
+export function buildDeals(games, info, { statuses = null, sort = 'cut', dir = 1, alertsOnly = false } = {}) {
   const prices = new Map((info?.prices || []).map((p) => [p.game_id, p]));
   const matches = new Map((info?.matches || []).map((m) => [m.game_id, m]));
   const alerts = new Map((info?.alerts || []).map((a) => [a.game_id, a]));
@@ -91,9 +156,8 @@ export function buildDeals(games, info, { statuses = null, sort = 'cut', alertsO
     else if (m && !m.itad_id) unmatched.push({ game, match: m });
     else if (m) waiting.push({ game, match: m });
   }
-  const cmp = COMPARE[sort] || COMPARE.cut;
   const title = (a, b) => a.game.title.localeCompare(b.game.title, 'en');
-  rows.sort((a, b) => cmp(a.p, b.p) || title(a, b));
+  rows.sort(rowSorter(sort, dir, (r) => r.game.title));
   unmatched.sort(title);
   waiting.sort(title);
   return { rows, unmatched, waiting };
@@ -105,7 +169,7 @@ export function buildDeals(games, info, { statuses = null, sort = 'cut', alertsO
  * `item`, `p` (the price), `badge` and `alert`; unmatched are games ITAD does not know, waiting are games whose prices have not
  * been read yet. alertsOnly keeps the games with a standing price alert.
  */
-export function buildWishlist(info, { sort = 'cut', alertsOnly = false } = {}) {
+export function buildWishlist(info, { sort = 'cut', dir = 1, alertsOnly = false } = {}) {
   const rows = [], unmatched = [], waiting = [];
   for (const item of info?.wishlist?.items || []) {
     const p = item.price, alert = item.alert || null;
@@ -114,9 +178,8 @@ export function buildWishlist(info, { sort = 'cut', alertsOnly = false } = {}) {
     else if (item.matched && !item.itad_id) unmatched.push({ item });
     else waiting.push({ item });
   }
-  const cmp = COMPARE[sort] || COMPARE.cut;
   const title = (a, b) => a.item.title.localeCompare(b.item.title, 'en');
-  rows.sort((a, b) => cmp(a.p, b.p) || title(a, b));
+  rows.sort(rowSorter(sort, dir, (r) => r.item.title));
   unmatched.sort(title);
   waiting.sort(title);
   return { rows, unmatched, waiting };
