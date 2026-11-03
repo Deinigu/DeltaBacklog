@@ -190,6 +190,8 @@ export const seriesUnhide = (collectionId, igdbId) => request('POST', 'api/serie
 export const similarList = () => request('GET', 'api/similar');
 /** Start reading the similar games from IGDB in the background; poll similarList() for its progress. */
 export const similarRefresh = () => request('POST', 'api/similar/refresh');
+/** Resolves everything the owner hid, from the database only: {deals: [{id, title, cover, cover_v, poster, poster_v, hidden_at}], similar: [{igdb_id, title, year, cover, v, because: [titles], hidden_at}], series: [{collection_id, igdb_id, title, year, cover, v, series, hidden_at}]}. */
+export const hiddenList = () => request('GET', 'api/hidden');
 export const similarHide = (igdbId) => request('POST', 'api/similar/hide', { igdb_id: igdbId });
 export const similarUnhide = (igdbId) => request('POST', 'api/similar/unhide', { igdb_id: igdbId });
 /** One IGDB game as a quick-add candidate (the Add button of a game the library does not have). */
@@ -299,6 +301,49 @@ export async function loadLinkPending() {
 /** Refresh store.dealsUnseen (the badge on Deals in the navigation). Reads the server's cache only, never IsThereAnyDeal. */
 export async function loadDealsUnseen() {
   try { store.dealsUnseen = (await dealsList()).unseen || 0; } catch { store.dealsUnseen = 0; }
+}
+
+/**
+ * Update a linked game's details from its IGDB game. mode 'empty' fills the empty fields, 'replace' overwrites the ones IGDB
+ * has a value for. Without apply nothing is saved and {changes:[{field,label,old,new}]} previews it. With apply the
+ * local game is replaced by the server's copy; the answer also has `undo`, a patch for patchGame.
+ */
+export async function igdbDetails(gameId, mode, apply = false) {
+  const data = await request('POST', `api/games/${gameId}/igdb-details`, { mode, apply });
+  if (apply && data.game) {
+    const g = store.byId.get(gameId);
+    if (g) { Object.assign(g, data.game); indexGame(g); }
+    gamesChanged(gameId);
+    fetch('api/games').catch(() => {}); // keeps the service worker's offline copy of the list current
+  }
+  return data;
+}
+
+// ---- Needs attention ----
+/** The games the owner told the page to ignore: {group: [game ids]}. */
+export async function attentionIgnored() {
+  return (await request('GET', 'api/attention/ignored')).ignored || {};
+}
+
+/** Ignore (or stop ignoring) one game in one group of the page. Resolves the new {group: [ids]}. */
+export async function attentionIgnore(group, gameId, ignore = true) {
+  return (await request('POST', 'api/attention/ignore', { group, game_id: gameId, ignore })).ignored || {};
+}
+
+// ---- bulk HowLongToBeat lookup (Needs attention) ----
+/** The run's state: {running, done, total, found, manual:[game ids needing a hand pick], report, failed}. */
+export const ttbSyncStatus = () => request('GET', 'api/ttb/sync');
+export const ttbSyncStart = () => request('POST', 'api/ttb/sync', {});
+export const ttbSyncCancel = () => request('POST', 'api/ttb/sync/cancel', {});
+
+/** Reload the games the server changed on its own (a finished background run) into the store. */
+export async function refreshGames() {
+  const fresh = await getJSON('api/games');
+  for (const f of fresh) {
+    const g = store.byId.get(f.id);
+    if (g) { Object.assign(g, f); indexGame(g); }
+  }
+  gamesChanged();
 }
 
 // ---- rankings ----

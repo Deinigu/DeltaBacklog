@@ -112,7 +112,9 @@ async function page(width, height, mobile) {
   await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); // the manuals show the dark theme
   return p;
 }
-const shot = (p, name) => p.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 78 });
+// ONLY=hidden-phone,deals-phone: write just these images (the rest of the run still happens, so the data is the same)
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
+const shot = (p, name) => (only && !only.includes(name) ? null : p.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 78 }));
 const go = async (p, hash) => { await p.goto('about:blank'); await p.goto(`${BASE}/${hash}`, { waitUntil: 'networkidle0' }); await wait(900); };
 const clickText = (p, selector, text) => p.$$eval(selector, (els, t) => { const e = els.find((x) => x.textContent.trim().includes(t)); if (e) e.click(); return !!e; }, text);
 
@@ -166,6 +168,23 @@ await shot(p, 'similar-phone');
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
 
+if (!process.env.BASE_URL) { // hide something in each place (Deals, Similar games, Series) so the Hidden page has all three groups
+  await p.evaluate(async () => {
+    const get = async (u) => (await fetch(u)).json();
+    const send = (method, url, body) => fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
+    const deal = (await get('/api/deals')).watched.slice(0, 2);
+    for (const id of deal) await send('PUT', `/api/deals/hidden/${id}`);
+    const sim = (await get('/api/similar')).suggestions.filter((s) => !s.hidden).slice(0, 2);
+    for (const s of sim) await send('POST', '/api/similar/hide', { igdb_id: s.igdb_id });
+    const series = (await get('/api/series/missing')).series.filter((s) => s.missing.length).slice(0, 2);
+    for (const s of series) await send('POST', '/api/series/hide', { collection_id: s.missing[0].collection_id, igdb_id: s.missing[0].igdb_id });
+  });
+}
+await p.setViewport({ width: 390, height: 1900, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); // tall enough for all three groups
+await go(p, '#/hidden'); await wait(1200);
+await shot(p, 'hidden-phone');
+await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+
 await go(p, '#/stats');
 await shot(p, 'stats-phone');
 
@@ -202,6 +221,10 @@ if (!process.env.BASE_URL) { // never write to a server we did not start
 
 await go(p, '#/link'); // needs at least one game waiting in the IGDB review queue (see the note at the top)
 await shot(p, 'link-phone');
+
+await go(p, '#/attention'); // the groups are computed from the games already loaded; the first one starts open
+await p.$$eval('details.att-group', (d) => d.forEach((x) => { x.open = /Uncertain|No time to beat/.test(x.textContent); })); await wait(300); // a few groups open, so the page shows its variety
+await shot(p, 'attention-phone');
 
 await go(p, '#/view/2'); // "Up next"
 await clickText(p, '.view-head .btn', 'Reorder'); await wait(700);
