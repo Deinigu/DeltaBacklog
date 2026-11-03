@@ -589,7 +589,7 @@ func evaluateWish(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 		if kind == "" || !alertDue(r.muted, p.FetchedAt, deref(p.Expiry), *p.Price, r.lastP, r.lastAt, now, fetchedSince) {
 			continue
 		}
-		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: kind, Price: *p.Price, Currency: p.Currency, Cut: *p.Cut, Shop: deref(p.Shop), URL: deref(p.URL)})
+		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: kind, Price: *p.Price, Currency: p.Currency, Cut: *p.Cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt)})
 	}
 	for _, a := range out {
 		if _, err := d.Exec(`UPDATE wish_item SET last_alert_price = ?, last_alert_kind = ?, last_alert_at = ?, seen = 0, pending = 1 WHERE appid = ?`,
@@ -598,6 +598,13 @@ func evaluateWish(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 		}
 	}
 	return out, nil
+}
+
+func deref64(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+	return *n
 }
 
 func deref(s *string) string {
@@ -623,7 +630,7 @@ func pendingWishAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 		if p.Cut != nil {
 			cut = *p.Cut
 		}
-		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: r.lastKind, Price: *p.Price, Currency: p.Currency, Cut: cut, Shop: deref(p.Shop), URL: deref(p.URL)})
+		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: r.lastKind, Price: *p.Price, Currency: p.Currency, Cut: cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt)})
 	}
 	return out, nil
 }

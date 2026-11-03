@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -36,19 +37,21 @@ func (h *histSource) LowSince(_ context.Context, id, _ string, since time.Time) 
 }
 
 type sink struct {
-	mu     sync.Mutex
-	sent   []string
-	err    error
-	failIf func(text string) bool // fail only the messages it says yes to
+	mu       sync.Mutex
+	sent     []string
+	previews []string // the preview address of each sent message
+	err      error
+	failIf   func(text string) bool // fail only the messages it says yes to
 }
 
-func (s *sink) Send(_ context.Context, text string) error {
+func (s *sink) Send(_ context.Context, text, preview string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil || (s.failIf != nil && s.failIf(text)) {
 		return errors.New("Telegram could not be reached")
 	}
 	s.sent = append(s.sent, text)
+	s.previews = append(s.previews, preview)
 	return nil
 }
 
@@ -98,8 +101,8 @@ func TestAlertRule(t *testing.T) {
 	if strings.Join(src.calls, ",") != "g2,g3,g5" {
 		t.Errorf("history calls %v", src.calls)
 	}
-	if len(sk.sent) != 2 || !res.Sent || !strings.Contains(sk.sent[0], "historical low") || !strings.Contains(sk.sent[1], "lowest in 2 years") ||
-		!strings.Contains(sk.sent[0], "€5.00 at Steam") || !strings.Contains(sk.sent[0], "https://shop.example/x") {
+	if len(sk.sent) != 2 || !res.Sent || !strings.Contains(sk.sent[0], "Historical low") || !strings.Contains(sk.sent[1], "Lowest in 2 years") ||
+		!strings.Contains(sk.sent[0], "€5.00</b>") || !strings.Contains(sk.sent[0], "https://shop.example/x") {
 		t.Errorf("messages %q", sk.sent)
 	}
 	l, _ := Load(d)
@@ -248,27 +251,150 @@ func TestHistoryRateLimitKeepsWhatWasDone(t *testing.T) {
 	}
 }
 
-func TestMessages(t *testing.T) {
+var (
+	tagRe    = regexp.MustCompile(`</?([a-z]+)[^>]*>`)
+	entityRe = regexp.MustCompile(`&(lt|gt|amp|quot|#[0-9]+|#x[0-9a-fA-F]+);`)
+)
+
+// checkHTML fails when text is not something Telegram parses: only b, s, i and a tags (balanced, a with an https href),
+// and every other "<", ">" or "&" escaped.
+func checkHTML(t *testing.T, text string) {
+	t.Helper()
+	var stack []string
+	for _, m := range tagRe.FindAllStringSubmatch(text, -1) {
+		name := m[1]
+		switch name {
+		case "b", "s", "i":
+		case "a":
+			if !strings.HasPrefix(m[0], "</") && !regexp.MustCompile(`^<a href="https?://[^"<>]*">$`).MatchString(m[0]) {
+				t.Errorf("bad link tag %q in %q", m[0], text)
+			}
+		default:
+			t.Errorf("tag <%s> in %q", name, text)
+		}
+		if strings.HasPrefix(m[0], "</") {
+			if len(stack) == 0 || stack[len(stack)-1] != name {
+				t.Errorf("unbalanced </%s> in %q", name, text)
+				return
+			}
+			stack = stack[:len(stack)-1]
+		} else {
+			stack = append(stack, name)
+		}
+	}
+	if len(stack) != 0 {
+		t.Errorf("unclosed %v in %q", stack, text)
+	}
+	bare := entityRe.ReplaceAllString(tagRe.ReplaceAllString(text, ""), "")
+	if strings.ContainsAny(bare, "<>&") {
+		t.Errorf("unescaped character in %q", text)
+	}
+}
+
+func TestMessageShapes(t *testing.T) {
 	a := func(n string) Alert {
 		return Alert{Title: n, Kind: KindHistorical, Price: 749, Currency: "EUR", Shop: "GOG", URL: "https://x.example/" + n}
 	}
 	if m := Messages(nil); m != nil {
 		t.Error(m)
 	}
+
+	// Single, historical low: regular price, cut and the low it beats.
+	hist := Alert{Title: "Celeste", Kind: KindHistorical, Price: 499, Currency: "EUR", Cut: 75, Shop: "Steam", URL: "https://shop.example/c?a=1&b=2",
+		Regular: 1999, Low: 599, LowAt: "2025-03-12T10:00:00Z"}
+	want := "🔥 <b>Historical low</b>\n<b>Celeste</b>\n<b>€4.99</b>  <s>€19.99</s>  −75% at Steam\nLowest ever before: €5.99 (12 Mar 2025)\n" +
+		`<a href="https://shop.example/c?a=1&amp;b=2">View deal</a>`
+	g := messageGroups([]Alert{hist})
+	if len(g) != 1 || g[0].text != want || g[0].preview != "" {
+		t.Errorf("historical:\n%q\nwant\n%q", g[0].text, want)
+	}
+	checkHTML(t, g[0].text)
+
+	// Single, lowest in 2 years: 📉, the historical low as the reference.
+	two := hist
+	two.Kind, two.Low = KindTwoYear, 399
+	m := Messages([]Alert{two})
+	if len(m) != 1 || !strings.HasPrefix(m[0], "📉 <b>Lowest in 2 years</b>\n") || !strings.Contains(m[0], "Historical low: €3.99 (12 Mar 2025)") {
+		t.Errorf("two-year: %q", m)
+	}
+	checkHTML(t, m[0])
+
+	// A price that is the low itself has nothing to compare with.
+	same := hist
+	same.Low = 499
+	if m := Messages([]Alert{same}); strings.Contains(m[0], "before") {
+		t.Errorf("%q", m)
+	}
+
+	// Wishlist: tag, and a large preview of the Steam page.
+	wish := Alert{AppID: 504230, Title: "Celeste", Kind: KindHistorical, Price: 499, Currency: "EUR", Cut: 75, Shop: "Steam"}
+	g = messageGroups([]Alert{wish})
+	if g[0].preview != "https://store.steampowered.com/app/504230/" || !strings.Contains(g[0].text, "💙 Wishlist") || strings.Contains(g[0].text, "View deal") {
+		t.Errorf("wishlist: %+v", g[0])
+	}
+	checkHTML(t, g[0].text)
+
+	// A library game: no preview.
+	if g := messageGroups([]Alert{a("A")}); g[0].preview != "" {
+		t.Errorf("preview for a library game: %q", g[0].preview)
+	}
 	three := Messages([]Alert{a("A"), a("B"), a("C")})
-	if len(three) != 3 || three[0] != "Price alert\nA: €7.49 at GOG (historical low)\nhttps://x.example/A" {
+	if len(three) != 3 || !strings.Contains(three[0], "<b>A</b>") || !strings.Contains(three[0], `<a href="https://x.example/A">View deal</a>`) {
 		t.Errorf("%q", three)
 	}
-	four := Messages([]Alert{a("A"), a("B"), a("C"), {Title: "D", Kind: KindTwoYear, Price: 100, Currency: "SEK"}})
-	if len(four) != 1 || !strings.Contains(four[0], "4 games") || !strings.Contains(four[0], "D: 1.00 SEK (lowest in 2 years)") || !strings.Contains(four[0], "https://x.example/C") {
-		t.Errorf("%q", four)
+
+	// List: header and one compact entry per game; no preview even with wishlist games.
+	four := messageGroups([]Alert{a("A"), a("B"), a("C"), {AppID: 9, Title: "D", Kind: KindTwoYear, Price: 100, Currency: "SEK", Cut: 40, URL: "https://x.example/D"}})
+	if len(four) != 1 || four[0].preview != "" {
+		t.Fatalf("%+v", four)
 	}
+	lt := four[0].text
+	if !strings.HasPrefix(lt, "🔥 <b>4 price alerts</b>\n") || !strings.Contains(lt, `🔥 <a href="https://x.example/A"><b>A</b></a> €7.49`) ||
+		!strings.Contains(lt, `📉 <a href="https://x.example/D"><b>D</b></a> 1.00 SEK −40% 💙`) {
+		t.Errorf("list: %q", lt)
+	}
+	checkHTML(t, lt)
+	if len(four[0].ids) != 3 || len(four[0].wish) != 1 {
+		t.Errorf("%+v", four[0])
+	}
+}
+
+func TestMessagesEscapeHostileText(t *testing.T) {
+	bad := `<b>&"'><a href="x">`
+	one := Alert{Title: bad, Kind: KindHistorical, Price: 100, Currency: "EUR", Cut: 10, Regular: 200, Shop: bad, URL: `https://x.example/?q="><script>&a=<`, Low: 300, LowAt: "2025-01-01T00:00:00Z"}
+	for _, m := range [][]Alert{{one}, {one, one, one, one}, {{AppID: 5, Title: bad, Kind: KindTwoYear, Price: 1, Currency: bad}}} {
+		for _, text := range Messages(m) {
+			checkHTML(t, text)
+			if strings.Contains(text, "<script") || strings.Contains(text, bad) {
+				t.Errorf("hostile text got through: %q", text)
+			}
+		}
+	}
+	if !strings.Contains(Messages([]Alert{one})[0], "&lt;b&gt;&amp;\"'&gt;&lt;a href=\"x\"&gt;") {
+		t.Errorf("%q", Messages([]Alert{one})[0])
+	}
+	// An address that is not http(s) is no link.
+	if m := Messages([]Alert{{Title: "x", Kind: KindHistorical, Price: 1, Currency: "EUR", URL: "javascript:alert(1)"}}); strings.Contains(m[0], "<a ") {
+		t.Errorf("%q", m)
+	}
+	checkHTML(t, TestMessage())
+}
+
+func TestTestMessage(t *testing.T) {
+	m := TestMessage()
+	if !strings.HasPrefix(m, "✅ <b>DeltaBacklog is connected</b>\n") || !strings.Contains(m, "Example alert") || !strings.Contains(m, "<s>€19.99</s>") {
+		t.Errorf("%q", m)
+	}
+}
+
+func TestMessagesLong(t *testing.T) {
+	a := Alert{Title: strings.Repeat("x", 50), Kind: KindHistorical, Price: 749, Currency: "EUR", Shop: "GOG", URL: "https://x.example/a"}
 	var many []Alert
 	for i := 0; i < 200; i++ {
-		many = append(many, a(strings.Repeat("x", 50)))
+		many = append(many, a)
 	}
-	if m := Messages(many); len(m) != 1 || len([]rune(m[0])) > 4001 {
-		t.Errorf("long message: %d", len([]rune(m[0])))
+	if m := Messages(many); len(m) != 1 || utf16Len(m[0]) > 4096 {
+		t.Errorf("long message: %d messages, %d units", len(m), utf16Len(m[0]))
 	}
 }
 
@@ -424,12 +550,27 @@ func TestTelegramRequest(t *testing.T) {
 	defer srv.Close()
 	tg, _ := NewTelegram(testToken, testChat)
 	tg.base = srv.URL
-	if err := tg.Send(context.Background(), "hello\nworld"); err != nil {
+	if err := tg.Send(context.Background(), "<b>hello</b>\nworld", ""); err != nil {
 		t.Fatal(err)
 	}
 	if gotMethod != "POST" || gotPath != "/bot"+testToken+"/sendMessage" || gotType != "application/json" ||
-		body["chat_id"] != testChat || body["text"] != "hello\nworld" || body["disable_web_page_preview"] != true || len(body) != 3 {
+		body["chat_id"] != testChat || body["text"] != "<b>hello</b>\nworld" || body["parse_mode"] != "HTML" || len(body) != 4 {
 		t.Errorf("%s %s %s %v", gotMethod, gotPath, gotType, body)
+	}
+	if lp, _ := body["link_preview_options"].(map[string]any); lp["is_disabled"] != true || len(lp) != 1 {
+		t.Errorf("previews are not off: %v", body["link_preview_options"])
+	}
+	if _, old := body["disable_web_page_preview"]; old {
+		t.Error("the deprecated disable_web_page_preview is sent")
+	}
+
+	// A preview address turns it on, large.
+	if err := tg.Send(context.Background(), "x", "https://store.steampowered.com/app/7/"); err != nil {
+		t.Fatal(err)
+	}
+	lp, _ := body["link_preview_options"].(map[string]any)
+	if lp["url"] != "https://store.steampowered.com/app/7/" || lp["prefer_large_media"] != true || lp["is_disabled"] != nil || len(lp) != 2 {
+		t.Errorf("preview: %v", lp)
 	}
 }
 
@@ -450,7 +591,7 @@ func TestTelegramErrorsNeverHoldTheToken(t *testing.T) {
 	tg.base = srv.URL
 	for _, m := range []string{"400", "500", "redirect"} {
 		mode = m
-		err := tg.Send(context.Background(), "x")
+		err := tg.Send(context.Background(), "x", "")
 		if err == nil || strings.Contains(err.Error(), testToken) || strings.Contains(err.Error(), "bot") {
 			t.Errorf("%s: %v", m, err)
 		}
@@ -459,7 +600,7 @@ func TestTelegramErrorsNeverHoldTheToken(t *testing.T) {
 		}
 	}
 	srv.Close() // unreachable
-	if err := tg.Send(context.Background(), "x"); err == nil || strings.Contains(err.Error(), testToken) || strings.Contains(err.Error(), "127.0.0.1") {
+	if err := tg.Send(context.Background(), "x", ""); err == nil || strings.Contains(err.Error(), testToken) || strings.Contains(err.Error(), "127.0.0.1") {
 		t.Errorf("unreachable: %v", err)
 	}
 }
@@ -549,7 +690,7 @@ func TestStalePricesAndEndedDealsDoNotAlert(t *testing.T) {
 func TestLongListKeepsLinksWholeAndUnderTheLimit(t *testing.T) {
 	var many []Alert
 	for i := 0; i < 200; i++ {
-		many = append(many, Alert{GameID: int64(i + 1), Title: strings.Repeat("\U0001F3AE", 20), Kind: KindTwoYear, Price: 100, Currency: "EUR", Shop: "Steam", URL: "https://x.example/game/0123456789"})
+		many = append(many, Alert{GameID: int64(i + 1), Title: strings.Repeat("\U0001F3AE", 20) + "<&>", Kind: KindTwoYear, Price: 100, Currency: "EUR", Shop: "Steam", URL: "https://x.example/game/0123456789?a=1&b=2"})
 	}
 	groups := messageGroups(many)
 	if len(groups) != 1 || len(groups[0].ids) != 200 {
@@ -562,11 +703,7 @@ func TestLongListKeepsLinksWholeAndUnderTheLimit(t *testing.T) {
 	if !strings.Contains(text, "and ") || !strings.Contains(text, "more: open Deals") {
 		t.Errorf("no note about the rest: %q", text[len(text)-80:])
 	}
-	for _, l := range strings.Split(text, "\n") {
-		if strings.HasPrefix(l, "  https:") && l != "  https://x.example/game/0123456789" {
-			t.Errorf("a cut link: %q", l)
-		}
-	}
+	checkHTML(t, text) // every entry whole: balanced tags, no cut link or entity
 	if !utf8.ValidString(text) {
 		t.Error("invalid UTF-8")
 	}
@@ -582,7 +719,7 @@ func TestTelegramUserAgentAndRuneSafeReason(t *testing.T) {
 	defer srv.Close()
 	tg, _ := NewTelegram(testToken, testChat)
 	tg.base = srv.URL
-	err := tg.Send(context.Background(), "x")
+	err := tg.Send(context.Background(), "x", "")
 	if err == nil || !utf8.ValidString(err.Error()) || ua != "DeltaBacklog" {
 		t.Errorf("%v %q", err, ua)
 	}

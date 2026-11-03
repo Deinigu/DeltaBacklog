@@ -294,7 +294,7 @@ func (s *Server) dealsTelegramTest(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	if err := s.Notify.Send(ctx, "DeltaBacklog: test message. Price alerts will arrive here."); err != nil {
+	if err := s.Notify.Send(ctx, deals.TestMessage(), ""); err != nil {
 		log.Printf("deals: telegram test: %v", err)
 		writeErr(w, http.StatusBadGateway, err.Error(), nil)
 		return

@@ -113,6 +113,9 @@ type Alert struct {
 	Cut      int
 	Shop     string
 	URL      string
+	Regular  int64  // the regular price (0 = unknown)
+	Low      int64  // the historical low as read (0 = unknown)
+	LowAt    string // when that low was seen (RFC 3339, may be empty)
 }
 
 // expired reports whether a deal's end time (RFC 3339, empty = none given) has passed.
@@ -127,7 +130,8 @@ func expired(expiry string, now time.Time) bool {
 // a deal whose end time has passed.
 func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Alert, error) {
 	rows, err := d.Query(`SELECT p.game_id, g.title, p.currency, coalesce(p.cur_shop, ''), p.cur_price, p.cur_cut, coalesce(p.cur_url, ''),
-		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, '')
+		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, ''),
+			coalesce(p.cur_regular, 0), coalesce(p.low_at, '')
 		FROM deal_price p JOIN game g ON g.id = p.game_id LEFT JOIN deal_alert a ON a.game_id = p.game_id
 		WHERE ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
 	if err != nil {
@@ -140,7 +144,7 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Aler
 		var cut *int
 		var muted int
 		var lastAt, fetchedAt, expiry string
-		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt, &fetchedAt, &expiry); err != nil {
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt, &fetchedAt, &expiry, &a.Regular, &a.LowAt); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -149,6 +153,9 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Aler
 			continue
 		}
 		a.Price, a.Cut = *price, *cut
+		if low != nil {
+			a.Low = *low
+		}
 		out = append(out, a)
 	}
 	if err := rows.Close(); err != nil {
@@ -377,7 +384,7 @@ func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, wit
 	}
 	var first error
 	for _, m := range messageGroups(pend) {
-		if err := notify.Send(ctx, m.text); err != nil {
+		if err := notify.Send(ctx, m.text, m.preview); err != nil {
 			if first == nil {
 				first = err
 			}
@@ -405,7 +412,8 @@ func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, wit
 // is still at or below the announced one and its deal has not ended.
 func pendingAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 	rows, err := d.Query(`SELECT a.game_id, g.title, a.last_alert_kind, p.cur_price, p.currency, coalesce(p.cur_cut, 0), coalesce(p.cur_shop, ''),
-		coalesce(p.cur_url, ''), coalesce(p.cur_expiry, '')
+		coalesce(p.cur_url, ''), coalesce(p.cur_expiry, ''),
+			coalesce(p.cur_regular, 0), coalesce(p.low_price, 0), coalesce(p.low_at, '')
 		FROM deal_alert a JOIN deal_price p ON p.game_id = a.game_id JOIN game g ON g.id = a.game_id
 		WHERE a.pending = 1 AND a.muted = 0 AND a.last_alert_kind IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_price <= a.last_alert_price
 		AND ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
@@ -417,7 +425,7 @@ func pendingAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 	for rows.Next() {
 		var a Alert
 		var expiry string
-		if err := rows.Scan(&a.GameID, &a.Title, &a.Kind, &a.Price, &a.Currency, &a.Cut, &a.Shop, &a.URL, &expiry); err != nil {
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Kind, &a.Price, &a.Currency, &a.Cut, &a.Shop, &a.URL, &expiry, &a.Regular, &a.Low, &a.LowAt); err != nil {
 			return nil, err
 		}
 		if !expired(expiry, now) {
@@ -443,27 +451,141 @@ func (m Money) String() string {
 	return s + " " + m.Currency
 }
 
-func (a Alert) line() string {
-	title := a.Title
-	if r := []rune(title); len(r) > 200 {
-		title = string(r[:200]) + "…"
+// Telegram HTML: only <b>, <s>, <i> and <a href> are used, and all text goes through esc.
+func esc(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+// href is a link for an <a> tag, or "" when the address is not a plain http(s) one.
+func href(u string) string {
+	if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+		return ""
 	}
-	s := fmt.Sprintf("%s: %s", title, Money{a.Price, a.Currency})
-	if a.Shop != "" {
-		s += " at " + a.Shop
-	}
-	s += " (" + KindLabel(a.Kind) + ")"
-	if a.AppID > 0 {
-		s += " [wishlist]"
+	u = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1 // no control characters in an address
+		}
+		return r
+	}, u)
+	return esc(strings.NewReplacer(`"`, "%22", " ", "%20").Replace(u))
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
 	}
 	return s
 }
 
+func kindEmoji(kind string) string {
+	if kind == KindHistorical {
+		return "🔥"
+	}
+	return "📉"
+}
+
+func kindTitle(kind string) string {
+	if kind == KindHistorical {
+		return "Historical low"
+	}
+	return "Lowest in 2 years"
+}
+
+// day formats a stored time as "12 Mar 2025" ("" when it cannot be read).
+func day(s string) string {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return ""
+	}
+	return t.Format("2 Jan 2006")
+}
+
+// priceLine: "€4.99  €19.99  −75% at Steam" (the regular price struck through).
+func (a Alert) priceLine() string {
+	s := "<b>" + esc(Money{a.Price, a.Currency}.String()) + "</b>"
+	if a.Regular > a.Price {
+		s += "  <s>" + esc(Money{a.Regular, a.Currency}.String()) + "</s>"
+	}
+	if a.Cut > 0 {
+		s += fmt.Sprintf("  −%d%%", a.Cut)
+	}
+	if a.Shop != "" {
+		s += " at " + esc(clip(a.Shop, 60))
+	}
+	return s
+}
+
+// lowLine tells the low to compare with: before a historical low, the one it beats; for a two-year low, the historical one.
+func (a Alert) lowLine() string {
+	if a.Low <= 0 {
+		return ""
+	}
+	label := "Historical low"
+	if a.Kind == KindHistorical {
+		if a.Low <= a.Price {
+			return ""
+		}
+		label = "Lowest ever before"
+	}
+	s := label + ": " + esc(Money{a.Low, a.Currency}.String())
+	if d := day(a.LowAt); d != "" {
+		s += " (" + d + ")"
+	}
+	return s
+}
+
+// previewURL: a wishlist game's Steam page, whose art Telegram shows as a large preview.
+func (a Alert) previewURL() string {
+	if a.AppID > 0 {
+		return fmt.Sprintf("https://store.steampowered.com/app/%d/", a.AppID)
+	}
+	return ""
+}
+
+// html is the message of one alert.
+func (a Alert) html() string {
+	head := kindEmoji(a.Kind) + " <b>" + kindTitle(a.Kind) + "</b>"
+	if a.AppID > 0 {
+		head += "  ·  💙 Wishlist"
+	}
+	lines := []string{head, "<b>" + esc(clip(a.Title, 200)) + "</b>", a.priceLine()}
+	if l := a.lowLine(); l != "" {
+		lines = append(lines, l)
+	}
+	if h := href(a.URL); h != "" {
+		lines = append(lines, `<a href="`+h+`">View deal</a>`)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// entry is one game of a list: the kind, the title linked to the deal, the price and the cut.
+func (a Alert) entry() string {
+	t := "<b>" + esc(clip(a.Title, 100)) + "</b>"
+	if h := href(a.URL); h != "" {
+		t = `<a href="` + h + `">` + t + `</a>`
+	}
+	s := kindEmoji(a.Kind) + " " + t + " " + esc(Money{a.Price, a.Currency}.String())
+	if a.Cut > 0 {
+		s += fmt.Sprintf(" −%d%%", a.Cut)
+	}
+	if a.AppID > 0 {
+		s += " 💙"
+	}
+	return s
+}
+
+// TestMessage is the text sent by the "send a test" button: it says the bot works and shows what an alert looks like.
+func TestMessage() string {
+	example := Alert{Title: "Example Game", Kind: KindHistorical, Price: 499, Currency: "EUR", Cut: 75, Shop: "Steam", Regular: 1999, Low: 599, LowAt: "2025-03-12T00:00:00Z"}
+	return "✅ <b>DeltaBacklog is connected</b>\nPrice alerts will arrive here when a game hits its historical low or its lowest price in 2 years.\n\n<i>Example alert:</i>\n\n" + example.html()
+}
+
 // message is one text for Telegram and the games it tells about.
 type message struct {
-	text string
-	ids  []int64 // library games
-	wish []int64 // Steam app ids of wishlist games
+	text    string
+	preview string  // address for a large link preview ("" = none)
+	ids     []int64 // library games
+	wish    []int64 // Steam app ids of wishlist games
 }
 
 func (m *message) add(a Alert) {
@@ -489,20 +611,14 @@ func messageGroups(alerts []Alert) []message {
 	if len(alerts) <= maxSingles {
 		out := make([]message, len(alerts))
 		for i, a := range alerts {
-			out[i] = message{text: "Price alert\n" + a.line()}
+			out[i] = message{text: a.html(), preview: a.previewURL()}
 			out[i].add(a)
-			if a.URL != "" {
-				out[i].text += "\n" + a.URL
-			}
 		}
 		return out
 	}
-	m := message{text: fmt.Sprintf("Price alert: %d games\n", len(alerts))}
+	m := message{text: fmt.Sprintf("🔥 <b>%d price alerts</b>\n", len(alerts))}
 	for i, a := range alerts {
-		item := "\n• " + a.line()
-		if a.URL != "" {
-			item += "\n  " + a.URL
-		}
+		item := "\n" + a.entry()
 		if utf16Len(m.text)+utf16Len(item) > listLimit {
 			m.text += fmt.Sprintf("\n…and %d more: open Deals in the app", len(alerts)-i)
 			for _, rest := range alerts[i:] {

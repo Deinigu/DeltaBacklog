@@ -14,9 +14,10 @@ import (
 	"time"
 )
 
-// Notifier delivers a text message to the owner's phone.
+// Notifier delivers a message to the owner's phone. The text is Telegram HTML (see esc). preview, when not empty, is a
+// page whose large link preview is shown; otherwise previews are off.
 type Notifier interface {
-	Send(ctx context.Context, text string) error
+	Send(ctx context.Context, text, preview string) error
 }
 
 var (
@@ -59,9 +60,13 @@ func NewTelegram(token, chatID string) (*Telegram, error) {
 	}}, nil
 }
 
-// Send posts one message (no link preview).
-func (t *Telegram) Send(ctx context.Context, text string) error {
-	b, err := json.Marshal(map[string]any{"chat_id": t.chatID, "text": text, "disable_web_page_preview": true})
+// Send posts one HTML message, with a large link preview of preview or none.
+func (t *Telegram) Send(ctx context.Context, text, preview string) error {
+	lp := map[string]any{"is_disabled": true}
+	if preview != "" {
+		lp = map[string]any{"url": preview, "prefer_large_media": true}
+	}
+	b, err := json.Marshal(map[string]any{"chat_id": t.chatID, "text": text, "parse_mode": "HTML", "link_preview_options": lp})
 	if err != nil {
 		return err
 	}
