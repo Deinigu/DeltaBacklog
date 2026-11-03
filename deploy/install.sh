@@ -84,10 +84,10 @@ shots_is_mount() { [ "$(mount_point_of "$1" 2>/dev/null)" = "$1" ]; }
 name_off() { [ "$(env_value "$1" PUBLIC_NAME)" = off ]; }
 
 # merge_settings <new> <old>: a deploy's settings file (new) does not carry the Pi-only settings: SCREENSHOTS_DIR,
-# ALLOWED_HOSTS, PUBLIC_NAME and the Telegram settings come over from the installed one (old) when new has none, and with PUBLIC_NAME=off the
+# ALLOWED_HOSTS, PUBLIC_NAME, STEAM_ID and the Telegram settings come over from the installed one (old) when new has none, and with PUBLIC_NAME=off the
 # installed LISTEN_ADDR too (127.0.0.1:8081 behind a proxy; a deploy's file says :8081).
 merge_settings() {
-  for k in SCREENSHOTS_DIR ALLOWED_HOSTS PUBLIC_NAME TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+  for k in SCREENSHOTS_DIR ALLOWED_HOSTS PUBLIC_NAME STEAM_ID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
     v=$(env_value "$2" "$k")
     if [ -n "$v" ] && [ -z "$(env_value "$1" "$k")" ]; then echo "$k=$v" >> "$1"; fi
   done

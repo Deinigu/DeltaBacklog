@@ -1,9 +1,11 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
 import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
-import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest } from './api.js';
+import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
+  dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
 import { openDrawer } from './drawer.js';
-import { DEAL_STATUSES, SORTS, BADGE_LABEL, ALERT_LABEL, buildDeals, hiddenGames, scopeOf, formatMoney, formatDate, oldestCheck, safeLink, LOCALE } from './deals.js';
+import { openAdd } from './add.js';
+import { DEAL_STATUSES, SORTS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, formatDate, oldestCheck, safeLink, LOCALE } from './deals.js';
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
 
@@ -17,6 +19,7 @@ export function renderDeals(root) {
   let statuses = new Set(); // empty = all three
   let sort = 'cut';
   let alertsOnly = false; // the Alerts chip: only the games with a standing price alert
+  let view = 'library'; // 'library' (your games) or 'wishlist' (your Steam wishlist; only when the server has a STEAM_ID)
   let newIds = new Set(); // the alerts that were new when this visit began (they are marked seen at once)
   let seenSent = false;
   let alive = true;
@@ -31,7 +34,8 @@ export function renderDeals(root) {
     if (!alive) return;
     if (!seenSent && info.unseen > 0) { // opening Deals is seeing the alerts: remember which ones were new, then tell the server
       seenSent = true;
-      newIds = new Set((info.alerts || []).filter((a) => !a.seen).map((a) => a.game_id));
+      newIds = new Set([...(info.alerts || []).filter((a) => !a.seen).map((a) => a.game_id),
+        ...(info.wishlist?.items || []).filter((i) => i.alert && !i.alert.seen).map((i) => `w${i.appid}`)]);
       dealsAlertsSeen().then((r) => { store.dealsUnseen = r.unseen || 0; window.dispatchEvent(new Event('deals-unseen')); }).catch(() => { seenSent = false; });
     }
     draw();
@@ -82,6 +86,28 @@ export function renderDeals(root) {
       say(`${game.title} hidden.`);
       toastAction(`Hidden “${game.title}”`, 'Undo', () => setHidden(game, false));
     } else say(`${game.title} shown again.`);
+  }
+
+  async function setWishHidden(item, hide) {
+    try {
+      const refresh = info.refresh;
+      info = { ...(hide ? await dealsWishHide(item.appid) : await dealsWishUnhide(item.appid)), refresh };
+    } catch (e) { toast(e.message || (hide ? 'Could not hide the game' : 'Could not show the game again')); return; }
+    draw();
+    if (hide) {
+      say(`${item.title} hidden.`);
+      toastAction(`Hidden “${item.title}”`, 'Undo', () => setWishHidden(item, false));
+    } else say(`${item.title} shown again.`);
+  }
+  async function wishMute(item, off) {
+    try {
+      const refresh = info.refresh;
+      info = { ...(off ? await dealsWishMute(item.appid) : await dealsWishUnmute(item.appid)), refresh };
+    } catch (e) { toast(e.message || 'Could not change the alerts'); return; }
+    store.dealsUnseen = info.unseen || 0;
+    window.dispatchEvent(new Event('deals-unseen'));
+    draw();
+    say(`Alerts for ${item.title} are ${off ? 'off' : 'on'}.`);
   }
 
   async function mute(game) {
@@ -136,6 +162,51 @@ export function renderDeals(root) {
         alert ? h('button.hide-chip', { type: 'button', 'aria-label': `Turn off price alerts for ${game.title}`, onclick: () => mute(game) }, 'Mute') : null,
         hideBtn(game)));
   }
+  // A wishlist game is not in the library: no drawer, the title opens its Steam page, and "Add to library" opens the normal add
+  // form with the title; once it is in the library the server stops listing it here.
+  function wishActions(item, link) {
+    return h('span.si-actions', {},
+      link ? h('a.add-chip.deal-link', { href: link, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `Open the deal for ${item.title} in a new tab` }, 'View deal ↗') : null,
+      h('button.add-chip', { type: 'button', 'aria-label': `Add ${item.title} to your library`, onclick: () => openAdd({ query: item.title }) }, 'Add to library'),
+      item.alert ? h('button.hide-chip', { type: 'button', 'aria-label': `Turn off price alerts for ${item.title}`, onclick: () => wishMute(item, true) }, 'Mute')
+        : item.muted ? h('button.hide-chip', { type: 'button', 'aria-label': `Turn on price alerts for ${item.title}`, onclick: () => wishMute(item, false) }, 'Alerts off') : null,
+      h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${item.title}`, onclick: () => setWishHidden(item, true) }, 'Hide'));
+  }
+  const wishPoster = (item) => h('span.pst', {}, h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
+  const openSteam = (item) => window.open(steamStoreURL(item.appid), '_blank', 'noopener,noreferrer');
+  function wishRow({ item, p, alert }, badge) {
+    const link = p.price != null ? safeLink(p.url) : null;
+    const onSale = p.price != null && p.cut > 0;
+    const price = p.price == null
+      ? h('div.deal-price', {}, h('span', {}, 'No shop lists it right now'))
+      : h('div.deal-price', {},
+        h('b', {}, formatMoney(p.price, p.currency)),
+        onSale && p.regular > p.price ? h('s', {}, formatMoney(p.regular, p.currency)) : null,
+        onSale ? h('span.deal-cut', {}, `-${p.cut}%`) : null,
+        p.shop ? h('span', {}, `at ${p.shop}`) : null);
+    const low = p.low_price != null
+      ? `Lowest ever ${formatMoney(p.low_price, p.currency)}${p.low_shop ? ` at ${p.low_shop}` : ''}${p.low_at ? `, ${formatDate(p.low_at)}` : ''}`
+      : 'No price history';
+    const expiry = p.price != null && p.expiry && formatDate(p.expiry) ? ` · Ends ${formatDate(p.expiry)}` : '';
+    const isNew = alert && newIds.has(`w${item.appid}`);
+    const body = h('span.up-body', {},
+      h('span.up-title', {}, item.title),
+      price,
+      h('span.up-from', {}, low + expiry),
+      badge || alert ? h('span', {}, badge ? h('span.deal-badge' + (badge === 'low' ? '.low' : ''), {}, BADGE_LABEL[badge]) : null,
+        alert ? h('span.deal-badge.alert', { style: badge ? 'margin-left:6px' : null }, `Alert: ${ALERT_LABEL[alert.kind] || 'price'}`) : null,
+        isNew ? h('span.deal-badge.new', {}, 'New') : null) : null);
+    const aria = `${item.title}, wishlist, ${p.price == null ? 'not on sale' : formatMoney(p.price, p.currency)}${badge ? `, ${BADGE_LABEL[badge]}` : ''}${alert ? `, price alert: ${ALERT_LABEL[alert.kind] || 'price'}${isNew ? ', new' : ''}` : ''}. Opens the Steam page`;
+    return h('li.up-row', {},
+      h('button.up-open', { type: 'button', onclick: () => openSteam(item), 'aria-label': aria }, wishPoster(item), body),
+      wishActions(item, link));
+  }
+  function wishPlainRow({ item }, note) {
+    return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openSteam(item), 'aria-label': `${item.title}, ${note}. Opens the Steam page` }, wishPoster(item),
+      h('span.up-body', {}, h('span.up-title', {}, item.title), h('span.up-from', {}, note))),
+    wishActions(item, null));
+  }
+
   const hideBtn = (game) => h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${game.title}`, onclick: () => setHidden(game, true) }, 'Hide');
   function plainRow({ game, match }, note) {
     return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openDrawer(game), 'aria-label': `${game.title}, ${note}` }, poster(game),
@@ -154,10 +225,13 @@ export function renderDeals(root) {
     });
     const select = h('select', { 'aria-label': 'Sort by', onchange: (e) => { sort = e.target.value; draw(); } },
       SORTS.map((s) => h('option', { value: s.key, selected: s.key === sort || null }, s.label)));
-    const alertCount = buildDeals(store.games, info, { alertsOnly: true }).rows.length;
+    const alertCount = view === 'wishlist' ? buildWishlist(info, { alertsOnly: true }).rows.length : buildDeals(store.games, info, { alertsOnly: true }).rows.length;
     const alertChip = h('button.chip' + (alertCount ? '' : '.zero'), { type: 'button', 'aria-pressed': String(alertsOnly), title: 'Games at their historical low or their lowest price in 2 years',
       onclick: () => { alertsOnly = !alertsOnly; draw(); } }, 'Alerts ', h('span.c', {}, String(alertCount)));
-    return [h('div.chips', {}, ...chips, alertChip), h('div.deals-bar', {}, select)];
+    const views = info.wishlist ? h('div.chips', { role: 'group', 'aria-label': 'What to list' },
+      h('button.chip', { type: 'button', 'aria-pressed': String(view === 'library'), onclick: () => { view = 'library'; draw(); } }, 'Library ', h('span.c', {}, String(scope.size))),
+      h('button.chip', { type: 'button', 'aria-pressed': String(view === 'wishlist'), onclick: () => { view = 'wishlist'; draw(); } }, 'Wishlist ', h('span.c', {}, String(info.wishlist.items.length)))) : null;
+    return [views, h('div.chips', {}, ...(view === 'wishlist' ? [] : chips), alertChip), h('div.deals-bar', {}, select)].filter(Boolean);
   }
 
   function refreshBar() {
@@ -172,7 +246,40 @@ export function renderDeals(root) {
     return [btn, note];
   }
 
+  // The Wishlist view: the Steam wishlist games, with the same price rows (see wishRow).
+  function drawWishlist() {
+    const w = info.wishlist;
+    const { rows, unmatched, waiting } = buildWishlist(info, { sort, alertsOnly });
+    const [btn, note] = refreshBar();
+    const empty = alertsOnly ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
+      : w.items.length ? 'No games match these filters.'
+      : w.hidden.length ? 'All your wishlist games are hidden. Show them again below.'
+      : w.status ? '' : 'Press Refresh prices to read your Steam wishlist.';
+    const unsold = rows.filter((r) => r.p.price == null).map((r) => r.item.title);
+    page.replaceChildren(...[
+      h('h1', {}, 'Deals'),
+      h('p.hint', {}, 'Your Steam wishlist, not part of your library. A game leaves this list when you add it to your library or take it off your wishlist (for example by buying it); it is read from Steam when you press Refresh prices.'),
+      h('div.deals-tools', {}, btn, info.telegram ? h('button.chip', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null),
+      h('p.hint', {}, note),
+      w.status ? h('p.hint.deal-note', { role: 'status' }, w.status) : null,
+      ...controls(),
+      rows.length ? h('ul.up-list', {}, rows.map((r) => wishRow(r, r.badge))) : null,
+      unsold.length ? h('p.hint', {}, `No shop lists ${unsold.slice(0, 5).join(', ')}${unsold.length > 5 ? ` and ${unsold.length - 5} more` : ''}.`) : null,
+      !rows.length && empty ? h('div.empty', {}, empty) : null,
+      !alertsOnly && waiting.length ? h('p.hint', {}, `${waiting.length} ${waiting.length === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`) : null,
+      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
+        h('p.hint', {}, 'IsThereAnyDeal does not know these Steam apps (it is tried again after a week).'),
+        h('ul.up-list', {}, unmatched.map((u) => wishPlainRow(u, 'No match on IsThereAnyDeal')))) : null,
+      w.hidden.length ? h('details.hidden-list', {},
+        h('summary', {}, `Hidden (${w.hidden.length})`),
+        h('ul', {}, w.hidden.map((i) => h('li', {}, h('span', {}, i.title),
+          h('button.hide-chip', { type: 'button', 'aria-label': `Show ${i.title} again`, onclick: () => setWishHidden(i, false) }, 'Show again'))))) : null,
+    ].filter(Boolean));
+  }
+
   function draw() {
+    if (!info.wishlist) view = 'library';
+    if (view === 'wishlist') { drawWishlist(); return; }
     const { rows, unmatched, waiting } = buildDeals(store.games, info, { statuses, sort, alertsOnly });
     const [btn, note] = refreshBar();
     const country = h('label.deals-country', {}, 'Country',

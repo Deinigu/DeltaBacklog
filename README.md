@@ -94,7 +94,7 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
-- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com), with an alert when a game reaches its historical low or its lowest price in 2 years (in the app, and on your phone through a Telegram bot if you set one up).
+- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com), with an alert when a game reaches its historical low or its lowest price in 2 years (in the app, and on your phone through a Telegram bot if you set one up). Your public Steam wishlist can be listed there too (set `STEAM_ID`), kept apart from your library.
 - A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
 
 **Add games quickly (optional lookups)**
@@ -178,6 +178,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming and Similar games pages). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers and posters. |
 | `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the games you do not own and have not played). |
+| `STEAM_ID` | empty | Optional: your 17-digit SteamID64. Adds a **Wishlist** section to Deals with the games on your public Steam wishlist (kept apart from your library). No Steam key is needed. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | empty | Optional: a Telegram bot token (from @BotFather) and a chat id, to get the Deals price alerts on your phone. You can reuse the bot of another service. Without them the alerts only show in the app. |
 | `SHOTS_MIN_FREE_GB` | `5` | Read by the Pi's nightly backup script, not by the app: the screenshot copy leaves this much space free on the backup disk. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |

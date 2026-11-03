@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 User=deltabacklog
 Group=deltabacklog
-# ITAD_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and DATA_DIR (root-only file); the same one the app reads
+# ITAD_API_KEY, STEAM_ID, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and DATA_DIR (root-only file); the same one the app reads
 EnvironmentFile=/etc/deltabacklog.env
 WorkingDirectory=/var/lib/deltabacklog
 ExecStart=/opt/deltabacklog/deltabacklog deals-check

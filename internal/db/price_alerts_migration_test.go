@@ -50,7 +50,7 @@ func TestPriceAlertsMigration(t *testing.T) {
 	var low2y, checked sql.NullString
 	d.QueryRow(`PRAGMA user_version`).Scan(&version)
 	d.QueryRow(`SELECT cur_price, low2y_price, low2y_checked_at FROM deal_price WHERE game_id = 1`).Scan(&price, &low2y, &checked)
-	if version != 20 || price != 500 || low2y.Valid || checked.Valid {
+	if version != 21 || price != 500 || low2y.Valid || checked.Valid {
 		t.Fatalf("version %d price %d low2y %v checked %v", version, price, low2y, checked)
 	}
 	for _, q := range []string{

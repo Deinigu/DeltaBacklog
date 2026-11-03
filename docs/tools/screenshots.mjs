@@ -56,7 +56,8 @@ if (!BASE) {
   const port = await freePort();
   BASE = `http://127.0.0.1:${port}`;
   // Started in the repo root; the keys (if any) reach it through the environment.
-  server = spawn(exe, [], { cwd: ROOT, env: { ...childEnv, LISTEN_ADDR: `127.0.0.1:${port}`, DATA_DIR: data }, stdio: 'inherit' });
+  // STEAM_ID is a made-up id that only switches the Wishlist section of Deals on (the demo data holds a made-up wishlist; Refresh is never pressed, so Steam is not called).
+  server = spawn(exe, [], { cwd: ROOT, env: { ...childEnv, LISTEN_ADDR: `127.0.0.1:${port}`, DATA_DIR: data, STEAM_ID: '76561190000000000' }, stdio: 'inherit' });
   let up = false;
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/healthz`)).ok) { up = true; break; } } catch {} await new Promise((r) => setTimeout(r, 500)); }
   if (!up) { console.error(`the demo server did not answer at ${BASE}/healthz within 30 s`); process.exit(1); }
@@ -167,6 +168,10 @@ await shot(p, 'similar-phone');
 
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
+if (!process.env.BASE_URL) { // the Wishlist section (the demo server has a made-up STEAM_ID)
+  await clickText(p, 'button.chip', 'Wishlist'); await wait(600);
+  await shot(p, 'deals-wishlist-phone');
+}
 
 if (!process.env.BASE_URL) { // hide something in each place (Deals, Similar games, Series) so the Hidden page has all three groups
   await p.evaluate(async () => {

@@ -20,6 +20,13 @@ func TestMergeSettingsKeepsTelegram(t *testing.T) {
 	if want := "LISTEN_ADDR=:8081\nITAD_API_KEY=k\nTELEGRAM_BOT_TOKEN=123456789:abc\nTELEGRAM_CHAT_ID=-1001\n"; string(b) != want {
 		t.Errorf("%q, want %q", b, want)
 	}
+	// So does the Steam id of the wishlist.
+	os.WriteFile(oldf, []byte("STEAM_ID=76561198000000000\n"), 0o600)
+	os.WriteFile(newf, []byte("ITAD_API_KEY=k\n"), 0o600)
+	run(t, "install.sh", "INSTALL_LIB", "merge_settings '"+filepath.ToSlash(newf)+"' '"+filepath.ToSlash(oldf)+"'")
+	if b, _ := os.ReadFile(newf); string(b) != "ITAD_API_KEY=k\nSTEAM_ID=76561198000000000\n" {
+		t.Errorf("the installed Steam id was not kept: %q", b)
+	}
 	// A new value in the deploy's file wins over the installed one.
 	os.WriteFile(newf, []byte("TELEGRAM_CHAT_ID=-2002\n"), 0o600)
 	run(t, "install.sh", "INSTALL_LIB", "merge_settings '"+filepath.ToSlash(newf)+"' '"+filepath.ToSlash(oldf)+"'")

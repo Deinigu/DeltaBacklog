@@ -51,8 +51,9 @@ export const BADGE_LABEL = { low: 'Historical low', near: 'Near low (within 10%)
 export const ALERT_LABEL = { historical: 'Historical low', two_year: 'Lowest in 2 years' };
 /** The standing alert of a game (the server's info.alerts), or null. */
 export const alertOf = (info, gameId) => (info?.alerts || []).find((a) => a.game_id === gameId) || null;
-/** How many alerts the owner has not seen yet (the badge on the menu). */
-export const unseenCount = (info) => (info?.alerts || []).filter((a) => !a.seen).length;
+/** How many alerts the owner has not seen yet (the badge on the menu): library games and wishlist games. */
+export const unseenCount = (info) => (info?.alerts || []).filter((a) => !a.seen).length
+  + (info?.wishlist?.items || []).filter((i) => i.alert && !i.alert.seen).length;
 /** Whether the owner turned the alerts of this game off. */
 export const isMuted = (info, gameId) => (info?.muted || []).includes(gameId);
 
@@ -98,6 +99,32 @@ export function buildDeals(games, info, { statuses = null, sort = 'cut', alertsO
   return { rows, unmatched, waiting };
 }
 
+/**
+ * What the Wishlist section lists: the Steam wishlist games (info.wishlist.items; the server already left out hidden ones and
+ * the ones that are in the library). Same sorts and badges as the library rows. Returns {rows, unmatched, waiting}: rows have
+ * `item`, `p` (the price), `badge` and `alert`; unmatched are games ITAD does not know, waiting are games whose prices have not
+ * been read yet. alertsOnly keeps the games with a standing price alert.
+ */
+export function buildWishlist(info, { sort = 'cut', alertsOnly = false } = {}) {
+  const rows = [], unmatched = [], waiting = [];
+  for (const item of info?.wishlist?.items || []) {
+    const p = item.price, alert = item.alert || null;
+    if (alertsOnly && !(p && alert)) continue;
+    if (p) rows.push({ item, p, badge: badgeOf(p), alert });
+    else if (item.matched && !item.itad_id) unmatched.push({ item });
+    else waiting.push({ item });
+  }
+  const cmp = COMPARE[sort] || COMPARE.cut;
+  const title = (a, b) => a.item.title.localeCompare(b.item.title, 'en');
+  rows.sort((a, b) => cmp(a.p, b.p) || title(a, b));
+  unmatched.sort(title);
+  waiting.sort(title);
+  return { rows, unmatched, waiting };
+}
+
+/** The Steam store page of a wishlist game. */
+export const steamStoreURL = (appid) => `https://store.steampowered.com/app/${encodeURIComponent(appid)}`;
+
 /** The ids of the games Deals shows (the server's rule, hidden ones left out); empty until the server has answered. */
 export const scopeOf = (info) => new Set(info?.watched || []);
 
@@ -113,7 +140,7 @@ export const matchOf = (info, gameId) => (info?.matches || []).find((m) => m.gam
 
 /** The oldest time any shown price was read (what "last checked" can promise), or null. */
 export function oldestCheck(info) {
-  const times = (info?.prices || []).map((p) => p.fetched_at).filter(Boolean).sort();
+  const times = [...(info?.prices || []), ...(info?.wishlist?.items || []).map((i) => i.price).filter(Boolean)].map((p) => p.fetched_at).filter(Boolean).sort();
   return times[0] || null;
 }
 
