@@ -109,7 +109,7 @@ const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
 async function page(width, height, mobile) {
   const p = await browser.newPage();
   await p.setViewport({ width, height, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); // the manuals show the light theme
+  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); // the manuals show the dark theme
   return p;
 }
 const shot = (p, name) => p.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 78 });
@@ -202,6 +202,10 @@ if (!process.env.BASE_URL) { // never write to a server we did not start
 
 await go(p, '#/link'); // needs at least one game waiting in the IGDB review queue (see the note at the top)
 await shot(p, 'link-phone');
+
+await go(p, '#/attention'); // the groups are computed from the games already loaded; the first one starts open
+await p.$$eval('details.att-group', (d) => d.forEach((x) => { x.open = /Uncertain|No time to beat/.test(x.textContent); })); await wait(300); // a few groups open, so the page shows its variety
+await shot(p, 'attention-phone');
 
 await go(p, '#/view/2'); // "Up next"
 await clickText(p, '.view-head .btn', 'Reorder'); await wait(700);

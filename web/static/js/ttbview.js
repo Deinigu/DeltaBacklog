@@ -25,7 +25,7 @@ export function ttbSection(game) {
     const known = hasTimes(game);
     const actions = h('div.ttb-actions', {},
       h('button.btn', { type: 'button', onclick: () => go('edit') }, known ? '✎ Edit times' : '✎ Add times'),
-      h('button.btn', { type: 'button', onclick: () => go('hltb') }, 'Get from HowLongToBeat'));
+      h('button.btn', { type: 'button', 'data-act': 'hltb', onclick: () => go('hltb') }, 'Get from HowLongToBeat'));
     return [heading(ttbSourceNote(game)), known ? tiles() : h('p.ttb-empty', {}, 'No time yet'), actions];
   }
 

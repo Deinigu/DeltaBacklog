@@ -691,6 +691,45 @@ table.wait .num { text-align: right; font-variant-numeric: tabular-nums; }
 .link-page-link { flex: none; display: flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 8px; color: var(--accent); font-size: 13px; text-decoration: none; }
 .link-title:focus { outline: none; }
 
+/* ---- Needs attention + the relink prompt ---- */
+.att-page { max-width: 760px; }
+.att-body { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.att-body > .pill { align-self: flex-start; min-height: 44px; }
+.att-body > .hint { margin: 0; }
+.att-group { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.att-group > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 14px; cursor: pointer; list-style: none; font-weight: 600; }
+.att-group > summary::-webkit-details-marker { display: none; }
+.att-group > summary::before { content: "▸"; color: var(--muted); transition: transform .12s; }
+.att-group[open] > summary::before { transform: rotate(90deg); }
+.att-gtitle { flex: 1; min-width: 0; }
+.att-count { flex: none; padding: 2px 10px; border-radius: 10px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
+.att-ign-n { flex: none; color: var(--muted); font-size: 12px; font-weight: 400; }
+.att-group > .hint { margin: 0; padding: 0 14px 8px; }
+.att-group > .hint a { color: var(--accent); }
+.att-list { list-style: none; margin: 0; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+.att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 12px; background: var(--surface-2); }
+.att-row.is-ignored { opacity: .65; }
+.att-name { flex: 1 1 200px; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.att-title { font-weight: 600; overflow-wrap: anywhere; }
+.att-sub { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.att-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.att-actions .btn { min-height: 44px; }
+.att-ignore { color: var(--muted); }
+.att-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 14px 8px; }
+.att-sync .btn { min-height: 44px; }
+.att-sync-line { color: var(--muted); font-size: 13px; }
+.att-sync-line.bad { color: #ef4444; }
+.att-sync progress { width: 100%; }
+.relink-prompt { padding: 12px 14px; margin: 0 0 12px; border-radius: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.relink-prompt.floating { position: fixed; z-index: 80; left: 16px; right: 16px; bottom: calc(var(--nav-h) + var(--safe-b) + 12px); max-width: 520px; margin: 0 auto; box-shadow: var(--shadow); background: var(--surface); }
+@media (min-width: 900px) { .relink-prompt.floating { left: 226px; bottom: 24px; margin: 0; } }
+.relink-q { margin: 0 0 4px; overflow-wrap: anywhere; }
+.relink-prompt .hint { margin: 0 0 10px; }
+.relink-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.relink-actions .btn { min-height: 44px; flex: 1 1 120px; }
+.relink-changes { margin: 6px 0 10px; padding-left: 18px; font-size: 14px; max-height: 40vh; overflow: auto; }
+.relink-changes li { margin: 2px 0; overflow-wrap: anywhere; }
+
 /* ---- phone navigation: "More" holds the pages that do not fit in the bottom bar ---- */
 #nav .more-btn {
   flex: 1; min-height: var(--nav-h); display: flex; flex-direction: column; align-items: center; justify-content: center;
