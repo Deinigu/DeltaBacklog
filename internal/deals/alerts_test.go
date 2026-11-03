@@ -37,19 +37,21 @@ func (h *histSource) LowSince(_ context.Context, id, _ string, since time.Time) 
 }
 
 type sink struct {
-	mu     sync.Mutex
-	sent   []string
-	err    error
-	failIf func(text string) bool // fail only the messages it says yes to
+	mu       sync.Mutex
+	sent     []string
+	previews []string // the preview address of each sent message
+	err      error
+	failIf   func(text string) bool // fail only the messages it says yes to
 }
 
-func (s *sink) Send(_ context.Context, text, _ string) error {
+func (s *sink) Send(_ context.Context, text, preview string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil || (s.failIf != nil && s.failIf(text)) {
 		return errors.New("Telegram could not be reached")
 	}
 	s.sent = append(s.sent, text)
+	s.previews = append(s.previews, preview)
 	return nil
 }
 
@@ -251,7 +253,7 @@ func TestHistoryRateLimitKeepsWhatWasDone(t *testing.T) {
 
 var (
 	tagRe    = regexp.MustCompile(`</?([a-z]+)[^>]*>`)
-	entityRe = regexp.MustCompile(`&[#a-zA-Z0-9]+;`)
+	entityRe = regexp.MustCompile(`&(lt|gt|amp|quot|#[0-9]+|#x[0-9a-fA-F]+);`)
 )
 
 // checkHTML fails when text is not something Telegram parses: only b, s, i and a tags (balanced, a with an https href),
@@ -299,9 +301,7 @@ func TestMessageShapes(t *testing.T) {
 
 	// Single, historical low: regular price, cut and the low it beats.
 	hist := Alert{Title: "Celeste", Kind: KindHistorical, Price: 499, Currency: "EUR", Cut: 75, Shop: "Steam", URL: "https://shop.example/c?a=1&b=2",
-		Regular: 1999, Low: 459, LowAt: "2025-03-12T10:00:00Z"}
-	// (the low is above the price here: ITAD's cached low was not yet updated)
-	hist.Low = 599
+		Regular: 1999, Low: 599, LowAt: "2025-03-12T10:00:00Z"}
 	want := "🔥 <b>Historical low</b>\n<b>Celeste</b>\n<b>€4.99</b>  <s>€19.99</s>  −75% at Steam\nLowest ever before: €5.99 (12 Mar 2025)\n" +
 		`<a href="https://shop.example/c?a=1&amp;b=2">View deal</a>`
 	g := messageGroups([]Alert{hist})
@@ -394,7 +394,7 @@ func TestMessagesLong(t *testing.T) {
 		many = append(many, a)
 	}
 	if m := Messages(many); len(m) != 1 || utf16Len(m[0]) > 4096 {
-		t.Errorf("long message: %d", len(m))
+		t.Errorf("long message: %d messages, %d units", len(m), utf16Len(m[0]))
 	}
 }
 

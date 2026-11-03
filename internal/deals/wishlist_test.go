@@ -364,6 +364,9 @@ func TestWishlistAlerts(t *testing.T) {
 	if err != nil || len(res.Alerts) != 1 || res.Alerts[0].AppID != 10 || res.Alerts[0].GameID != 0 || res.Alerts[0].Kind != KindHistorical || !res.Sent {
 		t.Fatalf("%+v %v", res, err)
 	}
+	if len(sk.previews) != 1 || sk.previews[0] != "https://store.steampowered.com/app/10/" {
+		t.Errorf("preview: %q", sk.previews)
+	}
 	if len(sk.sent) != 1 || !strings.Contains(sk.sent[0], "Hollow Knight") || !strings.Contains(sk.sent[0], "Historical low") || !strings.Contains(sk.sent[0], "Wishlist") || !strings.Contains(sk.sent[0], "https://shop.example/x") {
 		t.Errorf("message: %q", sk.sent)
 	}

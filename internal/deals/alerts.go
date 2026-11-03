@@ -153,6 +153,9 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Aler
 			continue
 		}
 		a.Price, a.Cut = *price, *cut
+		if low != nil {
+			a.Low = *low
+		}
 		out = append(out, a)
 	}
 	if err := rows.Close(); err != nil {
@@ -458,7 +461,13 @@ func href(u string) string {
 	if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
 		return ""
 	}
-	return esc(strings.NewReplacer(`"`, "%22", " ", "%20", "\n", "").Replace(u))
+	u = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1 // no control characters in an address
+		}
+		return r
+	}, u)
+	return esc(strings.NewReplacer(`"`, "%22", " ", "%20").Replace(u))
 }
 
 func clip(s string, n int) string {
