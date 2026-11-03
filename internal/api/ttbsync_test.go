@@ -90,7 +90,7 @@ func TestBulkHLTBSavesOnlyConfidentMatches(t *testing.T) {
 	f := &bulkHLTB{answers: map[string][]hltb.Candidate{
 		"Portal":        {{ID: 1, Name: "Portal", Year: 2007, Hastily: 180, Normally: 300, Completely: 600}},
 		"Doom":          {{ID: 2, Name: "Doom", Year: 1993, Normally: 400}, {ID: 3, Name: "DOOM", Year: 2016, Normally: 700}}, // two namesakes, no year: a guess
-		"Zelda":         {{ID: 4, Name: "Zelda", Year: 2011, Normally: 900}},                                                   // another year
+		"Zelda":         {{ID: 4, Name: "Zelda", Year: 2011, Normally: 900}},                                                  // another year
 		"Hollow Knight": {{ID: 5, Name: "Hollow Knight", Year: 2017, Normally: 1500}},
 		"Celeste":       {{ID: 6, Name: "Celeste", Normally: 500}},
 	}}
