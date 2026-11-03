@@ -315,6 +315,4 @@ export function seriesProgress(games) {
   const closest = inProgress.map((s) => ({ name: s.name, finished: s.finished, total: s.total }))
     .sort((a, b) => (b.finished / b.total) - (a.finished / a.total) || b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
   return { total: list.length, completed: completed.length, inProgress: inProgress.length, notStarted: list.length - completed.length - inProgress.length, closest };
-}// ---------------------------------------------------------------------------------------------------------------
-// Time estimates and the wider figures of the Stats page. Every hour figure is an estimate: it adds up the stored
-// time to beat (ttbMinutes: "Main + extras", else the quickest, else the complete time) of the games that have one,
+}

@@ -257,6 +257,7 @@ func (s *Server) patchGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.IGDBID != nil && *in.IGDBID > 0 && (!curIGDB.Valid || curIGDB.Int64 != *in.IGDBID) { // only a new link needs its date
 		s.fillReleaseLater(id, *in.IGDBID)
+		s.relinkPosterLater(id, *in.IGDBID) // the automatic poster follows the link; clearing the link leaves it alone
 	}
 	g, err := LoadGame(s.DB, id)
 	if err != nil {

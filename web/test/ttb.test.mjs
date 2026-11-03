@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { store } from '../static/js/api.js';
-import { SHORT_MINUTES, ttbMinutes, isShort, formatTime, ttbTiles, ttbSourceNote, parseTime, timeInputValue, hltbPatch, hasTimes, TTB_KINDS, totalTime } from '../static/js/ttb.js';
+import { SHORT_MINUTES, ttbMinutes, isShort, formatTime, ttbTiles, ttbSourceNote, parseTime, timeInputValue, hltbPatch, hasTimes, TTB_KINDS } from '../static/js/ttb.js';
 import { emptyState, matches, cycle, GROUPS, FLAGS, stateFromView, stateFromQuery, stateToQuery, filterToJSON, activeCount, facetSignature } from '../static/js/filters.js';
 import { emptyMood, applyMood, moodCounts, moodIsEmpty } from '../static/js/pick.js';
 
@@ -83,11 +83,6 @@ test('the edit input shows hours, minutes below an hour, and survives a round tr
 
 test('a HowLongToBeat candidate becomes a patch with its source; missing kinds clear', () => {
   assert.deepEqual(hltbPatch({ hastily: 180, normally: 0, completely: 450 }), { ttb_hastily: 180, ttb_normally: null, ttb_completely: 450, ttb_source: 'hltb' });
-});
-
-test('total time adds the estimates and counts games with and without one', () => {
-  const t = totalTime([g({ ttb_normally: 90 }), g({ ttb_hastily: 30 }), g()]);
-  assert.deepEqual(t, { minutes: 120, hours: 2, known: 2, unknown: 1 });
 });
 
 // ---- filters ----

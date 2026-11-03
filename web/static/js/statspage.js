@@ -25,6 +25,7 @@ const HOURS_KEY = 'deltabacklog.statsHoursPerWeek';
 /** A card with a heading and an optional one-line explanation. `id` is the jump target; `wide` spans both columns on a desktop. */
 const card = (id, title, hint, ...body) => h('section.stat-card', { 'data-sec': id, tabindex: '-1' }, h('h2', {}, title), hint && h('p.hint', {}, hint), ...body);
 const wide = (c) => { c.classList.add('wide'); return c; };
+const tall = (c) => { c.classList.add('tall'); return c; };
 
 /** Horizontal bars as plain HTML: the label and the number are real text, so no text alternative is needed. `text` formats the number. */
 function barList(rows, { empty = 'Nothing to show yet.', value = (r) => r.count, text = (r) => r.count, cls = '' } = {}) {
@@ -69,16 +70,19 @@ function chartSvg(rows, series, W, xTitle, yTitle, fmt) {
     g.append(svg('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }));
     g.append(svg('text', { class: 'tick', x: L - 6, y: y(t) + 4, 'text-anchor': 'end' }, fmt(t)));
   }
+  const first = rows.map((r) => r.values[0]);
+  const topValue = Math.max(...first), lastShown = first.findLastIndex((v) => v > 0);
   rows.forEach((r, i) => {
     const cx = L + slot * i + slot / 2;
     r.values.forEach((v, k) => {
       const x = cx - gw / 2 + k * (bw + 2), top = y(v);
-      if (v > 0) {
-        g.append(svg('rect', { class: `bar ${series[k].cls}`, x, y: top, width: bw, height: T + ph - top, rx: Math.min(3, bw / 2) },
-          svg('title', {}, `${r.label}, ${series[k].name}: ${fmt(v)}`)));
-        if (series.length === 1 && bw >= 18) g.append(svg('text', { class: 'val', x: x + bw / 2, y: top - 4, 'text-anchor': 'middle' }, fmt(v)));
-      }
+      if (v > 0) g.append(svg('rect', { class: `bar ${series[k].cls}`, x, y: top, width: bw, height: T + ph - top, rx: Math.min(3, bw / 2) }));
+      // one series: only the highest bar and the latest year carry their value (the rest is in the axis, the tooltip and the table)
+      if (series.length === 1 && v > 0 && bw >= 12 && (v === topValue || i === lastShown)) g.append(svg('text', { class: 'val', x: x + bw / 2, y: top - 4, 'text-anchor': 'middle' }, fmt(v)));
     });
+    // the hover / touch target is the whole column, not just the (possibly 8px tall) bar
+    g.append(svg('rect', { class: 'hit', x: cx - slot / 2, y: T, width: slot, height: ph, fill: 'transparent' },
+      svg('title', {}, `${r.label}: ${r.values.map((v, k) => `${series[k].name} ${fmt(v)}`).join(', ')}`)));
     if (i % every === 0) g.append(svg('text', { class: 'tick', x: cx, y: H - B + 16, 'text-anchor': 'middle' }, r.label));
   });
   g.append(svg('line', { class: 'axis', x1: L, x2: W - R, y1: T + ph, y2: T + ph }));
@@ -179,8 +183,8 @@ function tile(value, label, sub) {
   return h('div.tile-stat', {}, h('b', {}, value), h('span', {}, label), sub && h('small', {}, sub));
 }
 
-const SECTIONS = [['finished', 'Finished'], ['left', 'Time left'], ['years', 'Years'], ['backlog', 'Backlog'], ['short', 'Shortest'],
-  ['outcomes', 'Outcomes'], ['library', 'Library'], ['series', 'Series'], ['waiting', 'Waiting']];
+const SECTIONS = [['finished', 'Finished'], ['left', 'Time left'], ['backlog', 'Backlog'], ['years', 'Years'], ['outcomes', 'Outcomes'],
+  ['short', 'Shortest'], ['series', 'Series'], ['library', 'Library'], ['waiting', 'Waiting']];
 
 export function renderStats(root) {
   const games = store.games;
@@ -198,9 +202,9 @@ export function renderStats(root) {
     fin.all.known ? h('p.big', {}, approx(fin.all), h('small', {}, `across ${fin.all.known} of ${fin.all.total} finished games`)) : null,
     h('p.hint', {}, basis(fin.all, 'finished games')),
     fin.all.known ? h('div', {},
-      h('h3', {}, 'Hours by genre'), barList(fin.genres, { value: (r) => r.minutes, text: (r) => `${num(r.hours)} h`, cls: 'wide-count' }),
-      h('h3', {}, 'Hours by platform'), barList(fin.platforms, { value: (r) => r.minutes, text: (r) => `${num(r.hours)} h`, cls: 'wide-count' }),
-      h('p.hint', {}, 'The top six. A game with several genres or platforms counts for each, so the groups overlap.')) : null);
+      h('h3', {}, 'Hours by genre'), barList(fin.genres, { value: (r) => r.minutes, text: (r) => [`${num(r.hours)} h`, r.known < r.count && h('small', { title: `${r.known} of ${r.count} finished games have a time to beat` }, ` ${r.known}/${r.count}`)], cls: 'wide-count' }),
+      h('h3', {}, 'Hours by platform'), barList(fin.platforms, { value: (r) => r.minutes, text: (r) => [`${num(r.hours)} h`, r.known < r.count && h('small', { title: `${r.known} of ${r.count} finished games have a time to beat` }, ` ${r.known}/${r.count}`)], cls: 'wide-count' }),
+      h('p.hint', {}, 'The top six. A game with several genres or platforms counts for each, so the groups overlap. A small 9/11 means only 9 of the 11 finished games of the group have a time to beat, so that bar is low.')) : null);
 
   const under = fin.perYear.filter((r) => r.known < r.count).map((r) => r.year);
   const yearsCard = wide(card('years', 'Year by year',
@@ -253,7 +257,7 @@ export function renderStats(root) {
 
   root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
-    h('p.hint', {}, `Computed from the ${games.length} games in your library. Hours are estimates from each game's time to beat.`),
+    h('p.hint', {}, `Computed from the ${games.length} games in your library. Hours are estimates: a game's time is its Main + extras time to beat, else the quickest, else the complete one; games with no time add nothing.`),
     h('div.stat-tiles', {},
       tile(num(games.length), 'games'),
       tile(num(finishedCount), 'finished'),
@@ -264,7 +268,7 @@ export function renderStats(root) {
       onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
     }, label))),
     h('div.stat-grid', {},
-      finishedCard, timeLeftCard(left), yearsCard, backlogCard, shortCard, outcomesCard, libraryCard, seriesCard,
+      tall(finishedCard), timeLeftCard(left), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
   return () => cleanups.forEach((f) => f());

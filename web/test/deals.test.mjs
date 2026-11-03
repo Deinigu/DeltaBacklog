@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMoney, formatDate, badgeOf, buildDeals, oldestCheck, safeLink, priceLine, priceOf, matchOf, isWatched } from '../static/js/deals.js';
+import { formatMoney, formatDate, badgeOf, buildDeals, oldestCheck, safeLink, priceLine, priceOf, matchOf, isWatched, scopeOf, hiddenGames } from '../static/js/deals.js';
 
 let n = 0;
 const game = (title, status = 'backlog') => ({ id: ++n, title, status });
 const price = (g, o = {}) => ({ game_id: g.id, currency: 'EUR', shop: 'Steam', price: 1000, regular: 2000, cut: 50, url: 'https://shop.example/', low_price: 800, low_shop: 'GOG', low_at: '2025-11-27T10:00:00Z', fetched_at: '2026-10-01T10:00:00Z', ...o });
 const titles = (rows) => rows.map((r) => r.game.title);
+
+// The server says which games Deals shows (info.watched); these tests list every game they build unless they say otherwise.
+const build = (games, info, opts) => buildDeals(games, { watched: games.map((g) => g.id), ...info }, opts);
 
 test('money is formatted in en-GB with the price’s own currency', () => {
   assert.equal(formatMoney(749, 'EUR'), '€7.49');
@@ -38,8 +41,8 @@ test('a game that was never discounted gets no badge and no rank for it', () => 
   // Lowest ever was a real discount in the past: at the low again is worth saying.
   assert.equal(badgeOf(price(once, { price: 1000, regular: 2000, cut: 0, low_price: 1000 })), 'low');
   const info = { prices: [flat, price(once, { price: 1050, regular: 2000, cut: 0, low_price: 1000 })], matches: [] };
-  assert.deepEqual(titles(buildDeals([never, once], info).rows), ['Once', 'Never'], 'the sort keeps the never-discounted game behind');
-  assert.deepEqual(titles(buildDeals([never, once], info, { sort: 'low' }).rows), ['Once', 'Never']);
+  assert.deepEqual(titles(build([never, once], info).rows), ['Once', 'Never'], 'the sort keeps the never-discounted game behind');
+  assert.deepEqual(titles(build([never, once], info, { sort: 'low' }).rows), ['Once', 'Never']);
 });
 
 test('sorted by discount: sales first (biggest cut), then near the low, then the rest', () => {
@@ -54,7 +57,7 @@ test('sorted by discount: sales first (biggest cut), then near the low, then the
     ],
     matches: [],
   };
-  const { rows } = buildDeals([a, b, c, d, e], info);
+  const { rows } = build([a, b, c, d, e], info);
   assert.deepEqual(titles(rows), ['B', 'E', 'A', 'C', 'D']);
   assert.equal(rows[0].badge, 'low'); // 5.00 is under its recorded 8.00 low
   assert.equal(rows.find((r) => r.game === c).badge, 'near');
@@ -63,15 +66,15 @@ test('sorted by discount: sales first (biggest cut), then near the low, then the
 test('sorted by closeness to the low, and by price', () => {
   const a = game('A'), b = game('B'), c = game('C');
   const info = { prices: [price(a, { price: 900, low_price: 800, cut: 10 }), price(b, { price: 800, low_price: 800, cut: 0 }), price(c, { price: 100, low_price: null, cut: 0 })], matches: [] };
-  assert.deepEqual(titles(buildDeals([a, b, c], info, { sort: 'low' }).rows), ['B', 'A', 'C']);
-  assert.deepEqual(titles(buildDeals([a, b, c], info, { sort: 'price' }).rows), ['C', 'B', 'A']);
-  assert.deepEqual(titles(buildDeals([a, b, c], info, { sort: 'bogus' }).rows), ['A', 'B', 'C'], 'an unknown sort falls back to the discount sort');
+  assert.deepEqual(titles(build([a, b, c], info, { sort: 'low' }).rows), ['B', 'A', 'C']);
+  assert.deepEqual(titles(build([a, b, c], info, { sort: 'price' }).rows), ['C', 'B', 'A']);
+  assert.deepEqual(titles(build([a, b, c], info, { sort: 'bogus' }).rows), ['A', 'B', 'C'], 'an unknown sort falls back to the discount sort');
 });
 
 test('a game nobody sells right now still lists, after the ones on sale', () => {
   const a = game('A'), b = game('B');
   const info = { prices: [price(a, { price: null, regular: null, cut: null, shop: null, url: null }), price(b, { cut: 10 })], matches: [] };
-  const { rows } = buildDeals([a, b], info);
+  const { rows } = build([a, b], info);
   assert.deepEqual(titles(rows), ['B', 'A']);
   assert.equal(rows[1].badge, null);
 });
@@ -79,16 +82,16 @@ test('a game nobody sells right now still lists, after the ones on sale', () => 
 test('only Backlog and Up next; the status chips filter', () => {
   const b = game('B', 'backlog'), u = game('U', 'up_next'), f = game('F', 'finished'), p = game('P', 'playing');
   const info = { prices: [b, u, f, p].map((g) => price(g)), matches: [] };
-  assert.deepEqual(titles(buildDeals([b, u, f, p], info).rows).sort(), ['B', 'U']);
-  assert.deepEqual(titles(buildDeals([b, u, f, p], info, { statuses: new Set(['up_next']) }).rows), ['U']);
-  assert.deepEqual(titles(buildDeals([b, u, f, p], info, { statuses: new Set(['finished']) }).rows), [], 'a status that gets no prices shows nothing');
-  assert.equal(titles(buildDeals([b, u], info, { statuses: new Set() }).rows).length, 2, 'an empty selection means all');
+  assert.deepEqual(titles(build([b, u, f, p], info).rows).sort(), ['B', 'U']);
+  assert.deepEqual(titles(build([b, u, f, p], info, { statuses: new Set(['up_next']) }).rows), ['U']);
+  assert.deepEqual(titles(build([b, u, f, p], info, { statuses: new Set(['finished']) }).rows), [], 'a status that gets no prices shows nothing');
+  assert.equal(titles(build([b, u], info, { statuses: new Set() }).rows).length, 2, 'an empty selection means all');
 });
 
 test('games without a price are told apart: no match, and matched but not read yet', () => {
   const a = game('A'), b = game('B'), c = game('C'), d = game('D');
   const info = { prices: [price(a)], matches: [{ game_id: b.id, itad_id: '', source: 'title' }, { game_id: c.id, itad_id: 'x', source: 'steam' }] };
-  const r = buildDeals([a, b, c, d], info);
+  const r = build([a, b, c, d], info);
   assert.deepEqual(titles(r.rows), ['A']);
   assert.deepEqual(r.unmatched.map((x) => x.game.title), ['B']);
   assert.deepEqual(r.waiting.map((x) => x.game.title), ['C']); // D was never looked at: it is in none of the lists
@@ -109,6 +112,8 @@ test('lookups, the oldest check and links', () => {
   assert.equal(safeLink('not a url'), null);
   assert.equal(safeLink(null), null);
   assert.ok(isWatched({ status: 'backlog' }) && !isWatched({ status: 'finished' }));
+  assert.ok(isWatched({ id: 1, status: 'backlog' }, { watched: [1] }));
+  assert.ok(!isWatched({ id: 2, status: 'backlog' }, { watched: [1] }), 'not in the server scope (owned, played or hidden)');
 });
 
 test('the price line', () => {
@@ -117,4 +122,17 @@ test('the price line', () => {
   assert.equal(priceLine(price(game('A'), { price: null, cut: null, shop: null })), 'No shop lists it right now');
   assert.equal(priceLine(price(game('A'), { price: null, low_price: null, shop: null })), 'No price found');
   assert.equal(priceLine(null), 'No price found');
+});
+
+test('only the games the server puts in scope are listed; hidden ones come back separately', () => {
+  const a = game('A'), b = game('B'), c = game('C');
+  const info = { prices: [a, b, c].map((g) => price(g)), matches: [], watched: [a.id], hidden: [b.id] };
+  const r = buildDeals([a, b, c], info);
+  assert.deepEqual(titles(r.rows), ['A'], 'a game outside the scope is not shown, even with a cached price');
+  assert.deepEqual(hiddenGames([c, b, a], info).map((g) => g.title), ['B']);
+  assert.deepEqual([...scopeOf(info)], [a.id]);
+  assert.deepEqual(titles(buildDeals([a], { prices: [price(a)], matches: [] }).rows), [], 'nothing until the server has answered');
+  assert.deepEqual(hiddenGames([a], null), []);
+  const z = game('Zed'), y = game('Yak');
+  assert.deepEqual(hiddenGames([z, y], { hidden: [z.id, y.id] }).map((g) => g.title), ['Yak', 'Zed'], 'by title');
 });

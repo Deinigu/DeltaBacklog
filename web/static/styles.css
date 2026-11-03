@@ -1026,3 +1026,6 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .deal-cands { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .deal-cands button { width: 100%; min-height: 44px; text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 6px 10px; cursor: pointer; }
 
+@media (min-width: 900px) { .stat-card.tall { grid-row: span 2; } }
+.hbars.wide-count li { grid-template-columns: minmax(70px, 30%) 1fr 84px; }
+.hb-count small { color: var(--muted); font-size: 11px; }

@@ -2,6 +2,8 @@
 // Every URL is relative (api/..., covers/...), resolved against the page, so the app also works under a reverse-proxy sub-path.
 import { norm } from './util.js';
 import { slotOrder } from './order.js';
+import { prepareImage } from './imageprep.js';
+import { sizeProblem, sentence } from './uploadcheck.js';
 
 export const store = {
   games: [],
@@ -247,6 +249,30 @@ export async function setPoster(id, body) {
   return g;
 }
 
+/**
+ * Use an image from the device as the wide cover (kind 'cover') or the portrait poster (kind 'poster').
+ * Rejects with an Error whose message is the server's reason (wrong type, too big, damaged).
+ */
+export async function uploadImage(id, kind, file) {
+  const blob = await prepareImage(file, kind); // shrunk and turned upright in the browser (see imageprep.js)
+  const tooBig = sizeProblem(blob);
+  if (tooBig) throw new Error(tooBig);
+  const fd = new FormData();
+  fd.append('file', blob, blob === file ? file.name || 'image' : 'image.jpg');
+  const res = await fetch(`api/games/${id}/${kind}/upload`, { method: 'POST', body: fd }); // the browser sets the multipart boundary
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(sentence(data?.error || (res.status === 413 ? 'that image is too large' : `upload failed (${res.status})`)));
+    err.status = res.status;
+    throw err;
+  }
+  const g = store.byId.get(id);
+  if (g) { Object.assign(g, data); indexGame(g); }
+  gamesChanged(id);
+  fetch('api/games').catch(() => {}); // keeps the service worker's offline copy of the list on the new image
+  return g;
+}
+
 // ---- Link with IGDB (review queue of the IGDB sync) ----
 
 /** Games the IGDB sync could not link on its own. Resolves [{game_id, title, year, platforms, status, candidates:[{igdb_id, name, year, score, platforms, slug}]}]. */
@@ -370,8 +396,8 @@ export function hltbSearch(q, year = 0) {
   return request('GET', `api/hltb/search?${p}`);
 }
 
-// ---- the Deals page: prices from IsThereAnyDeal for the Backlog and Up next (cached by the server) ----
-/** Resolves {configured, country, matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, fetched_at}], refresh}. Amounts are cents. */
+// ---- the Deals page: prices from IsThereAnyDeal for the games you do not own and have not played (cached by the server) ----
+/** Resolves {configured, country, watched: [ids of the games Deals shows], hidden: [ids of the games the owner hid], matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, fetched_at}], refresh}. Amounts are cents. */
 export const dealsList = () => request('GET', 'api/deals');
 /** Start reading the prices in the background; poll dealsList() for its progress. */
 export const dealsRefresh = () => request('POST', 'api/deals/refresh');
@@ -379,5 +405,8 @@ export const dealsRefresh = () => request('POST', 'api/deals/refresh');
 export const dealsSearch = (title) => request('GET', `api/deals/search?title=${encodeURIComponent(title)}`);
 /** Fix one game's match: {itad_id, title, slug} picks a game, {none: true} says there is none, {reset: true} goes back to automatic. Resolves the dealsList() answer. */
 export const dealsSetMatch = (gameId, body) => request('PUT', `api/games/${gameId}/deal-match`, body);
+/** Hide a game from Deals, or show it again. Both resolve the dealsList() answer. */
+export const dealsHide = (gameId) => request('PUT', `api/deals/hidden/${gameId}`);
+export const dealsUnhide = (gameId) => request('DELETE', `api/deals/hidden/${gameId}`);
 /** The country (two letters, such as ES) the prices are read for. Resolves the dealsList() answer. */
 export const dealsSetCountry = (country) => request('PUT', 'api/deals/country', { country });

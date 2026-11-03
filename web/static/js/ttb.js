@@ -127,16 +127,3 @@ export function timeInputValue(minutes) {
 export const hltbPatch = (c) => ({
   ttb_hastily: c.hastily || null, ttb_normally: c.normally || null, ttb_completely: c.completely || null, ttb_source: 'hltb',
 });
-
-/**
- * Total time of a set of games, for "the backlog is N hours". `known` games have a time, `unknown` have none, so the
- * caller can say how much of the backlog the number covers.
- */
-export function totalTime(games) {
-  let minutes = 0, known = 0;
-  for (const g of games) {
-    const m = ttbMinutes(g);
-    if (m !== null) { minutes += m; known++; }
-  }
-  return { minutes, hours: Math.floor(minutes / 60), known, unknown: games.length - known };
-}

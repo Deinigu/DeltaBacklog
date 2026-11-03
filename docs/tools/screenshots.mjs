@@ -277,7 +277,7 @@ await shot(p, 'table-desktop');
 await go(p, '#/screenshots');
 await shot(p, 'gallery-desktop');
 await go(p, '#/stats');
-await p.setViewport({ width: 1280, height: 1500, deviceScaleFactor: 1 }); await wait(600);
+await p.setViewport({ width: 1280, height: 1600, deviceScaleFactor: 1 }); await wait(600);
 await shot(p, 'stats-desktop');
 await p.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
 if (rankingId) {

@@ -72,7 +72,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | **Series** | how far you are through every series | [14](#14-series) |
 | **Upcoming** | new games of your series that are not out yet | [15](#15-upcoming-releases) |
 | **Similar games** | games you might like, from the ones you finished | [16](#16-similar-games) |
-| **Deals** | what your backlog and up next games cost right now | [17](#17-deals) |
+| **Deals** | what the games you don't own and haven't played yet cost right now | [17](#17-deals) |
 | **Stats** | numbers about your library | [18](#18-stats) |
 | **Year in review** | what you played in a year | [19](#19-year-in-review) |
 | **Rankings** | tier lists of your games | [20](#20-rankings) |
@@ -281,15 +281,18 @@ Open a game and tap **Change cover**.
 - The search box starts with the game's title. Type another title and tap **Search** when the automatic match is the wrong game.
 - Tap a picture to use it. It is saved on your Raspberry Pi, so the app does not depend on those websites afterwards.
 - Cards show the cover as a wide picture, so wide images look best.
+- **Upload from device** uses a picture from your own phone or computer (on a phone it opens the photo picker or the camera). JPEG, PNG or WebP. A big photo is shrunk (and turned the right way up) on your phone before it is sent, so a camera photo is fine; the app says so when a file is the wrong type, too big or damaged. The picture is shrunk and saved on the Pi like any other cover, and nothing ever replaces it on its own.
 
 ### The poster (portrait picture)
 
 The Series, Upcoming, Similar games and Deals pages and the rankings (and their PNG) use a **portrait poster** of each game, made for you automatically. A wrong poster is the usual thing to fix here: for example a game that is not linked to IGDB can get a look-alike from SteamGridDB. To choose your own, open a game and tap **Change poster**, or, on a ranking board, tap a game and then the picture button in the bar at the bottom.
 
 - **IGDB** shows the official box cover and **SteamGridDB** shows several community portraits. Tap one to use it. Both lists load on their own: if SteamGridDB cannot be reached right now (some providers block it at times) its part says so and the IGDB cover is still there.
+- **Upload from device** uses a portrait picture from your own phone or computer (JPEG, PNG or WebP; photos are shrunk and turned upright first). The middle of the picture is cut to a 2:3 poster, so choose one that is already tall.
 - **Paste an image link** uses a picture from the web. Only links from the same sites as covers (IGDB and SteamGridDB images) are accepted.
 - **Crop of the wide cover** cuts the middle of the game's wide cover into a portrait (no internet needed). **Fetch automatically again** goes back to what the app chooses by itself (IGDB, then SteamGridDB, then the crop) and replaces your pick.
-- A poster you chose stays: the app never replaces it on its own, and changing the wide cover does not change it. The ranking board and the exported PNG show the new poster at once.
+- **Linking the game to another IGDB game updates the poster.** When you change a game's IGDB link (in its details or on the Link screen), the app fetches the new game's poster by itself (IGDB, then SteamGridDB, then the crop) and replaces the old one. If IGDB cannot be reached at that moment, the app tries again by itself a little later. Removing the link leaves the poster as it is.
+- A poster you chose or uploaded stays: the app never replaces it on its own, also not when the IGDB link changes, and changing the wide cover does not change it. The ranking board and the exported PNG show the new poster at once.
 
 ## 13. What the little icons mean
 
@@ -370,7 +373,11 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 *Needs an IsThereAnyDeal key ([section 3](#3-setting-up-keys)). Games are matched through their Steam store link (from IGDB) or exact title.*
 
-**Deals** shows what the games in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+**Deals** shows what the games you **don't own and haven't played yet** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+
+**Which games are listed.** A game is on Deals when both are true: you don't own it, meaning its *Ownership* is **Borrowed**, **Family Share** or **Nope**, or it has none (**Owned**, **Free to play** and **Pirated** games never appear); and you haven't played it, meaning it is in the **Backlog** or **Up next** and has no years played (not even *childhood* or *always*). Finished, dropped, playing, on hold, evergreen and not interested games are left out. When you change a game so that it no longer fits (you buy it, or log a year of play), it leaves the page and is no longer refreshed; its saved match and prices are kept in case it comes back.
+
+**Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Show again** to bring one back.
 
 ![The Deals page](img/deals-phone.jpg)
 
@@ -394,7 +401,7 @@ The top has four tiles (games, finished, estimated hours finished, estimated hou
 - **Finished or dropped**: the share of games you finished against dropped, and the same per genre and per platform. Only groups with at least 5 finished or dropped games are listed; the percentage is the share finished (*5/6* is finished out of finished plus dropped).
 - **Library**: your games by ownership, by platform (top eight) and by release decade (games with no release year are mentioned).
 - **Series**: of the series that have at least two games in your library, how many are completed (every game finished), in progress and not started, and the three closest to done. Games of a series that you do not have are not counted.
-- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet. (A game's *added* date is the import date for imported games, so no "backlog age" is shown from it.)
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet. The line about how long the waiting games have been in your library (typical) uses the *added* date and leaves out the games of the import (the games all changed at the same moment, detected automatically), because an imported game's added date is the import day, not when you got it.
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
 
 ![The Stats page](img/stats-phone.jpg)
@@ -511,9 +518,9 @@ The pages that use other websites keep what they read on the server. **Opening a
 | **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
 | **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
-| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of your backlog and up next (about one request per 50 games) | before you buy something |
+| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something |
 
-Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or poster you chose, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date).
+Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own.
 
 If a refresh is refused or stopped (too many requests, a wrong key, no connection) the page says why and keeps what it had; try again later.
 
