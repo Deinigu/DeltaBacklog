@@ -448,7 +448,7 @@ export function hltbSearch(q, year = 0) {
 }
 
 // ---- the Deals page: prices from IsThereAnyDeal for the games you do not own and have not played (cached by the server) ----
-/** Resolves {configured, country, watched: [ids of the games Deals shows], hidden: [ids of the games the owner hid], matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, low2y_price, fetched_at}], alerts: [{game_id, kind: 'historical'|'two_year', price, at, seen}], muted: [game ids], unseen, telegram: bool, refresh}. Amounts are cents. */
+/** Resolves {configured, country, watched: [ids of the games Deals shows], hidden: [ids of the games the owner hid], matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, low2y_price, fetched_at}], alerts: [{game_id, kind: 'historical'|'two_year', price, at, seen}], muted: [game ids], unseen, telegram: bool, wishlist: null (no STEAM_ID) | {items: [{appid, itad_id, matched, title, slug, added_at, price (as a price above, without game_id) or null, alert: {kind, price, at, seen} or null, muted}], hidden: [same shape], status ('' or why the last read of Steam gave nothing), synced_at}, refresh}. Amounts are cents. */
 export const dealsList = () => request('GET', 'api/deals');
 /** Start reading the prices in the background; poll dealsList() for its progress. */
 export const dealsRefresh = () => request('POST', 'api/deals/refresh');
@@ -466,5 +466,10 @@ export const dealsTelegramTest = () => request('POST', 'api/deals/telegram-test'
 /** Hide a game from Deals, or show it again. Both resolve the dealsList() answer. */
 export const dealsHide = (gameId) => request('PUT', `api/deals/hidden/${gameId}`);
 export const dealsUnhide = (gameId) => request('DELETE', `api/deals/hidden/${gameId}`);
+/** Hide a wishlist game from Deals (by Steam app id), or show it again; mute its price alerts, or turn them on. All resolve the dealsList() answer. */
+export const dealsWishHide = (appid) => request('PUT', `api/deals/wishlist/${appid}/hidden`);
+export const dealsWishUnhide = (appid) => request('DELETE', `api/deals/wishlist/${appid}/hidden`);
+export const dealsWishMute = (appid) => request('PUT', `api/deals/wishlist/${appid}/muted`);
+export const dealsWishUnmute = (appid) => request('DELETE', `api/deals/wishlist/${appid}/muted`);
 /** The country (two letters, such as ES) the prices are read for. Resolves the dealsList() answer. */
 export const dealsSetCountry = (country) => request('PUT', 'api/deals/country', { country });

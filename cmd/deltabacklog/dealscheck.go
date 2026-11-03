@@ -32,9 +32,23 @@ func telegramFromEnv() deals.Notifier {
 	return nil
 }
 
+// steamFromEnv builds the wishlist reader from STEAM_ID (the 17-digit SteamID64). It returns nil (no wishlist section) when
+// it is not set or malformed; the log never holds the value.
+func steamFromEnv() deals.WishlistSource {
+	s, err := deals.NewSteam(os.Getenv("STEAM_ID"))
+	if err != nil {
+		log.Print("Steam wishlist off: STEAM_ID must be a 17-digit SteamID64")
+		return nil
+	}
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
 // runDealsCheck is `deltabacklog deals-check`: refresh the prices, apply the alert rule and send the alerts. It returns
 // the exit code. It does not run while the app's own refresh (or another check) is running.
-func runDealsCheck(dbPath string, src deals.Source, notify deals.Notifier, out io.Writer) int {
+func runDealsCheck(dbPath string, src deals.Source, wl deals.WishlistSource, notify deals.Notifier, out io.Writer) int {
 	if !src.Configured() {
 		fmt.Fprintln(out, deals.ErrNotConfigured)
 		return 1
@@ -49,7 +63,7 @@ func runDealsCheck(dbPath string, src deals.Source, notify deals.Notifier, out i
 		return 1
 	}
 	defer d.Close()
-	return checkDB(d, src, notify, out)
+	return checkDB(d, src, wl, notify, out)
 }
 
 // How long the check waits for a refresh that is running (a manual one at the same time of day) before it gives up, and
@@ -84,7 +98,7 @@ func acquire(d *sql.DB, out io.Writer) (func(), error) {
 	}
 }
 
-func checkDB(d *sql.DB, src deals.Source, notify deals.Notifier, out io.Writer) int {
+func checkDB(d *sql.DB, src deals.Source, wl deals.WishlistSource, notify deals.Notifier, out io.Writer) int {
 	release, err := acquire(d, out)
 	if err != nil {
 		return 1
@@ -92,7 +106,7 @@ func checkDB(d *sql.DB, src deals.Source, notify deals.Notifier, out io.Writer) 
 	defer release()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	res, err := deals.Check(ctx, d, src, notify)
+	res, err := deals.CheckWith(ctx, d, src, wl, notify)
 	fmt.Fprintf(out, "prices: %s\n", res.Report)
 	fmt.Fprintf(out, "%d new price %s", len(res.Alerts), map[bool]string{true: "alert", false: "alerts"}[len(res.Alerts) == 1])
 	if res.Sent {

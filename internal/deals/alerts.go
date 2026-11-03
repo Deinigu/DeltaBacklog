@@ -103,6 +103,7 @@ func alertKind(price *int64, cut *int, low, low2y *int64) string {
 // Alert is a deal worth telling the owner about.
 type Alert struct {
 	GameID   int64
+	AppID    int64 // Steam app id of a wishlist game (then GameID is 0)
 	Title    string
 	Kind     string
 	Price    int64
@@ -122,7 +123,7 @@ func expired(expiry string, now time.Time) bool {
 // (see Cooldown), records what it returns (unseen in the app, and pending for Telegram) and returns it. Only prices read
 // at or after fetchedSince count (a refresh that stopped halfway leaves older prices, whose sale may be over), and never
 // a deal whose end time has passed.
-func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
+func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Alert, error) {
 	rows, err := d.Query(`SELECT p.game_id, g.title, p.currency, coalesce(p.cur_shop, ''), p.cur_price, p.cur_cut, coalesce(p.cur_url, ''),
 		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, '')
 		FROM deal_price p JOIN game g ON g.id = p.game_id LEFT JOIN deal_alert a ON a.game_id = p.game_id
@@ -142,17 +143,20 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 			return nil, err
 		}
 		a.Kind = alertKind(price, cut, low, low2y)
-		if a.Kind == "" || muted == 1 || fetchedAt < fetchedSince.UTC().Format(timeFmt) || expired(expiry, now) {
+		if a.Kind == "" || !alertDue(muted == 1, fetchedAt, expiry, *price, lastPrice, lastAt, now, fetchedSince) {
 			continue
 		}
 		a.Price, a.Cut = *price, *cut
-		if at, err := time.Parse(timeFmt, lastAt); err == nil && lastPrice != nil && a.Price >= *lastPrice && now.Sub(at) < Cooldown {
-			continue // announced already, at this price or a lower one
-		}
 		out = append(out, a)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
+	}
+	var wish []Alert // the wishlist only when a Steam wishlist is set up: with STEAM_ID removed, its leftovers stay silent
+	if withWishlist {
+		if wish, err = evaluateWish(d, now, fetchedSince); err != nil {
+			return nil, err
+		}
 	}
 	for _, a := range out {
 		if _, err := d.Exec(`INSERT INTO deal_alert(game_id, last_alert_price, last_alert_kind, last_alert_at, seen, pending) VALUES (?, ?, ?, ?, 0, 1)
@@ -161,7 +165,20 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 			return nil, err
 		}
 	}
-	return out, nil
+	return append(out, wish...), nil
+}
+
+// alertDue is the part of the alert rule that does not depend on the kind: the alert is not muted, the price was read
+// at or after fetchedSince, the deal has not ended, and the same deal was not announced already (at this price or a lower
+// one, less than Cooldown ago).
+func alertDue(muted bool, fetchedAt, expiry string, price int64, lastPrice *int64, lastAt string, now, fetchedSince time.Time) bool {
+	if muted || fetchedAt < fetchedSince.UTC().Format(timeFmt) || expired(expiry, now) {
+		return false
+	}
+	if at, err := time.Parse(timeFmt, lastAt); err == nil && lastPrice != nil && price >= *lastPrice && now.Sub(at) < Cooldown {
+		return false
+	}
+	return true
 }
 
 // AlertInfo is a standing alert, for the app: the game's price is still at or below the one announced.
@@ -219,6 +236,9 @@ func SetMuted(d *sql.DB, gameID int64, mute bool) error {
 
 // MarkSeen records that the owner has opened Deals: the alerts stop counting as new.
 func MarkSeen(d *sql.DB) error {
+	if _, err := d.Exec(`UPDATE wish_item SET seen = 1 WHERE seen = 0`); err != nil {
+		return err
+	}
 	_, err := d.Exec(`UPDATE deal_alert SET seen = 1 WHERE seen = 0`)
 	return err
 }
@@ -228,7 +248,7 @@ func MarkSeen(d *sql.DB) error {
 // fillTwoYearLows reads the two-year low of the games that may need it. ITAD's overview has the all-time low only, so
 // the price history is asked, one call per game, only for a game that is on sale above its historical low (at the low
 // the alert is "historical low" anyway) and whose two-year low was not read within a week. A rate limit ends the step.
-func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time) error {
+func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.Time, withWishlist bool) error {
 	rows, err := d.Query(`SELECT p.game_id, m.itad_id, p.currency FROM deal_price p
 		JOIN deal_match m ON m.game_id = p.game_id JOIN game g ON g.id = p.game_id
 		WHERE `+watchedSQL+` AND m.itad_id IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_cut > 0
@@ -277,7 +297,10 @@ func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.
 			return err
 		}
 	}
-	return nil
+	if !withWishlist {
+		return nil
+	}
+	return fillWishTwoYearLows(ctx, d, hs, now)
 }
 
 // ---------------- the daily check ----------------
@@ -292,37 +315,57 @@ type CheckResult struct {
 // Check is the daily run: it refreshes the prices (same rules as the app's Refresh), reads the two-year lows that are
 // needed, applies the alert rule and sends the alerts to notify (nil: only recorded for the app). The caller holds AcquireRun.
 func Check(ctx context.Context, d *sql.DB, src Source, notify Notifier) (CheckResult, error) {
+	return CheckWith(ctx, d, src, nil, notify)
+}
+
+// CheckWith is Check with the Steam wishlist (nil: none) read and priced along with the library.
+func CheckWith(ctx context.Context, d *sql.DB, src Source, wl WishlistSource, notify Notifier) (CheckResult, error) {
 	var res CheckResult
 	runStart := time.Now()
-	rep, err := Refresh(ctx, d, src, Options{})
+	rep, err := Refresh(ctx, d, src, Options{Wishlist: wl})
 	res.Report = rep
 	if err != nil {
 		return res, err
 	}
 	now := time.Now()
 	if hs, ok := src.(HistorySource); ok && rep.Stopped == "" {
-		if err := fillTwoYearLows(ctx, d, hs, now); err != nil {
+		if err := fillTwoYearLows(ctx, d, hs, now, wl != nil); err != nil {
 			return res, err
 		}
 	}
-	if res.Alerts, err = Evaluate(d, now, runStart); err != nil {
+	if res.Alerts, err = Evaluate(d, now, runStart, wl != nil); err != nil {
 		return res, err
 	}
 	if notify == nil { // no Telegram: the alerts are for the app only, and must not queue up for a bot set up later
+		if _, err := d.Exec(`UPDATE wish_item SET pending = 0 WHERE pending = 1`); err != nil {
+			return res, err
+		}
 		_, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1`)
 		return res, err
 	}
-	return res, deliver(ctx, d, notify, now, &res)
+	return res, deliver(ctx, d, notify, now, wl != nil, &res)
 }
 
 // deliver sends the alerts that have not reached Telegram yet: the new ones and those an earlier run could not send,
 // while they still stand. A message that fails does not stop the others; its alerts stay pending for the next run.
-func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, res *CheckResult) error {
+func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, withWishlist bool, res *CheckResult) error {
 	if _, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE pending = 1 AND last_alert_at < ?`, now.Add(-pendingMax).UTC().Format(timeFmt)); err != nil {
+		return err
+	}
+	if _, err := d.Exec(`UPDATE wish_item SET pending = 0 WHERE pending = 1 AND last_alert_at < ?`, now.Add(-pendingMax).UTC().Format(timeFmt)); err != nil {
 		return err
 	}
 	pend, err := pendingAlerts(d, now)
 	if err != nil {
+		return err
+	}
+	if withWishlist {
+		wishPend, err := pendingWishAlerts(d, now)
+		if err != nil {
+			return err
+		}
+		pend = append(pend, wishPend...)
+	} else if _, err := d.Exec(`UPDATE wish_item SET pending = 0 WHERE pending = 1`); err != nil {
 		return err
 	}
 	var first error
@@ -335,6 +378,11 @@ func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, res
 		}
 		for _, id := range m.ids {
 			if _, err := d.Exec(`UPDATE deal_alert SET pending = 0 WHERE game_id = ?`, id); err != nil {
+				return err
+			}
+		}
+		for _, id := range m.wish {
+			if _, err := d.Exec(`UPDATE wish_item SET pending = 0 WHERE appid = ?`, id); err != nil {
 				return err
 			}
 		}
@@ -397,13 +445,26 @@ func (a Alert) line() string {
 	if a.Shop != "" {
 		s += " at " + a.Shop
 	}
-	return s + " (" + KindLabel(a.Kind) + ")"
+	s += " (" + KindLabel(a.Kind) + ")"
+	if a.AppID > 0 {
+		s += " [wishlist]"
+	}
+	return s
 }
 
 // message is one text for Telegram and the games it tells about.
 type message struct {
 	text string
-	ids  []int64
+	ids  []int64 // library games
+	wish []int64 // Steam app ids of wishlist games
+}
+
+func (m *message) add(a Alert) {
+	if a.AppID > 0 {
+		m.wish = append(m.wish, a.AppID)
+	} else {
+		m.ids = append(m.ids, a.GameID)
+	}
 }
 
 // utf16Len is how Telegram counts the length of a text (its limit is 4096 units).
@@ -421,7 +482,8 @@ func messageGroups(alerts []Alert) []message {
 	if len(alerts) <= maxSingles {
 		out := make([]message, len(alerts))
 		for i, a := range alerts {
-			out[i] = message{text: "Price alert\n" + a.line(), ids: []int64{a.GameID}}
+			out[i] = message{text: "Price alert\n" + a.line()}
+			out[i].add(a)
 			if a.URL != "" {
 				out[i].text += "\n" + a.URL
 			}
@@ -437,12 +499,12 @@ func messageGroups(alerts []Alert) []message {
 		if utf16Len(m.text)+utf16Len(item) > listLimit {
 			m.text += fmt.Sprintf("\n…and %d more: open Deals in the app", len(alerts)-i)
 			for _, rest := range alerts[i:] {
-				m.ids = append(m.ids, rest.GameID)
+				m.add(rest)
 			}
 			return []message{m}
 		}
 		m.text += item
-		m.ids = append(m.ids, a.GameID)
+		m.add(a)
 	}
 	return []message{m}
 }

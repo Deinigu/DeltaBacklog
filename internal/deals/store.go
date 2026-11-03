@@ -72,6 +72,9 @@ func SetCountry(d *sql.DB, country string) error {
 	if _, err := tx.Exec(`DELETE FROM deal_price`); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM wish_price`); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -84,9 +87,8 @@ type Match struct {
 	Source string `json:"source"` // "steam", "title" or "user"
 }
 
-// Price is the cached price of a game; the amounts are cents of Currency. Cur* are nil when no shop sells it.
-type Price struct {
-	GameID    int64   `json:"game_id"`
+// PriceData is a cached price; the amounts are cents of Currency. Cur* are nil when no shop sells it.
+type PriceData struct {
 	Currency  string  `json:"currency"`
 	Shop      *string `json:"shop"`
 	Price     *int64  `json:"price"`
@@ -101,6 +103,12 @@ type Price struct {
 	FetchedAt string  `json:"fetched_at"`
 }
 
+// Price is the cached price of a library game.
+type Price struct {
+	GameID int64 `json:"game_id"`
+	PriceData
+}
+
 // List is everything the Deals page and the drawer show: matches and prices of the watched games.
 type List struct {
 	Country string
@@ -110,6 +118,7 @@ type List struct {
 	Hidden  []int64     // eligible games the owner hid
 	Alerts  []AlertInfo // standing price alerts (see Evaluate), newest first
 	Muted   []int64     // watched games whose alerts the owner turned off
+	Wish    Wishlist    // the Steam wishlist section (see wishlist.go)
 }
 
 // Load reads the cache (never ITAD).
@@ -120,6 +129,9 @@ func Load(d *sql.DB) (*List, error) {
 		return nil, err
 	}
 	if l.Muted, err = loadMuted(d); err != nil {
+		return nil, err
+	}
+	if l.Wish, err = loadWishlist(d); err != nil {
 		return nil, err
 	}
 	if l.Watched, err = gameIDs(d, watchedSQL); err != nil {
@@ -315,6 +327,11 @@ type Report struct {
 	Unmatched int    // games ITAD could not be matched to
 	Priced    int    // games whose prices were read
 	Stopped   string // why the run ended early; empty when it ran to the end
+
+	WishGames     int    // wishlist games Deals works on (0 when no wishlist is set up)
+	WishPriced    int    // wishlist games whose prices were read
+	WishUnmatched int    // wishlist games ITAD does not know
+	WishNote      string // why the Steam wishlist could not be read (private, empty, Steam down); empty when fine
 }
 
 func (r Report) String() string {
@@ -325,7 +342,7 @@ func (r Report) String() string {
 	if r.Stopped != "" {
 		s += ". Stopped: " + r.Stopped
 	}
-	return s + "."
+	return s + "." + r.wishString()
 }
 
 func plural(n int, one, many string) string {
@@ -338,6 +355,8 @@ func plural(n int, one, many string) string {
 // Options tune a refresh.
 type Options struct {
 	Progress func(done, total int)
+	// Wishlist, when set, is the Steam wishlist read after the library games (see wishlist.go). Nil: no wishlist section.
+	Wishlist WishlistSource
 }
 
 // Refresh matches the watched games that have no match yet and reads the prices of all matched ones. It stops at the first
@@ -435,7 +454,10 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 		}
 		progress(done, total)
 	}
-	return rep, nil
+	if opt.Wishlist == nil {
+		return rep, nil
+	}
+	return refreshWishlist(ctx, d, src, opt, rep, done, total)
 }
 
 // RefreshOne reads the prices of one matched game (after the owner fixed its match).
@@ -546,14 +568,9 @@ func saveAutoMatch(d *sql.DB, gameID int64, f found) error {
 	return err
 }
 
-// savePrice stores prices read for itadID in country. It does nothing (and says false) unless the game is still matched
-// with that ITAD game, still on Deals (not hidden, still unowned and unplayed) and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
-// fix a match, reset it or change the country meanwhile.
-func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (bool, error) {
+// priceArgs turns an ITAD overview into the column values of a price row (shared by deal_price and wish_price).
+func priceArgs(o Overview) (currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt any) {
 	cur := o.Current
-	var currency, shop, curURL, expiry any
-	var price, regular, cut any
-	var lowPrice, lowShop, lowAt any
 	currency = "EUR"
 	if cur != nil {
 		currency, shop, price, regular, cut = cur.Price.Currency, cur.Shop, cur.Price.Cents, cur.Regular.Cents, cur.Cut
@@ -570,6 +587,14 @@ func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (boo
 			currency = o.Low.Price.Currency
 		}
 	}
+	return
+}
+
+// savePrice stores prices read for itadID in country. It does nothing (and says false) unless the game is still matched
+// with that ITAD game, still on Deals (not hidden, still unowned and unplayed) and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
+// fix a match, reset it or change the country meanwhile.
+func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (bool, error) {
+	currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt := priceArgs(o)
 	res, err := d.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
 		low_price, low_shop, low_at, fetched_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE EXISTS (SELECT 1 FROM deal_match WHERE game_id = ?1 AND itad_id = ?13)

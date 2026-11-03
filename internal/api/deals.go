@@ -21,7 +21,7 @@ func (s *Server) dealsError(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusServiceUnavailable, err.Error(), nil)
 	case errors.As(err, &rl):
 		writeErr(w, http.StatusTooManyRequests, err.Error(), nil)
-	case errors.Is(err, deals.ErrUnknownGame):
+	case errors.Is(err, deals.ErrUnknownGame), errors.Is(err, deals.ErrUnknownWish):
 		notFound(w)
 	default:
 		log.Printf("deals: %v", err)
@@ -37,14 +37,50 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	unseen := 0
+	if s.Wishlist != nil { // leftovers of a removed STEAM_ID are not counted: the page cannot show them
+		unseen = l.Wish.Unseen
+	}
 	for _, a := range l.Alerts {
 		if !a.Seen {
 			unseen++
 		}
 	}
+	// "wishlist" is null when no STEAM_ID is set up (the page shows no wishlist section).
+	var wish any
+	if s.Wishlist != nil {
+		wish = l.Wish
+	}
 	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "country": l.Country, "matches": l.Matches, "prices": l.Prices,
-		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen,
+		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen, "wishlist": wish,
 		"telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
+}
+
+// dealsWishHide hides a wishlist game from Deals (PUT) or shows it again (DELETE); the answer is the new list.
+func (s *Server) dealsWishHide(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "appid")
+	if !ok {
+		notFound(w)
+		return
+	}
+	if err := deals.SetWishHidden(s.DB, id, r.Method == http.MethodPut); err != nil {
+		s.dealsError(w, err)
+		return
+	}
+	s.dealsList(w, r)
+}
+
+// dealsWishMute turns the alerts of a wishlist game off (PUT) or on again (DELETE); the answer is the new list.
+func (s *Server) dealsWishMute(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "appid")
+	if !ok {
+		notFound(w)
+		return
+	}
+	if err := deals.SetWishMuted(s.DB, id, r.Method == http.MethodPut); err != nil {
+		s.dealsError(w, err)
+		return
+	}
+	s.dealsList(w, r)
 }
 
 // dealsHide hides a game from Deals (PUT) or shows it again (DELETE); the answer is the new list.
@@ -97,7 +133,7 @@ func (s *Server) dealsRefresh(w http.ResponseWriter, r *http.Request) {
 		defer release()
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()
-		rep, err := deals.Refresh(ctx, s.DB, s.Deals, deals.Options{
+		rep, err := deals.Refresh(ctx, s.DB, s.Deals, deals.Options{Wishlist: s.Wishlist,
 			Progress: func(done, total int) { j.mu.Lock(); j.done, j.total = done, total; j.mu.Unlock() },
 		})
 		j.mu.Lock()

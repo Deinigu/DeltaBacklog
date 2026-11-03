@@ -271,6 +271,43 @@ func main() {
 		_, err := tx.Exec(`INSERT INTO deal_match(game_id, source) SELECT id, 'title' FROM game WHERE title = ?`, g)
 		must(err)
 	}
+	// Made-up Steam wishlist for the Wishlist section of Deals (no Steam account is read): not library games. Dave the Diver
+	// sits at its historical low (an alert), Cuphead is near it, Blasphemous has no price yet, Obscure Demo is unknown to ITAD.
+	for _, w := range []struct {
+		appid                  int64
+		title, shop            string
+		price, regular, cut    int
+		low                    int
+		lowShop, lowDate       string
+		matched, priced, alert bool
+	}{
+		{1868140, "Dave the Diver", "Steam", 1199, 1999, 40, 1199, "GOG", "2025-06-26T17:00:00Z", true, true, true},
+		{268910, "Cuphead", "Steam", 1349, 2499, 46, 1249, "Humble Store", "2024-12-19T18:00:00Z", true, true, false},
+		{1092790, "Inscryption", "GOG", 1999, 1999, 0, 999, "Steam", "2025-03-12T09:00:00Z", true, true, false},
+		{1030300, "Hollow Knight: Silksong", "Steam", 1999, 1999, 0, 1999, "Steam", "2025-09-04T16:00:00Z", true, true, false},
+		{774361, "Blasphemous", "", 0, 0, 0, 0, "", "", true, false, false},
+		{3000001, "Obscure Demo", "", 0, 0, 0, 0, "", "", false, false, false},
+	} {
+		title, itad := w.title, any(nil)
+		if w.matched {
+			itad = "demo-wish-" + strconv.FormatInt(w.appid, 10)
+		} else {
+			title = "Steam app " + strconv.FormatInt(w.appid, 10)
+		}
+		_, err := tx.Exec(`INSERT INTO wish_item(appid, itad_id, title, added_at, seen_at, matched_at) VALUES (?, ?, ?, '2025-05-01T10:00:00Z',
+			strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, w.appid, itad, title)
+		must(err)
+		if !w.priced {
+			continue
+		}
+		_, err = tx.Exec(`INSERT INTO wish_price(appid, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, low_price, low_shop, low_at, fetched_at)
+			VALUES (?, 'EUR', ?, ?, ?, ?, 'https://example.org/deal', ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, w.appid, w.shop, w.price, w.regular, w.cut, w.low, w.lowShop, w.lowDate)
+		must(err)
+		if w.alert {
+			_, err = tx.Exec(`UPDATE wish_item SET last_alert_price = ?, last_alert_kind = 'historical', last_alert_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), seen = 1 WHERE appid = ?`, w.price, w.appid)
+			must(err)
+		}
+	}
 	must(tx.Commit())
 
 	for i, g := range games {
