@@ -258,3 +258,67 @@ func TestSyncImagesOffWithoutCache(t *testing.T) {
 		t.Fatal("no cache, no requests")
 	}
 }
+
+func TestPruneKeepsOnlyWhatIsWanted(t *testing.T) {
+	c := testCache(t)
+	for _, n := range []string{"1.jpg", "2.png", "3.none", "4.jpg", "notes.txt", "5.jpg.tmp"} {
+		if err := os.MkdirAll(c.Dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(c.Dir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.Prune([]int64{1, 3})
+	ents, _ := os.ReadDir(c.Dir)
+	var got []string
+	for _, e := range ents {
+		got = append(got, e.Name())
+	}
+	if strings.Join(got, ",") != "1.jpg,3.none,5.jpg.tmp,notes.txt" {
+		t.Fatalf("left %v; only 2.png and 4.jpg may go (foreign names are never touched)", got)
+	}
+}
+
+func TestFailuresCountOverTheWholeRun(t *testing.T) {
+	// 250 apps = 3 batches; the CDN is down. The run must stop after 3 failed downloads, not 3 per batch.
+	var cdnHits atomic.Int32
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cdnHits.Add(1)
+		http.Error(w, "down", http.StatusBadGateway)
+	}))
+	t.Cleanup(down.Close)
+	s, _, _ := steamFake(t, down.URL, nil)
+	ids := make([]int64, 250)
+	for i := range ids {
+		ids[i] = int64(1000 + i)
+	}
+	s.SyncImages(context.Background(), ids)
+	if n := cdnHits.Load(); n > 6 { // 3 apps, each tries its two addresses
+		t.Fatalf("%d downloads were tried after the CDN failed", n)
+	}
+}
+
+func TestLibraryImages(t *testing.T) {
+	d := newDB(t)
+	addGame(t, d, 1, "Has Steam", "backlog", "https://store.steampowered.com/app/111/X")
+	addGame(t, d, 2, "Has cover", "backlog", "https://store.steampowered.com/app/222/X")
+	addGame(t, d, 3, "No link", "backlog", "")
+	if _, err := d.Exec(`UPDATE game SET cover_file = '2.jpg' WHERE id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "steam")
+	c := &ImageCache{Dir: dir}
+	_ = os.MkdirAll(dir, 0o755)
+	for _, id := range []string{"111", "222"} {
+		_ = os.WriteFile(filepath.Join(dir, id+".jpg"), jpegBytes(10, 10), 0o644)
+	}
+	_ = c
+	got, err := LibraryImages(d, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[1] != "steam/111.jpg" {
+		t.Fatalf("lib images = %v; only the game without a cover and with a Steam link gets one", got)
+	}
+}

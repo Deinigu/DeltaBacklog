@@ -401,6 +401,7 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 	progress()
 	nameWishGames(ctx, d, opt.Wishlist, active)
 	syncWishImages(ctx, opt.Wishlist, active)
+	pruneImages(opt.Wishlist, d, entries)
 	// Matching, in bulk when the source can. A rate limit here only ends the matching: what is matched is still priced
 	// below, and the games not looked up yet wait for the next run.
 	var cut error
@@ -519,6 +520,28 @@ func syncWishImages(ctx context.Context, wl WishlistSource, active []wishRow) {
 		ids = append(ids, r.appid)
 	}
 	is.SyncImages(ctx, ids)
+}
+
+// pruneImages drops the cached pictures of apps that are neither on the wishlist Steam just sent nor library games.
+func pruneImages(wl WishlistSource, d *sql.DB, entries []WishEntry) {
+	is, ok := wl.(ImageSource)
+	if !ok || len(entries) == 0 {
+		return
+	}
+	keep := make([]int64, 0, len(entries))
+	for _, e := range entries {
+		keep = append(keep, e.AppID)
+	}
+	if games, err := watchedGames(d); err == nil {
+		for _, g := range games {
+			if g.appID > 0 {
+				keep = append(keep, g.appID)
+			}
+		}
+	} else {
+		return // not sure what the library needs: keep everything
+	}
+	is.PruneImages(keep)
 }
 
 // matchWishBulk looks up the ITAD ids of the games in todo with the bulk endpoint, MaxLookupBatch per request. It stops at the

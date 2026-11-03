@@ -192,13 +192,14 @@ export function renderDeals(root) {
       alert ? { label: 'Mute price alerts', run: () => mute(game) } : null,
       withHide ? { label: 'Hide from Deals', run: () => setHidden(game, true) } : null].filter(Boolean);
   }
+  const libImage = (game) => coverURL(game) || posterURL(game) || (info.lib_images?.[game.id] ? `covers/${info.lib_images[game.id]}` : null);
   function libRow({ game, p, alert }, badge) {
     const status = DEAL_STATUSES.find((s) => s.code === game.status)?.label || '';
-    return dlRow({ title: game.title, image: coverURL(game) || posterURL(game), p, badge, alert, isNew: alert && newIds.has(game.id),
+    return dlRow({ title: game.title, image: libImage(game), p, badge, alert, isNew: alert && newIds.has(game.id),
       aria: ariaOf(game.title, status, p, badge, alert, alert && newIds.has(game.id)), actions: gameActions(game, alert) });
   }
   function libPlainRow({ game }, note) {
-    return dlRow({ title: game.title, image: coverURL(game) || posterURL(game), p: null, note, aria: `${game.title}, ${note}. Opens the actions`, actions: gameActions(game, null) });
+    return dlRow({ title: game.title, image: libImage(game), p: null, note, aria: `${game.title}, ${note}. Opens the actions`, actions: gameActions(game, null) });
   }
   function wishActions(item) {
     return [{ label: 'Steam page ↗', href: steamStoreURL(item.appid) },
@@ -237,8 +238,8 @@ export function renderDeals(root) {
     const r = info.refresh || {};
     const old = oldestCheck(info);
     const views = info.wishlist ? h('div.dl-seg', { role: 'group', 'aria-label': 'What to list' },
-      h('button', { type: 'button', 'aria-pressed': String(view === 'library'), onclick: () => { view = 'library'; draw(); } }, 'Library ', h('span.c', {}, String(scope.size))),
-      h('button', { type: 'button', 'aria-pressed': String(view === 'wishlist'), onclick: () => { view = 'wishlist'; draw(); } }, 'Wishlist ', h('span.c', {}, String(info.wishlist.items.length)))) : null;
+      h('button', { type: 'button', 'aria-pressed': String(view === 'library'), onclick: () => { view = 'library'; closeSheet(); draw(); } }, 'Library ', h('span.c', {}, String(scope.size))),
+      h('button', { type: 'button', 'aria-pressed': String(view === 'wishlist'), onclick: () => { view = 'wishlist'; closeSheet(); draw(); } }, 'Wishlist ', h('span.c', {}, String(info.wishlist.items.length)))) : null;
     const btn = h('button.dl-refresh', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
       'aria-label': r.running ? 'Reading prices' : 'Refresh prices',
       title: info.configured ? 'Refresh prices' : 'IsThereAnyDeal is not set up (ITAD_API_KEY is missing from .env)' },
@@ -249,7 +250,7 @@ export function renderDeals(root) {
         onchange: (e) => saveCountry(e.target.value) }),
       h('datalist', { id: 'dl-countries' }, ['ES', 'US', 'GB', 'DE', 'FR', 'IT', 'PT', 'NL', 'PL', 'SE', 'BR', 'MX', 'CA', 'AU', 'JP'].map((c) => h('option', { value: c })))) : null;
     return h('div.dl-toolbar', {}, views, h('span.dl-check', {}, btn, h('span.dl-checked', {}, checked)), country,
-      info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Test Telegram') : null);
+      null);
   }
 
   function filters() {
@@ -266,7 +267,7 @@ export function renderDeals(root) {
       onclick: () => { alertsOnly = !alertsOnly; draw(); } }, 'Alerts ', h('span.c', {}, String(alertCount)));
     const select = h('select.dl-sortsel', { 'aria-label': 'Sort by', onchange: (e) => { sort = e.target.value; dir = 1; draw(); } },
       SORT_KEYS.filter((s) => !s.wish || view === 'wishlist').map((s) => h('option', { value: s.key, selected: s.key === sort || null }, s.label)));
-    return h('div.dl-filters', {}, ...chips, alertChip, select);
+    return h('div.dl-filters', {}, select, ...chips, alertChip);
   }
 
   const sectionNote = (rows, nameOf) => {
@@ -283,7 +284,8 @@ export function renderDeals(root) {
     return [
       h('div.dl-title-row', {}, h('h1', {}, 'Deals'),
         h('button.dl-info', { type: 'button', 'aria-expanded': String(infoOpen), 'aria-label': 'About this page', onclick: () => { infoOpen = !infoOpen; draw(); } }, 'i')),
-      infoOpen ? h('p.hint', {}, text) : null,
+      infoOpen ? h('div.dl-info-panel', {}, h('p.hint', {}, text),
+        info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null) : null,
       setup ? h('p.hint', {}, setup) : null,
       toolbar(),
       extra,
@@ -318,7 +320,6 @@ export function renderDeals(root) {
 
   function draw() {
     if (!info.wishlist) view = 'library';
-    closeSheet();
     if (view === 'wishlist') { drawWishlist(); return; }
     const { rows, unmatched, waiting } = buildDeals(store.games, info, { statuses, sort, dir, alertsOnly });
     const scope = rows.length + unmatched.length + waiting.length;

@@ -52,7 +52,12 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 		s.fillWishImages(l.Wish.Hidden)
 		wish = l.Wish
 	}
-	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "country": l.Country, "matches": l.Matches, "prices": l.Prices,
+	libImages, err := deals.LibraryImages(s.DB, deals.ImageSubdir(s.CoverDir))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "lib_images": libImages, "country": l.Country, "matches": l.Matches, "prices": l.Prices,
 		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen, "wishlist": wish,
 		"telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
 }

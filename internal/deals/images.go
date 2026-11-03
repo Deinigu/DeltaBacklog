@@ -3,6 +3,7 @@ package deals
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"image"
@@ -175,6 +176,71 @@ func (c *ImageCache) Fetch(ctx context.Context, appid int64, raw string) error {
 type ImageSource interface {
 	// SyncImages downloads the images the cache does not have yet. It is best effort: errors only stop it.
 	SyncImages(ctx context.Context, appIDs []int64)
+	// PruneImages deletes the cached pictures (and markers) of every app not in keep.
+	PruneImages(keep []int64)
+}
+
+var cacheFileRe = regexp.MustCompile(`^([0-9]+)\.(jpg|png|none)$`)
+
+// Prune removes the files of apps that are not in keep: games that left the wishlist leave no picture behind. Only files
+// named like the cache's own (<appid>.jpg|png|none) are touched.
+func (c *ImageCache) Prune(keep []int64) {
+	want := make(map[string]bool, len(keep))
+	for _, id := range keep {
+		want[strconv.FormatInt(id, 10)] = true
+	}
+	ents, err := os.ReadDir(c.Dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		if m := cacheFileRe.FindStringSubmatch(e.Name()); m != nil && e.Type().IsRegular() && !want[m[1]] {
+			_ = os.Remove(filepath.Join(c.Dir, e.Name()))
+		}
+	}
+}
+
+// PruneImages implements ImageSource.
+func (c *Steam) PruneImages(keep []int64) {
+	if c.Images != nil {
+		c.Images.Prune(keep)
+	}
+}
+
+// syncLibImages gives the library games that have no cover but a Steam link the picture of their Steam app (the same
+// cache and rules as the wishlist's).
+func syncLibImages(ctx context.Context, wl WishlistSource, games []libGame) {
+	is, ok := wl.(ImageSource)
+	if !ok {
+		return
+	}
+	var ids []int64
+	for _, g := range games {
+		if g.noCover && g.appID > 0 {
+			ids = append(ids, g.appID)
+		}
+	}
+	if len(ids) > 0 {
+		is.SyncImages(ctx, ids)
+	}
+}
+
+// LibraryImages maps the Deals games that have no cover of their own to the cached Steam picture of their Steam link
+// (a file under /covers/, such as "steam/1868140.jpg"). dir is the cache folder.
+func LibraryImages(d *sql.DB, dir string) (map[int64]string, error) {
+	games, err := watchedGames(d)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64]string{}
+	for _, g := range games {
+		if g.noCover && g.appID > 0 {
+			if n := ImageName(dir, g.appID); n != "" {
+				out[g.id] = n
+			}
+		}
+	}
+	return out, nil
 }
 
 // DefaultImageBase is where Steam serves the files named by GetItems assets (store_item_assets).
@@ -240,6 +306,7 @@ func (c *Steam) SyncImages(ctx context.Context, appIDs []int64) {
 	if len(need) > maxImagesPerRun {
 		need = need[:maxImagesPerRun]
 	}
+	fails := 0 // network failures in a row, over the whole run
 	for len(need) > 0 {
 		n := min(len(need), MaxTitleBatch)
 		batch := need[:n]
@@ -248,7 +315,6 @@ func (c *Steam) SyncImages(ctx context.Context, appIDs []int64) {
 		if err != nil {
 			return
 		}
-		fails := 0
 		for _, id := range batch {
 			urls := assets[id]
 			if len(urls) == 0 {
