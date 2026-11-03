@@ -15,7 +15,26 @@ import (
 // DefaultCountry is the country prices are read for until the owner changes it.
 const DefaultCountry = "ES"
 
-const watchedSQL = `('backlog', 'up_next')`
+// NotOwned lists the ownership names that count as "you don't own it" (ownership is a lookup table of names, matched
+// without regard to case). A game with no ownership counts too; Owned and Free to play never do.
+var NotOwned = []string{"Pirated", "Borrowed", "Family Share", "Nope"}
+
+// eligibleSQL is the one rule for the games Deals covers, as a condition on a `game g` row: the game is in the Backlog or
+// Up next, has no play rows (no year and no period), and is not owned (see NotOwned). Hiding is applied on top of it.
+var eligibleSQL = `(g.status_id IN (SELECT id FROM status WHERE code IN ('backlog', 'up_next'))
+	AND NOT EXISTS (SELECT 1 FROM play pl WHERE pl.game_id = g.id)
+	AND (g.ownership_id IS NULL OR g.ownership_id IN (SELECT id FROM ownership WHERE name IN (` + quoted(NotOwned) + `))))`
+
+// watchedSQL is eligibleSQL without the games the owner hid: the games that are shown, refreshed and priced.
+var watchedSQL = `(` + eligibleSQL + ` AND NOT EXISTS (SELECT 1 FROM deal_hidden h WHERE h.game_id = g.id))`
+
+func quoted(names []string) string {
+	q := make([]string, len(names))
+	for i, n := range names {
+		q[i] = "'" + strings.ReplaceAll(n, "'", "''") + "'"
+	}
+	return strings.Join(q, ", ")
+}
 
 // retryUnmatched is how long an automatic "no match" is trusted before the search is made again.
 const retryUnmatched = 7 * 24 * time.Hour
@@ -86,14 +105,23 @@ type List struct {
 	Country string
 	Matches []Match
 	Prices  []Price
+	Watched []int64 // the games Deals shows: eligible and not hidden
+	Hidden  []int64 // eligible games the owner hid
 }
 
 // Load reads the cache (never ITAD).
 func Load(d *sql.DB) (*List, error) {
-	l := &List{Country: Country(d), Matches: []Match{}, Prices: []Price{}}
+	l := &List{Country: Country(d), Matches: []Match{}, Prices: []Price{}, Watched: []int64{}, Hidden: []int64{}}
+	var err error
+	if l.Watched, err = gameIDs(d, watchedSQL); err != nil {
+		return nil, err
+	}
+	if l.Hidden, err = gameIDs(d, eligibleSQL+` AND EXISTS (SELECT 1 FROM deal_hidden h WHERE h.game_id = g.id)`); err != nil {
+		return nil, err
+	}
 	rows, err := d.Query(`SELECT m.game_id, coalesce(m.itad_id, ''), m.itad_title, m.itad_slug, m.source
-		FROM deal_match m JOIN game g ON g.id = m.game_id JOIN status s ON s.id = g.status_id
-		WHERE s.code IN ` + watchedSQL + ` ORDER BY m.game_id`)
+		FROM deal_match m JOIN game g ON g.id = m.game_id
+		WHERE ` + watchedSQL + ` ORDER BY m.game_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +138,8 @@ func Load(d *sql.DB) (*List, error) {
 	}
 	rows, err = d.Query(`SELECT p.game_id, p.currency, p.cur_shop, p.cur_price, p.cur_regular, p.cur_cut, p.cur_url, p.cur_expiry,
 		p.low_price, p.low_shop, p.low_at, p.fetched_at
-		FROM deal_price p JOIN game g ON g.id = p.game_id JOIN status s ON s.id = g.status_id
-		WHERE s.code IN ` + watchedSQL + ` ORDER BY p.game_id`)
+		FROM deal_price p JOIN game g ON g.id = p.game_id
+		WHERE ` + watchedSQL + ` ORDER BY p.game_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +153,41 @@ func Load(d *sql.DB) (*List, error) {
 		l.Prices = append(l.Prices, p)
 	}
 	return l, rows.Err()
+}
+
+func gameIDs(d *sql.DB, cond string) ([]int64, error) {
+	rows, err := d.Query(`SELECT g.id FROM game g WHERE ` + cond + ` ORDER BY g.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// SetHidden hides a game from Deals (or shows it again). A hidden game is not refreshed; its match and prices are kept.
+func SetHidden(d *sql.DB, gameID int64, hide bool) error {
+	var n int
+	if err := d.QueryRow(`SELECT count(*) FROM game WHERE id = ?`, gameID).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrUnknownGame
+	}
+	var err error
+	if hide {
+		_, err = d.Exec(`INSERT INTO deal_hidden(game_id, hidden_at) VALUES (?, ?) ON CONFLICT(game_id) DO NOTHING`, gameID, now())
+	} else {
+		_, err = d.Exec(`DELETE FROM deal_hidden WHERE game_id = ?`, gameID)
+	}
+	return err
 }
 
 // ErrUnknownGame: no such game in the library.
@@ -212,9 +275,9 @@ type libGame struct {
 
 // watchedGames lists the games that get prices, with their Steam app id.
 func watchedGames(d *sql.DB) ([]libGame, error) {
-	rows, err := d.Query(`SELECT g.id, g.title, coalesce(l.url, '') FROM game g JOIN status s ON s.id = g.status_id
+	rows, err := d.Query(`SELECT g.id, g.title, coalesce(l.url, '') FROM game g
 		LEFT JOIN game_link l ON l.game_id = g.id AND l.kind = 'steam'
-		WHERE s.code IN ` + watchedSQL + ` ORDER BY g.id`)
+		WHERE ` + watchedSQL + ` ORDER BY g.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -372,8 +435,8 @@ func RefreshOne(ctx context.Context, d *sql.DB, src Source, gameID int64) error 
 		return ErrNotConfigured
 	}
 	var id string
-	err := d.QueryRow(`SELECT m.itad_id FROM deal_match m JOIN game g ON g.id = m.game_id JOIN status s ON s.id = g.status_id
-		WHERE m.game_id = ? AND m.itad_id IS NOT NULL AND s.code IN `+watchedSQL, gameID).Scan(&id)
+	err := d.QueryRow(`SELECT m.itad_id FROM deal_match m JOIN game g ON g.id = m.game_id
+		WHERE m.game_id = ? AND m.itad_id IS NOT NULL AND `+watchedSQL, gameID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

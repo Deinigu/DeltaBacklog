@@ -1,9 +1,10 @@
-// Deals: the prices (from IsThereAnyDeal, cached by the server) of the games in the Backlog and Up next.
+// Deals: the prices (from IsThereAnyDeal, cached by the server) of the games you don't own and haven't played yet.
+// The server decides which games those are (info.watched, without the ones the owner hid, info.hidden); the client only filters.
 // Pure (no DOM): unit-tested. Amounts are cents of the price's own currency; they are only formatted when shown.
 
 export const LOCALE = 'en-GB'; // the UI text is English, so money and dates are too, whatever the browser's language
 export const NEAR_LOW = 0.10; // "near the historical low": within 10% of it
-/** The statuses that get prices, in the order of the filter chips. */
+/** The statuses Deals can cover (a game also has to be unowned and unplayed: the server's rule), in the order of the filter chips. */
 export const DEAL_STATUSES = [
   { code: 'backlog', label: 'Backlog' },
   { code: 'up_next', label: 'Up next' },
@@ -60,18 +61,19 @@ const COMPARE = {
 
 /**
  * What the Deals page lists.
- *  games    the library (store.games); info  the server's answer {matches, prices}
- *  statuses a Set of status codes to show (empty or null = all three); sort a SORTS key
+ *  games    the library (store.games); info  the server's answer {matches, prices, watched}
+ *  statuses a Set of status codes to show (empty or null = all); sort a SORTS key
  * Returns {rows, unmatched, waiting}: rows are games with a cached price (a row has `p`, the price, and `badge`), unmatched
  * are games ITAD has no match for, waiting are matched games whose prices have not been read yet.
  */
 export function buildDeals(games, info, { statuses = null, sort = 'cut' } = {}) {
   const prices = new Map((info?.prices || []).map((p) => [p.game_id, p]));
   const matches = new Map((info?.matches || []).map((m) => [m.game_id, m]));
+  const scope = scopeOf(info);
   const want = new Set(statuses && statuses.size ? statuses : DEAL_STATUSES.map((s) => s.code));
   const rows = [], unmatched = [], waiting = [];
   for (const game of games) {
-    if (!want.has(game.status) || !DEAL_STATUSES.some((s) => s.code === game.status)) continue;
+    if (!scope.has(game.id) || !want.has(game.status) || !DEAL_STATUSES.some((s) => s.code === game.status)) continue;
     const p = prices.get(game.id), m = matches.get(game.id);
     if (p) rows.push({ game, p, match: m || null, badge: badgeOf(p) });
     else if (m && !m.itad_id) unmatched.push({ game, match: m });
@@ -85,6 +87,15 @@ export function buildDeals(games, info, { statuses = null, sort = 'cut' } = {}) 
   return { rows, unmatched, waiting };
 }
 
+/** The ids of the games Deals shows (the server's rule, hidden ones left out); empty until the server has answered. */
+export const scopeOf = (info) => new Set(info?.watched || []);
+
+/** The hidden games (the owner hid them and they still qualify), by title. */
+export function hiddenGames(games, info) {
+  const hid = new Set(info?.hidden || []);
+  return games.filter((g) => hid.has(g.id)).sort((a, b) => a.title.localeCompare(b.title, 'en'));
+}
+
 /** The cached price of one game (for the drawer), or null. */
 export const priceOf = (info, gameId) => (info?.prices || []).find((p) => p.game_id === gameId) || null;
 export const matchOf = (info, gameId) => (info?.matches || []).find((m) => m.game_id === gameId) || null;
@@ -95,8 +106,8 @@ export function oldestCheck(info) {
   return times[0] || null;
 }
 
-/** A game the deals cover: Backlog or Up next. */
-export const isWatched = (game) => DEAL_STATUSES.some((s) => s.code === game.status);
+/** Whether a game can be on Deals: by status alone (a quick test) or, with the server's answer, by the whole rule and not hidden. */
+export const isWatched = (game, info) => DEAL_STATUSES.some((s) => s.code === game.status) && (info == null || scopeOf(info).has(game.id));
 
 /** The shop link of a price, only if it is a real web address (it opens in a new tab). */
 export function safeLink(url) {

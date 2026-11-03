@@ -37,7 +37,21 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "country": l.Country, "matches": l.Matches, "prices": l.Prices,
-		"refresh": s.dealsJob.status()})
+		"watched": l.Watched, "hidden": l.Hidden, "refresh": s.dealsJob.status()})
+}
+
+// dealsHide hides a game from Deals (PUT) or shows it again (DELETE); the answer is the new list.
+func (s *Server) dealsHide(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "id")
+	if !ok {
+		notFound(w)
+		return
+	}
+	if err := deals.SetHidden(s.DB, id, r.Method == http.MethodPut); err != nil {
+		s.dealsError(w, err)
+		return
+	}
+	s.dealsList(w, r)
 }
 
 // dealsRefresh starts reading the prices in the background; the answer is the job's status. One run at a time.

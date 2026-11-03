@@ -114,6 +114,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/deals/refresh", s.dealsRefresh)
 	mux.HandleFunc("GET /api/deals/search", s.dealsSearch)
 	mux.HandleFunc("PUT /api/deals/country", s.dealsSetCountry)
+	mux.HandleFunc("PUT /api/deals/hidden/{id}", s.dealsHide)
+	mux.HandleFunc("DELETE /api/deals/hidden/{id}", s.dealsHide)
 	mux.HandleFunc("PUT /api/games/{id}/deal-match", s.dealsSetMatch)
 	mux.HandleFunc("GET /api/covers/search", s.searchCovers)
 	mux.HandleFunc("GET /api/hltb/search", s.hltbSearch)
