@@ -88,21 +88,38 @@ func SavePoster(r io.Reader, dir string, gameID int64) (string, error) {
 
 // savePosterAs is SavePoster with the file name chosen by the caller.
 func savePosterAs(r io.Reader, dir, name string) (string, error) {
+	return savePosterLimit(r, dir, name, maxPixels)
+}
+
+func savePosterLimit(r io.Reader, dir, name string, limit int64) (string, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
 	}
+	return savePosterRaw(raw, dir, name, limit, 1)
+}
+
+// savePosterRaw is savePosterLimit for an image already in memory with EXIF orientation o (see saveCoverRaw).
+func savePosterRaw(raw []byte, dir, name string, limit int64, o int) (string, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("%w: decode: %v", ErrBadImage, err)
+		return "", fmt.Errorf("%w: %w: decode: %v", ErrBadImage, ErrCorrupt, err)
 	}
-	if tooLarge(cfg.Width, cfg.Height) {
-		return "", fmt.Errorf("%w: too large (%dx%d)", ErrBadImage, cfg.Width, cfg.Height)
+	if tooLargeFor(cfg.Width, cfg.Height, limit) {
+		return "", fmt.Errorf("%w: %w (%dx%d)", ErrBadImage, ErrTooManyPixels, cfg.Width, cfg.Height)
 	}
 	img, _, err := image.Decode(bytes.NewReader(raw))
-	raw = nil
 	if err != nil {
-		return "", fmt.Errorf("%w: decode: %v", ErrBadImage, err)
+		return "", fmt.Errorf("%w: %w: decode: %v", ErrBadImage, ErrCorrupt, err)
+	}
+	if o >= 2 { // keep about twice the poster width in the 2:3 part that will be cropped
+		img = prescaleOrient(img, o, func(ow, oh int) float64 {
+			cw := min(ow, oh*2/3)
+			if cw < 1 {
+				return 1
+			}
+			return min(1, float64(2*PosterWidth)/float64(cw))
+		})
 	}
 	src := posterCrop(img.Bounds())
 	if src.Dx() < 16 || src.Dy() < 16 {
