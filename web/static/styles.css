@@ -772,7 +772,10 @@ ol.shortest { list-style: none; margin: 8px 0 0; padding: 0; }
 }
 #nav .more-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #nav .more-btn[aria-current="page"] { color: var(--accent); font-weight: 600; }
-@media (max-width: 899px) { #nav .more-item { display: none; } }
+@media (max-width: 899px) { #nav .more-item { display: none; } #nav .more-btn { position: relative; } #nav .more-btn .nav-badge { position: absolute; top: 6px; left: calc(50% + 4px); } }
+.nav-badge { display: inline-block; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-sizing: border-box; }
+.more-link .nav-badge { margin-left: auto; }
+@media (min-width: 900px) { #nav a .nav-badge { margin-left: auto; } }
 @media (min-width: 900px) {
   #nav .more-btn { display: none; }
   .more-wrap { display: none; }
@@ -1054,6 +1057,10 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .deal-cut { color: #4ade80; } }
 .deal-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); border: 1px solid var(--accent); }
 .deal-badge.low { background: var(--accent); color: var(--accent-text); }
+.deal-badge.alert { background: #b45309; border-color: #b45309; color: #fff; }
+.deal-badge.new { margin-left: 6px; background: var(--surface); color: var(--text); }
+.deals-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.deals-tools .chip[disabled] { opacity: .6; }
 .deal-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .deal-drawer h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .deal-drawer .hint { margin: 4px 0; }

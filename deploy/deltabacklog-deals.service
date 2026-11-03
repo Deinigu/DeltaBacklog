@@ -1,0 +1,28 @@
+[Unit]
+Description=DeltaBacklog daily price check (Deals prices and price alerts)
+After=network-online.target deltabacklog.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deltabacklog
+Group=deltabacklog
+# ITAD_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and DATA_DIR (root-only file); the same one the app reads
+EnvironmentFile=/etc/deltabacklog.env
+WorkingDirectory=/var/lib/deltabacklog
+ExecStart=/opt/deltabacklog/deltabacklog deals-check
+# A run is a few minutes of paced requests; the program waits up to 20 minutes for a running refresh and stops itself 20 minutes after it starts.
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=96M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/deltabacklog

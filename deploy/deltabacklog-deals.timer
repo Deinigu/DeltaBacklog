@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the DeltaBacklog price check every day
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+# If the Pi was off at 08:00, run the check as soon as it is back.
+Persistent=true
+RandomizedDelaySec=20min
+
+[Install]
+WantedBy=timers.target

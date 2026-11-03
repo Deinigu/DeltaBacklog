@@ -1,9 +1,9 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
 import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
-import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsHide, dealsUnhide } from './api.js';
+import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest } from './api.js';
 import { openDrawer } from './drawer.js';
-import { DEAL_STATUSES, SORTS, BADGE_LABEL, buildDeals, hiddenGames, scopeOf, formatMoney, formatDate, oldestCheck, safeLink, LOCALE } from './deals.js';
+import { DEAL_STATUSES, SORTS, BADGE_LABEL, ALERT_LABEL, buildDeals, hiddenGames, scopeOf, formatMoney, formatDate, oldestCheck, safeLink, LOCALE } from './deals.js';
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
 
@@ -16,6 +16,9 @@ export function renderDeals(root) {
   let info = { configured: false, country: 'ES', matches: [], prices: [], refresh: { running: false } };
   let statuses = new Set(); // empty = all three
   let sort = 'cut';
+  let alertsOnly = false; // the Alerts chip: only the games with a standing price alert
+  let newIds = new Set(); // the alerts that were new when this visit began (they are marked seen at once)
+  let seenSent = false;
   let alive = true;
   let timer = null;
   const live = h('div.sr-only', { role: 'status', 'aria-live': 'polite' });
@@ -26,6 +29,11 @@ export function renderDeals(root) {
   async function load() {
     try { info = await dealsList(); } catch { /* offline or an old server: the page says nothing is cached */ }
     if (!alive) return;
+    if (!seenSent && info.unseen > 0) { // opening Deals is seeing the alerts: remember which ones were new, then tell the server
+      seenSent = true;
+      newIds = new Set((info.alerts || []).filter((a) => !a.seen).map((a) => a.game_id));
+      dealsAlertsSeen().then((r) => { store.dealsUnseen = r.unseen || 0; window.dispatchEvent(new Event('deals-unseen')); }).catch(() => { seenSent = false; });
+    }
     draw();
     if (info.refresh?.running) schedulePoll();
   }
@@ -76,8 +84,29 @@ export function renderDeals(root) {
     } else say(`${game.title} shown again.`);
   }
 
+  async function mute(game) {
+    try {
+      const refresh = info.refresh;
+      info = { ...(await dealsMute(game.id)), refresh };
+    } catch (e) { toast(e.message || 'Could not turn the alerts off'); return; }
+    store.dealsUnseen = info.unseen || 0; // a muted game's alert leaves the count
+    window.dispatchEvent(new Event('deals-unseen'));
+    draw();
+    say(`Alerts for ${game.title} are off.`);
+    toast(`Alerts off for “${game.title}”. Turn them on again in the game’s Price section.`, 4000);
+  }
+  async function telegramTest(btn) {
+    btn.disabled = true;
+    try {
+      await dealsTelegramTest();
+      toast('Test message sent to Telegram.', 3000);
+      say('Test message sent.');
+    } catch (e) { toast(e.message || 'The test message was not sent', 5000); }
+    btn.disabled = false;
+  }
+
   // ---- the page ----
-  function row({ game, p }, badge) {
+  function row({ game, p, alert }, badge) {
     const link = p.price != null ? safeLink(p.url) : null;
     const onSale = p.price != null && p.cut > 0;
     const price = p.price == null
@@ -95,13 +124,16 @@ export function renderDeals(root) {
       h('span.up-title', {}, game.title),
       price,
       h('span.up-from', {}, low + expiry),
-      badge ? h('span', {}, h('span.deal-badge' + (badge === 'low' ? '.low' : ''), {}, BADGE_LABEL[badge])) : null);
+      badge || alert ? h('span', {}, badge ? h('span.deal-badge' + (badge === 'low' ? '.low' : ''), {}, BADGE_LABEL[badge]) : null,
+        alert ? h('span.deal-badge.alert', { style: badge ? 'margin-left:6px' : null }, `Alert: ${ALERT_LABEL[alert.kind] || 'price'}`) : null,
+        alert && newIds.has(game.id) ? h('span.deal-badge.new', {}, 'New') : null) : null);
     const status = DEAL_STATUSES.find((s) => s.code === game.status)?.label || '';
-    const aria = `${game.title}, ${status}, ${p.price == null ? 'not on sale' : formatMoney(p.price, p.currency)}${badge ? `, ${BADGE_LABEL[badge]}` : ''}`;
+    const aria = `${game.title}, ${status}, ${p.price == null ? 'not on sale' : formatMoney(p.price, p.currency)}${badge ? `, ${BADGE_LABEL[badge]}` : ''}${alert ? `, price alert: ${ALERT_LABEL[alert.kind] || 'price'}${newIds.has(game.id) ? ', new' : ''}` : ''}`;
     return h('li.up-row', {},
       h('button.up-open', { type: 'button', onclick: () => openDrawer(game), 'aria-label': aria }, poster(game), body),
       h('span.si-actions', {},
         link ? h('a.add-chip.deal-link', { href: link, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `Open the deal for ${game.title} in a new tab` }, `View deal ↗`) : null,
+        alert ? h('button.hide-chip', { type: 'button', 'aria-label': `Turn off price alerts for ${game.title}`, onclick: () => mute(game) }, 'Mute') : null,
         hideBtn(game)));
   }
   const hideBtn = (game) => h('button.hide-chip', { type: 'button', 'aria-label': `Hide ${game.title}`, onclick: () => setHidden(game, true) }, 'Hide');
@@ -122,7 +154,10 @@ export function renderDeals(root) {
     });
     const select = h('select', { 'aria-label': 'Sort by', onchange: (e) => { sort = e.target.value; draw(); } },
       SORTS.map((s) => h('option', { value: s.key, selected: s.key === sort || null }, s.label)));
-    return [h('div.chips', {}, ...chips), h('div.deals-bar', {}, select)];
+    const alertCount = buildDeals(store.games, info, { alertsOnly: true }).rows.length;
+    const alertChip = h('button.chip' + (alertCount ? '' : '.zero'), { type: 'button', 'aria-pressed': String(alertsOnly), title: 'Games at their historical low or their lowest price in 2 years',
+      onclick: () => { alertsOnly = !alertsOnly; draw(); } }, 'Alerts ', h('span.c', {}, String(alertCount)));
+    return [h('div.chips', {}, ...chips, alertChip), h('div.deals-bar', {}, select)];
   }
 
   function refreshBar() {
@@ -138,14 +173,15 @@ export function renderDeals(root) {
   }
 
   function draw() {
-    const { rows, unmatched, waiting } = buildDeals(store.games, info, { statuses, sort });
+    const { rows, unmatched, waiting } = buildDeals(store.games, info, { statuses, sort, alertsOnly });
     const [btn, note] = refreshBar();
     const country = h('label.deals-country', {}, 'Country',
       h('input', { value: info.country || 'ES', maxlength: 2, 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off',
         onchange: (e) => saveCountry(e.target.value) }));
     const scope = rows.length + unmatched.length + waiting.length;
     const hiddenList = hiddenGames(store.games, info);
-    const empty = scopeOf(info).size ? 'No games match these filters.'
+    const empty = alertsOnly ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
+      : scopeOf(info).size ? 'No games match these filters.'
       : hiddenList.length ? 'All your deals games are hidden. Show them again below.'
       : 'Deals shows games you don’t own and haven’t played yet: in the backlog or up next, with no years played, and ownership Borrowed, Family Share, Nope or empty.';
     // Matched, but no shop sells it: often the match is an old or delisted entry (a game and its "Final Cut"), so say where to look.
@@ -155,16 +191,16 @@ export function renderDeals(root) {
       : null;
     page.replaceChildren(...[
       h('h1', {}, 'Deals'),
-      h('p.hint', {}, 'The best price right now and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal.'),
-      h('div.chips', {}, btn),
+      h('p.hint', {}, 'The best price right now and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.'),
+      h('div.deals-tools', {}, btn, info.telegram ? h('button.chip', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null),
       h('p.hint', {}, note),
       info.configured ? country : null,
       ...controls(),
       rows.length ? h('ul.up-list', {}, rows.map((r) => row(r, r.badge))) : null,
       unsoldHint,
-      !rows.length && info.configured ? h('div.empty', {}, scope ? 'No prices yet. Press Refresh prices.' : empty) : null,
-      waiting.length ? h('p.hint', {}, `${waiting.length} ${waiting.length === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`) : null,
-      unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
+      !rows.length && info.configured ? h('div.empty', {}, scope && !alertsOnly ? 'No prices yet. Press Refresh prices.' : empty) : null,
+      !alertsOnly && waiting.length ? h('p.hint', {}, `${waiting.length} ${waiting.length === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`) : null,
+      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'Open a game to pick the right one by hand.'),
         h('ul.up-list', {}, unmatched.map((u) => plainRow(u, u.match.source === 'user' ? 'You said there is no match' : 'No exact match found')))) : null,
       hiddenList.length ? h('details.hidden-list', {},

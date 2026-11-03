@@ -36,8 +36,15 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	unseen := 0
+	for _, a := range l.Alerts {
+		if !a.Seen {
+			unseen++
+		}
+	}
 	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "country": l.Country, "matches": l.Matches, "prices": l.Prices,
-		"watched": l.Watched, "hidden": l.Hidden, "refresh": s.dealsJob.status()})
+		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen,
+		"telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
 }
 
 // dealsHide hides a game from Deals (PUT) or shows it again (DELETE); the answer is the new list.
@@ -67,9 +74,27 @@ func (s *Server) dealsRefresh(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusAccepted, j.status())
 		return
 	}
+	// The daily `deals-check` is another process: a row in the database keeps the two apart.
+	release, err := deals.AcquireRun(s.DB, deals.HolderApp)
+	if errors.Is(err, deals.ErrBusy) {
+		j.mu.Unlock()
+		msg := "The daily price check is running right now. Try again in a few minutes."
+		var busy *deals.BusyError
+		if errors.As(err, &busy) && busy.Holder != deals.HolderCheck {
+			msg = "A price refresh was left running (the app may have restarted during one). It clears itself within 30 minutes: try again then."
+		}
+		writeErr(w, http.StatusConflict, msg, nil)
+		return
+	}
+	if err != nil {
+		j.mu.Unlock()
+		fail(w, err)
+		return
+	}
 	j.running, j.done, j.total, j.report, j.failed = true, 0, 0, "", false
 	j.mu.Unlock()
 	go func() {
+		defer release()
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()
 		rep, err := deals.Refresh(ctx, s.DB, s.Deals, deals.Options{
@@ -190,4 +215,43 @@ func (s *Server) dealsSetCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.dealsList(w, r)
+}
+
+// dealsMute turns the alerts of a game off (PUT) or on again (DELETE); the answer is the new list.
+func (s *Server) dealsMute(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "id")
+	if !ok {
+		notFound(w)
+		return
+	}
+	if err := deals.SetMuted(s.DB, id, r.Method == http.MethodPut); err != nil {
+		s.dealsError(w, err)
+		return
+	}
+	s.dealsList(w, r)
+}
+
+// dealsAlertsSeen records that Deals was opened: the alerts are no longer new.
+func (s *Server) dealsAlertsSeen(w http.ResponseWriter, r *http.Request) {
+	if err := deals.MarkSeen(s.DB); err != nil {
+		fail(w, err)
+		return
+	}
+	s.dealsList(w, r)
+}
+
+// dealsTelegramTest sends a test message, so the owner can check the bot is set up.
+func (s *Server) dealsTelegramTest(w http.ResponseWriter, r *http.Request) {
+	if s.Notify == nil {
+		writeErr(w, http.StatusServiceUnavailable, "Telegram is not set up (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are missing from .env)", nil)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := s.Notify.Send(ctx, "DeltaBacklog: test message. Price alerts will arrive here."); err != nil {
+		log.Printf("deals: telegram test: %v", err)
+		writeErr(w, http.StatusBadGateway, err.Error(), nil)
+		return
+	}
+	writeJSON(w, map[string]any{"sent": true})
 }

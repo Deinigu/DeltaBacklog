@@ -41,6 +41,8 @@ type Server struct {
 	Similar collections.SimilarSource
 	// Deals is the IsThereAnyDeal client the Deals page reads prices with; nil means the feature is off (tests set a fake).
 	Deals deals.Source
+	// Notify sends the Telegram messages (the alerts' test message); nil means Telegram is not set up.
+	Notify deals.Notifier
 
 	hltbOnce   sync.Once
 	posterOnce sync.Once
@@ -118,6 +120,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/deals/refresh", s.dealsRefresh)
 	mux.HandleFunc("GET /api/deals/search", s.dealsSearch)
 	mux.HandleFunc("PUT /api/deals/country", s.dealsSetCountry)
+	mux.HandleFunc("PUT /api/deals/muted/{id}", s.dealsMute)
+	mux.HandleFunc("DELETE /api/deals/muted/{id}", s.dealsMute)
+	mux.HandleFunc("POST /api/deals/alerts/seen", s.dealsAlertsSeen)
+	mux.HandleFunc("POST /api/deals/telegram-test", s.dealsTelegramTest)
 	mux.HandleFunc("PUT /api/deals/hidden/{id}", s.dealsHide)
 	mux.HandleFunc("DELETE /api/deals/hidden/{id}", s.dealsHide)
 	mux.HandleFunc("PUT /api/games/{id}/deal-match", s.dealsSetMatch)

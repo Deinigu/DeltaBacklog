@@ -1,6 +1,6 @@
 // App shell: hash router, navigation (bottom bar / sidebar), theme toggle, service worker.
 import { h, icon } from './util.js';
-import { load, store, loadLinkPending } from './api.js';
+import { load, store, loadLinkPending, loadDealsUnseen } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
 import { renderStats } from './statspage.js';
@@ -55,7 +55,11 @@ function resolve(path) {
 const SIDEBAR_ORDER = ['years', 'rankings', 'screenshots', 'series', 'upcoming', 'similar', 'deals', 'stats', 'views', 'hidden', 'attention', 'link']; // the insight pages together, then Views
 
 // The sheet / sidebar pages; "Link IGDB" joins them only while the IGDB review queue is not empty.
-const morePages = () => (store.linkPending > 0 ? [...MORE_PAGES, { path: 'link', label: 'Link IGDB', icon: 'link' }] : MORE_PAGES);
+const morePages = () => {
+  const pages = MORE_PAGES.map((p) => (p.path === 'deals' && store.dealsUnseen > 0 ? { ...p, badge: store.dealsUnseen } : p)); // new price alerts
+  return store.linkPending > 0 ? [...pages, { path: 'link', label: 'Link IGDB', icon: 'link' }] : pages;
+};
+const badge = (n) => (n > 0 ? h('span.nav-badge', { 'aria-hidden': 'true' }, n > 9 ? '9+' : String(n)) : null);
 
 function buildNav() {
   const pinned = store.views.filter((v) => v.pinned);
@@ -67,8 +71,8 @@ function buildNav() {
     ...pinned.map((v, i) => h('a.nav-view', { href: `#/view/${v.id}`, 'data-path': `view/${v.id}`, class: i >= 2 ? 'extra' : '' },
       h('span.emoji', {}, v.icon || '⭐'), h('span', {}, v.name))),
     ...[...morePages()].sort((a, b) => SIDEBAR_ORDER.indexOf(a.path) - SIDEBAR_ORDER.indexOf(b.path)).map((p) =>
-      h('a.more-item', { href: `#/${p.path}`, 'data-path': p.path }, icon(p.icon), h('span', {}, p.label))),
-    h('button.more-btn', { type: 'button', 'aria-haspopup': 'dialog', onclick: (e) => openMore(e.currentTarget, resolve(currentPath()).path, morePages()) }, icon('more'), h('span', {}, 'More')),
+      h('a.more-item', { href: `#/${p.path}`, 'data-path': p.path, 'aria-label': p.badge ? `${p.label}, ${p.badge} new price ${p.badge === 1 ? 'alert' : 'alerts'}` : null }, icon(p.icon), h('span', {}, p.label), badge(p.badge))),
+    h('button.more-btn', { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': store.dealsUnseen > 0 ? 'More, new price alerts on Deals' : null, onclick: (e) => openMore(e.currentTarget, resolve(currentPath()).path, morePages()) }, icon('more'), h('span', {}, 'More'), badge(store.dealsUnseen)),
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
   markActive();
@@ -105,6 +109,7 @@ async function route() {
     }
     buildNav();
     loadLinkPending().then(() => { if (store.linkPending > 0) buildNav(); });
+    loadDealsUnseen().then(() => { if (store.dealsUnseen > 0) buildNav(); });
   }
   const r = resolve(currentPath());
   markActive();
@@ -125,6 +130,8 @@ window.addEventListener('hashchange', () => {
 });
 // Views changed (saved, pinned, renamed...): refresh navigation without re-rendering the open page.
 window.addEventListener('views-changed', buildNav);
+// Price alerts seen (Deals opened) or new ones read: redraw the badge.
+window.addEventListener('deals-unseen', buildNav);
 // A game was added or deleted: rebuild the open page (new genres, platforms... must show up as filter chips).
 window.addEventListener('games-reloaded', () => route());
 

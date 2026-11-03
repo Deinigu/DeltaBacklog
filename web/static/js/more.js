@@ -1,7 +1,7 @@
 // The phone navigation's "More" sheet: the pages that do not fit in the bottom bar (see main.js).
 import { h, icon } from './util.js';
 
-/** Pages in the sheet, in order. `path` is the route (`data-path`), `icon` a util.js icon name. */
+/** Pages in the sheet, in order. `path` is the route (`data-path`), `icon` a util.js icon name; a page may carry a `badge` count (main.js adds one to Deals for new price alerts). */
 export const MORE_PAGES = [
   { path: 'series', label: 'Series', icon: 'series' },
   { path: 'upcoming', label: 'Upcoming', icon: 'upcoming' },
@@ -42,7 +42,7 @@ function onKey(e) {
 export function openMore(opener, current, pages = MORE_PAGES) {
   closeMore(false);
   const link = (p) => h('a.more-link', { href: `#/${p.path}`, 'aria-current': p.path === current ? 'page' : null, onclick: () => closeMore(false) },
-    icon(p.icon), h('span', {}, p.label));
+    icon(p.icon), h('span', {}, p.label), p.badge ? h('span.nav-badge', { 'aria-label': `${p.badge} new` }, p.badge > 9 ? '9+' : String(p.badge)) : null);
   const sheet = h('div.more-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'More pages' },
     h('div.more-links', {}, pages.map(link)),
     h('button.btn.more-close', { type: 'button', onclick: () => closeMore() }, 'Close'));

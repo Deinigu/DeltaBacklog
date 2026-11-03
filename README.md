@@ -50,7 +50,7 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
 - **One binary, one SQLite file.** No CGO, no frontend build step, no login. The web app is compiled into the binary.
 - **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
 - **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
-- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry.
+- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal and HowLongToBeat are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's daily price check for Deals (and its optional Telegram alerts).
 - **Yours to keep.** Covers and posters are stored next to the database, so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
 
 ## How it works
@@ -94,7 +94,7 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
-- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com).
+- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com), with an alert when a game reaches its historical low or its lowest price in 2 years (in the app, and on your phone through a Telegram bot if you set one up).
 - A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
 
 **Add games quickly (optional lookups)**
@@ -178,6 +178,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming and Similar games pages). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers and posters. |
 | `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the games you do not own and have not played). |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | empty | Optional: a Telegram bot token (from @BotFather) and a chat id, to get the Deals price alerts on your phone. You can reuse the bot of another service. Without them the alerts only show in the app. |
 | `SHOTS_MIN_FREE_GB` | `5` | Read by the Pi's nightly backup script, not by the app: the screenshot copy leaves this much space free on the backup disk. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |
 
@@ -197,6 +198,7 @@ A page whose key is missing says it is not set up; without any key the app still
 | `deltabacklog backup <file>` | Write a consistent copy of the database (safe while it runs; never migrates it). |
 | `deltabacklog backup-screenshots <dir>` | Copy the screenshot files `<dir>` does not have yet (never deletes). |
 | `deltabacklog check <file>` | Verify a database or backup (read-only). |
+| `deltabacklog deals-check` | Refresh the Deals prices and send the price alerts (the Pi's daily timer runs it; needs `ITAD_API_KEY`). |
 | `deltabacklog sync-igdb [--dry-run]` | Link games to IGDB (needs the keys); add `--enrich` to fill in details, times, dates and the Series and Similar games caches. |
 | `deltabacklog fetch-posters [--dry-run] [--limit N]` | Make the ranking posters for every game (IGDB / SteamGridDB keys help). |
 
@@ -234,7 +236,7 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Does it work offline?** The app and your covers are served from your own machine. Lookups need internet. The offline cache of the installed PWA needs HTTPS (browsers do not allow service workers on plain `http://` outside `localhost`).
 
-**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, only when you press the refresh button; HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
+**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, when you press the refresh button (and once a day on the Pi, for the alerts); HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
 
 **Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above, to the services you set up keys for; no page reads them just by being opened.
 

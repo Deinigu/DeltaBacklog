@@ -97,6 +97,7 @@ type Price struct {
 	LowPrice  *int64  `json:"low_price"`
 	LowShop   *string `json:"low_shop"`
 	LowAt     *string `json:"low_at"`
+	Low2y     *int64  `json:"low2y_price"` // lowest price of the last two years, when it was read (see fillTwoYearLows)
 	FetchedAt string  `json:"fetched_at"`
 }
 
@@ -105,14 +106,22 @@ type List struct {
 	Country string
 	Matches []Match
 	Prices  []Price
-	Watched []int64 // the games Deals shows: eligible and not hidden
-	Hidden  []int64 // eligible games the owner hid
+	Watched []int64     // the games Deals shows: eligible and not hidden
+	Hidden  []int64     // eligible games the owner hid
+	Alerts  []AlertInfo // standing price alerts (see Evaluate), newest first
+	Muted   []int64     // watched games whose alerts the owner turned off
 }
 
 // Load reads the cache (never ITAD).
 func Load(d *sql.DB) (*List, error) {
 	l := &List{Country: Country(d), Matches: []Match{}, Prices: []Price{}, Watched: []int64{}, Hidden: []int64{}}
 	var err error
+	if l.Alerts, err = loadAlerts(d); err != nil {
+		return nil, err
+	}
+	if l.Muted, err = loadMuted(d); err != nil {
+		return nil, err
+	}
 	if l.Watched, err = gameIDs(d, watchedSQL); err != nil {
 		return nil, err
 	}
@@ -137,7 +146,7 @@ func Load(d *sql.DB) (*List, error) {
 		return nil, err
 	}
 	rows, err = d.Query(`SELECT p.game_id, p.currency, p.cur_shop, p.cur_price, p.cur_regular, p.cur_cut, p.cur_url, p.cur_expiry,
-		p.low_price, p.low_shop, p.low_at, p.fetched_at
+		p.low_price, p.low_shop, p.low_at, p.low2y_price, p.fetched_at
 		FROM deal_price p JOIN game g ON g.id = p.game_id
 		WHERE ` + watchedSQL + ` ORDER BY p.game_id`)
 	if err != nil {
@@ -147,7 +156,7 @@ func Load(d *sql.DB) (*List, error) {
 	for rows.Next() {
 		var p Price
 		if err := rows.Scan(&p.GameID, &p.Currency, &p.Shop, &p.Price, &p.Regular, &p.Cut, &p.URL, &p.Expiry,
-			&p.LowPrice, &p.LowShop, &p.LowAt, &p.FetchedAt); err != nil {
+			&p.LowPrice, &p.LowShop, &p.LowAt, &p.Low2y, &p.FetchedAt); err != nil {
 			return nil, err
 		}
 		l.Prices = append(l.Prices, p)

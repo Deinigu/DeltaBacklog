@@ -315,3 +315,69 @@ func webURL(s string) string {
 	}
 	return u.String()
 }
+
+// HistorySource is what the alerts need beyond Source: the lowest price a game had since a date. The real Client has it;
+// ITAD's overview only knows the all-time low, so the two-year low comes from the price history (one call per game, made
+// only for the few games that need it).
+type HistorySource interface {
+	// LowSince is the lowest price any shop asked since the given time; ok is false when the history has none.
+	LowSince(ctx context.Context, id, country string, since time.Time) (low Money, ok bool, err error)
+}
+
+// lowLookback is how far before the window LowSince also reads, to find the price in effect when the window opens.
+const lowLookback = 8 * 7 * 24 * time.Hour
+
+// LowSince reads GET /games/history/v2 (every price change since a date) and keeps the lowest price in effect since
+// `since`: the changes after it and the last one before it (a low price set a few weeks earlier and still running when the
+// window opens counts). It reads a few weeks earlier than `since` to find that one.
+func (c *Client) LowSince(ctx context.Context, id, country string, since time.Time) (Money, bool, error) {
+	var out []struct {
+		Timestamp string `json:"timestamp"`
+		Deal      *struct {
+			Price struct {
+				Amount    float64 `json:"amount"`
+				AmountInt int64   `json:"amountInt"`
+				Currency  string  `json:"currency"`
+			} `json:"price"`
+		} `json:"deal"`
+	}
+	q := url.Values{"id": {id}, "country": {country}, "since": {since.Add(-lowLookback).UTC().Format("2006-01-02T15:04:05Z")}}
+	if err := c.call(ctx, http.MethodGet, "/games/history/v2", q, nil, &out); err != nil {
+		return Money{}, false, err
+	}
+	var low Money
+	ok := false
+	var startAt time.Time // the latest change before the window, and its price (no deal = not sold then)
+	var start *Money
+	take := func(m Money) {
+		if !ok || m.Cents < low.Cents {
+			low, ok = m, true
+		}
+	}
+	for _, e := range out {
+		var m *Money
+		if e.Deal != nil && e.Deal.Price.Currency != "" {
+			cents := e.Deal.Price.AmountInt
+			if cents == 0 && e.Deal.Price.Amount > 0 {
+				cents = int64(e.Deal.Price.Amount*100 + 0.5)
+			}
+			if cents >= 0 {
+				m = &Money{cents, e.Deal.Price.Currency}
+			}
+		}
+		at, err := time.Parse(time.RFC3339, e.Timestamp)
+		if err == nil && at.Before(since) {
+			if startAt.IsZero() || at.After(startAt) {
+				startAt, start = at, m
+			}
+			continue
+		}
+		if m != nil {
+			take(*m)
+		}
+	}
+	if start != nil {
+		take(*start)
+	}
+	return low, ok, nil
+}

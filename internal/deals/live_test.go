@@ -59,3 +59,33 @@ func TestLive(t *testing.T) {
 	}
 	t.Logf("search \"Hades\" -> %d results, first %q", len(list), list[0].Title)
 }
+
+// TestLiveHistory reads the price history of one well-known game and checks that the two-year low parses and is not
+// below the all-time low. Same way to run as TestLive; prints prices only.
+func TestLiveHistory(t *testing.T) {
+	if os.Getenv("DELTABACKLOG_LIVE") == "" {
+		t.Skip("set DELTABACKLOG_LIVE=1 to call the real service")
+	}
+	c := New(os.Getenv("ITAD_API_KEY"))
+	if !c.Configured() {
+		t.Skip("ITAD_API_KEY is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	g, ok, err := c.LookupTitle(ctx, "Hollow Knight")
+	if err != nil || !ok {
+		t.Fatalf("lookup: %v %v", ok, err)
+	}
+	ov, err := c.Overview(ctx, []string{g.ID}, "ES")
+	if err != nil || ov[g.ID].Low == nil {
+		t.Fatalf("overview: %v", err)
+	}
+	low, ok, err := c.LowSince(ctx, g.ID, "ES", time.Now().Add(-HistoryWindow))
+	if err != nil || !ok {
+		t.Fatalf("history: %v %v", ok, err)
+	}
+	t.Logf("%s: lowest in 2 years %s, lowest ever %s", g.Title, low, ov[g.ID].Low.Price)
+	if low.Currency != ov[g.ID].Low.Price.Currency || low.Cents < ov[g.ID].Low.Price.Cents {
+		t.Errorf("the two-year low %s is below the all-time low %s", low, ov[g.ID].Low.Price)
+	}
+}
