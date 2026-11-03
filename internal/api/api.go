@@ -112,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/similar/refresh", s.similarRefresh)
 	mux.HandleFunc("POST /api/similar/hide", s.similarHide)
 	mux.HandleFunc("POST /api/similar/unhide", s.similarUnhide)
+	mux.HandleFunc("GET /api/hidden", s.hiddenList)
 	mux.HandleFunc("GET /api/deals", s.dealsList)
 	mux.HandleFunc("POST /api/deals/refresh", s.dealsRefresh)
 	mux.HandleFunc("GET /api/deals/search", s.dealsSearch)

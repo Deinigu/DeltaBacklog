@@ -12,6 +12,7 @@ export const MORE_PAGES = [
   { path: 'rankings', label: 'Rankings', icon: 'rankings' },
   { path: 'screenshots', label: 'Screenshots', icon: 'screenshots' },
   { path: 'views', label: 'Views', icon: 'views' },
+  { path: 'hidden', label: 'Hidden', icon: 'hidden' },
 ];
 export const isMorePath = (path, pages = MORE_PAGES) => pages.some((p) => p.path === path);
 
