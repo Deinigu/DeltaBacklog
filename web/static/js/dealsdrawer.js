@@ -1,4 +1,4 @@
-// The "Price" row of the game drawer, for a Backlog or Up next game: the best price now and the historical low,
+// The "Price" row of the game drawer, for a game on the Deals page (not owned, not played, not hidden): the best price now and the historical low,
 // as the server has cached them (never ITAD on open). Also where a wrong or missing match is fixed. It stays out of the way:
 // nothing is drawn until the cache answers, when ITAD is not set up, or for other statuses.
 import { h, toast } from './util.js';
@@ -7,7 +7,7 @@ import { badgeOf, BADGE_LABEL, formatMoney, formatDate, isWatched, matchOf, pric
 
 export function dealsSection(game) {
   const box = h('div.deal-drawer', { hidden: true });
-  if (!isWatched(game)) return box;
+  if (!isWatched(game)) return box; // a quick test by status; the server's answer decides below
   let info = null;
 
   function draw() {
@@ -75,7 +75,7 @@ export function dealsSection(game) {
 
   dealsList().then((resp) => {
     info = resp;
-    if (!box.isConnected || (!resp.configured && !priceOf(info, game.id) && !matchOf(info, game.id))) return; // nothing cached and no way to read it
+    if (!box.isConnected || !isWatched(game, resp) || (!resp.configured && !priceOf(info, game.id) && !matchOf(info, game.id))) return; // nothing cached and no way to read it
     draw();
   }).catch(() => { /* offline or an old server: no row */ });
   return box;

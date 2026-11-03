@@ -72,7 +72,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | **Series** | how far you are through every series | [14](#14-series) |
 | **Upcoming** | new games of your series that are not out yet | [15](#15-upcoming-releases) |
 | **Similar games** | games you might like, from the ones you finished | [16](#16-similar-games) |
-| **Deals** | what your backlog and up next games cost right now | [17](#17-deals) |
+| **Deals** | what the games you don't own and haven't played yet cost right now | [17](#17-deals) |
 | **Stats** | numbers about your library | [18](#18-stats) |
 | **Year in review** | what you played in a year | [19](#19-year-in-review) |
 | **Rankings** | tier lists of your games | [20](#20-rankings) |
@@ -373,7 +373,11 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 *Needs an IsThereAnyDeal key ([section 3](#3-setting-up-keys)). Games are matched through their Steam store link (from IGDB) or exact title.*
 
-**Deals** shows what the games in your **Backlog** and **Up next** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+**Deals** shows what the games you **don't own and haven't played yet** cost right now and how that compares with the lowest price they ever had, from [IsThereAnyDeal](https://isthereanydeal.com). Games on sale come first, biggest discount first; then the games that are not on sale but are at or near their historical low. A game gets a **Historical low** badge when its price is at (or under) the lowest ever recorded, and **Near low (within 10%)** when it is at most 10% above it. The badges only appear when that low was a real discount or the game is on sale now: a game that has always cost its full price has none. Each row has the price, the regular price, the cut, the shop and the date of the lowest price; **View deal ↗** opens the shop page in a new tab. The chips filter by status and the menu changes the order (biggest discount, closest to the low, lowest price).
+
+**Which games are listed.** A game is on Deals when both are true: you don't own it, meaning its *Ownership* is **Borrowed**, **Family Share** or **Nope**, or it has none (**Owned**, **Free to play** and **Pirated** games never appear); and you haven't played it, meaning it is in the **Backlog** or **Up next** and has no years played (not even *childhood* or *always*). Finished, dropped, playing, on hold, evergreen and not interested games are left out. When you change a game so that it no longer fits (you buy it, or log a year of play), it leaves the page and is no longer refreshed; its saved match and prices are kept in case it comes back.
+
+**Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Show again** to bring one back.
 
 ![The Deals page](img/deals-phone.jpg)
 
@@ -501,7 +505,7 @@ The pages that use other websites keep what they read on the server. **Opening a
 | **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
 | **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
-| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of your backlog and up next (about one request per 50 games) | before you buy something |
+| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something |
 
 Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own.
 

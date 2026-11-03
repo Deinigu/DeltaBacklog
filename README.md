@@ -94,7 +94,7 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 - **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
-- **Deals**: the price now and the historical low of your backlog and up next games, from [IsThereAnyDeal](https://isthereanydeal.com).
+- **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com).
 - A **year in review**, TierMaker-style **rankings** (your own tiers and labels, big posters, export as a picture), and **stats** (backlog by platform and hours, finished per year, how long games have waited).
 
 **Add games quickly (optional lookups)**
@@ -177,7 +177,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `PUBLIC_NAME` | empty | Read by `deploy/install.sh` on the Pi, not by the app. `off` turns the friendly address off: `deltabacklog-name.service` is disabled and stopped (no `deltabacklog.local`, no port 80 rules), for an app reached only through a reverse proxy; then also set `LISTEN_ADDR=127.0.0.1:8081`, which `install.sh` keeps. See the [developer manual](docs/developer-manual.md#11-build-and-deploy). |
 | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming and Similar games pages). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers and posters. |
-| `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the backlog and up next games). |
+| `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the games you do not own and have not played). |
 | `SHOTS_MIN_FREE_GB` | `5` | Read by the Pi's nightly backup script, not by the app: the screenshot copy leaves this much space free on the backup disk. |
 | `GOMEMLIMIT` | unset | Go runtime soft memory limit, for example `96MiB`. The Pi install sets it; you rarely need it elsewhere. |
 

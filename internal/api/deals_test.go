@@ -148,3 +148,25 @@ func TestDealsMatchAndCountry(t *testing.T) {
 		t.Errorf("bad country: %d", code)
 	}
 }
+
+func TestDealsHide(t *testing.T) {
+	srv, _ := dealsServer(t, dealsFake{})
+	_, out := send(t, "GET", srv.URL+"/api/deals", nil)
+	if w := out["watched"].([]any); len(w) != 2 || len(out["hidden"].([]any)) != 0 {
+		t.Fatalf("watched %v hidden %v", out["watched"], out["hidden"])
+	}
+	code, out := send(t, "PUT", srv.URL+"/api/deals/hidden/1", nil)
+	if code != 200 || len(out["watched"].([]any)) != 1 || len(out["hidden"].([]any)) != 1 || out["hidden"].([]any)[0] != 1.0 {
+		t.Fatalf("hide %d %v", code, out)
+	}
+	code, out = send(t, "DELETE", srv.URL+"/api/deals/hidden/1", nil)
+	if code != 200 || len(out["watched"].([]any)) != 2 || len(out["hidden"].([]any)) != 0 {
+		t.Fatalf("unhide %d %v", code, out)
+	}
+	if code, _ = send(t, "PUT", srv.URL+"/api/deals/hidden/99", nil); code != 404 {
+		t.Errorf("unknown game: %d", code)
+	}
+	if code, _ = send(t, "PUT", srv.URL+"/api/deals/hidden/x", nil); code != 404 {
+		t.Errorf("bad id: %d", code)
+	}
+}
