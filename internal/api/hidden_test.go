@@ -69,7 +69,7 @@ func TestHiddenPage(t *testing.T) {
 	if len(r.Similar) != 1 || r.Similar[0].Title != "Sim" || len(r.Similar[0].Because) != 2 || r.Similar[0].Because[0] != "Newer" || r.Similar[0].Because[1] != "Zed" || r.Similar[0].HiddenAt == "" {
 		t.Errorf("similar: %+v", r.Similar)
 	}
-	if len(r.Series) != 1 || r.Series[0].IGDBID != 101 || r.Series[0].Series != "zeds" || r.Series[0].CollectionID != 7 || r.Series[0].HiddenAt == "" {
+	if len(r.Series) != 1 || r.Series[0].IGDBID != 101 || r.Series[0].Series != "Zeds" || r.Series[0].CollectionID != 7 || r.Series[0].HiddenAt == "" {
 		t.Errorf("series: %+v", r.Series)
 	}
 

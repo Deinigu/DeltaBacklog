@@ -40,5 +40,5 @@ test('becauseTitles and hiddenOn', () => {
   assert.equal(becauseTitles(['A', 'B', 'C', 'D', 'E']), 'Because you played A, B and C and 2 more');
   assert.equal(hiddenOn(''), '');
   assert.equal(hiddenOn('nonsense'), '');
-  assert.equal(hiddenOn('2026-03-04T10:00:00Z', 'en-GB'), 'Hidden on 04/03/2026');
+  assert.equal(hiddenOn('2026-03-04T10:00:00Z', 'en-GB'), 'Hidden on 4 Mar 2026');
 });

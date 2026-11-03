@@ -115,7 +115,14 @@ type Client struct {
 
 	paceMu sync.Mutex
 	next   time.Time
+
+	// sleep is time.After; tests replace it so a Retry-After does not make them wait.
+	sleep func(time.Duration) <-chan time.Time
 }
+
+// maxRetryWait is the longest Retry-After the client waits out (once) before trying a request again; a longer one stops
+// the run, which carries on at the next refresh.
+const maxRetryWait = 15 * time.Second
 
 // New returns a client for the real API. An empty key disables it.
 func New(key string) *Client {
@@ -152,8 +159,44 @@ func (c *Client) pace(ctx context.Context) error {
 	}
 }
 
-// call sends one request and decodes the JSON answer into out.
+// call sends one request and decodes the JSON answer into out. A 429 whose Retry-After is short (maxRetryWait or less) is
+// waited out once, respecting ctx, and the request is sent again; otherwise the RateLimitError is returned.
 func (c *Client) call(ctx context.Context, method, path string, query url.Values, body any, out any) error {
+	err := c.callOnce(ctx, method, path, query, body, out)
+	var rl *RateLimitError
+	if !errors.As(err, &rl) || rl.RetryAfter <= 0 || rl.RetryAfter > maxRetryWait {
+		return err
+	}
+	sleep := c.sleep
+	if sleep == nil {
+		sleep = time.After
+	}
+	select {
+	case <-sleep(rl.RetryAfter):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return c.callOnce(ctx, method, path, query, body, out)
+}
+
+// retryAfter reads a Retry-After header: seconds, or an HTTP date. 0 when absent, invalid or in the past.
+func retryAfter(v string, now time.Time) time.Duration {
+	v = strings.TrimSpace(v)
+	if n, err := strconv.Atoi(v); err == nil {
+		if n > 0 {
+			return time.Duration(n) * time.Second
+		}
+		return 0
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return (d + time.Second - 1).Truncate(time.Second) // rounded up to whole seconds
+		}
+	}
+	return 0
+}
+
+func (c *Client) callOnce(ctx context.Context, method, path string, query url.Values, body any, out any) error {
 	if !c.Configured() {
 		return ErrNotConfigured
 	}
@@ -196,11 +239,7 @@ func (c *Client) call(ctx context.Context, method, path string, query url.Values
 	defer res.Body.Close()
 	switch {
 	case res.StatusCode == http.StatusTooManyRequests:
-		e := &RateLimitError{}
-		if n, err := strconv.Atoi(strings.TrimSpace(res.Header.Get("Retry-After"))); err == nil && n > 0 {
-			e.RetryAfter = time.Duration(n) * time.Second
-		}
-		return e
+		return &RateLimitError{RetryAfter: retryAfter(res.Header.Get("Retry-After"), time.Now())}
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
 		return errors.New("IsThereAnyDeal refused the API key")
 	case res.StatusCode != http.StatusOK:

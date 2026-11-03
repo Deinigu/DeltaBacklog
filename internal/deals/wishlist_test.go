@@ -539,6 +539,7 @@ type bulkSource struct {
 	known  map[int64]string
 	chunks [][]int64
 	failAt int
+	failed error // what the failing call answers (default: a rate limit)
 }
 
 func (b *bulkSource) LookupAppIDs(_ context.Context, ids []int64) (map[int64]string, error) {
@@ -547,6 +548,9 @@ func (b *bulkSource) LookupAppIDs(_ context.Context, ids []int64) (map[int64]str
 	}
 	b.chunks = append(b.chunks, ids)
 	if len(b.chunks)-1 == b.failAt {
+		if b.failed != nil {
+			return nil, b.failed
+		}
 		return nil, &RateLimitError{RetryAfter: 4 * time.Minute}
 	}
 	out := map[int64]string{}
@@ -627,7 +631,7 @@ func TestRateLimitInTheMatchStepStillPricesWhatIsMatched(t *testing.T) {
 	if rep.WishPriced != 180 || rep.WishUnmatched != 20 {
 		t.Fatalf("the first chunk is matched and priced: %+v", rep)
 	}
-	if !strings.Contains(rep.String(), "Wishlist: 180 of 450 priced; the rest next run") && !strings.Contains(rep.String(), "Wishlist: 180 of 430 priced; the rest next run") {
+	if !strings.Contains(rep.String(), "Wishlist: 180 of 430 priced; the rest next run, 20 without a match.") {
 		t.Errorf("report: %s", rep)
 	}
 	var waiting int
@@ -643,7 +647,7 @@ func TestRateLimitInTheMatchStepStillPricesWhatIsMatched(t *testing.T) {
 	}
 }
 
-func TestLibraryRateLimitBeforeTheWishlistKeepsItsMatches(t *testing.T) {
+func TestRateLimitOnTheFirstLookupKeepsTheWishlist(t *testing.T) {
 	d := newDB(t)
 	src, wl := manyApps(30)
 	src.failAt = 0 // refused at once: nothing matched, nothing priced, and the run says so

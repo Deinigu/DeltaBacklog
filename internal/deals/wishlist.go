@@ -413,15 +413,15 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 			progress()
 		}
 	}
-	if cut != nil && !isStop(cut) {
-		return rep, cut
-	}
+	// Whatever ended the matching (a rate limit, a timeout, an error of the lookup), what is matched is still priced below
+	// and the problem is reported at the end.
 	// What was matched may now be a library game (same ITAD id): look again before reading prices.
 	before := len(active)
 	if active, err = activeWish(d); err != nil {
 		return rep, err
 	}
 	total -= before - len(active) // games that turned out to be in the library are not priced here
+	rep.WishGames = len(active)
 	byID := map[string][]int64{}
 	var ids []string
 	for _, r := range active {
@@ -462,7 +462,10 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 		progress()
 	}
 	if cut != nil {
-		return stop(cut)
+		if isStop(cut) {
+			return stop(cut)
+		}
+		rep.Stopped = "matching the wishlist failed: " + cut.Error() // the lookup's errors are fixed texts, never the key
 	}
 	return rep, nil
 }
@@ -474,7 +477,8 @@ func isStop(err error) bool {
 }
 
 // nameWishGames gives the games that still carry the placeholder title the name Steam has for them, one request per
-// MaxTitleBatch games. A source that cannot name games, or an error, leaves the placeholder (the ITAD title fills it later).
+// MaxTitleBatch games. A source that cannot name games, or an error, leaves the placeholder; a game Steam cannot name
+// (delisted, region-locked) keeps "Steam app <id>" and is asked about again at the next run (one cheap Steam request).
 func nameWishGames(ctx context.Context, d *sql.DB, wl WishlistSource, active []wishRow) {
 	ts, ok := wl.(TitleSource)
 	if !ok {
@@ -494,7 +498,9 @@ func nameWishGames(ctx context.Context, d *sql.DB, wl WishlistSource, active []w
 			return
 		}
 		for id, name := range names {
-			d.Exec(`UPDATE wish_item SET title = ? WHERE appid = ? AND title = ?`, name, id, placeholderTitle(id))
+			if _, err := d.Exec(`UPDATE wish_item SET title = ? WHERE appid = ? AND title = ?`, name, id, placeholderTitle(id)); err != nil {
+				return
+			}
 		}
 	}
 }

@@ -1,5 +1,6 @@
 // The Hidden page: everything the owner hid, in one list (GET api/hidden, read from the database). Pure (no DOM): unit-tested.
 // Each group is one place where a Hide button exists; unhiding goes through that place's own endpoint (see hiddenview.js).
+import { formatDay } from './upcoming.js';
 
 /** The groups in page order. `kind` is also the key of the answer. */
 export const HIDDEN_GROUPS = [
@@ -17,10 +18,10 @@ export function becauseTitles(titles, n = 3) {
   return `Because you played ${list}${more > 0 ? ` and ${more} more` : ''}`;
 }
 
-/** "Hidden on 03/02/2026", or '' when the date is missing or unreadable. */
+/** "Hidden on 3 Feb 2026", or '' when the date is missing or unreadable. */
 export function hiddenOn(iso, locale = 'en-GB') {
   const t = Date.parse(iso || '');
-  return Number.isNaN(t) ? '' : `Hidden on ${new Date(t).toLocaleDateString(locale)}`;
+  return Number.isNaN(t) ? '' : `Hidden on ${formatDay(t, locale)}`;
 }
 
 /** One row: { key, kind, id, title, year, cover, v, poster, poster_v (Deals only), note, when, ref } (ref: what the unhide call needs). */

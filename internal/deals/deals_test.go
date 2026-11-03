@@ -31,6 +31,7 @@ func fakeITAD(t *testing.T, h http.HandlerFunc) *Client {
 	t.Cleanup(srv.Close)
 	c := New(secret)
 	c.BaseURL, c.Gap = srv.URL, 0
+	c.sleep = func(time.Duration) <-chan time.Time { ch := make(chan time.Time, 1); ch <- time.Time{}; return ch } // a Retry-After costs no time
 	return c
 }
 
