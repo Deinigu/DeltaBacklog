@@ -185,7 +185,7 @@ if (!process.env.BASE_URL) { // hide something in each place (Deals, Similar gam
     for (const s of series) await send('POST', '/api/series/hide', { collection_id: s.missing[0].collection_id, igdb_id: s.missing[0].igdb_id });
   });
 }
-await p.setViewport({ width: 390, height: 1900, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); // tall enough for all three groups
+await p.setViewport({ width: 390, height: 1400, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); // tall enough for all three groups, no empty space below
 await go(p, '#/hidden'); await wait(1200);
 await shot(p, 'hidden-phone');
 await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
