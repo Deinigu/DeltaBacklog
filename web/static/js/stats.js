@@ -1,5 +1,6 @@
 // Backlog statistics computed from the games already in memory. Pure (no DOM): unit-tested.
-import { totalTime } from './ttb.js';
+import { ttbMinutes } from './ttb.js';
+import { buildSeries } from './series.js';
 
 export const WAITING = ['backlog', 'up_next'];                  // "the backlog" for the size and platform counts
 export const WAITING_STATUSES = ['backlog', 'up_next', 'hold']; // statuses where "time waiting" is meaningful
@@ -148,12 +149,170 @@ export function niceScale(maxValue, wanted = 4) {
   for (let v = 0; v <= max + 1e-9; v += step) ticks.push(Math.round(v));
   return { max, ticks };
 }
+// ---------------------------------------------------------------------------------------------------------------
+// Time estimates and the wider figures of the Stats page. Every hour figure is an estimate: it adds up the stored
+// time to beat (ttbMinutes: "Main + extras", else the quickest, else the complete time) of the games that have one,
+// and always reports how many games that covered, so the page can say "about 1,240 h across 142 of 189 games".
+// ---------------------------------------------------------------------------------------------------------------
+
+export const MIN_GROUP = 5;             // a genre or platform needs this many finished + dropped games to get a finish rate
+export const DEFAULT_HOURS_PER_WEEK = 10;
+export const MAX_HOURS_PER_WEEK = 168;
+const WEEKS_PER_MONTH = 52.1775 / 12;
+
+const hoursOf = (minutes) => Math.round(minutes / 60);
+
+/** Estimated time of a set of games: { minutes, hours (rounded), known (games with a time), total }. Games without a time add nothing. */
+export function estimate(games) {
+  let minutes = 0, known = 0;
+  for (const g of games) {
+    const m = ttbMinutes(g);
+    if (m !== null) { minutes += m; known++; }
+  }
+  return { minutes, hours: hoursOf(minutes), known, total: games.length };
+}
+
+/** The year a finished game belongs to: the latest year played, or null (only periods, or nothing recorded). */
+export const finishedYear = (g) => (g.years.length ? Math.max(...g.years) : null);
+
+/** Fill the gaps between the smallest and largest key of a Map(int -> row) with make(key). */
+function fillGaps(map, make) {
+  if (!map.size) return [];
+  const ks = [...map.keys()];
+  const out = [];
+  for (let k = Math.min(...ks); k <= Math.max(...ks); k++) out.push(map.get(k) ?? make(k));
+  return out;
+}
 
 /**
- * How long the backlog would take: the time to beat (IGDB) of the games on the backlog or up next, added up.
- * `known` games have a time, `unknown` have none and are not in the sum; `hours` is 0 and `known` 0 before the IGDB enrichment ran.
+ * Time spent on finished games. `all` is the estimate for every finished game. `perYear` has one bar per calendar year
+ * (gaps filled) with games finished and the estimated hours; a game finished in several years counts once, in its
+ * latest year. Finished games with only a period (childhood / always) or nothing recorded have no year: they are in
+ * `all` but not in the bars, and are counted in `periods` / `unknown`. `genres` and `platforms` are the groups with the
+ * most estimated hours (a game with several genres or platforms counts for each).
  */
-export function backlogTime(games) {
-  const t = totalTime(games.filter((g) => WAITING.includes(g.status)));
-  return { hours: t.hours, known: t.known, unknown: t.unknown, total: t.known + t.unknown };
+export function finishedTime(games, limit = 6) {
+  const fin = games.filter((g) => g.status === 'finished');
+  const years = new Map();
+  let periods = 0, unknown = 0;
+  for (const g of fin) {
+    const y = finishedYear(g);
+    if (y === null) { if (g.periods.length) periods++; else unknown++; continue; }
+    if (!years.has(y)) years.set(y, []);
+    years.get(y).push(g);
+  }
+  const perYear = fillGaps(new Map([...years].map(([y, gs]) => [y, { year: y, count: gs.length, ...estimate(gs) }])),
+    (year) => ({ year, count: 0, minutes: 0, hours: 0, known: 0, total: 0 }));
+  const group = (pick, none) => {
+    const m = new Map();
+    for (const g of fin) for (const k of (pick(g).length ? pick(g) : [none])) { if (!m.has(k)) m.set(k, []); m.get(k).push(g); }
+    return [...m].map(([label, gs]) => ({ label, count: gs.length, ...estimate(gs) }))
+      .filter((r) => r.known > 0)
+      .sort((a, b) => b.minutes - a.minutes || a.label.localeCompare(b.label))
+      .slice(0, limit);
+  };
+  return { all: estimate(fin), perYear, periods, unknown, genres: group((g) => g.genres, 'No genre'), platforms: group((g) => g.platforms, 'No platform') };
+}
+
+/** Hours a week -> a whole number from 1 to 168, or the default for anything unreadable. */
+export function cleanHoursPerWeek(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n >= 1 ? Math.min(MAX_HOURS_PER_WEEK, n) : DEFAULT_HOURS_PER_WEEK;
+}
+
+/** Calendar months needed to play `hours` at `perWeek` hours a week (a month is 4.35 weeks). */
+export const monthsToClear = (hours, perWeek) => hours / cleanHoursPerWeek(perWeek) / WEEKS_PER_MONTH;
+
+/** "about 3 weeks", "about 5 months", "about 2.4 years"; "" for no hours. */
+export function formatDuration(months) {
+  if (!(months > 0)) return '';
+  if (months < 1) { const w = Math.max(1, Math.round(months * WEEKS_PER_MONTH)); return `about ${w} week${w === 1 ? '' : 's'}`; }
+  if (months < 24) { const m = Math.round(months); return `about ${m} month${m === 1 ? '' : 's'}`; }
+  return `about ${+(months / 12).toFixed(1)} years`;
+}
+
+/** Time left: the estimate for Up next and Backlog separately, and together. */
+export function timeLeft(games) {
+  const of = (s) => estimate(games.filter((g) => g.status === s));
+  return { upNext: of('up_next'), backlog: of('backlog'), both: estimate(games.filter((g) => WAITING.includes(g.status))) };
+}
+
+/**
+ * Finished against dropped per genre or per platform (`key` = 'genres' | 'platforms'), only for groups with at least
+ * `min` finished + dropped games. `rate` is the finished share (0..1). Most games first.
+ */
+export function outcomesBy(games, key, min = MIN_GROUP) {
+  const m = new Map();
+  for (const g of games) {
+    if (g.status !== 'finished' && g.status !== 'dropped') continue;
+    for (const k of new Set(g[key])) {
+      const r = m.get(k) ?? { label: k, finished: 0, dropped: 0 };
+      r[g.status]++;
+      m.set(k, r);
+    }
+  }
+  return [...m.values()].map((r) => ({ ...r, total: r.finished + r.dropped, rate: r.finished / (r.finished + r.dropped) }))
+    .filter((r) => r.total >= min)
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+}
+
+/** The shortest games still to play: Backlog and Up next with a time to beat, shortest first. Returns the games themselves. */
+export function shortestWins(games, n = 10) {
+  return games.filter((g) => WAITING.includes(g.status) && ttbMinutes(g) !== null)
+    .sort((a, b) => ttbMinutes(a) - ttbMinutes(b) || a.title.localeCompare(b.title)).slice(0, n);
+}
+
+/** Library composition: ownership, platforms (every game; one on two platforms counts for both) and release decade. */
+export function composition(games) {
+  const decades = new Map();
+  let noYear = 0;
+  for (const g of games) {
+    if (!g.release_year) { noYear++; continue; }
+    const d = Math.floor(g.release_year / 10);
+    decades.set(d, (decades.get(d) || 0) + 1);
+  }
+  return {
+    total: games.length,
+    ownership: tally(games.map((g) => g.ownership || 'Not set')),
+    platforms: tally(games.flatMap((g) => (g.platforms.length ? g.platforms : ['No platform']))),
+    decades: fillGaps(new Map([...decades].map(([d, count]) => [d, { label: `${d * 10}s`, count }])), (d) => ({ label: `${d * 10}s`, count: 0 })),
+    noYear,
+  };
+}
+
+/**
+ * Year by year. `rows` has, for every calendar year from the first to the last, `played` (games with that year in
+ * their years played: a game played in three years counts in each) and `finished` (finished games, counted once in
+ * their latest year). `mostActive` is the year with the most games played (the later year on a tie). Games played in
+ * a period are counted in `childhood` / `always` (a game with both is in both), never given a year.
+ */
+export function yearByYear(games) {
+  const played = new Map(), fin = new Map();
+  for (const g of games) {
+    for (const y of new Set(g.years)) played.set(y, (played.get(y) || 0) + 1);
+    if (g.status === 'finished') { const y = finishedYear(g); if (y !== null) fin.set(y, (fin.get(y) || 0) + 1); }
+  }
+  const all = new Set([...played.keys(), ...fin.keys()]);
+  const rows = [];
+  if (all.size) for (let y = Math.min(...all); y <= Math.max(...all); y++) rows.push({ year: y, played: played.get(y) || 0, finished: fin.get(y) || 0 });
+  let mostActive = null;
+  for (const r of rows) if (r.played > 0 && (!mostActive || r.played >= mostActive.played)) mostActive = r;
+  return {
+    rows, mostActive: mostActive && { year: mostActive.year, played: mostActive.played },
+    childhood: games.filter((g) => g.periods.includes('childhood')).length,
+    always: games.filter((g) => g.periods.includes('always')).length,
+  };
+}
+
+/**
+ * Series of the library with two games or more (a series of one has nothing to complete), from the games in the
+ * library only: completed (every game finished), in progress (some played, not all finished), not started.
+ */
+export function seriesProgress(games) {
+  const list = buildSeries(games).filter((s) => s.total >= 2);
+  const completed = list.filter((s) => s.finished === s.total);
+  const inProgress = list.filter((s) => s.finished < s.total && s.played > 0);
+  const closest = inProgress.map((s) => ({ name: s.name, finished: s.finished, total: s.total }))
+    .sort((a, b) => (b.finished / b.total) - (a.finished / a.total) || b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
+  return { total: list.length, completed: completed.length, inProgress: inProgress.length, notStarted: list.length - completed.length - inProgress.length, closest };
 }
