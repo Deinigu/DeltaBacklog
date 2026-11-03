@@ -374,7 +374,7 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 **Which games are listed.** A game is on Deals when both are true: you don't own it, meaning its *Ownership* is **Pirated**, **Borrowed**, **Family Share** or **Nope**, or it has none (**Owned** and **Free to play** games never appear); and you haven't played it, meaning it is in the **Backlog** or **Up next** and has no years played (not even *childhood* or *always*). Finished, dropped, playing, on hold, evergreen and not interested games are left out. When you change a game so that it no longer fits (you buy it, or log a year of play), it leaves the page and is no longer refreshed; its saved match and prices are kept in case it comes back.
 
-**Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Unhide** to bring one back.
+**Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Show again** to bring one back.
 
 ![The Deals page](img/deals-phone.jpg)
 

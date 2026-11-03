@@ -135,3 +135,30 @@ func TestHideAndRefresh(t *testing.T) {
 		t.Errorf("the stored price must be kept, got %d rows", n)
 	}
 }
+
+// A refresh takes minutes: a price read for a game that was hidden (or left the scope) meanwhile is not stored.
+func TestSavePriceSkipsGamesOutOfScope(t *testing.T) {
+	d := newDB(t)
+	addGame(t, d, 1, "A", "backlog", "")
+	if err := SetMatch(d, 1, Game{ID: "a", Title: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	o := Overview{Current: &Current{Shop: "Steam", Price: eur(500), Regular: eur(1000), Cut: 50}}
+	count := func() (n int) {
+		d.QueryRow(`SELECT count(*) FROM deal_price WHERE game_id = 1`).Scan(&n)
+		return
+	}
+	SetHidden(d, 1, true)
+	if ok, err := savePrice(d, 1, "a", "ES", o); err != nil || ok || count() != 0 {
+		t.Fatalf("hidden: ok %v err %v rows %d", ok, err, count())
+	}
+	SetHidden(d, 1, false)
+	d.Exec(`INSERT INTO play(game_id, year) VALUES (1, 2024)`)
+	if ok, _ := savePrice(d, 1, "a", "ES", o); ok || count() != 0 {
+		t.Fatalf("played: ok %v rows %d", ok, count())
+	}
+	d.Exec(`DELETE FROM play`)
+	if ok, err := savePrice(d, 1, "a", "ES", o); err != nil || !ok || count() != 1 {
+		t.Fatalf("in scope: ok %v err %v rows %d", ok, err, count())
+	}
+}

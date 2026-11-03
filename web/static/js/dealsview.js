@@ -146,6 +146,7 @@ export function renderDeals(root) {
     const scope = rows.length + unmatched.length + waiting.length;
     const hiddenList = hiddenGames(store.games, info);
     const empty = scopeOf(info).size ? 'No games match these filters.'
+      : hiddenList.length ? 'All your deals games are hidden. Show them again below.'
       : 'Deals shows games you don’t own and haven’t played yet: in the backlog or up next, with no years played, and ownership Pirated, Borrowed, Family Share, Nope or empty.';
     // Matched, but no shop sells it: often the match is an old or delisted entry (a game and its "Final Cut"), so say where to look.
     const unsold = rows.filter((r) => r.p.price == null).map((r) => r.game.title);
@@ -169,14 +170,16 @@ export function renderDeals(root) {
       hiddenList.length ? h('details.hidden-list', {},
         h('summary', {}, `Hidden (${hiddenList.length})`),
         h('ul', {}, hiddenList.map((g) => h('li', {}, h('span', {}, g.title),
-          h('button.hide-chip', { type: 'button', 'aria-label': `Show ${g.title} again`, onclick: () => setHidden(g, false) }, 'Unhide'))))) : null,
+          h('button.hide-chip', { type: 'button', 'aria-label': `Show ${g.title} again`, onclick: () => setHidden(g, false) }, 'Show again'))))) : null,
     ].filter(Boolean));
   }
 
-  function onGames() { draw(); }
+  // A game edited elsewhere may enter or leave the scope (ownership, years played): draw at once, then ask the server again (cache only, no ITAD).
+  let reloadTimer = null;
+  function onGames() { draw(); clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 300); }
   window.addEventListener('deals-changed', load);
   draw();
   load();
   window.addEventListener('games-changed', onGames);
-  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); window.removeEventListener('deals-changed', load); };
+  return () => { alive = false; clearTimeout(timer); clearTimeout(reloadTimer); window.removeEventListener('games-changed', onGames); window.removeEventListener('deals-changed', load); };
 }

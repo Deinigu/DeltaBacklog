@@ -538,7 +538,7 @@ func saveAutoMatch(d *sql.DB, gameID int64, f found) error {
 }
 
 // savePrice stores prices read for itadID in country. It does nothing (and says false) unless the game is still matched
-// with that ITAD game and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
+// with that ITAD game, still on Deals (not hidden, still unowned and unplayed) and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
 // fix a match, reset it or change the country meanwhile.
 func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (bool, error) {
 	cur := o.Current
@@ -564,6 +564,7 @@ func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (boo
 	res, err := d.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
 		low_price, low_shop, low_at, fetched_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE EXISTS (SELECT 1 FROM deal_match WHERE game_id = ?1 AND itad_id = ?13)
+		AND EXISTS (SELECT 1 FROM game g WHERE g.id = ?1 AND ` + watchedSQL + `)
 		AND coalesce((SELECT value FROM setting WHERE key = 'deals_country'), 'ES') = ?14
 		ON CONFLICT(game_id) DO UPDATE SET currency = excluded.currency, cur_shop = excluded.cur_shop, cur_price = excluded.cur_price,
 		cur_regular = excluded.cur_regular, cur_cut = excluded.cur_cut, cur_url = excluded.cur_url, cur_expiry = excluded.cur_expiry,
