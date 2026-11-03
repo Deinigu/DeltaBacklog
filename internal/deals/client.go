@@ -315,3 +315,46 @@ func webURL(s string) string {
 	}
 	return u.String()
 }
+
+// HistorySource is what the alerts need beyond Source: the lowest price a game had since a date. The real Client has it;
+// ITAD's overview only knows the all-time low, so the two-year low comes from the price history (one call per game, made
+// only for the few games that need it).
+type HistorySource interface {
+	// LowSince is the lowest price any shop asked since the given time; ok is false when the history has none.
+	LowSince(ctx context.Context, id, country string, since time.Time) (low Money, ok bool, err error)
+}
+
+// LowSince reads GET /games/history/v2 (every price change since a date) and keeps the lowest price.
+func (c *Client) LowSince(ctx context.Context, id, country string, since time.Time) (Money, bool, error) {
+	var out []struct {
+		Deal *struct {
+			Price struct {
+				Amount    float64 `json:"amount"`
+				AmountInt int64   `json:"amountInt"`
+				Currency  string  `json:"currency"`
+			} `json:"price"`
+		} `json:"deal"`
+	}
+	q := url.Values{"id": {id}, "country": {country}, "since": {since.UTC().Format("2006-01-02T15:04:05Z")}}
+	if err := c.call(ctx, http.MethodGet, "/games/history/v2", q, nil, &out); err != nil {
+		return Money{}, false, err
+	}
+	var low Money
+	ok := false
+	for _, e := range out {
+		if e.Deal == nil || e.Deal.Price.Currency == "" {
+			continue
+		}
+		cents := e.Deal.Price.AmountInt
+		if cents == 0 && e.Deal.Price.Amount > 0 {
+			cents = int64(e.Deal.Price.Amount*100 + 0.5)
+		}
+		if cents < 0 {
+			continue
+		}
+		if !ok || cents < low.Cents {
+			low, ok = Money{cents, e.Deal.Price.Currency}, true
+		}
+	}
+	return low, ok, nil
+}

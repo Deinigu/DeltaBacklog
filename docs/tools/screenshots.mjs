@@ -109,7 +109,7 @@ const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
 async function page(width, height, mobile) {
   const p = await browser.newPage();
   await p.setViewport({ width, height, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); // the manuals show the light theme
+  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); // the manuals show the dark theme
   return p;
 }
 const shot = (p, name) => p.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 78 });

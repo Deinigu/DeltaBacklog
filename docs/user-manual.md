@@ -97,6 +97,7 @@ The app works without any key: you can add games by hand, filter, sort, rank and
 | **IGDB**: looking games up when you add one, **Fill from IGDB**, Link IGDB, time to beat, game modes, store buttons, Series' games you do not have, Upcoming dates, Similar games | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | IGDB belongs to Twitch. Create a Twitch account with two-factor authentication, register an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) (category *Application Integration*, redirect URL `http://localhost`), then copy the **Client ID** and generate a **Client Secret**. |
 | **SteamGridDB**: more covers and portrait posters | `STEAMGRIDDB_API_KEY` | Sign in at [steamgriddb.com](https://www.steamgriddb.com/), open *Preferences → API* and copy the key. |
 | **IsThereAnyDeal**: the Deals page | `ITAD_API_KEY` | Create an app at [isthereanydeal.com/apps](https://isthereanydeal.com/apps/) and copy its API key. |
+| **Telegram**: price alerts on your phone (optional) | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Talk to [@BotFather](https://t.me/BotFather) on Telegram to make a bot and copy its token (it looks like `123456789:ABC…`), then send your bot a message and use the number of your chat as the chat id (`-100…` for a group, or `@channelname`). If you already run a bot for another service (for example the Raspberry Dashboard), you can reuse its token and chat id. |
 
 A page whose key is missing says *not set up* and its refresh button is off; nothing else is affected. The sections below that need a key say so in their first line. The IGDB step of linking games you already have is explained in [section 22](#22-link-your-games-with-igdb).
 
@@ -377,6 +378,17 @@ The suggestions are saved on the server. Opening the page never asks IGDB: tap *
 
 **Which games are listed.** A game is on Deals when both are true: you don't own it, meaning its *Ownership* is **Borrowed**, **Family Share** or **Nope**, or it has none (**Owned**, **Free to play** and **Pirated** games never appear); and you haven't played it, meaning it is in the **Backlog** or **Up next** and has no years played (not even *childhood* or *always*). Finished, dropped, playing, on hold, evergreen and not interested games are left out. When you change a game so that it no longer fits (you buy it, or log a year of play), it leaves the page and is no longer refreshed; its saved match and prices are kept in case it comes back.
 
+**Price alerts.** Deals tells you when a game is worth buying, with no price to set. A game gets an **alert** when its best price, on sale, is **at or below its historical low** (the lowest ever recorded) or, failing that, **at or below its lowest price of the last 2 years**. The alert says which one: **Alert: Historical low** or **Alert: Lowest in 2 years**. In the app:
+
+- The **Alerts** chip shows only the games with an alert, with their count. An alert lasts while the game stays at that price or lower.
+- A game with a new alert you have not seen is marked **New** the first time you open Deals, and **Deals** carries a small number in the **More** menu (in the sidebar on a PC) until you do.
+- **Mute** on a row, or **Price alerts: on / off** in the game's **Price** details, turns the alerts of one game off or on again. A muted game is never announced.
+- You are told once per deal: again only when the price falls below the one you were told about, or after 30 days.
+
+**Telegram.** To get the alerts as a message on your phone too, put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the settings file ([section 3](#3-setting-up-keys)) and restart the app. Deals then shows **Send test message**: press it to check that the message arrives. A single run sends one message per game, or one list when more than three games have an alert. Without these settings the alerts only appear in the app.
+
+**The daily check.** On the Raspberry Pi a timer reads the prices once a day (about 08:00, with a small random delay) and sends the alerts, so you do not have to press anything: the alerts and prices are there when you open Deals. It does the same as **↻ Refresh prices**, for the games on the page (not the hidden ones), and does not run while you are refreshing by hand (and **Refresh prices** says so if the daily check is running at that moment). On a PC, run `deltabacklog deals-check` yourself, or from your own scheduler.
+
 **Hiding a game.** Tap **Hide** on a row to take a game off the page; a message offers **Undo**. A hidden game is not shown and not refreshed, so it costs no lookups. **Hidden (N)** at the bottom of the page lists them: tap it, then **Show again** to bring one back.
 
 ![The Deals page](img/deals-phone.jpg)
@@ -505,9 +517,9 @@ The pages that use other websites keep what they read on the server. **Opening a
 | **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
 | **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
-| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something |
+| **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something. The Pi also does this once a day by itself (the daily check, [section 17](#17-deals)) |
 
-Things that never happen on their own: reading a website when a page opens, adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own.
+Things that never happen on their own: reading a website when a page opens (the one scheduled read is the Pi's daily price check, [section 17](#17-deals)), adding a game to your library, changing a status, changing a cover or a poster you chose or uploaded, replacing times you set or took from HowLongToBeat. Adding or linking a game to IGDB does read that one game at once (its details and release date), and linking a game to a different IGDB game also fetches that game's poster, unless the poster is your own.
 
 If a refresh is refused or stopped (too many requests, a wrong key, no connection) the page says why and keeps what it had; try again later.
 

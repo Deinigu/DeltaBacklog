@@ -47,6 +47,15 @@ export function badgeOf(p) {
 }
 export const BADGE_LABEL = { low: 'Historical low', near: 'Near low (within 10%)' };
 
+/** What a price alert says (the server's kinds): at the historical low, or at the lowest price of the last two years. */
+export const ALERT_LABEL = { historical: 'Historical low', two_year: 'Lowest in 2 years' };
+/** The standing alert of a game (the server's info.alerts), or null. */
+export const alertOf = (info, gameId) => (info?.alerts || []).find((a) => a.game_id === gameId) || null;
+/** How many alerts the owner has not seen yet (the badge on the menu). */
+export const unseenCount = (info) => (info?.alerts || []).filter((a) => !a.seen).length;
+/** Whether the owner turned the alerts of this game off. */
+export const isMuted = (info, gameId) => (info?.muted || []).includes(gameId);
+
 /** price / low: 1 is at the low, 1.1 is 10% above it; Infinity without both numbers or when the low is no real discount. */
 const lowRatio = (p) => (p.price != null && p.low_price > 0 && realLow(p) ? p.price / p.low_price : Infinity);
 const onSale = (p) => p.price != null && (p.cut ?? 0) > 0;
@@ -62,20 +71,22 @@ const COMPARE = {
 /**
  * What the Deals page lists.
  *  games    the library (store.games); info  the server's answer {matches, prices, watched}
- *  statuses a Set of status codes to show (empty or null = all); sort a SORTS key
+ *  statuses a Set of status codes to show (empty or null = all); sort a SORTS key; alertsOnly keeps the games with a standing price alert
  * Returns {rows, unmatched, waiting}: rows are games with a cached price (a row has `p`, the price, and `badge`), unmatched
  * are games ITAD has no match for, waiting are matched games whose prices have not been read yet.
  */
-export function buildDeals(games, info, { statuses = null, sort = 'cut' } = {}) {
+export function buildDeals(games, info, { statuses = null, sort = 'cut', alertsOnly = false } = {}) {
   const prices = new Map((info?.prices || []).map((p) => [p.game_id, p]));
   const matches = new Map((info?.matches || []).map((m) => [m.game_id, m]));
+  const alerts = new Map((info?.alerts || []).map((a) => [a.game_id, a]));
   const scope = scopeOf(info);
   const want = new Set(statuses && statuses.size ? statuses : DEAL_STATUSES.map((s) => s.code));
   const rows = [], unmatched = [], waiting = [];
   for (const game of games) {
     if (!scope.has(game.id) || !want.has(game.status) || !DEAL_STATUSES.some((s) => s.code === game.status)) continue;
-    const p = prices.get(game.id), m = matches.get(game.id);
-    if (p) rows.push({ game, p, match: m || null, badge: badgeOf(p) });
+    const p = prices.get(game.id), m = matches.get(game.id), alert = alerts.get(game.id) || null;
+    if (alertsOnly && !(p && alert)) continue;
+    if (p) rows.push({ game, p, match: m || null, badge: badgeOf(p), alert });
     else if (m && !m.itad_id) unmatched.push({ game, match: m });
     else if (m) waiting.push({ game, match: m });
   }

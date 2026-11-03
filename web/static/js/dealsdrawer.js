@@ -2,8 +2,8 @@
 // as the server has cached them (never ITAD on open). Also where a wrong or missing match is fixed. It stays out of the way:
 // nothing is drawn until the cache answers, when ITAD is not set up, or for other statuses.
 import { h, toast } from './util.js';
-import { dealsList, dealsSearch, dealsSetMatch } from './api.js';
-import { badgeOf, BADGE_LABEL, formatMoney, formatDate, isWatched, matchOf, priceOf, priceLine, safeLink } from './deals.js';
+import { dealsList, dealsSearch, dealsSetMatch, dealsMute, dealsUnmute } from './api.js';
+import { alertOf, isMuted, ALERT_LABEL, badgeOf, BADGE_LABEL, formatMoney, formatDate, isWatched, matchOf, priceOf, priceLine, safeLink } from './deals.js';
 
 export function dealsSection(game) {
   const box = h('div.deal-drawer', { hidden: true });
@@ -14,13 +14,16 @@ export function dealsSection(game) {
     const p = priceOf(info, game.id), m = matchOf(info, game.id);
     const matched = m && m.itad_id;
     const badge = badgeOf(p);
+    const alert = alertOf(info, game.id), muted = isMuted(info, game.id);
     const link = p && p.price != null ? safeLink(p.url) : null;
     const parts = [h('h3', {}, 'Price')];
     if (p) {
       parts.push(
         h('div', {}, h('b', {}, priceLine(p))),
-        badge ? h('div', {}, h('span.deal-badge' + (badge === 'low' ? '.low' : ''), {}, BADGE_LABEL[badge])) : null,
+        badge || alert ? h('div', {}, badge ? h('span.deal-badge' + (badge === 'low' ? '.low' : ''), {}, BADGE_LABEL[badge]) : null,
+          alert ? h('span.deal-badge.alert', { style: badge ? 'margin-left:6px' : null }, `Alert: ${ALERT_LABEL[alert.kind] || 'price'}`) : null) : null,
         p.low_price != null ? h('p.hint', {}, `Lowest ever ${formatMoney(p.low_price, p.currency)}${p.low_shop ? ` at ${p.low_shop}` : ''}${p.low_at ? `, ${formatDate(p.low_at)}` : ''}.`) : null,
+        p.low2y_price != null ? h('p.hint', {}, `Lowest in 2 years ${formatMoney(p.low2y_price, p.currency)}.`) : null,
         h('p.hint', {}, `Checked ${formatDate(p.fetched_at)}${matched && m.title ? ` · ${m.title}` : ''}.`));
     } else {
       parts.push(h('p.hint', {}, matched ? 'Not read yet. Press Refresh prices on the Deals page.'
@@ -29,10 +32,23 @@ export function dealsSection(game) {
     const actions = h('div.deal-actions', {},
       link ? h('a.btn', { href: link, target: '_blank', rel: 'noopener noreferrer' }, 'View deal ↗') : null,
       h('button.btn', { type: 'button', onclick: openFix }, matched ? 'Wrong game?' : 'Pick the game'),
+      matched ? h('button.btn', { type: 'button', 'aria-pressed': String(!muted), onclick: toggleMute }, muted ? 'Price alerts: off' : 'Price alerts: on') : null,
       m && m.source === 'user' ? h('button.btn', { type: 'button', onclick: () => save({ reset: true }, 'Back to automatic matching.') }, 'Match automatically') : null);
     parts.push(actions, h('div.deal-fix', { hidden: true }));
     box.replaceChildren(...parts.filter(Boolean));
     box.hidden = false;
+  }
+
+  async function toggleMute() {
+    const muted = isMuted(info, game.id);
+    try {
+      info = await (muted ? dealsUnmute(game.id) : dealsMute(game.id));
+      toast(muted ? 'Price alerts are on for this game.' : 'Price alerts are off for this game.', 3000);
+      window.dispatchEvent(new Event('deals-changed'));
+    } catch (e) {
+      toast(e.message || 'Could not change the alerts');
+    }
+    draw();
   }
 
   async function save(body, done) {

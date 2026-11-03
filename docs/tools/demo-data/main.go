@@ -224,7 +224,7 @@ func main() {
 		must(err)
 	}
 	// Made-up prices for the Deals page (nothing is read from IsThereAnyDeal): cents of EUR. Hollow Knight sits at its
-	// historical low, Celeste near it; Baldur's Gate 3 has no deal; Cyberpunk has no match; Pentiment waits; Elden Ring is hidden.
+	// historical low (an alert), Celeste near it, Subnautica at its two-year low (an alert); Baldur's Gate 3 has no deal; Cyberpunk has no match; Pentiment waits; Elden Ring is hidden.
 	// Only games that are not owned and not played are on Deals, so these are Borrowed, Family share or Nope (Pirated games are not listed).
 	for _, f := range []struct {
 		game, shop       string
@@ -249,6 +249,14 @@ func main() {
 		}
 		_, err = tx.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, low_price, low_shop, low_at, fetched_at)
 			VALUES (?, 'EUR', ?, ?, ?, ?, 'https://example.org/deal', ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`, gid, f.shop, f.price, f.regular, f.cut, f.low, f.lowShop, f.lowDate)
+		must(err)
+	}
+	// Price alerts (already seen): Hollow Knight is at its historical low, Subnautica at its lowest price in 2 years.
+	_, err = tx.Exec(`UPDATE deal_price SET low2y_price = 1049, low2y_checked_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE game_id = (SELECT id FROM game WHERE title = 'Subnautica')`)
+	must(err)
+	for game, kind := range map[string]string{"Hollow Knight": "historical", "Subnautica": "two_year"} {
+		_, err = tx.Exec(`INSERT INTO deal_alert(game_id, last_alert_price, last_alert_kind, last_alert_at, seen)
+			SELECT g.id, p.cur_price, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'), 1 FROM game g JOIN deal_price p ON p.game_id = g.id WHERE g.title = ?`, kind, game)
 		must(err)
 	}
 	_, err = tx.Exec(`INSERT INTO deal_hidden(game_id, hidden_at) SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ','now') FROM game WHERE title = 'Elden Ring'`)

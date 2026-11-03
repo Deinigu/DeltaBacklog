@@ -13,6 +13,7 @@ export const store = {
   statusOrder: new Map(),
   views: [],
   linkPending: 0, // games waiting in the IGDB review queue; the nav shows its link while > 0
+  dealsUnseen: 0, // price alerts not seen yet; the nav shows a badge on Deals while > 0
   loaded: false,
 };
 
@@ -295,6 +296,11 @@ export async function loadLinkPending() {
   try { store.linkPending = (await linkQueue()).length; } catch { store.linkPending = 0; }
 }
 
+/** Refresh store.dealsUnseen (the badge on Deals in the navigation). Reads the server's cache only, never IsThereAnyDeal. */
+export async function loadDealsUnseen() {
+  try { store.dealsUnseen = (await dealsList()).unseen || 0; } catch { store.dealsUnseen = 0; }
+}
+
 // ---- rankings ----
 /** Portrait box art for the rankings (null until the server has made it); poster_v is its cache key. */
 export function posterURL(g) {
@@ -397,7 +403,7 @@ export function hltbSearch(q, year = 0) {
 }
 
 // ---- the Deals page: prices from IsThereAnyDeal for the games you do not own and have not played (cached by the server) ----
-/** Resolves {configured, country, watched: [ids of the games Deals shows], hidden: [ids of the games the owner hid], matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, fetched_at}], refresh}. Amounts are cents. */
+/** Resolves {configured, country, watched: [ids of the games Deals shows], hidden: [ids of the games the owner hid], matches: [{game_id, itad_id, title, slug, source}], prices: [{game_id, currency, shop, price, regular, cut, url, expiry, low_price, low_shop, low_at, low2y_price, fetched_at}], alerts: [{game_id, kind: 'historical'|'two_year', price, at, seen}], muted: [game ids], unseen, telegram: bool, refresh}. Amounts are cents. */
 export const dealsList = () => request('GET', 'api/deals');
 /** Start reading the prices in the background; poll dealsList() for its progress. */
 export const dealsRefresh = () => request('POST', 'api/deals/refresh');
@@ -405,6 +411,13 @@ export const dealsRefresh = () => request('POST', 'api/deals/refresh');
 export const dealsSearch = (title) => request('GET', `api/deals/search?title=${encodeURIComponent(title)}`);
 /** Fix one game's match: {itad_id, title, slug} picks a game, {none: true} says there is none, {reset: true} goes back to automatic. Resolves the dealsList() answer. */
 export const dealsSetMatch = (gameId, body) => request('PUT', `api/games/${gameId}/deal-match`, body);
+/** Turn the price alerts of a game off, or on again. Both resolve the dealsList() answer (which has alerts, muted, unseen, telegram). */
+export const dealsMute = (gameId) => request('PUT', `api/deals/muted/${gameId}`);
+export const dealsUnmute = (gameId) => request('DELETE', `api/deals/muted/${gameId}`);
+/** The owner opened Deals: the alerts are no longer new. Resolves the dealsList() answer. */
+export const dealsAlertsSeen = () => request('POST', 'api/deals/alerts/seen');
+/** Send a test message to the Telegram chat. Resolves {sent: true}; rejects with Telegram's reason. */
+export const dealsTelegramTest = () => request('POST', 'api/deals/telegram-test');
 /** Hide a game from Deals, or show it again. Both resolve the dealsList() answer. */
 export const dealsHide = (gameId) => request('PUT', `api/deals/hidden/${gameId}`);
 export const dealsUnhide = (gameId) => request('DELETE', `api/deals/hidden/${gameId}`);

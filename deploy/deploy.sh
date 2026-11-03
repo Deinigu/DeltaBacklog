@@ -4,7 +4,7 @@
 #   deploy/deploy.sh [--seed <dir>] [--env <file>]
 #
 #   --seed <dir>   first install: <dir> holds app.db and covers/ (ignored when the Pi already has a database)
-#   --env <file>   a .env with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, STEAMGRIDDB_API_KEY, ITAD_API_KEY;
+#   --env <file>   a .env with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, STEAMGRIDDB_API_KEY, ITAD_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID;
 #                  installed as the service's settings (root only on the Pi). Without it the existing settings are kept.
 #   DEPLOY_HOST    the ssh host name (default: raspberry)
 #
@@ -33,14 +33,14 @@ echo "==> building $VERSION for linux/arm (armv7)"
 GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/deltabacklog" ./cmd/deltabacklog
 ls -l "$OUT/deltabacklog" | awk '{printf "    binary: %.1f MB\n", $5/1048576}'
 
-cp deploy/deltabacklog.service deploy/deltabacklog-backup.service deploy/deltabacklog-backup.timer deploy/deltabacklog-name.service deploy/name.sh deploy/backup.sh deploy/install.sh "$OUT/"
+cp deploy/deltabacklog.service deploy/deltabacklog-backup.service deploy/deltabacklog-backup.timer deploy/deltabacklog-deals.service deploy/deltabacklog-deals.timer deploy/deltabacklog-name.service deploy/name.sh deploy/backup.sh deploy/install.sh "$OUT/"
 
 if [ -n "$ENVFILE" ]; then
   {
     echo "LISTEN_ADDR=:8081"
     echo "DATA_DIR=/var/lib/deltabacklog"
     echo "GOMEMLIMIT=96MiB"
-    grep -E '^(IGDB_CLIENT_ID|IGDB_CLIENT_SECRET|STEAMGRIDDB_API_KEY|ITAD_API_KEY)=' "$ENVFILE" || true
+    grep -E '^(IGDB_CLIENT_ID|IGDB_CLIENT_SECRET|STEAMGRIDDB_API_KEY|ITAD_API_KEY|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=' "$ENVFILE" || true
   } > "$OUT/env"
 fi
 

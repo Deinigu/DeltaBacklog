@@ -3,7 +3,7 @@
 #
 #   sudo ./install.sh <stage-dir>
 #
-# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service), backup.sh, name.sh, and optionally
+# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service and the daily price check, deltabacklog-deals), backup.sh, name.sh, and optionally
 #   env       the settings file; installed to /etc/deltabacklog.env (root only) when given, kept otherwise
 #   seed/     app.db and covers/ for a first install; only used when no database exists yet
 # It is safe to run again: data is never overwritten, the service is restarted only if the program, the settings or the
@@ -84,10 +84,10 @@ shots_is_mount() { [ "$(mount_point_of "$1" 2>/dev/null)" = "$1" ]; }
 name_off() { [ "$(env_value "$1" PUBLIC_NAME)" = off ]; }
 
 # merge_settings <new> <old>: a deploy's settings file (new) does not carry the Pi-only settings: SCREENSHOTS_DIR,
-# ALLOWED_HOSTS and PUBLIC_NAME come over from the installed one (old) when new has none, and with PUBLIC_NAME=off the
+# ALLOWED_HOSTS, PUBLIC_NAME and the Telegram settings come over from the installed one (old) when new has none, and with PUBLIC_NAME=off the
 # installed LISTEN_ADDR too (127.0.0.1:8081 behind a proxy; a deploy's file says :8081).
 merge_settings() {
-  for k in SCREENSHOTS_DIR ALLOWED_HOSTS PUBLIC_NAME; do
+  for k in SCREENSHOTS_DIR ALLOWED_HOSTS PUBLIC_NAME TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
     v=$(env_value "$2" "$k")
     if [ -n "$v" ] && [ -z "$(env_value "$1" "$k")" ]; then echo "$k=$v" >> "$1"; fi
   done
@@ -213,17 +213,17 @@ fi
 install -m 755 "$STAGE/backup.sh" "$STAGE/name.sh" "$APP/"
 
 # 6. systemd units
-install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" /etc/systemd/system/
+install -m 644 "$STAGE/deltabacklog.service" "$STAGE/deltabacklog-backup.service" "$STAGE/deltabacklog-backup.timer" "$STAGE/deltabacklog-deals.service" "$STAGE/deltabacklog-deals.timer" /etc/systemd/system/
 cmp -s "$STAGE/deltabacklog-name.service" /etc/systemd/system/deltabacklog-name.service 2>/dev/null || NAME_CHANGED=1
 install -m 644 "$STAGE/deltabacklog-name.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable deltabacklog.service deltabacklog-backup.timer >/dev/null 2>&1
+systemctl enable deltabacklog.service deltabacklog-backup.timer deltabacklog-deals.timer >/dev/null 2>&1
 if systemctl is-active --quiet deltabacklog.service; then
   if [ "$CHANGED" = 1 ] || [ -f "$STAGE/env" ] || [ "$DROPIN_CHANGED" = 1 ]; then systemctl restart deltabacklog.service; fi
 else
   systemctl start deltabacklog.service
 fi
-systemctl start deltabacklog-backup.timer
+systemctl start deltabacklog-backup.timer deltabacklog-deals.timer
 
 # 7. the friendly address http://deltabacklog.local (mDNS name + port 80 -> 8081), unless PUBLIC_NAME=off. Optional: a
 #    failure here must not fail the install, the app itself is already running.
