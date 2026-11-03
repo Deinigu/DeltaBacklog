@@ -203,6 +203,12 @@ func main() {
 			time_to_beat_completely = nullif(?, 0), time_to_beat_src = ? WHERE title = ?`, t.h, t.n, t.c, t.source, t.game)
 		must(err)
 	}
+	// Every other game gets a made-up usual time (5 to 27 hours), so the Stats page has enough to add up; the endless
+	// multiplayer games are left without one on purpose, like in a real library, and a finished game and a Backlog game too, so the Stats page shows how partial an estimate looks (it says how many games it could not count).
+	_, err = tx.Exec(`UPDATE game SET time_to_beat_normally = 300 + (id * 37 % 45) * 30, time_to_beat_src = 'igdb'
+		WHERE time_to_beat_normally IS NULL AND time_to_beat_hastily IS NULL AND time_to_beat_completely IS NULL
+		AND title NOT IN ('Fortnite', 'Among Us', 'Fall Guys', 'Rocket League', 'Beat Saber', 'Minecraft', 'Tetris Effect', 'Undertale', 'Apollo Justice: Ace Attorney')`)
+	must(err)
 	// Two games waiting in the "Link IGDB" review screen (made-up ids), so that screen has something to show.
 	for _, c := range []struct {
 		game     string
