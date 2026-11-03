@@ -109,7 +109,7 @@ const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
 async function page(width, height, mobile) {
   const p = await browser.newPage();
   await p.setViewport({ width, height, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
-  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); // the manuals show the light theme
+  await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); // the manuals show the dark theme
   return p;
 }
 const shot = (p, name) => p.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 78 });
@@ -166,8 +166,10 @@ await shot(p, 'similar-phone');
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
 
-await go(p, '#/stats');
+await go(p, '#/stats'); // taller than a phone screen, so the first sections fit in one picture
+await p.setViewport({ width: 390, height: 1900, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); await wait(600);
 await shot(p, 'stats-phone');
+await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
 await go(p, '#/years'); // the latest year with games
 await shot(p, 'year-phone');
@@ -274,6 +276,10 @@ await go(p, '#/library?layout=table&sort=title:asc');
 await shot(p, 'table-desktop');
 await go(p, '#/screenshots');
 await shot(p, 'gallery-desktop');
+await go(p, '#/stats');
+await p.setViewport({ width: 1280, height: 1500, deviceScaleFactor: 1 }); await wait(600);
+await shot(p, 'stats-desktop');
+await p.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
 if (rankingId) {
   await go(p, `#/rankings/${rankingId}`);
   await shot(p, 'ranking-desktop');

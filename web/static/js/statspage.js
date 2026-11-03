@@ -1,8 +1,13 @@
-// The #/stats page: backlog size, finished per year, time waiting, top genres, finished vs dropped.
-// All numbers come from stats.js (pure); this file only draws them.
+// The #/stats page: summary tiles, then cards for time spent, time left, years, outcomes, shortest wins, composition, series.
+// All numbers come from stats.js (pure); this file only draws them. Every hour figure is an estimate and says how many games it rests on.
 import { h } from './util.js';
 import { store } from './api.js';
-import { backlogSize, backlogTime, finishedPerYear, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale } from './stats.js';
+import { openDrawer } from './drawer.js';
+import { formatTime, ttbMinutes } from './ttb.js';
+import {
+  backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP, DEFAULT_HOURS_PER_WEEK,
+  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration,
+} from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 function svg(tag, attrs, ...children) {
@@ -14,21 +19,33 @@ function svg(tag, attrs, ...children) {
 
 const statusLabel = (key) => store.statusByCode.get(key)?.label ?? key;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const num = (n) => n.toLocaleString();
+const HOURS_KEY = 'deltabacklog.statsHoursPerWeek';
 
-/** A card with a heading and an optional one-line explanation. */
-const card = (title, hint, ...body) => h('section.stat-card', {}, h('h2', {}, title), hint && h('p.hint', {}, hint), ...body);
+/** A card with a heading and an optional one-line explanation. `id` is the jump target; `wide` spans both columns on a desktop. */
+const card = (id, title, hint, ...body) => h('section.stat-card', { 'data-sec': id, tabindex: '-1' }, h('h2', {}, title), hint && h('p.hint', {}, hint), ...body);
+const wide = (c) => { c.classList.add('wide'); return c; };
 
-/** Horizontal bars as plain HTML: the label and the number are real text, so no text alternative is needed. */
-function barList(rows, { empty = 'Nothing to show yet.' } = {}) {
+/** Horizontal bars as plain HTML: the label and the number are real text, so no text alternative is needed. `text` formats the number. */
+function barList(rows, { empty = 'Nothing to show yet.', value = (r) => r.count, text = (r) => r.count, cls = '' } = {}) {
   if (!rows.length) return h('p.hint', {}, empty);
-  const max = Math.max(...rows.map((r) => r.count));
-  return h('ul.hbars', {}, rows.map((r) => h('li', {},
-    h('span.hb-label', {}, r.label),
-    h('span.hb-track', { 'aria-hidden': 'true' }, h('span.hb-fill', { style: `width:${Math.max(2, (r.count / max) * 100)}%` })),
-    h('span.hb-count', {}, r.count))));
+  const max = Math.max(...rows.map(value), 1);
+  return h(`ul.hbars${cls ? '.' + cls : ''}`, {}, rows.map((r) => h('li', {},
+    h('span.hb-label', { title: r.label }, r.label),
+    h('span.hb-track', { 'aria-hidden': 'true' }, h('span.hb-fill', { style: `width:${Math.max(2, (value(r) / max) * 100)}%` })),
+    h('span.hb-count', {}, text(r)))));
 }
 
-/** The hint under the chart about finished games that are not in it. */
+/** "≈ 1,240 h across 142 of 189 finished games (the rest have no time to beat)": what an hours figure rests on. */
+function basis(e, noun) {
+  if (!e.total) return `No ${noun} yet.`;
+  if (!e.known) return `None of the ${plural(e.total, noun.replace(/s$/, ''), noun)} has a time to beat yet.`;
+  if (e.known === e.total) return `Rests on the time to beat of all ${plural(e.total, noun.replace(/s$/, ''), noun)}.`;
+  return `Rests on ${e.known} of ${e.total} ${noun}; the other ${e.total - e.known} ${e.total - e.known === 1 ? 'has' : 'have'} no time to beat, so the real figure is higher.`;
+}
+const approx = (e) => `≈ ${num(e.hours)} h`;
+
+/** The hint under a chart about finished games that are not in it. */
 function unplacedHint(periods, unknown) {
   const parts = [];
   if (periods > 0) parts.push(`${plural(periods, 'finished game was', 'finished games were')} played in childhood or always, so ${periods === 1 ? 'is' : 'are'} not in the chart`);
@@ -36,44 +53,49 @@ function unplacedHint(periods, unknown) {
   return parts.length ? h('p.hint', {}, parts.join('; ') + '.') : null;
 }
 
-/** The SVG for a chart `W` units wide. Drawn at the width it is shown at, so its 12px text is never scaled down. */
-function chartSvg(bars, W) {
-  const H = 220, L = 42, R = 8, T = 10, B = 44;
+/**
+ * A grouped vertical bar chart `W` units wide: rows = [{label, values: [..]}], one value per series ({name, cls}).
+ * Drawn at the width it is shown at, so its 12px text is never scaled down. A 2px gap separates bars of one group.
+ */
+function chartSvg(rows, series, W, xTitle, yTitle, fmt) {
+  const H = 220, L = 46, R = 8, T = 12, B = 44;
   const pw = W - L - R, ph = H - T - B;
-  const { max, ticks } = niceScale(Math.max(...bars.map((b) => b.count)));
-  const slot = pw / bars.length, bw = Math.min(36, slot * 0.7);
+  const { max, ticks } = niceScale(Math.max(...rows.flatMap((r) => r.values)));
+  const slot = pw / rows.length, gw = Math.min(40 * series.length, slot * 0.8), bw = (gw - 2 * (series.length - 1)) / series.length;
   const y = (v) => T + ph - (v / max) * ph;
-  const every = Math.max(1, Math.ceil(34 / slot)); // keep year labels from overlapping
-  const g = svg('svg', {
-    class: 'chart', viewBox: `0 0 ${W} ${H}`, width: W, height: H, 'aria-hidden': 'true', // the table below carries the numbers
-  });
+  const every = Math.max(1, Math.ceil(34 / slot));
+  const g = svg('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, width: W, height: H, 'aria-hidden': 'true' }); // the table below carries the numbers
   for (const t of ticks) {
     g.append(svg('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }));
-    g.append(svg('text', { class: 'tick', x: L - 6, y: y(t) + 4, 'text-anchor': 'end' }, t));
+    g.append(svg('text', { class: 'tick', x: L - 6, y: y(t) + 4, 'text-anchor': 'end' }, fmt(t)));
   }
-  bars.forEach((b, i) => {
+  rows.forEach((r, i) => {
     const cx = L + slot * i + slot / 2;
-    const top = y(b.count);
-    g.append(svg('rect', { class: 'bar', x: cx - bw / 2, y: top, width: bw, height: T + ph - top, rx: 3 }, svg('title', {}, `${b.year}: ${plural(b.count, 'game', 'games')}`)));
-    if (b.count > 0 && bw >= 18) g.append(svg('text', { class: 'val', x: cx, y: top - 4, 'text-anchor': 'middle' }, b.count));
-    if (i % every === 0) g.append(svg('text', { class: 'tick', x: cx, y: H - B + 16, 'text-anchor': 'middle' }, b.year));
+    r.values.forEach((v, k) => {
+      const x = cx - gw / 2 + k * (bw + 2), top = y(v);
+      if (v > 0) {
+        g.append(svg('rect', { class: `bar ${series[k].cls}`, x, y: top, width: bw, height: T + ph - top, rx: Math.min(3, bw / 2) },
+          svg('title', {}, `${r.label}, ${series[k].name}: ${fmt(v)}`)));
+        if (series.length === 1 && bw >= 18) g.append(svg('text', { class: 'val', x: x + bw / 2, y: top - 4, 'text-anchor': 'middle' }, fmt(v)));
+      }
+    });
+    if (i % every === 0) g.append(svg('text', { class: 'tick', x: cx, y: H - B + 16, 'text-anchor': 'middle' }, r.label));
   });
   g.append(svg('line', { class: 'axis', x1: L, x2: W - R, y1: T + ph, y2: T + ph }));
-  g.append(svg('text', { class: 'axis-title', x: L + pw / 2, y: H - 6, 'text-anchor': 'middle' }, 'Year last played'));
-  g.append(svg('text', { class: 'axis-title', transform: `translate(10 ${T + ph / 2}) rotate(-90)`, 'text-anchor': 'middle' }, 'Games finished'));
+  g.append(svg('text', { class: 'axis-title', x: L + pw / 2, y: H - 6, 'text-anchor': 'middle' }, xTitle));
+  g.append(svg('text', { class: 'axis-title', transform: `translate(10 ${T + ph / 2}) rotate(-90)`, 'text-anchor': 'middle' }, yTitle));
   return g;
 }
 
-/** Vertical bar chart (finished per year): inline SVG redrawn when its box changes width, plus a screen-reader table. */
-function yearChart({ bars, periods, unknown, total }, cleanups) {
-  if (!bars.length) return h('p.hint', {}, 'No finished game has a year played yet.');
+/** A bar chart that redraws when its box changes width, with a legend (two series or more) and a screen-reader table. */
+function barChart({ rows, series, xTitle, yTitle, caption, fmt = (v) => v }, cleanups) {
   const box = h('div.chart-box', {});
   let width = 0;
   const fit = (w) => {
     w = Math.max(280, Math.min(720, Math.floor(w)));
     if (w === width) return;
     width = w;
-    box.replaceChildren(chartSvg(bars, w));
+    box.replaceChildren(chartSvg(rows, series, w, xTitle, yTitle, fmt));
   };
   fit(320);
   if (typeof ResizeObserver === 'function') {
@@ -81,10 +103,12 @@ function yearChart({ bars, periods, unknown, total }, cleanups) {
     ro.observe(box);
     cleanups.push(() => ro.disconnect());
   }
-  return h('div', {}, box, unplacedHint(periods, unknown),
-    h('table.sr-only', {}, h('caption', {}, `Games finished per year (${total} in all)`),
-      h('thead', {}, h('tr', {}, h('th', {}, 'Year'), h('th', {}, 'Games finished'))),
-      h('tbody', {}, bars.map((b) => h('tr', {}, h('td', {}, b.year), h('td', {}, b.count))))));
+  return h('div', {},
+    series.length > 1 && h('div.ratio-legend.chart-legend', {}, series.map((s) => h('span', {}, h('i', { class: `sw ${s.cls}` }), s.name))),
+    box,
+    h('table.sr-only', {}, h('caption', {}, caption),
+      h('thead', {}, h('tr', {}, h('th', {}, xTitle), series.map((s) => h('th', {}, s.name)))),
+      h('tbody', {}, rows.map((r) => h('tr', {}, h('td', {}, r.label), r.values.map((v) => h('td', {}, fmt(v))))))));
 }
 
 /** One stacked bar: finished against dropped, with the numbers as text under it. */
@@ -101,18 +125,14 @@ function ratioBar({ finished, dropped, share }) {
     h('p.big', {}, `${pct}%`, h('small', {}, ` finished, ${100 - pct}% dropped`)));
 }
 
-/** "At least 410 hours" and how much of the backlog that covers (leading with the coverage when it is under half); says how to get times when there are none. */
-function backlogHours(t) {
-  if (!t.known) return h('p.hint', {}, 'No time to beat yet. Run deltabacklog sync-igdb --enrich to read it from IGDB.');
-  const hours = `at least ${t.hours.toLocaleString()} hours`;
-  if (t.known * 2 < t.total) { // most of the backlog has no time yet: the sum would mislead as a headline
-    return h('div', {},
-      h('p.big', {}, `${t.known} of ${t.total}`, h('small', {}, t.known === 1 ? ' game has a time to beat' : ' games have a time to beat')),
-      h('p.hint', {}, `That is ${hours} for those; the other ${plural(t.unknown, 'has', 'have')} no time to beat yet.`));
-  }
-  return h('div', {},
-    h('p.big', {}, hours, h('small', {}, ' to beat the backlog')),
-    h('p.hint', {}, t.unknown ? `Counted for ${t.known} of ${t.total} games; ${plural(t.unknown, 'game has', 'games have')} no time to beat yet.` : `Counted for all ${t.total} games.`));
+/** Finished against dropped for each genre / platform: a small stacked bar and the finish rate as text. */
+function outcomeRows(rows, what) {
+  if (!rows.length) return h('p.hint', {}, `No ${what} has ${MIN_GROUP} finished or dropped games yet.`);
+  return h('ul.outcomes', {}, rows.map((r) => h('li', {},
+    h('span.hb-label', { title: r.label }, r.label),
+    h('span.ratio-bar.mini', { role: 'img', 'aria-label': `${r.finished} finished, ${r.dropped} dropped` },
+      r.finished > 0 && h('span.r-fin', { style: `flex:${r.finished}` }), r.dropped > 0 && h('span.r-drop', { style: `flex:${r.dropped}` })),
+    h('span.oc-rate', {}, `${Math.round(r.rate * 100)}%`, h('small', {}, ` ${r.finished}/${r.total}`)))));
 }
 
 function waitingTable(time) {
@@ -132,22 +152,120 @@ function waitingTable(time) {
     since && h('p.hint', {}, since));
 }
 
+const loadHours = () => { try { return cleanHoursPerWeek(localStorage.getItem(HOURS_KEY) ?? DEFAULT_HOURS_PER_WEEK); } catch { return DEFAULT_HOURS_PER_WEEK; } };
+const saveHours = (n) => { try { localStorage.setItem(HOURS_KEY, String(n)); } catch { /* private window: it just is not remembered */ } };
+
+/** Hours left in Up next and Backlog, and how long that takes at N hours a week (N is remembered on this device). */
+function timeLeftCard(left) {
+  const line = (label, e) => h('li', {}, h('span.hb-label', {}, label), h('b', {}, e.known ? approx(e) : 'no times'), h('small', {}, ` ${e.known} of ${e.total}`));
+  const out = h('p.big', {});
+  const input = h('input', { id: 'stats-hpw', type: 'number', inputmode: 'numeric', min: '1', max: '168', step: '1', value: String(loadHours()) });
+  const update = () => {
+    const perWeek = cleanHoursPerWeek(input.value);
+    const when = formatDuration(monthsToClear(left.both.hours, perWeek));
+    out.replaceChildren(when || 'Nothing to clear', h('small', {}, when ? `to play the ≈ ${num(left.both.hours)} h of Up next and Backlog at ${perWeek} h a week` : 'No time to beat is known for the games waiting.'));
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('change', () => { const n = cleanHoursPerWeek(input.value); input.value = String(n); saveHours(n); update(); });
+  update();
+  return card('left', 'Time left', 'Hours to clear the games still waiting. An estimate from the time to beat.',
+    h('ul.lines', {}, line('Up next', left.upNext), line('Backlog', left.backlog)),
+    h('p.hint', {}, basis(left.both, 'waiting games')),
+    h('div.hpw', {}, h('label', { for: 'stats-hpw' }, 'I play'), input, h('span', {}, 'hours a week')),
+    out);
+}
+
+function tile(value, label, sub) {
+  return h('div.tile-stat', {}, h('b', {}, value), h('span', {}, label), sub && h('small', {}, sub));
+}
+
+const SECTIONS = [['finished', 'Finished'], ['left', 'Time left'], ['years', 'Years'], ['backlog', 'Backlog'], ['short', 'Shortest'],
+  ['outcomes', 'Outcomes'], ['library', 'Library'], ['series', 'Series'], ['waiting', 'Waiting']];
+
 export function renderStats(root) {
   const games = store.games;
   const size = backlogSize(games);
   const cleanups = [];
+  const fin = finishedTime(games);
+  const left = timeLeft(games);
+  const years = yearByYear(games);
+  const comp = composition(games);
+  const sp = seriesProgress(games);
+  const short = shortestWins(games);
+  const finishedCount = games.filter((g) => g.status === 'finished').length;
+
+  const finishedCard = card('finished', 'Time spent finishing games', 'About how long the games you finished take to beat, from their time to beat (not the time you actually played).',
+    fin.all.known ? h('p.big', {}, approx(fin.all), h('small', {}, `across ${fin.all.known} of ${fin.all.total} finished games`)) : null,
+    h('p.hint', {}, basis(fin.all, 'finished games')),
+    fin.all.known ? h('div', {},
+      h('h3', {}, 'Hours by genre'), barList(fin.genres, { value: (r) => r.minutes, text: (r) => `${num(r.hours)} h`, cls: 'wide-count' }),
+      h('h3', {}, 'Hours by platform'), barList(fin.platforms, { value: (r) => r.minutes, text: (r) => `${num(r.hours)} h`, cls: 'wide-count' }),
+      h('p.hint', {}, 'The top six. A game with several genres or platforms counts for each, so the groups overlap.')) : null);
+
+  const under = fin.perYear.filter((r) => r.known < r.count).map((r) => r.year);
+  const yearsCard = wide(card('years', 'Year by year',
+    years.mostActive ? `Your most active year was ${years.mostActive.year}, with ${plural(years.mostActive.played, 'game', 'games')} played.` : 'Games played and finished in each year.',
+    years.rows.length ? barChart({
+      rows: years.rows.map((r) => ({ label: String(r.year), values: [r.played, r.finished] })),
+      series: [{ name: 'Games played', cls: 'bar-1' }, { name: 'Games finished', cls: 'bar-2' }],
+      xTitle: 'Year', yTitle: 'Games', caption: 'Games played and finished per year',
+    }, cleanups) : h('p.hint', {}, 'No game has a year played yet.'),
+    h('p.hint', {}, 'A game played in several years counts in each of them under played, but only once under finished, in the last year you played it.'),
+    years.childhood || years.always ? h('p.hint', {}, [years.childhood && `${plural(years.childhood, 'game was', 'games were')} played in childhood`, years.always && `${plural(years.always, 'game is', 'games are')} played on and off (always)`].filter(Boolean).join('; ') + ': these are not a calendar year, so they are not in the chart.') : null,
+    fin.perYear.length && fin.all.known ? h('div', {},
+      h('h3', {}, 'Estimated hours of the games finished each year'),
+      barChart({
+        rows: fin.perYear.map((r) => ({ label: String(r.year), values: [r.hours] })),
+        series: [{ name: 'Hours', cls: 'bar-1' }], xTitle: 'Year last played', yTitle: 'Hours (estimate)',
+        caption: 'Estimated hours of the games finished per year', fmt: (v) => num(v),
+      }, cleanups),
+      unplacedHint(fin.periods, fin.unknown),
+      h('p.hint', {}, 'Each finished game counts once, in the last year you played it.' + (under.length ? ` The years ${under.join(', ')} have finished games without a time to beat, so they are underestimated.` : ''))) : null));
+
+  const outcomesCard = wide(card('outcomes', 'Finished or dropped', `Genres and platforms with at least ${MIN_GROUP} finished or dropped games. The percentage is the share finished.`,
+    ratioBar(finishedVsDropped(games)),
+    h('div.two-cols', {},
+      h('div', {}, h('h3', {}, 'By genre'), outcomeRows(outcomesBy(games, 'genres'), 'genre')),
+      h('div', {}, h('h3', {}, 'By platform'), outcomeRows(outcomesBy(games, 'platforms'), 'platform')))));
+
+  const shortCard = card('short', 'Shortest wins', 'The 10 shortest games waiting in Backlog or Up next, by time to beat. Tap one to open it.',
+    short.length ? h('ol.shortest', {}, short.map((g) => h('li', {}, h('button.short-item', { type: 'button', onclick: () => openDrawer(g) },
+      h('span.s-title', {}, g.title), h('small', {}, `${statusLabel(g.status)} · ${formatTime(ttbMinutes(g))}`))))) : h('p.hint', {}, 'No waiting game has a time to beat yet.'));
+
+  const libraryCard = card('library', 'Library', `The ${games.length} games in your library.`,
+    h('h3', {}, 'By ownership'), barList(comp.ownership),
+    h('h3', {}, 'By platform'), barList(comp.platforms.slice(0, 8)),
+    comp.platforms.length > 8 && h('p.hint', {}, `+${comp.platforms.length - 8} more platforms. A game on two platforms counts for both.`),
+    h('h3', {}, 'By release decade'), barList(comp.decades),
+    comp.noYear > 0 && h('p.hint', {}, `${plural(comp.noYear, 'game has', 'games have')} no release year.`));
+
+  const seriesCard = card('series', 'Series', 'Series with at least two games in your library. Games of a series that you do not have are not counted.',
+    sp.total ? h('div', {},
+      h('p.big', {}, `${sp.completed} of ${sp.total}`, h('small', {}, `series completed (every game finished); ${sp.inProgress} in progress, ${sp.notStarted} not started`)),
+      sp.closest.length ? h('div', {}, h('h3', {}, 'Closest to done'),
+        h('ul.lines', {}, sp.closest.map((s) => h('li', {}, h('span.hb-label', {}, s.name), h('b', {}, `${s.finished}/${s.total}`))))) : null,
+      h('p.hint', {}, h('a', { href: '#/series' }, 'Open the Series page'))) : h('p.hint', {}, 'No series with two games yet.'));
+
+  const backlogCard = card('backlog', 'Backlog', 'Games on the backlog or up next.',
+    h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
+    h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
+    size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`));
+
   root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
-    h('p.hint', {}, `Computed from the ${games.length} games in your library.`),
+    h('p.hint', {}, `Computed from the ${games.length} games in your library. Hours are estimates from each game's time to beat.`),
+    h('div.stat-tiles', {},
+      tile(num(games.length), 'games'),
+      tile(num(finishedCount), 'finished'),
+      tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
+      tile(left.both.known ? approx(left.both) : '—', 'left to play', left.both.known ? `${left.both.known} of ${left.both.total} timed` : 'no times yet')),
+    h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
+      type: 'button',
+      onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
+    }, label))),
     h('div.stat-grid', {},
-      card('Backlog', 'Games on the backlog or up next.',
-        h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
-        backlogHours(backlogTime(games)),
-        h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
-          size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`)),
-      card('Finished per year', 'Each finished game counts in the last year you played it.', yearChart(finishedPerYear(games), cleanups)),
-      card('Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))),
-      card('Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
-      card('Finished or dropped', null, ratioBar(finishedVsDropped(games))))));
+      finishedCard, timeLeftCard(left), yearsCard, backlogCard, shortCard, outcomesCard, libraryCard, seriesCard,
+      card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
+      card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
   return () => cleanups.forEach((f) => f());
 }

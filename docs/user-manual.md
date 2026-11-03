@@ -380,15 +380,28 @@ Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap 
 
 ## 18. Stats
 
-Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored.
+Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored (only the *hours a week* you type under **Time left**, kept in this browser).
 
-- **Backlog**: how many games are on the backlog or up next, **at least how many hours** that is (the "Main + extras" time of each game, or the closest time known when it has no such time, added up, whatever its source; games with no time to beat yet are left out, so it is a minimum, and the card says how many games it covers: when fewer than half have a time it leads with that instead), and how many per platform (a game on two platforms counts for both). Before the IGDB details have been read it says there is no time to beat yet.
-- **Finished per year**: a bar chart of games with the status Finished, counted in the last year you played them. Finished games you played in *Childhood* or *Always* (no calendar year) and finished games with nothing recorded are mentioned separately under the chart, not drawn.
-- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet.
+The top has four tiles (games, finished, estimated hours finished, estimated hours left) and a row of buttons that jump to a section.
+
+**About the hours.** Every hours figure is an estimate and says how many games it rests on, for example *≈ 1,240 h across 142 of 189 finished games*. A game's time is its **Main + extras** time to beat; when it has none, the quickest time, then the complete one (whatever the source: IGDB, HowLongToBeat or typed by you). Games with no time to beat add nothing, so the real figure is higher. It is how long the games take to beat, not how long you actually played them.
+
+- **Time spent finishing games**: the estimated hours of all the games with the status Finished, and the genres and platforms (top six) where those hours went. A game with several genres or platforms counts for each, so the groups overlap.
+- **Time left**: the estimated hours of **Up next** and **Backlog**, separately, and how long that takes at *N* hours a week (type your own; a month is 4.35 weeks). Hold, Playing and the rest are not counted.
+- **Year by year**: a chart of games played (every year in a game's *Years played* counts, so a game played in three years is in three bars) and games finished (each finished game once, in the last year you played it), the most active year, and a second chart with the estimated hours of the games finished each year (years with finished games lacking a time are underestimated, and the page says which). Games played in *Childhood* or *Always* are not a calendar year: they are counted under the chart, never put in a year. Finished games with no year at all are mentioned too. Under the charts, the numbers are also in a table for screen readers.
+- **Backlog**: how many games are on the backlog or up next, and how many per platform (a game on two platforms counts for both).
+- **Shortest wins**: the 10 shortest games in Backlog or Up next that have a time to beat. Tap one to open it.
+- **Finished or dropped**: the share of games you finished against dropped, and the same per genre and per platform. Only groups with at least 5 finished or dropped games are listed; the percentage is the share finished (*5/6* is finished out of finished plus dropped).
+- **Library**: your games by ownership, by platform (top eight) and by release decade (games with no release year are mentioned).
+- **Series**: of the series that have at least two games in your library, how many are completed (every game finished), in progress and not started, and the three closest to done. Games of a series that you do not have are not counted.
+- **Time waiting**: for Backlog, Up Next and Hold, the typical and longest time since a game was last changed, and the five games that have waited longest (tap one to find it in the Library). This is a rough guide: any edit resets the clock. Games you have not touched since the import are left out (the card says how many), and until the rest were changed over at least a week it tells you there is nothing to compare yet. (A game's *added* date is the import date for imported games, so no "backlog age" is shown from it.)
 - **Most played genres**: genres of the games you have played (a year or period recorded, or a status such as Playing, Finished or Dropped).
-- **Finished or dropped**: the share of games you finished against dropped.
 
 ![The Stats page](img/stats-phone.jpg)
+
+On a desktop the cards use two columns:
+
+![The Stats page on a desktop](img/stats-desktop.jpg)
 
 The charts have text labels and work in light and dark. Screen readers get the numbers as a table.
 

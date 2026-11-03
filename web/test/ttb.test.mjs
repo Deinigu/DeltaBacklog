@@ -4,7 +4,6 @@ import { store } from '../static/js/api.js';
 import { SHORT_MINUTES, ttbMinutes, isShort, formatTime, ttbTiles, ttbSourceNote, parseTime, timeInputValue, hltbPatch, hasTimes, TTB_KINDS, totalTime } from '../static/js/ttb.js';
 import { emptyState, matches, cycle, GROUPS, FLAGS, stateFromView, stateFromQuery, stateToQuery, filterToJSON, activeCount, facetSignature } from '../static/js/filters.js';
 import { emptyMood, applyMood, moodCounts, moodIsEmpty } from '../static/js/pick.js';
-import { backlogTime } from '../static/js/stats.js';
 
 store.statusOrder = new Map();
 let n = 0;
@@ -89,15 +88,6 @@ test('a HowLongToBeat candidate becomes a patch with its source; missing kinds c
 test('total time adds the estimates and counts games with and without one', () => {
   const t = totalTime([g({ ttb_normally: 90 }), g({ ttb_hastily: 30 }), g()]);
   assert.deepEqual(t, { minutes: 120, hours: 2, known: 2, unknown: 1 });
-});
-
-test('backlog time covers backlog and up next only', () => {
-  const r = backlogTime([
-    g({ status: 'backlog', ttb_normally: 600 }), g({ status: 'up_next', ttb_normally: 1200 }), g({ status: 'backlog' }),
-    g({ status: 'finished', ttb_normally: 6000 }), g({ status: 'hold', ttb_normally: 6000 }),
-  ]);
-  assert.deepEqual(r, { hours: 30, known: 2, unknown: 1, total: 3 });
-  assert.deepEqual(backlogTime([]), { hours: 0, known: 0, unknown: 0, total: 0 });
 });
 
 // ---- filters ----
