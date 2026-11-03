@@ -125,8 +125,8 @@ func TestUploadRefused(t *testing.T) {
 	}{
 		{"notes.png", "file", []byte("this is not an image at all"), 415},
 		{"x.png", "file", append([]byte("GIF89a"), make([]byte, 100)...), 415}, // a type outside JPEG/PNG/WebP
-		{"photo.jpg", "file", upPNG(10, 10)[:40], 422},                      // PNG, cut off in the header
-		{"torn.jpg", "file", upJPEG(300, 300)[:700], 422},                   // a readable header, no data
+		{"photo.jpg", "file", upPNG(10, 10)[:40], 422},                         // PNG, cut off in the header
+		{"torn.jpg", "file", upJPEG(300, 300)[:700], 422},                      // a readable header, no data
 		{"big.png", "file", big, 413},                                          // too many pixels
 		{"huge.bin", "file", make([]byte, 11<<20), 413},                        // too many bytes
 		{"empty.png", "file", nil, 400},
