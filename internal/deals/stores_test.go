@@ -320,3 +320,25 @@ func TestMessageShowsTheCheaperOffer(t *testing.T) {
 		t.Error("a dearer alt is not a hint")
 	}
 }
+
+func TestClearingTheRankingClearsTheHints(t *testing.T) {
+	d, h := alertDB(t)
+	src := &shopSource{histSource: h, offers: map[string][]Current{"g1": {saleAt("Steam", 900, 1000, 10), saleAt("GOG", 500, 1000, 50)}}}
+	setPrice(h, "g1", cur(500, 1000, 50), 500)
+	SaveStorePrefs(d, StorePrefs{Shops: []string{"Steam"}, Threshold: 15})
+	if _, err := Refresh(context.Background(), d, src, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	d.QueryRow(`SELECT count(*) FROM deal_price WHERE alt_shop IS NOT NULL`).Scan(&n)
+	if n == 0 {
+		t.Fatal("expected a hint")
+	}
+	if err := SaveStorePrefs(d, StorePrefs{Threshold: 15}); err != nil {
+		t.Fatal(err)
+	}
+	d.QueryRow(`SELECT count(*) FROM deal_price WHERE alt_shop IS NOT NULL OR alt_price IS NOT NULL OR alt_url IS NOT NULL`).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d rows keep a hint", n)
+	}
+}

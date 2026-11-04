@@ -276,9 +276,17 @@ func (s *Server) dealsStores(w http.ResponseWriter, r *http.Request) {
 // dealsSetStores replaces the ranking (an ordered list of shop names and the threshold in percent). Cached prices change
 // at the next refresh.
 func (s *Server) dealsSetStores(w http.ResponseWriter, r *http.Request) {
-	var in deals.StorePrefs
-	if !readJSON(w, r, &in, 8<<10) {
+	var body struct {
+		Shops     []string `json:"stores"`
+		Threshold *int     `json:"threshold"`
+	}
+	if !readJSON(w, r, &body, 8<<10) {
 		return
+	}
+	// A missing threshold keeps the current one (the default when none was ever set), not 0.
+	in := deals.StorePrefs{Shops: body.Shops, Threshold: deals.LoadStorePrefs(s.DB).Threshold}
+	if body.Threshold != nil {
+		in.Threshold = *body.Threshold
 	}
 	for i := range in.Shops {
 		in.Shops[i] = strings.TrimSpace(in.Shops[i])

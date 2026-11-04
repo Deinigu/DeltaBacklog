@@ -169,15 +169,16 @@ export function renderDeals(root) {
     const body = h('div.dl-stores-body');
     const err = h('p.hint.dl-stores-err', { role: 'alert' });
     const dlg = h('dialog.dl-sheet.dl-stores', { 'aria-label': 'Preferred stores' }, body);
-    const paint = () => {
+    const paint = (focusKey) => {
+      const typed = body.querySelector('.dl-store-add input')?.value ?? '';
       const rows = list.map((s, i) => h('li.dl-store', {},
         h('span.dl-store-n', {}, String(i + 1)), h('span.dl-store-name', {}, s),
-        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} up`, disabled: i === 0 || null, onclick: () => { list = moveStore(list, i, -1); paint(); } }, '↑'),
-        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} down`, disabled: i === list.length - 1 || null, onclick: () => { list = moveStore(list, i, 1); paint(); } }, '↓'),
-        h('button.dl-store-b', { type: 'button', 'aria-label': `Remove ${s}`, onclick: () => { list = removeStore(list, i); paint(); } }, '✕')));
-      const input = h('input', { list: 'dl-shops', placeholder: 'Add a store…', 'aria-label': 'Store to add', maxlength: 60, autocomplete: 'off',
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} up`, disabled: i === 0 || null, 'data-fk': `up-${i}`, onclick: () => { list = moveStore(list, i, -1); paint(`up-${Math.max(i - 1, 0)}`); } }, '↑'),
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} down`, disabled: i === list.length - 1 || null, 'data-fk': `down-${i}`, onclick: () => { list = moveStore(list, i, 1); paint(`down-${Math.min(i + 1, list.length - 1)}`); } }, '↓'),
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Remove ${s}`, 'data-fk': `rm-${i}`, onclick: () => { list = removeStore(list, i); paint(`rm-${Math.min(i, list.length - 1)}`); } }, '✕')));
+      const input = h('input', { 'data-fk': 'add', value: typed, list: 'dl-shops', placeholder: 'Add a store…', 'aria-label': 'Store to add', maxlength: 60, autocomplete: 'off',
         onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } } });
-      const add = () => { const next = addStore(list, input.value); if (next === list && input.value.trim()) err.textContent = list.length >= MAX_STORES ? `At most ${MAX_STORES} stores.` : 'That store is already in the list.'; else err.textContent = ''; list = next; paint(); };
+      const add = () => { const next = addStore(list, input.value); if (next === list && input.value.trim()) err.textContent = list.length >= MAX_STORES ? `At most ${MAX_STORES} stores.` : 'That store is already in the list.'; else err.textContent = ''; if (next !== list) input.value = ''; list = next; paint('add'); };
       const th = h('input', { type: 'number', min: 0, max: 100, step: 1, value: String(threshold), inputmode: 'numeric', 'aria-label': 'Percent cheaper before another store is shown',
         oninput: (e) => { const n = parseThreshold(e.target.value); if (n != null) threshold = n; } });
       body.replaceChildren(
@@ -189,6 +190,7 @@ export function renderDeals(root) {
         h('label.dl-store-th', {}, h('span', {}, 'Also show a cheaper offer elsewhere when it is more than'), th, h('span', {}, '% cheaper')),
         err,
         h('div.dl-acts', {}, h('button.dl-act.dl-save', { type: 'button', onclick: save }, 'Save'), h('button.dl-act.dl-close', { type: 'button', onclick: closeSheet }, 'Cancel')));
+      if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]:not(:disabled)`) || body.querySelector('[data-fk="add"]'))?.focus();
     };
     async function save() {
       try {
@@ -227,7 +229,7 @@ export function renderDeals(root) {
       h('span.dl-name', { role: 'cell' },
         h('button.dl-open', { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': o.aria, onclick: open }, h('span.dl-title', {}, o.title)),
         tags.length ? h('span.dl-tags', {}, tags.map((t) => h('span.dl-tag.' + t.cls, {}, t.text))) : null,
-        h('span.dl-sub', {}, sub, alt ? h('span.dl-alt-inline', {}, ` · ${alt}`) : null),
+        h('span.dl-sub', {}, sub),
         alt ? h('span.dl-altline', {}, alt) : null),
       h('span.dl-cut', { role: 'cell' }, onSale ? h('span.dl-pct', {}, `-${p.cut}%`) : null),
       h('span.dl-price', { role: 'cell' }, p && p.price != null ? [h('b', {}, formatMoney(p.price, p.currency)), onSale && p.regular > p.price ? h('s', {}, formatMoney(p.regular, p.currency)) : null]
@@ -333,7 +335,7 @@ export function renderDeals(root) {
   function header(extra) {
     const wl = view === 'wishlist';
     const text = wl ? 'Your Steam wishlist, not part of your library. A game leaves this list when you add it to your library or take it off your wishlist (for example by buying it); it is read from Steam when you press Refresh prices.'
-      : 'The best price right now and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
+      : 'The price right now (at your preferred store when you set some, else the best price) and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
     const setup = !info.configured && !oldestCheck(info) ? 'IsThereAnyDeal is not set up: add ITAD_API_KEY to .env and restart the app (see the user manual, Deals).' : '';
     return [
       h('div.dl-title-row', {}, h('h1', {}, 'Deals'),

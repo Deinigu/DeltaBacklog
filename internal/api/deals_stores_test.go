@@ -77,3 +77,18 @@ func TestDealsShopsList(t *testing.T) {
 		t.Errorf("not configured: %d", code)
 	}
 }
+
+func TestDealsStoresMissingThresholdKeepsTheCurrentOne(t *testing.T) {
+	srv, _ := dealsServer(t, &shopsFake{})
+	if code, _ := send(t, "PUT", srv.URL+"/api/deals/stores", map[string]any{"stores": []string{"Steam"}}); code != 200 {
+		t.Fatalf("put: %d", code)
+	}
+	if _, out := send(t, "GET", srv.URL+"/api/deals/stores", nil); out["threshold"] != float64(deals.DefaultThreshold) {
+		t.Errorf("default expected, got %v", out)
+	}
+	send(t, "PUT", srv.URL+"/api/deals/stores", map[string]any{"stores": []string{"Steam"}, "threshold": 30})
+	send(t, "PUT", srv.URL+"/api/deals/stores", map[string]any{"stores": []string{"Steam", "GOG"}})
+	if _, out := send(t, "GET", srv.URL+"/api/deals/stores", nil); out["threshold"] != float64(30) {
+		t.Errorf("current expected, got %v", out)
+	}
+}

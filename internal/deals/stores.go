@@ -107,6 +107,13 @@ func SaveStorePrefs(d *sql.DB, p StorePrefs) error {
 			return err
 		}
 	}
+	if len(p.Shops) == 0 { // no ranking: the hints of the old one are stale
+		for _, t := range []string{"deal_price", "wish_price"} {
+			if _, err := tx.Exec(`UPDATE ` + t + ` SET alt_shop = NULL, alt_price = NULL, alt_url = NULL WHERE alt_shop IS NOT NULL`); err != nil {
+				return err
+			}
+		}
+	}
 	return tx.Commit()
 }
 
