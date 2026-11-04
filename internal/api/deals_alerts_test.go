@@ -66,7 +66,7 @@ func TestDealsMuteAndSeen(t *testing.T) {
 	}
 }
 
-func TestDealsRefreshWaitsForTheDailyCheck(t *testing.T) {
+func TestDealsRefreshWaitsForTheScheduledCheck(t *testing.T) {
 	srv, d := dealsServer(t, dealsFake{})
 	release, err := deals.AcquireRun(d, deals.HolderCheck) // what `deals-check` holds while it runs
 	if err != nil {

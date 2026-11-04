@@ -211,9 +211,10 @@ export function renderDeals(root) {
       } catch (e) { err.textContent = errorText('save', e); }
     }
     dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); });
-    dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; });
     document.body.append(dlg);
     sheetEl = dlg;
+    const release = openLayer(dlg, { requestClose: closeSheet, trap: false }); // Back closes it, like the action sheet
+    dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; release(); });
     paint();
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
     if (info.configured) { try { shops = (await dealsShops()).shops || []; if (sheetEl === dlg) paint(); } catch { /* the box still takes a typed name */ } }
@@ -336,7 +337,7 @@ export function renderDeals(root) {
   const group = (label, refs, o = {}) => ({ ...filterGroup(label, { open: true, chips: h('div.chips', {}, refs.map((r) => r.btn)), ...o }), refs });
 
   const statusRefs = DEAL_STATUSES.map((s) => chip(s.label, { on: () => filter.statuses.has(s.code), toggle: toggleIn(filter.statuses, s.code),
-    count: () => { const scope = scopeOf(info); return store.games.filter((g) => g.status === s.code && scope.has(g.id)).length; } }));
+    count: () => ({ statuses: new Set([s.code]) }) }));
   const showRefs = [
     chip('On sale', { on: () => filter.sale, toggle: flip('sale'), count: () => ({ sale: true }) }),
     chip('Alerts', { on: () => filter.alerts, toggle: flip('alerts'), count: () => ({ alerts: true }) }),
@@ -514,7 +515,7 @@ export function renderDeals(root) {
     if (wl && filter.added) pills.push(pill('', `Added in the last ${ADDED_DAYS} days`, off(() => { filter.added = false; }), `Added in the last ${ADDED_DAYS} days`));
     const revert = (pills.length || filter.q) && h('button.pill.reset', { type: 'button', onclick: resetFilters }, 'Reset');
     meta.replaceChildren(count, ...pills, revert);
-    count.textContent = base.length ? `${rowCount} of ${plural(base.length, 'game')}` : '';
+    count.textContent = base.length ? `${rowCount} of ${plural(base.length, 'priced game')}` : '';
   }
 
   /** Brings the panel's chips in line with the filter: states, the counts they would give, the shops that exist. */

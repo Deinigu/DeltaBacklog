@@ -1,5 +1,5 @@
 [Unit]
-Description=DeltaBacklog price check (every 6 hours) (Deals prices and price alerts)
+Description=DeltaBacklog price check every 6 hours (Deals prices and price alerts)
 After=network-online.target deltabacklog.service
 Wants=network-online.target
 

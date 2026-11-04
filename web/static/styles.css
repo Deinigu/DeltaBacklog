@@ -106,7 +106,8 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .library { display: block; }
 @media (min-width: 900px) {
   .library { display: grid; grid-template-columns: 290px 1fr; gap: 24px; align-items: start; }
-  .filters { position: sticky; top: calc(var(--toolbar-h, 126px) + 8px); max-height: calc(100vh - var(--toolbar-h, 126px) - 24px); }
+  .filters { position: sticky; z-index: 10; top: calc(var(--toolbar-h, 126px) + 8px); max-height: calc(100vh - var(--toolbar-h, 126px) - 24px); } /* below the sticky toolbar (20), so it never slides over it */
+  .library { min-height: calc(100vh - var(--toolbar-h, 126px)); } /* tall enough for the panel to stay put, however short the list */
 }
 
 /* ---- filter sheet (bottom sheet on phones, side panel on desktop) ---- */
@@ -612,8 +613,6 @@ ul.lines { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4p
 ul.lines li { display: flex; align-items: baseline; gap: 8px; font-size: 14px; min-height: 28px; }
 ul.lines .hb-label { flex: 1; }
 ul.lines small { color: var(--muted); font-size: 12px; }
-.hpw { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; font-size: 14px; }
-.hpw input { width: 76px; min-height: 44px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 16px; text-align: right; }
 .outcomes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .outcomes li { display: grid; grid-template-columns: minmax(70px, 38%) 1fr 72px; align-items: center; gap: 8px; font-size: 14px; }
 .ratio-bar.mini { height: 14px; border-radius: 7px; }

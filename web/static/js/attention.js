@@ -1,7 +1,6 @@
 // "Needs attention": which games need a fix, grouped. Pure (no DOM, no network): unit-tested.
 
-/** Statuses where the time to beat matters: the games that are about to be played. */
-export const TTB_STATUSES = new Set(['backlog', 'up_next', 'playing']);
+import { ttbState, ttbGroupOfStatus, TTB_GROUPS } from './ttbscope.js';
 
 /** Groups in display order. `fix` is what the row's main button does (attentionview.js maps it to a screen). */
 export const GROUPS = [
@@ -9,7 +8,8 @@ export const GROUPS = [
   { key: 'uncertain', title: 'Uncertain IGDB match', fix: 'confirm', hint: 'The sync found a likely match but was not sure enough to link it. Confirm the top one or pick another.' },
   { key: 'no_cover', title: 'No cover', fix: 'cover', hint: '' },
   { key: 'poster', title: 'No poster, or only a crop of the cover', fix: 'poster', hint: 'The poster is the portrait picture the Rankings use.' },
-  { key: 'no_ttb', title: 'No time to beat', fix: 'ttb', hint: 'Only games in Backlog, Up Next and Playing, where the time helps you choose.' },
+  { key: 'no_ttb', title: 'No time to beat', fix: 'ttb', hint: 'Games in Backlog, Up Next and Playing, where the time helps you choose. Evergreen and dropped games are not listed.' },
+  { key: 'no_ttb_finished', title: 'Finished, no time to beat', fix: 'ttb', hint: 'Stats adds up the time of the games you finished, so each one without a time makes that figure lower than it is.' },
   { key: 'no_platform', title: 'No platform', fix: 'platforms', hint: '' },
   { key: 'no_year', title: 'No release year', fix: 'year', hint: '' },
   { key: 'no_ownership', title: 'No ownership', fix: 'ownership', hint: '' },
@@ -37,7 +37,8 @@ export function problemsOf(g, uncertain = new Set()) {
   const p = posterState(g);
   if (p === 'none') out.push(['poster', 'No poster yet']);
   else if (p === 'crop') out.push(['poster', 'Only a crop of the cover']);
-  if (TTB_STATUSES.has(g.status) && g.ttb_hastily == null && g.ttb_normally == null && g.ttb_completely == null) out.push(['no_ttb', '']);
+  const t = ttbState(g); // one rule with Stats (ttbscope.js); a game marked "no time on HowLongToBeat" is listed as ignored
+  if (t === 'missing' || t === 'none') out.push([ttbGroupOfStatus(g.status), '']);
   if (empty(g.platforms)) out.push(['no_platform', '']);
   if (g.release_year == null) out.push(['no_year', '']);
   if (!g.ownership && g.status !== 'wishlist') out.push(['no_ownership', '']);
@@ -59,9 +60,10 @@ export function buildGroups(games, queue = [], ignored = {}, showIgnored = false
   const sorted = [...games].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
   for (const g of sorted) {
     for (const [key, note] of problemsOf(g, uncertain)) {
-      const isIgnored = (ignored[key] || []).includes(g.id);
+      const marked = TTB_GROUPS.includes(key) && !!g.ttb_not_found; // "no time on HowLongToBeat" counts as ignored here
+      const isIgnored = marked || (ignored[key] || []).includes(g.id);
       if (isIgnored && !showIgnored) { hidden.set(key, hidden.get(key) + 1); continue; }
-      rows.get(key).push({ game: g, note, ignored: isIgnored, candidate: key === 'uncertain' ? top.get(g.id) || null : null });
+      rows.get(key).push({ game: g, note, ignored: isIgnored, marked, candidate: key === 'uncertain' ? top.get(g.id) || null : null });
     }
   }
   return GROUPS.map((def) => ({ ...def, rows: rows.get(def.key), ignoredCount: hidden.get(def.key) })).filter((g) => g.rows.length > 0);
