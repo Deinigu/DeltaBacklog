@@ -1,6 +1,6 @@
 // "Link with IGDB": review the games the IGDB sync could not link on its own, one at a time.
 // For each: accept a proposal, search IGDB by hand, mark it "not on IGDB", or skip it for now.
-import { h, toast } from './util.js';
+import { h, toast, toastError, emptyBox, brand } from './util.js';
 import { store, linkQueue, linkAccept, linkNone } from './api.js';
 import { pickCandidate } from './add.js';
 import { relinkPrompt } from './relinkprompt.js';
@@ -14,10 +14,10 @@ export function renderLink(root) {
 
   const head = h('div.link-head');
   const card = h('div.link-card');
-  root.replaceChildren(h('div.manage.link-page', {}, h('h1', {}, 'Link with IGDB'), head, card));
+  root.replaceChildren(h('div.manage.link-page', {}, h('h1', {}, 'Link with ', brand('IGDB')), head, card));
 
   async function refresh(keepFocus = false) {
-    try { items = await linkQueue(); } catch { items = []; toast('Could not load the review queue'); }
+    try { items = await linkQueue(); } catch { items = []; toastError('load the review queue'); }
     if (alive) draw(keepFocus);
   }
 
@@ -27,7 +27,7 @@ export function renderLink(root) {
     let stale = false;
     try { await fn(); } catch (e) {
       if (e.status === 409 && e.data?.code === 'already_linked') { stale = true; toast('That game was already linked elsewhere. Nothing was changed.'); }
-      else toast(e.status === 409 ? e.message : 'Something went wrong. Check the connection and try again');
+      else if (e.status === 409) toast(e.message); else toastError('link the game');
     }
     busy = false;
     if (stale) { items = without(items, it.game_id); refresh(true); }
@@ -70,14 +70,11 @@ export function renderLink(root) {
     head.replaceChildren(h('p.hint', {}, progressText(items, skipped)));
     const left = remaining(items, skipped);
     if (items.length === 0) {
-      card.replaceChildren(h('div.empty', {}, 'Every game that could be matched is linked to IGDB.',
-        h('p.hint', {}, 'Games that are still unlinked are found by running ', h('code', {}, 'deltabacklog sync-igdb'), ' on the server.'),
-        h('a.btn', { href: '#/library' }, 'Back to the Library')));
+      card.replaceChildren(emptyBox(['Every game that could be matched is linked to IGDB. Games that are still unlinked are found by running ', h('code', {}, 'deltabacklog sync-igdb'), ' on the server.'], h('a.btn', { href: '#/library' }, 'Back to the Library')));
       return;
     }
     if (left.length === 0) {
-      card.replaceChildren(h('div.empty', {}, 'You skipped the rest for now.',
-        h('button.btn', { type: 'button', onclick: () => { skipped.clear(); draw(); } }, 'Review them again')));
+      card.replaceChildren(emptyBox('You skipped the rest for now.', h('button.btn', { type: 'button', onclick: () => { skipped.clear(); draw(); } }, 'Review them again')));
       return;
     }
     const it = left[0];
@@ -91,8 +88,8 @@ export function renderLink(root) {
             c.slug ? h('a.link-page-link', { href: `https://www.igdb.com/games/${encodeURIComponent(c.slug)}`, target: '_blank', rel: 'noopener', 'aria-label': `Open ${c.name} on IGDB (opens in a new tab)` }, 'IGDB ↗') : null)))
         : h('p.hint', {}, 'IGDB did not find a close match for this title.'),
       h('div.link-actions', {},
-        h('button.btn', { type: 'button', onclick: () => search(it) }, 'Search IGDB…'),
-        h('button.btn', { type: 'button', onclick: () => none(it) }, 'Not on IGDB'),
+        h('button.btn', { type: 'button', onclick: () => search(it) }, 'Search ', brand('IGDB'), '…'),
+        h('button.btn', { type: 'button', onclick: () => none(it) }, 'Not on ', brand('IGDB')),
         h('button.btn', { type: 'button', onclick: () => { skipped.add(it.game_id); draw(true); } }, 'Skip')));
     if (focus) card.querySelector('.link-title')?.focus({ preventScroll: true });
   }

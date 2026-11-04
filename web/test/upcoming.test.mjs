@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { releasePeriod, formatRelease, isReleased, today, buildUpcoming, formatDay } from '../static/js/upcoming.js';
+import { releasePeriod, formatRelease, isReleased, today, buildUpcoming } from '../static/js/upcoming.js';
+import { formatDate as formatDay } from '../static/js/format.js';
 
 const utc = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
 const NOW = new Date(2026, 9, 27, 12, 0, 0); // 27 Oct 2026, noon on the viewer's clock

@@ -1,6 +1,6 @@
 // Quick add: search IGDB by title or store link, pick a match, review the pre-filled form and cover, save.
 // Also the IGDB match picker and the cover and poster pickers used by the game drawer and the ranking board.
-import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog, NO_AUTOCORRECT } from './util.js';
+import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog, NO_AUTOCORRECT, toastError } from './util.js';
 import { openLayer, guardUnload } from './layers.js';
 import { store, lookup, coverSearch, createGame, setCover, setPoster, uploadImage } from './api.js';
 import { uploadProblem, PICK_TYPES } from './uploadcheck.js';
@@ -277,7 +277,7 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
           toast('That game is already in your library');
           ui.close();
           openDrawer(store.byId.get(e.data.id));
-        } else toast(e.message || 'Could not add the game');
+        } else toastError('add the game', e);
       }
     }
   }

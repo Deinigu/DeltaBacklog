@@ -1,4 +1,5 @@
 // The "Update details from IGDB?" prompt after a game is linked to another IGDB game: its pure text helpers (unit-tested).
+import { couldNot } from './util.js';
 
 /** "Genres: Action → Indie, Roguelike", with "(empty)" for a field that had no value. */
 export function changeText(c) {
@@ -19,7 +20,7 @@ export function errorText(e) {
     case 502: return 'IGDB did not answer. Nothing was changed; try again later';
     case 409: return 'This game is not linked to that IGDB game any more';
     case 422: return 'IGDB has no details for this game';
-    default: return 'Could not update the details. Check the connection and try again';
+    default: return couldNot('update the details');
   }
 }
 

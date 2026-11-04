@@ -1,6 +1,6 @@
 // "Linked to <IGDB title>. Update details from it?": offered after a game's IGDB link changes (the drawer's save, the
 // Link with IGDB screen). Fill empty fields is the default; Replace all shows what would change first. One Undo toast.
-import { h, toast, toastAction } from './util.js';
+import { h, toast, toastAction, toastError } from './util.js';
 import { igdbDetails, patchGame } from './api.js';
 import { changeText, appliedText, errorText, hasUndo, undoText } from './relink.js';
 
@@ -46,7 +46,7 @@ export function relinkPrompt(game, name, mount = null) {
     const text = appliedText(data.changes, mode);
     if (data.changes.length && hasUndo(data.undo)) {
       toastAction(text, 'Undo', async () => {
-        try { await patchGame(game.id, data.undo); toast(undoText(data.undo)); } catch { toast('Could not undo the update'); }
+        try { await patchGame(game.id, data.undo); toast(undoText(data.undo)); } catch { toastError('undo the update'); }
       }, 8000);
     } else toast(text);
   });

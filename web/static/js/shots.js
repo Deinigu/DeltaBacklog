@@ -1,4 +1,5 @@
 // Pure helpers for the screenshot gallery (no DOM): ordering, formatting, picking the files to upload.
+import { formatCalendarDate } from './format.js';
 
 /** Ids in the new order after moving one screenshot a place earlier (dir -1) or later (dir 1); null when it cannot move. */
 export function moveShot(ids, id, dir) {
@@ -24,14 +25,8 @@ export function formatBytes(n) {
   return `${(n / 1048576).toFixed(n < 10 * 1048576 ? 1 : 0)} MB`;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** "14 Nov 2023" from the API's taken_at (2006-01-02T15:04:05 with or without Z); '' when absent or unreadable. */
-export function formatTaken(iso) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
-  if (!m || +m[2] < 1 || +m[2] > 12) return '';
-  return `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}`;
-}
+export const formatTaken = formatCalendarDate;
 
 /** "Screenshots (3)" heading text. */
 export const countLabel = (n) => (n ? `Screenshots (${n})` : 'Screenshots');

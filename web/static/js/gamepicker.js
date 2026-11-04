@@ -1,6 +1,6 @@
 // "Add games" sheet for the rankings: search and filter the whole library (the same filters as the Library page), tick
 // games one by one or all the matches at once, and add them. Resolves to the picked game ids, or null when cancelled.
-import { h, norm, icon, debounce, gradientFor, initials, lazyImg, NO_AUTOCORRECT } from './util.js';
+import { h, norm, icon, debounce, gradientFor, initials, lazyImg, NO_AUTOCORRECT, emptyBox } from './util.js';
 import { openLayer } from './layers.js';
 import { store, coverURL, posterURL } from './api.js';
 import { GROUPS, FLAGS, emptyState, matches, cycle, chipState, activeCount } from './filters.js';
@@ -95,7 +95,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     }
     function draw() {
       rowEls.clear();
-      list.replaceChildren(...(shown.length ? shown.map(rowFor) : [h('div.empty', {}, 'No games match.')]));
+      list.replaceChildren(...(shown.length ? shown.map(rowFor) : [emptyBox('No games match.')]));
       for (const id of picked) paintRow(id);
       count.textContent = `${shown.length} of ${games.length} game${games.length === 1 ? '' : 's'}`;
       paintFoot();

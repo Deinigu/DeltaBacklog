@@ -1,5 +1,5 @@
 // Game detail drawer: facts at a glance, quick status/favorite changes, and an Edit mode for every field.
-import { h, gradientFor, initials, toast, confirmDialog, newTab, glyphLabel } from './util.js';
+import { h, gradientFor, initials, toast, confirmDialog, newTab, glyphLabel, toastError, brand } from './util.js';
 import { openLayer, guardUnload } from './layers.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, openPosterPicker, pickCandidate } from './add.js';
@@ -36,7 +36,7 @@ function quickActions(game) {
   const fav = h('button.btn', { type: 'button', 'aria-pressed': String(game.favorite), onclick: () => change({ favorite: !game.favorite }) });
   favLabel(fav, game.favorite);
   async function change(patch) {
-    try { await patchGame(game.id, patch); } catch { toast('Could not save the change'); }
+    try { await patchGame(game.id, patch); } catch { toastError('save the change'); }
     sel.value = game.status;
     favLabel(fav, game.favorite);
     fav.setAttribute('aria-pressed', String(game.favorite));
@@ -101,7 +101,7 @@ export function openDrawer(game, opts = {}) {
   ];
 
   const ttb = ttbSection(game);
-  const title = h('h2', {}, game.title);
+  const title = h('h2', { translate: 'no' }, game.title);
   const readView = h('div.readview', {},
     h('dl.facts', {},
       fact('Platforms', game.platforms),
@@ -148,7 +148,7 @@ export function openDrawer(game, opts = {}) {
       await deleteGame(game.id);
       closeDrawer();
       toast(`Deleted “${game.title}”`);
-    } catch { toast('Could not delete the game'); }
+    } catch { toastError('delete the game'); }
   }
 
   // ---------------------------------------------------------------- edit mode
@@ -184,7 +184,7 @@ export function openDrawer(game, opts = {}) {
         h('div.frow.col', {}, h('span.flabel', {}, 'Notes'), notesField(f)),
         linked,
         h('div.frow.col', {},
-          h('button.btn', { type: 'button', onclick: fill }, 'Fill from IGDB…'),
+          h('button.btn', { type: 'button', onclick: fill }, 'Fill from ', brand('IGDB'), '…'),
           h('p.hint', {}, 'Looks the game up on IGDB and replaces its genres, themes, developer, series and release year. Platforms, notes and ownership are kept.'))));
     }
 
@@ -212,7 +212,7 @@ export function openDrawer(game, opts = {}) {
       } catch (e) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
-        toast(e.status === 409 ? 'Another game in your library is already linked to that IGDB match.' : 'Could not save the changes.');
+        if (e.status === 409) toast('Another game in your library is already linked to that IGDB match.'); else toastError('save the changes');
       }
     }
 

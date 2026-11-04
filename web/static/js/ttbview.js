@@ -1,6 +1,6 @@
 // The "Time to beat" block of the game drawer: three tiles, a source note, typed edits and the HowLongToBeat picker.
 // The formatting and parsing live in ttb.js (pure, unit-tested); this file only builds the DOM.
-import { h, toast, NO_AUTOCORRECT } from './util.js';
+import { h, toast, NO_AUTOCORRECT, toastError, brand } from './util.js';
 import { patchGame, hltbSearch } from './api.js';
 import { TTB_KINDS, ttbTiles, hasTimes, ttbSourceNote, parseTime, timeInputValue, hltbPatch, formatTime } from './ttb.js';
 
@@ -25,7 +25,7 @@ export function ttbSection(game) {
     const known = hasTimes(game);
     const actions = h('div.ttb-actions', {},
       h('button.btn', { type: 'button', onclick: () => go('edit') }, known ? '✎ Edit times' : '✎ Add times'),
-      h('button.btn', { type: 'button', 'data-act': 'hltb', onclick: () => go('hltb') }, 'Get from HowLongToBeat'));
+      h('button.btn', { type: 'button', 'data-act': 'hltb', onclick: () => go('hltb') }, 'Get from ', brand('HowLongToBeat')));
     return [heading(ttbSourceNote(game)), known ? tiles() : h('p.ttb-empty', {}, 'No time yet'), actions];
   }
 
@@ -107,7 +107,7 @@ export function ttbSection(game) {
       toast(message);
       go('view');
     } catch {
-      toast('Could not save the times');
+      toastError('save the times');
     } finally {
       root.removeAttribute('aria-busy');
     }

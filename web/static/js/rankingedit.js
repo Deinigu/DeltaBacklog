@@ -1,7 +1,7 @@
 // The ranking editor (#/rankings/<id>): a dark TierMaker-style board of tiers with big poster tiles, and the pool of
 // games that are not ranked yet. Games move by dragging (touch: press and hold), or with a tap to select and the
 // buttons of the selection bar, or with the keyboard. Everything is saved through the save queue.
-import { h, toast, toastAction, gradientFor, initials, icon, promptDialog, confirmDialog } from './util.js';
+import { h, toast, toastAction, gradientFor, initials, icon, promptDialog, confirmDialog, toastError, loadErrorBox, emptyBox } from './util.js';
 import { openLayer } from './layers.js';
 import {
   store, coverURL, posterURL, getRanking, patchRanking, deleteRanking, duplicateRanking, addRankingTier, deleteRankingTier,
@@ -43,7 +43,7 @@ export function renderRanking(root, id) {
 
   // ---------- loading ----------
   async function load() {
-    // First load, or Retry on the error panel: show "Loading…". A reload keeps the board in place but not editable until the fresh one is drawn.
+    // First load, or Try again on the error panel: show "Loading…". A reload keeps the board in place but not editable until the fresh one is drawn.
     if (!board || errorShown) page.replaceChildren(h('p.hint', {}, 'Loading…')); else page.inert = true;
     errorShown = false;
     try {
@@ -58,8 +58,8 @@ export function renderRanking(root, id) {
     } catch (e) {
       if (!alive) return;
       page.inert = false; errorShown = true;
-      if (e.status === 404) { page.replaceChildren(h('div.empty', {}, 'This ranking does not exist (any more). ', h('a.btn', { href: '#/rankings' }, 'Back to the rankings'))); return; }
-      page.replaceChildren(h('div.empty', {}, 'Could not load the ranking. ', h('button.btn', { type: 'button', onclick: load }, 'Retry')));
+      if (e.status === 404) { page.replaceChildren(emptyBox('This ranking does not exist (any more).', h('a.btn', { href: '#/rankings' }, 'Back to the rankings'))); return; }
+      page.replaceChildren(loadErrorBox('the ranking', load));
     }
   }
 
@@ -237,7 +237,7 @@ export function renderRanking(root, id) {
         const tier = was && board.tiers.some((t) => t.id === was.tier) ? was.tier : null; // its tier may be gone since
         board = place(addGames(board, [gid]), gid, tier, was && tier === was.tier ? was.index : Infinity);
         drawBoard(); queue.change();
-      } catch { toast('Could not bring it back'); }
+      } catch { toastError('bring it back'); }
     });
   }
 
@@ -291,7 +291,7 @@ export function renderRanking(root, id) {
       drawBoard();
       queue.change();
       openTierSheet(t.id, true);
-    } catch { toast('Could not add the tier'); }
+    } catch { toastError('add the tier'); }
   }
   async function addPreset() {
     try {
@@ -299,7 +299,7 @@ export function renderRanking(root, id) {
       drawBoard();
       queue.change();
       say('Tiers S to F added');
-    } catch { toast('Could not add all the tiers'); drawBoard(); }
+    } catch { toastError('add all the tiers'); drawBoard(); }
   }
   async function deleteTierClicked(t) {
     closeSheet();
@@ -313,7 +313,7 @@ export function renderRanking(root, id) {
         board = restoreTier(board, removed, nt.id);
         drawBoard();
         queue.change();
-      } catch { toast('Could not bring the tier back'); }
+      } catch { toastError('bring the tier back'); }
     }, 8000);
   }
   async function duplicateTierClicked(t) {
@@ -324,7 +324,7 @@ export function renderRanking(root, id) {
       drawBoard();
       queue.change();
       paintSheet?.();
-    } catch { toast('Could not duplicate the tier'); }
+    } catch { toastError('duplicate the tier'); }
   }
 
   // ---------- sheets (tier settings, ranking menu) ----------
@@ -417,19 +417,19 @@ export function renderRanking(root, id) {
   async function renameRanking() {
     const name = await promptDialog({ title: 'Rename the ranking', value: ranking.name });
     if (!name || name === ranking.name || !alive) return;
-    try { await patchRanking(id, { name }); ranking.name = name; drawHead(); } catch { toast('Could not rename'); }
+    try { await patchRanking(id, { name }); ranking.name = name; drawHead(); } catch { toastError('rename'); }
   }
   async function editDescription() {
     const d = await promptDialog({ title: 'Description', value: ranking.description || '', placeholder: 'What is this ranking about?', multiline: true, maxlength: 500, allowEmpty: true });
     if (d == null || !alive) return;
-    try { await patchRanking(id, { description: d }); ranking.description = d || null; drawHead(); } catch { toast('Could not save the description'); }
+    try { await patchRanking(id, { description: d }); ranking.description = d || null; drawHead(); } catch { toastError('save the description'); }
   }
   async function duplicateClicked() {
-    try { await queue.flush(); const copy = await duplicateRanking(id); toast('Duplicated'); location.hash = `#/rankings/${copy.id}`; } catch { toast('Could not duplicate'); }
+    try { await queue.flush(); const copy = await duplicateRanking(id); toast('Duplicated'); location.hash = `#/rankings/${copy.id}`; } catch { toastError('duplicate'); }
   }
   async function deleteClicked() {
     if (!await confirmDialog({ title: `Delete “${ranking.name}”?`, message: 'The games stay in your library; only this ranking is deleted.' })) return;
-    try { await deleteRanking(id); alive = false; board = null; location.hash = '#/rankings'; } catch { toast('Could not delete'); }
+    try { await deleteRanking(id); alive = false; board = null; location.hash = '#/rankings'; } catch { toastError('delete'); }
   }
 
   // ---------- adding games, export ----------
@@ -442,11 +442,11 @@ export function renderRanking(root, id) {
       drawBoard();
       toast(`${res.added.length} game${res.added.length === 1 ? '' : 's'} added to “Not ranked”`);
       pollPosters();
-    } catch { toast('Could not add the games'); }
+    } catch { toastError('add the games'); }
   }
   async function exportClicked(btn) {
     btn.disabled = true;
-    try { await exportRankingPNG({ name: ranking.name, board, byId: store.byId }); } catch (e) { toast(/too many/.test(e?.message) ? 'Too many ranked games for one picture' : 'Could not make the image'); } finally { btn.disabled = false; }
+    try { await exportRankingPNG({ name: ranking.name, board, byId: store.byId }); } catch (e) { if (/too many/.test(e?.message)) toast('Too many ranked games for one picture'); else toastError('make the image'); } finally { btn.disabled = false; }
   }
 
   // ---------- page chrome ----------

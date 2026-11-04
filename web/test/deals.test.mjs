@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatMoney, formatDate, badgeOf, buildDeals, oldestCheck, safeLink, priceLine, priceOf, matchOf, isWatched, scopeOf, hiddenGames } from '../static/js/deals.js';
+import { formatDate } from '../static/js/format.js';
+import { formatMoney, badgeOf, buildDeals, oldestCheck, safeLink, priceLine, priceOf, matchOf, isWatched, scopeOf, hiddenGames } from '../static/js/deals.js';
 
 let n = 0;
 const game = (title, status = 'backlog') => ({ id: ++n, title, status });

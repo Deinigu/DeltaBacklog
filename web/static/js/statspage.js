@@ -2,6 +2,7 @@
 // All numbers come from stats.js (pure); this file only draws them. Every hour figure is an estimate and says how many games it rests on.
 import { h, plural } from './util.js';
 import { store } from './api.js';
+import { formatNumber } from './format.js';
 import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import {
@@ -18,7 +19,7 @@ function svg(tag, attrs, ...children) {
 }
 
 const statusLabel = (key) => store.statusByCode.get(key)?.label ?? key;
-const num = (n) => n.toLocaleString();
+const num = formatNumber;
 const HOURS_KEY = 'deltabacklog.statsHoursPerWeek';
 
 /** A card with a heading and an optional one-line explanation. `id` is the jump target; `wide` spans both columns on a desktop. */

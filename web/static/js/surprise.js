@@ -1,6 +1,6 @@
 // "Surprise me": a sheet that narrows the games a Library or view shows by mood, then deals one at random.
 // The rules and the randomness live in pick.js (pure, tested); this file is only the sheet.
-import { h, toast, gradientFor, initials, lazyImg } from './util.js';
+import { h, toast, gradientFor, initials, lazyImg, toastError } from './util.js';
 import { store, coverURL, patchGame } from './api.js';
 import { makeSheet } from './add.js';
 import { playedBadges, playedSummary } from './years.js';
@@ -147,6 +147,6 @@ export function openSurprise(state) {
     const status = playTarget(g.status);
     if (g.status === status) { toast(`${g.title} is already being played`); return; }
     try { await patchGame(g.id, { status }); toast(`Enjoy ${g.title}!`); }
-    catch { toast('Could not mark it as Playing'); }
+    catch { toastError('mark it as Playing'); }
   }
 }
