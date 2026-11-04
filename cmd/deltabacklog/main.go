@@ -122,7 +122,7 @@ func main() {
 			"       deltabacklog backup-screenshots [--min-free-gb N] <dir>  copy screenshots missing from <dir> (never deletes)\n"+
 			"       deltabacklog check <file>          verify a database or backup\n"+
 			"       deltabacklog sync-igdb [--dry-run] link games to IGDB\n"+
-			"       deltabacklog deals-check           read the prices and send the price alerts (the daily timer)\n"+
+			"       deltabacklog deals-check           read the prices and send the price alerts (the 6-hourly timer)\n"+
 			"       deltabacklog fetch-posters [--dry-run] [--limit N] [--upgrade]  make the portrait posters of the rankings\n")
 		if os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
 			return
@@ -150,7 +150,7 @@ func main() {
 		os.Exit(posters.Main(os.Args[2:], filepath.Join(dataDir, "app.db"), filepath.Join(dataDir, "covers"), mc, srv.PosterHostAllowed, os.Stdout))
 	}
 
-	// `deltabacklog deals-check`: refresh the Deals prices and send the price alerts (the daily timer; see the developer manual).
+	// `deltabacklog deals-check`: refresh the Deals prices and send the price alerts (the timer that runs every 6 hours; see the developer manual).
 	if len(os.Args) > 1 && os.Args[1] == "deals-check" {
 		os.Exit(runDealsCheck(filepath.Join(dataDir, "app.db"), deals.New(os.Getenv("ITAD_API_KEY")), steamFromEnv(filepath.Join(dataDir, "covers")), telegramFromEnv(), os.Stdout))
 	}

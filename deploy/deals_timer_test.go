@@ -35,7 +35,7 @@ func TestMergeSettingsKeepsTelegram(t *testing.T) {
 	}
 }
 
-// The daily price check is shipped, installed and enabled like the nightly backup, and runs as the service user with the
+// The price check (every 6 hours) is shipped, installed and enabled like the nightly backup, and runs as the service user with the
 // same settings file.
 func TestDealsTimerIsInstalled(t *testing.T) {
 	read := func(name string) string {
@@ -51,7 +51,7 @@ func TestDealsTimerIsInstalled(t *testing.T) {
 			t.Errorf("service lacks %q", want)
 		}
 	}
-	for _, want := range []string{"OnCalendar=*-*-*", "Persistent=true", "RandomizedDelaySec=", "WantedBy=timers.target"} {
+	for _, want := range []string{"OnCalendar=*-*-* 02,08,14,20:00:00", "Persistent=true", "RandomizedDelaySec=15min", "WantedBy=timers.target"} {
 		if !strings.Contains(timer, want) {
 			t.Errorf("timer lacks %q", want)
 		}

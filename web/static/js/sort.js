@@ -1,6 +1,6 @@
 // Multi-level sorting and group-by, shared by every view.
 import { h, icon } from './util.js';
-import { openLayer } from './layers.js';
+import { createSheet } from './filtershell.js';
 import { store } from './api.js';
 import { ownershipLabel } from './ownership.js';
 import { ttbMinutes } from './ttb.js';
@@ -113,38 +113,16 @@ export function createSortSheet(state, onChange) {
     h('option', { value: '' }, 'No grouping'),
     Object.entries(GROUP_FIELDS).map(([k, v]) => h('option', { value: k }, v.label)));
 
-  const scrim = h('div.scrim', { onclick: () => toggle(false) });
-  const sheet = h('div.sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Sort and group', inert: true },
-    h('div.filters-head', {}, h('span', {}, 'Sort & group'), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: () => toggle(false) }, '✕')),
-    h('div.filters-body', {},
+  // Closed, the sheet is only moved off screen: `inert` keeps Tab and screen readers out of it (see createSheet).
+  const { el, toggle } = createSheet({ label: 'Sort and group', title: 'Sort & group',
+    body: [
       h('p.hint', {}, 'Games are sorted by the first level; ties fall through to the next.'),
       list,
       h('button.btn.add-level', { type: 'button', onclick: addLevel }, icon('add'), 'Add level'),
-      h('div.group-by', {}, h('label', {}, 'Group by'), groupSel)),
-    h('div.filters-foot', {},
+      h('div.group-by', {}, h('label', {}, 'Group by'), groupSel)],
+    foot: (close) => [
       h('button.btn', { type: 'button', onclick: () => { state.sorts = []; state.group = ''; render(); onChange(); } }, 'Reset'),
-      h('button.btn.primary', { type: 'button', onclick: () => toggle(false) }, 'Done')));
-
-  // Closed, the sheet is only moved off screen: `inert` keeps Tab and screen readers out of it.
-  let release = null;
-  const onKey = (e) => {
-    if (!sheet.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (e.key === 'Escape' && !document.querySelector('.dialog')) toggle(false);
-  };
-  function toggle(on) {
-    if (on === sheet.classList.contains('open')) return;
-    sheet.classList.toggle('open', on);
-    scrim.classList.toggle('show', on);
-    if (on) {
-      sheet.inert = false;
-      document.addEventListener('keydown', onKey);
-      release = openLayer(sheet, { requestClose: () => toggle(false) });
-    } else {
-      document.removeEventListener('keydown', onKey);
-      release?.(); release = null;
-      sheet.inert = true;
-    }
-  }
+      h('button.btn.primary', { type: 'button', onclick: close }, 'Done')] });
 
   function addLevel() {
     if (!state.sorts.length) state.sorts = DEFAULT_SORT.map((l) => ({ ...l }));
@@ -178,5 +156,5 @@ export function createSortSheet(state, onChange) {
   function remove(i) { own(); state.sorts.splice(i, 1); render(); onChange(); }
 
   render();
-  return { el: [scrim, sheet], open: () => { render(); toggle(true); }, render };
+  return { el, open: () => { render(); toggle(true); }, render };
 }

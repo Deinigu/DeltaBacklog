@@ -3,6 +3,7 @@
 // Pure (no DOM): unit-tested. Amounts are cents of the price's own currency; they are only formatted when shown.
 
 import { LOCALE, noSept, formatDate } from './format.js'; // dates and numbers are written the same way on every page
+import { norm } from './util.js';
 export const NEAR_LOW = 0.10; // "near the historical low": within 10% of it
 /** The statuses Deals can cover (a game also has to be unowned and unplayed: the server's rule), in the order of the filter chips. */
 export const DEAL_STATUSES = [
@@ -135,25 +136,167 @@ export function lowLine(p) {
   return `Lowest ${formatMoney(p.low_price, p.currency)}${p.low_shop ? ` · ${p.low_shop}` : ''}`;
 }
 
+// ---------------- the filters ----------------
+// The filter state of the page (shared by the Library and Wishlist views; a few filters only make sense for one):
+//   q        title search (normalised words, all must be in the title)
+//   statuses Set of status codes (library only; empty = all)
+//   sale     only games on sale now
+//   minCut   minimum discount in percent: 0 (any), 25, 50 or 75
+//   maxPrice most the price may be, in whole units of the shop's currency: 0 (any), 5, 10, 20 or 40
+//   lows     Set of 'historical' | 'two_year' | 'near': the low types to keep
+//   alerts   only games with a standing price alert
+//   stores   Set of shop names
+//   ends     only deals that end within 3 days
+//   added    wishlist only: added in the last 30 days
+export const MIN_CUTS = [25, 50, 75];
+export const MAX_PRICES = [5, 10, 20, 40];
+export const LOW_TYPES = [
+  { key: 'historical', label: 'Historical low' },
+  { key: 'two_year', label: 'Lowest in 2 years' },
+  { key: 'near', label: 'Near low' },
+];
+export const ENDS_DAYS = 3;
+export const ADDED_DAYS = 30;
+const DAY = 24 * 3600 * 1000;
+const MAX_STORE_FILTER = 30;
+
+export function emptyDealsFilter() {
+  return { q: '', statuses: new Set(), sale: false, minCut: 0, maxPrice: 0, lows: new Set(), alerts: false, stores: new Set(), ends: false, added: false };
+}
+
+/** The low types a row belongs to: at the historical low (badge or alert), the lowest in 2 years (alert), or near the low (badge). */
+export function lowKindsOf(row) {
+  const kinds = new Set();
+  if (row.badge === 'low' || row.alert?.kind === 'historical') kinds.add('historical');
+  if (row.alert?.kind === 'two_year') kinds.add('two_year');
+  if (row.badge === 'near') kinds.add('near');
+  return kinds;
+}
+
+/** Whether the deal ends in the next `days` days (not already over); false without a price or an end date. */
+export function endsWithin(p, now, days = ENDS_DAYS) {
+  if (!p || p.price == null || !p.expiry) return false;
+  const t = Date.parse(p.expiry);
+  return Number.isFinite(t) && t >= now.getTime() && t <= now.getTime() + days * DAY;
+}
+
+const titleOfRow = (row) => row.game?.title ?? row.item?.title ?? '';
+/** Whether a title has every word of the search. */
+export const titleMatches = (q, title) => !q || norm(q).split(/\s+/).filter(Boolean).every((w) => norm(title).includes(w));
+
+/**
+ * Whether a row (with `p`, `badge`, `alert` and a `game` or an `item`) passes the filters. `skip` ignores one filter (for the counts
+ * of its own chips): 'sale' | 'minCut' | 'maxPrice' | 'lows' | 'alerts' | 'stores' | 'ends' | 'added'.
+ */
+export function rowPasses(f, row, now = new Date(), skip = '') {
+  const p = row.p;
+  if (!titleMatches(f.q, titleOfRow(row))) return false;
+  if (f.statuses.size && row.game && !f.statuses.has(row.game.status)) return false;
+  const on = (k) => skip !== k;
+  if (on('sale') && f.sale && !(p.price != null && p.cut > 0)) return false;
+  if (on('minCut') && f.minCut && !(p.price != null && (p.cut ?? 0) >= f.minCut)) return false;
+  if (on('maxPrice') && f.maxPrice && !(p.price != null && p.price <= f.maxPrice * 100)) return false;
+  if (on('lows') && f.lows.size && ![...lowKindsOf(row)].some((k) => f.lows.has(k))) return false;
+  if (on('alerts') && f.alerts && !row.alert) return false;
+  if (on('stores') && f.stores.size && !(p.price != null && f.stores.has(p.shop))) return false;
+  if (on('ends') && f.ends && !endsWithin(p, now)) return false;
+  if (on('added') && f.added) {
+    const t = Date.parse(row.item?.added_at);
+    if (!(Number.isFinite(t) && t <= now.getTime() + DAY && t >= now.getTime() - ADDED_DAYS * DAY)) return false;
+  }
+  return true;
+}
+
+/** Whether a filter only a price can pass is on (games without a price are then left out of the other sections too). */
+export function priceFilterActive(f, wishlist = false) {
+  return f.sale || f.minCut > 0 || f.maxPrice > 0 || f.lows.size > 0 || f.alerts || f.stores.size > 0 || f.ends || (wishlist && f.added);
+}
+
+/** How many filters are on (the badge on the Filters button; the search is not one of them). */
+export function dealsFilterCount(f, wishlist = false) {
+  return (wishlist ? 0 : f.statuses.size) + (f.sale ? 1 : 0) + (f.minCut ? 1 : 0) + (f.maxPrice ? 1 : 0) + f.lows.size + (f.alerts ? 1 : 0) + f.stores.size + (f.ends ? 1 : 0) + (wishlist && f.added ? 1 : 0);
+}
+
+/** The shops of the rows, most games first (then by name), with how many rows each has. */
+export function storesOf(rows) {
+  const tally = new Map();
+  for (const r of rows) if (r.p?.price != null && r.p.shop) tally.set(r.p.shop, (tally.get(r.p.shop) || 0) + 1);
+  return [...tally].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
+}
+
+// ---- the address: #/deals?view=wishlist&q=zelda&status=backlog&sale=1&min=50&max=10&low=historical,near&alerts=1&store=Steam&ends=1&added=1&sort=price&dir=-1 ----
+const LOW_KEYS = new Set(LOW_TYPES.map((l) => l.key));
+const STATUS_CODES = new Set(DEAL_STATUSES.map((s) => s.code));
+const csv = (v) => (v || '').split(',').map((x) => x.trim()).filter(Boolean);
+
+/** The page state of an address query: {view, filter, sort, dir}. Anything unknown or out of range is dropped. */
+export function dealsStateFromQuery(search) {
+  const qs = new URLSearchParams(search || '');
+  const f = emptyDealsFilter();
+  f.q = norm(qs.get('q') || '').trim().slice(0, 100);
+  for (const s of csv(qs.get('status'))) if (STATUS_CODES.has(s)) f.statuses.add(s);
+  f.sale = qs.get('sale') === '1';
+  const min = Number(qs.get('min'));
+  if (MIN_CUTS.includes(min)) f.minCut = min;
+  const max = Number(qs.get('max'));
+  if (MAX_PRICES.includes(max)) f.maxPrice = max;
+  for (const l of csv(qs.get('low'))) if (LOW_KEYS.has(l)) f.lows.add(l);
+  f.alerts = qs.get('alerts') === '1';
+  // A shop name may hold a comma, so every shop is its own store= parameter.
+  for (const s of qs.getAll('store')) if (s && s.length <= 60 && f.stores.size < MAX_STORE_FILTER) f.stores.add(s);
+  f.ends = qs.get('ends') === '1';
+  f.added = qs.get('added') === '1';
+  const sort = SORT_KEYS.some((k) => k.key === qs.get('sort')) ? qs.get('sort') : 'cut';
+  return { view: qs.get('view') === 'wishlist' ? 'wishlist' : 'library', filter: f, sort, dir: qs.get('dir') === '-1' ? -1 : 1 };
+}
+
+/** The address query of a page state (only what differs from the default); '' for the default page. */
+export function dealsStateToQuery({ view = 'library', filter: f, sort = 'cut', dir = 1 }) {
+  const qs = new URLSearchParams();
+  if (view === 'wishlist') qs.set('view', 'wishlist');
+  if (f.q) qs.set('q', f.q);
+  if (f.statuses.size) qs.set('status', DEAL_STATUSES.map((s) => s.code).filter((c) => f.statuses.has(c)).join(','));
+  if (f.sale) qs.set('sale', '1');
+  if (f.minCut) qs.set('min', f.minCut);
+  if (f.maxPrice) qs.set('max', f.maxPrice);
+  if (f.lows.size) qs.set('low', LOW_TYPES.map((l) => l.key).filter((k) => f.lows.has(k)).join(','));
+  if (f.alerts) qs.set('alerts', '1');
+  for (const s of [...f.stores].sort()) qs.append('store', s);
+  if (f.ends) qs.set('ends', '1');
+  if (f.added) qs.set('added', '1');
+  if (sort !== 'cut') qs.set('sort', sort);
+  if (dir === -1) qs.set('dir', '-1');
+  return qs.toString();
+}
+
 /**
  * What the Deals page lists.
  *  games    the library (store.games); info  the server's answer {matches, prices, watched}
- *  statuses a Set of status codes to show (empty or null = all); sort a SORTS key; alertsOnly keeps the games with a standing price alert
+ *  filter   a deals filter (see emptyDealsFilter); statuses (a Set of status codes) and alertsOnly are the older spelling of two of them
+ *  sort a SORT_KEYS key; now is the time "ends within" is counted from
  * Returns {rows, unmatched, waiting}: rows are games with a cached price (a row has `p`, the price, and `badge`), unmatched
- * are games ITAD has no match for, waiting are matched games whose prices have not been read yet.
+ * are games ITAD has no match for, waiting are matched games whose prices have not been read yet. A filter only a price can
+ * pass leaves the last two out.
  */
-export function buildDeals(games, info, { statuses = null, sort = 'cut', dir = 1, alertsOnly = false } = {}) {
+export function buildDeals(games, info, { filter = null, statuses = null, sort = 'cut', dir = 1, alertsOnly = false, now = new Date() } = {}) {
+  const f = { ...emptyDealsFilter(), ...filter };
+  if (statuses && statuses.size) f.statuses = new Set(statuses);
+  if (alertsOnly) f.alerts = true;
+  f.added = false; // only a wishlist game has an added date
   const prices = new Map((info?.prices || []).map((p) => [p.game_id, p]));
   const matches = new Map((info?.matches || []).map((m) => [m.game_id, m]));
   const alerts = new Map((info?.alerts || []).map((a) => [a.game_id, a]));
   const scope = scopeOf(info);
-  const want = new Set(statuses && statuses.size ? statuses : DEAL_STATUSES.map((s) => s.code));
+  const want = new Set(f.statuses.size ? f.statuses : DEAL_STATUSES.map((s) => s.code));
+  const priceOnly = priceFilterActive(f);
   const rows = [], unmatched = [], waiting = [];
   for (const game of games) {
     if (!scope.has(game.id) || !want.has(game.status) || !DEAL_STATUSES.some((s) => s.code === game.status)) continue;
     const p = prices.get(game.id), m = matches.get(game.id), alert = alerts.get(game.id) || null;
-    if (alertsOnly && !(p && alert)) continue;
-    if (p) rows.push({ game, p, match: m || null, badge: badgeOf(p), alert });
+    if (p) {
+      const row = { game, p, match: m || null, badge: badgeOf(p), alert };
+      if (rowPasses(f, row, now)) rows.push(row);
+    } else if (priceOnly || !titleMatches(f.q, game.title)) continue;
     else if (m && !m.itad_id) unmatched.push({ game, match: m });
     else if (m) waiting.push({ game, match: m });
   }
@@ -166,16 +309,21 @@ export function buildDeals(games, info, { statuses = null, sort = 'cut', dir = 1
 
 /**
  * What the Wishlist section lists: the Steam wishlist games (info.wishlist.items; the server already left out hidden ones and
- * the ones that are in the library). Same sorts and badges as the library rows. Returns {rows, unmatched, waiting}: rows have
- * `item`, `p` (the price), `badge` and `alert`; unmatched are games ITAD does not know, waiting are games whose prices have not
- * been read yet. alertsOnly keeps the games with a standing price alert.
+ * the ones that are in the library). Same filters, sorts and badges as the library rows. Returns {rows, unmatched, waiting}: rows
+ * have `item`, `p` (the price), `badge` and `alert`; unmatched are games ITAD does not know, waiting are games whose prices
+ * have not been read yet. `alertsOnly` is the older spelling of the alerts filter.
  */
-export function buildWishlist(info, { sort = 'cut', dir = 1, alertsOnly = false } = {}) {
+export function buildWishlist(info, { filter = null, sort = 'cut', dir = 1, alertsOnly = false, now = new Date() } = {}) {
+  const f = { ...emptyDealsFilter(), ...filter, statuses: new Set() }; // a wishlist game has no status
+  if (alertsOnly) f.alerts = true;
+  const priceOnly = priceFilterActive(f, true);
   const rows = [], unmatched = [], waiting = [];
   for (const item of info?.wishlist?.items || []) {
     const p = item.price, alert = item.alert || null;
-    if (alertsOnly && !(p && alert)) continue;
-    if (p) rows.push({ item, p, badge: badgeOf(p), alert });
+    if (p) {
+      const row = { item, p, badge: badgeOf(p), alert };
+      if (rowPasses(f, row, now)) rows.push(row);
+    } else if (priceOnly || !titleMatches(f.q, item.title)) continue;
     else if (item.matched && !item.itad_id) unmatched.push({ item });
     else waiting.push({ item });
   }
