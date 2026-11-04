@@ -1112,6 +1112,7 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dl-tags { display: flex; gap: 4px; overflow: hidden; }
 .dl-tag { flex: none; font-size: 12px; font-weight: 700; line-height: 16px; padding: 0 6px; border-radius: 4px; white-space: nowrap; border: 1px solid transparent; }
+@media (max-width: 599px) { .dl-tag { font-size: 11px; } }
 .dl-tag.low { background: #4c6b22; color: #beee11; }
 .dl-tag.near { border-color: var(--accent); color: var(--accent); }
 .dl-tag.alert { background: #b45309; color: #fff; }

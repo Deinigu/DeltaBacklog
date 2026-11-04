@@ -51,7 +51,7 @@ func TestDealsTimerIsInstalled(t *testing.T) {
 			t.Errorf("service lacks %q", want)
 		}
 	}
-	for _, want := range []string{"OnCalendar=*-*-*", "Persistent=true", "RandomizedDelaySec=", "WantedBy=timers.target"} {
+	for _, want := range []string{"OnCalendar=*-*-* 02,08,14,20:00:00", "Persistent=true", "RandomizedDelaySec=15min", "WantedBy=timers.target"} {
 		if !strings.Contains(timer, want) {
 			t.Errorf("timer lacks %q", want)
 		}
