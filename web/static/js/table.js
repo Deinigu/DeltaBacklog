@@ -1,6 +1,7 @@
 // Excel-like table: sticky header and title column, resizable and hideable columns, sortable headers,
 // inline editing, windowed rendering (only the visible rows exist in the DOM), CSV export.
 import { h, toast } from './util.js';
+import { openLayer } from './layers.js';
 import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
 import { toCSV } from './csv.js';
@@ -312,13 +313,16 @@ export function renderTable(ctx) {
       btn.dataset.state = hidden.has(c.key) && c.key !== 'title' ? 'off' : 'in';
       return btn;
     }));
-    const sheet = h('div.sheet.open', { role: 'dialog', 'aria-label': 'Columns' },
+    const sheet = h('div.sheet.open', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Columns' },
       h('div.filters-head', {}, h('span', {}, 'Columns'), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: close }, '✕')),
       h('div.filters-body', {}, h('p.hint', {}, 'Choose which columns the table shows. Drag the edge of a column header to resize it.'), chips),
       h('div.filters-foot', {}, h('button.btn', { type: 'button', onclick: () => { hidden.clear(); DEFAULT_HIDDEN.forEach((k) => hidden.add(k)); Object.keys(widths).forEach((k) => delete widths[k]); save('tbl-hidden', [...hidden]); save('tbl-widths', {}); close(); changed(); } }, 'Defaults'), h('button.btn.primary', { type: 'button', onclick: close }, 'Done')));
     sheet.style.zIndex = 96;
-    function close() { scrim.remove(); sheet.remove(); }
+    function close() { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); release(); }
+    const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.dialog')) close(); };
+    document.addEventListener('keydown', onKey);
     document.body.append(scrim, sheet);
+    const release = openLayer(sheet, { requestClose: close });
   }
 
   wrap.exportCSV = () => {

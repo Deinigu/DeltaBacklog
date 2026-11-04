@@ -1,6 +1,7 @@
 // "Add games" sheet for the rankings: search and filter the whole library (the same filters as the Library page), tick
 // games one by one or all the matches at once, and add them. Resolves to the picked game ids, or null when cancelled.
-import { h, norm, icon, debounce, gradientFor, initials, lazyImg } from './util.js';
+import { h, norm, icon, debounce, gradientFor, initials, lazyImg, NO_AUTOCORRECT } from './util.js';
+import { openLayer } from './layers.js';
 import { store, coverURL, posterURL } from './api.js';
 import { GROUPS, FLAGS, emptyState, matches, cycle, chipState, activeCount } from './filters.js';
 import { createTtbFilter } from './ttbfilter.js';
@@ -27,7 +28,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     const label = (grp, v) => (grp.key === 'ownership' ? ownershipLabel(v) : null) ?? (grp.key === 'status' ? store.statusByCode.get(v)?.label : null)
       ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
 
-    const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search games' });
+    const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', ...NO_AUTOCORRECT, enterkeyhint: 'search', 'aria-label': 'Search games' });
     const chipRefs = [];
     const groupEls = GROUPS.map((grp) => {
       const nSel = h('span.n');
@@ -125,7 +126,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     }
     input.addEventListener('input', debounce(() => { state.q = norm(input.value.trim()); update(); }, 90));
 
-    const finish = (value) => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); resolve(value); };
+    const finish = (value) => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); release(); resolve(value); };
     const scrim = h('div.scrim.show', { onclick: () => finish(null) });
     scrim.style.zIndex = 95;
     const sheet = h('div.sheet.open.picker', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -139,6 +140,7 @@ export function openGamePicker({ title = 'Add games', existing = new Set(), conf
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, sheet);
+    const release = openLayer(sheet, { requestClose: () => finish(null) });
     update();
     input.focus({ preventScroll: true });
   });

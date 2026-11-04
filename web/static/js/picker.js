@@ -1,5 +1,6 @@
 // Multi-select sheet: search, tick existing values, optionally add a new one. Used for the table's list cells.
 import { h, norm, icon } from './util.js';
+import { openLayer } from './layers.js';
 
 /**
  * opts: { title, options: string[], selected: string[], allowNew, label?: (v) => string, validate?: (text) => string|null }
@@ -12,7 +13,7 @@ export function pickMany({ title, options, selected, allowNew = true, label = (v
     const search = h('input', { type: 'search', placeholder: allowNew ? 'Search or add…' : 'Search…', autocomplete: 'off', enterkeyhint: 'done', 'aria-label': 'Search' });
     const list = h('div.pick-list');
 
-    const finish = (value) => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); resolve(value); };
+    const finish = (value) => { scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey); release(); resolve(value); };
     const done = () => {
       const next = [...chosen];
       const same = next.length === selected.length && next.every((v) => selected.includes(v));
@@ -49,6 +50,7 @@ export function pickMany({ title, options, selected, allowNew = true, label = (v
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, sheet);
+    const release = openLayer(sheet, { requestClose: () => finish(null) }); // Back cancels, like Escape
     draw();
     search.focus({ preventScroll: true });
   });

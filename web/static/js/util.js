@@ -1,4 +1,5 @@
 // Small DOM and string helpers shared by all views.
+import { openLayer } from './layers.js';
 
 /** h('div.card', {onclick}, child, 'text') -> HTMLElement */
 /** An empty state: one short sentence and, next to it, the button that fixes it (never a bare sentence). */
@@ -78,19 +79,46 @@ export function icon(name) {
   return s;
 }
 
-export function toast(msg, ms = 2600) {
-  const box = document.getElementById('toasts');
-  const t = h('div.toast', {}, msg);
-  box.append(t);
-  setTimeout(() => t.remove(), ms);
+/** For inputs that search game titles: a phone must not "correct" Celeste or Hades. */
+export const NO_AUTOCORRECT = { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' };
+
+/**
+ * The content of a link that opens in a new tab: its text, a decorative arrow and hidden "(opens in a new tab)".
+ * One element, so a flex parent (.btn has a gap) sees one item and the button does not grow.
+ */
+export const newTab = (label) => h('span', {}, label, h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)'));
+
+/** A glyph that is decoration (✎ ★) followed by its label, as one element for the same reason. */
+export const glyphLabel = (glyph, label) => h('span', {}, h('span', { 'aria-hidden': 'true' }, glyph), ` ${label}`);
+
+/** "1 game", "3 games". `many` defaults to `one` + "s". */
+export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+const ERROR_TOAST = /\b(could not|couldn't|can't|cannot|failed|went wrong|did not|didn't|not saved|not sent)\b/i;
+/** How long a toast stays: a message that reports a failure never less than 5 s, so it can be read (and acted on). */
+export const toastMs = (msg, ms) => (ERROR_TOAST.test(String(msg)) ? Math.max(ms ?? 0, 5000) : ms ?? 2600);
+
+/** Show `t` in the toast box for `ms`; hovering or focusing it holds it, and it then gets a short fresh time to be read. */
+function showToast(t, ms) {
+  let timer = 0;
+  const start = (n) => { clearTimeout(timer); timer = setTimeout(() => t.remove(), n); };
+  const hold = () => clearTimeout(timer);
+  t.addEventListener('mouseenter', hold);
+  t.addEventListener('focusin', hold);
+  t.addEventListener('mouseleave', () => start(Math.min(ms, 3000)));
+  t.addEventListener('focusout', () => start(Math.min(ms, 3000)));
+  document.getElementById('toasts').append(t);
+  start(ms);
+}
+
+export function toast(msg, ms) {
+  showToast(h('div.toast', {}, msg), toastMs(msg, ms));
 }
 
 /** A toast with one action button (for example Undo). onAction runs when it is tapped; the toast then closes. */
 export function toastAction(msg, label, onAction, ms = 6000) {
-  const box = document.getElementById('toasts');
   const t = h('div.toast', {}, msg, ' ', h('button.toast-action', { type: 'button', onclick: () => { t.remove(); onAction(); } }, label));
-  box.append(t);
-  setTimeout(() => t.remove(), ms);
+  showToast(t, toastMs(msg, ms));
   return t;
 }
 
@@ -99,7 +127,7 @@ export function askNameDialog({ title, name = '', icon: ic = '⭐', confirm = 'S
   return new Promise((resolve) => {
     const nameIn = h('input', { type: 'text', value: name, maxlength: '60', placeholder: 'e.g. Indie RPGs to play', 'aria-label': 'Name', required: true });
     const iconIn = h('input.icon-in', { type: 'text', value: ic, maxlength: '4', 'aria-label': 'Icon (emoji)' });
-    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); release(); resolve(v); };
     const form = h('form', { onsubmit: (e) => { e.preventDefault(); if (nameIn.value.trim()) done({ name: nameIn.value.trim(), icon: iconIn.value.trim() }); } },
       h('h2', {}, title),
       h('div.field-row', {}, iconIn, nameIn),
@@ -110,6 +138,7 @@ export function askNameDialog({ title, name = '', icon: ic = '⭐', confirm = 'S
     const onKey = (e) => { if (e.key === 'Escape') done(null); };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, box);
+    const release = openLayer(box, { requestClose: () => done(null) });
     nameIn.focus(); nameIn.select();
   });
 }
@@ -125,7 +154,7 @@ export function promptDialog({ title, value = '', placeholder = '', confirm = 'S
       : h('input', { type: 'text', maxlength: String(maxlength), placeholder, 'aria-label': title });
     input.value = value;
     input.classList.add('prompt-in');
-    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); release(); resolve(v); };
     const submit = () => { const t = input.value.trim(); if (t || allowEmpty) done(t); };
     const form = h('form', { onsubmit: (e) => { e.preventDefault(); submit(); } },
       h('h2', {}, title), input, extra,
@@ -136,6 +165,7 @@ export function promptDialog({ title, value = '', placeholder = '', confirm = 'S
     const onKey = (e) => { if (e.key === 'Escape') done(null); };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, box);
+    const release = openLayer(box, { requestClose: () => done(null) });
     input.focus(); input.select();
   });
 }
@@ -143,7 +173,7 @@ export function promptDialog({ title, value = '', placeholder = '', confirm = 'S
 /** Yes/no modal. Resolves true when confirmed. */
 export function confirmDialog({ title, message = '', confirm = 'Delete', danger = true }) {
   return new Promise((resolve) => {
-    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const done = (v) => { scrim.remove(); box.remove(); document.removeEventListener('keydown', onKey); release(); resolve(v); };
     const scrim = h('div.scrim.show', { onclick: () => done(false) });
     scrim.style.zIndex = 95;
     const box = h('div.dialog', { role: 'alertdialog', 'aria-modal': 'true', 'aria-label': title },
@@ -154,6 +184,7 @@ export function confirmDialog({ title, message = '', confirm = 'Delete', danger 
     const onKey = (e) => { if (e.key === 'Escape') done(false); };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, box);
+    const release = openLayer(box, { requestClose: () => done(false) });
     box.querySelector('.btn').focus();
   });
 }

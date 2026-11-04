@@ -1,6 +1,7 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
-import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab } from './util.js';
+import { openLayer } from './layers.js';
 import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsStores, dealsSetStores, dealsShops, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
   dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
 import { openDrawer } from './drawer.js';
@@ -138,9 +139,9 @@ export function renderDeals(root) {
     const link = p && p.price != null ? safeLink(p.url) : null;
     const act = (label, fn, cls = '') => h('button.dl-act' + cls, { type: 'button', onclick: () => { closeSheet(); fn(); } }, label);
     const actions = [
-      link ? h('a.dl-act', { href: link, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, 'View deal ↗') : null,
-      altLink ? h('a.dl-act', { href: altLink, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, `View at ${p.alt_shop} ↗`) : null,
-      ...o.actions.map((a) => (a.href ? h('a.dl-act', { href: a.href, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, a.label) : act(a.label, a.run))),
+      link ? h('a.dl-act', { href: link, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab('View deal')) : null,
+      altLink ? h('a.dl-act', { href: altLink, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(`View at ${p.alt_shop}`)) : null,
+      ...o.actions.map((a) => (a.href ? h('a.dl-act', { href: a.href, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(a.label.replace(/ ↗$/, ''))) : act(a.label, a.run))),
     ];
     const altLink = p && altLine(p) ? safeLink(p.alt_url) : null;
     const lines = p ? [priceLine(p), altLine(p) ? `Cheaper: ${altLine(p)}` : null, lowLine(p) + (p.low_at && p.low_price != null ? `, ${formatDate(p.low_at)}` : ''),
@@ -152,9 +153,11 @@ export function renderDeals(root) {
       h('div.dl-acts', {}, ...actions),
       h('button.dl-act.dl-close', { type: 'button', onclick: closeSheet }, 'Close'));
     dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); }); // a tap on the backdrop
-    dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; });
     document.body.append(dlg);
     sheetEl = dlg;
+    // A native modal <dialog> traps Tab and handles Escape itself; the layer adds Back and the scroll lock.
+    const release = openLayer(dlg, { requestClose: closeSheet, trap: false });
+    dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; release(); });
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
   }
 
@@ -302,7 +305,7 @@ export function renderDeals(root) {
     h('span' + (r.running ? '.spin' : ''), { 'aria-hidden': 'true' }, '↻'));
     const checked = r.running ? `Reading prices… ${r.total ? `${r.done}/${r.total}` : ''}` : old ? `checked ${checkedLabel(old)}` : 'not checked yet';
     const country = info.configured ? h('label.dl-country', {}, h('span.sr-only', {}, 'Country for prices'),
-      h('input', { value: info.country || 'ES', maxlength: 2, list: 'dl-countries', 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off', title: 'Country for prices',
+      h('input', { value: info.country || 'ES', maxlength: 2, autocapitalize: 'characters', list: 'dl-countries', 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off', title: 'Country for prices',
         onchange: (e) => saveCountry(e.target.value) }),
       h('datalist', { id: 'dl-countries' }, ['ES', 'US', 'GB', 'DE', 'FR', 'IT', 'PT', 'NL', 'PL', 'SE', 'BR', 'MX', 'CA', 'AU', 'JP'].map((c) => h('option', { value: c })))) : null;
     return h('div.dl-toolbar', {}, views, h('span.dl-check', {}, btn, h('span.dl-checked', {}, checked)), country,

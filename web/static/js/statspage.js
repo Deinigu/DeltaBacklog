@@ -1,6 +1,6 @@
 // The #/stats page: summary tiles, then cards for time spent, time left, years, outcomes, shortest wins, composition, series.
 // All numbers come from stats.js (pure); this file only draws them. Every hour figure is an estimate and says how many games it rests on.
-import { h } from './util.js';
+import { h, plural } from './util.js';
 import { store } from './api.js';
 import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
@@ -18,7 +18,6 @@ function svg(tag, attrs, ...children) {
 }
 
 const statusLabel = (key) => store.statusByCode.get(key)?.label ?? key;
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const num = (n) => n.toLocaleString();
 const HOURS_KEY = 'deltabacklog.statsHoursPerWeek';
 

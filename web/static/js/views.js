@@ -1,5 +1,5 @@
 // Manage saved views: open, rename, pin, reorder, duplicate, delete (with undo).
-import { h, emptyBox, toast, askNameDialog } from './util.js';
+import { h, emptyBox, toast, toastAction, askNameDialog } from './util.js';
 import { stateFromView } from './filters.js';
 import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
@@ -20,9 +20,7 @@ export function renderViews(root) {
   async function remove(v) {
     const copy = { name: v.name, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned };
     await guard(() => deleteView(v.id), 'Could not delete the view');
-    const t = h('div.toast', {}, `Deleted “${v.name}”  `, h('button.pill', { type: 'button', onclick: () => guard(async () => { await createView(copy); t.remove(); }, 'Could not restore') }, 'Undo'));
-    document.getElementById('toasts').append(t);
-    setTimeout(() => t.remove(), 6000);
+    toastAction(`Deleted “${v.name}”`, 'Undo', () => guard(() => createView(copy), 'Could not restore'));
   }
 
   function move(i, d) {
@@ -38,7 +36,7 @@ export function renderViews(root) {
       h('span.emoji', {}, v.icon || '⭐'),
       h('a.name', { href: `#/view/${v.id}`, style: 'text-decoration:none;color:inherit' }, v.name, h('small', {}, summary(v))),
       h('div.tools', {},
-        h('button.btn.pin', { type: 'button', 'aria-label': v.pinned ? 'Unpin from navigation' : 'Pin to navigation', 'aria-pressed': String(v.pinned), title: 'Pin to navigation', onclick: () => guard(() => updateView(v.id, { pinned: !v.pinned })) }, '📌'),
+        h('button.btn.pin', { type: 'button', 'aria-label': v.pinned ? 'Unpin from navigation' : 'Pin to navigation', 'aria-pressed': String(v.pinned), title: 'Pin to navigation', onclick: () => guard(() => updateView(v.id, { pinned: !v.pinned })) }, h('span', { 'aria-hidden': 'true' }, '📌')),
         h('button.btn', { type: 'button', 'aria-label': 'Move up', disabled: i === 0 || null, onclick: () => move(i, -1) }, '▲'),
         h('button.btn', { type: 'button', 'aria-label': 'Move down', disabled: i === store.views.length - 1 || null, onclick: () => move(i, 1) }, '▼'),
         h('button.btn', { type: 'button', 'aria-label': 'Rename', onclick: async () => {

@@ -170,7 +170,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 
 ## 7. Changing a game
 
-Tap a card to open the game.
+Tap a card to open the game. On a phone, the **Back** button or swipe closes whatever panel is open (a game, a filter or sort sheet, a dialog) instead of leaving the page; if you have unsaved edits it asks first.
 
 ![A game's details](img/game-phone.jpg)
 

@@ -2,6 +2,7 @@
 // It owns the frame: bar, picture, previous/next, swipe, keys, focus trap, the date/size line and the download button.
 // The callers add what differs: bar buttons, the foot (caption, move, game name...) and how to step.
 import { h } from './util.js';
+import { openLayer } from './layers.js';
 import { formatBytes, formatTaken, stepIndex } from './shots.js';
 
 const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg>';
@@ -69,7 +70,7 @@ export function openShotViewer(opts, start) {
     closed = true;
     document.removeEventListener('keydown', onKey);
     view.remove();
-    document.body.classList.remove('no-scroll');
+    release(); // also lifts the scroll lock
     opts.onClose?.(cur);
   }
 
@@ -107,8 +108,8 @@ export function openShotViewer(opts, start) {
   }, { passive: true });
 
   document.addEventListener('keydown', onKey);
-  document.body.classList.add('no-scroll');
   document.body.append(view);
+  const release = openLayer(view, { requestClose: close });
   show();
   view.focus({ preventScroll: true });
   return { close, show, index: () => cur };

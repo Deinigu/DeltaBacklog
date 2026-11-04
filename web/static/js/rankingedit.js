@@ -2,6 +2,7 @@
 // games that are not ranked yet. Games move by dragging (touch: press and hold), or with a tap to select and the
 // buttons of the selection bar, or with the keyboard. Everything is saved through the save queue.
 import { h, toast, toastAction, gradientFor, initials, icon, promptDialog, confirmDialog } from './util.js';
+import { openLayer } from './layers.js';
 import {
   store, coverURL, posterURL, getRanking, patchRanking, deleteRanking, duplicateRanking, addRankingTier, deleteRankingTier,
   addRankingGames, removeRankingGame, saveBoard, saveBoardKeepalive, applyPosters,
@@ -333,6 +334,7 @@ export function renderRanking(root, id) {
     if (!sheet) return;
     sheet.scrim.remove(); sheet.el.remove();
     document.removeEventListener('keydown', sheet.onKey);
+    sheet.release(false); // focus goes back to the opener below
     const back = sheet.opener;
     sheet = null; paintSheet = null;
     if (back?.isConnected) back.focus();
@@ -344,16 +346,11 @@ export function renderRanking(root, id) {
     scrim.style.zIndex = 95;
     el.style.zIndex = 96;
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return; }
-      if (e.key !== 'Tab') return;
-      const items = [...el.querySelectorAll('button:not([disabled]), input, textarea, a')];
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeSheet(); }
     };
     document.addEventListener('keydown', onKey);
     document.body.append(scrim, el);
-    sheet = { el, scrim, onKey, opener };
+    sheet = { el, scrim, onKey, opener, release: openLayer(el, { requestClose: closeSheet }) }; // Tab stays inside, Back closes it
   }
 
   function openTierSheet(tierId, fresh = false) {

@@ -2,7 +2,7 @@
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { createTtbFilter } from './ttbfilter.js';
 import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
-import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg } from './util.js';
+import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, NO_AUTOCORRECT } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -11,6 +11,7 @@ import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
+import { openLayer, replaceUrl } from './layers.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState, facetSignature,
@@ -45,13 +46,16 @@ export function renderLibrary(root, opts = {}) {
   const label = (grp, v) => (grp.key === 'ownership' ? ownershipLabel(v) : null) ?? (grp.key === 'status' ? store.statusByCode.get(v)?.label : null) ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
 
   // ---------- header + toolbar ----------
-  const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Search', value: state.q });
+  const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', ...NO_AUTOCORRECT, enterkeyhint: 'search', 'aria-label': 'Search', value: state.q });
   const clearBtn = h('button.clear', { type: 'button', 'aria-label': 'Clear search', onclick: () => { input.value = ''; state.q = ''; input.focus(); update(); } }, '✕');
   const filterBadge = h('span.badge', { hidden: true });
   const filterBtn = h('button.btn.open-filters', { type: 'button', 'aria-label': 'Filters', onclick: () => setSheet(true) }, icon('filter'), filterBadge);
   const sortSheet = createSortSheet(state, () => update());
   const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort and group', onclick: () => sortSheet.open() }, icon('sort'), h('span.sort-label'));
   const meta = h('div.meta-row');
+  const count = h('span.count', { role: 'status' }); // one live region for the whole page: "12 of 600 games" is announced as the filters change
+  /** An active-filter pill: tapping it removes the filter. */
+  const pill = (cls, name, onclick, ...kids) => h('button.pill' + cls, { type: 'button', 'aria-label': `Remove filter: ${name}`, onclick }, ...kids.slice(0, -1), h('span', {}, kids[kids.length - 1], h('span', { 'aria-hidden': 'true' }, ' ✕'))); // the label and ✕ are one flex item, as before
 
   let reordering = false;
   let tableInst = null, tableBox = null;
@@ -116,7 +120,24 @@ export function renderLibrary(root, opts = {}) {
       h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls, ttbFilter.el),
     h('div.filters-foot', {}, resetBtn, showBtn));
   const scrim = h('div.scrim', { onclick: () => setSheet(false) });
-  function setSheet(on) { panel.classList.toggle('open', on); scrim.classList.toggle('show', on); }
+  // Below 900px the panel is a bottom sheet that is only moved off screen when closed: `inert` keeps Tab and screen
+  // readers out of it then. From 900px it is a sidebar that is always there.
+  const sheetMode = window.matchMedia('(max-width: 899px)');
+  let releasePanel = null;
+  const syncPanel = () => {
+    if (!sheetMode.matches && panel.classList.contains('open')) setSheet(false); // the window grew into a sidebar
+    panel.inert = sheetMode.matches && !panel.classList.contains('open');
+  };
+  function setSheet(on) {
+    if (on === panel.classList.contains('open')) return;
+    if (on) panel.inert = false;
+    panel.classList.toggle('open', on);
+    scrim.classList.toggle('show', on);
+    if (on) releasePanel = openLayer(panel, { requestClose: () => setSheet(false) }); // Back closes it, Tab stays inside
+    else { releasePanel?.(); releasePanel = null; syncPanel(); }
+  }
+  sheetMode.addEventListener('change', syncPanel);
+  syncPanel();
 
   // ---------- results ----------
   const results = h('section', { 'aria-label': 'Games' });
@@ -203,7 +224,7 @@ export function renderLibrary(root, opts = {}) {
   });
 
   function update() {
-    if (!view) history.replaceState(null, '', '#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
+    if (!view) replaceUrl('#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
     const list = store.games.filter((g) => matches(state, g));
     list.sort(buildComparator(state.sorts));
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');
@@ -232,7 +253,7 @@ export function renderLibrary(root, opts = {}) {
       // Reordering always works on the manual order of exactly the games shown, whatever the sort is.
       const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);
       results.replaceChildren(
-        h('p.hint', {}, 'Drag ⠿ (or use ▲▼) to reorder these ' + list.length + ' games. The order is shared by every view that sorts by Manual order.'),
+        h('p.hint', {}, `Drag ⠿ (or use ▲▼) to reorder ${list.length === 1 ? 'this' : 'these'} ${plural(list.length, 'game')}. The order is shared by every view that sorts by Manual order.`),
         createReorderList(byPos, async (ids) => { try { await reorderGames(ids); } catch { toast('Could not save the order'); } }, openDrawer));
     } else results.replaceChildren(...groupGames(list, state.group).map((grp) => h('div.group-block', {},
       state.group && h('h3.group-title', {}, grp.label, h('span.count', {}, grp.games.length)),
@@ -275,26 +296,27 @@ export function renderLibrary(root, opts = {}) {
     // active filter pills
     const active = [];
     for (const grp of GROUPS) {
-      for (const v of state.in[grp.key]) active.push(h('button.pill', { type: 'button', onclick: () => { state.in[grp.key].delete(v); if (state.in[grp.key].size < 2) state.all.delete(grp.key); update(); } }, h('b', {}, grp.label), label(grp, v), ' ✕'));
-      for (const v of state.ex[grp.key]) active.push(h('button.pill.ex', { type: 'button', onclick: () => { state.ex[grp.key].delete(v); update(); } }, h('b', {}, grp.label), `not ${label(grp, v)}`, ' ✕'));
+      for (const v of state.in[grp.key]) active.push(pill('', `${grp.label}: ${label(grp, v)}`, () => { state.in[grp.key].delete(v); if (state.in[grp.key].size < 2) state.all.delete(grp.key); update(); }, h('b', {}, grp.label), label(grp, v)));
+      for (const v of state.ex[grp.key]) active.push(pill('.ex', `${grp.label}: not ${label(grp, v)}`, () => { state.ex[grp.key].delete(v); update(); }, h('b', {}, grp.label), `not ${label(grp, v)}`));
     }
-    for (const f of state.flags) active.push(h('button.pill', { type: 'button', onclick: () => { state.flags.delete(f); update(); } }, FLAGS.find((x) => x.key === f).label, ' ✕'));
-    if (ttbRangeActive(state.ttb)) active.push(h('button.pill', { type: 'button', onclick: () => { state.ttb.min = state.ttb.max = null; update(); } }, h('b', {}, ttbKindLabel(state.ttb.kind)), ttbRangeText(state.ttb), ' ✕'));
-    if (state.ttb.unknown) active.push(h('button.pill' + (state.ttb.unknown === 'ex' ? '.ex' : ''), { type: 'button', onclick: () => { state.ttb.unknown = ''; update(); } }, h('b', {}, ttbKindLabel(state.ttb.kind)), state.ttb.unknown === 'ex' ? 'not unknown' : 'unknown', ' ✕'));
+    for (const f of state.flags) active.push(pill('', FLAGS.find((x) => x.key === f).label, () => { state.flags.delete(f); update(); }, FLAGS.find((x) => x.key === f).label));
+    if (ttbRangeActive(state.ttb)) active.push(pill('', `${ttbKindLabel(state.ttb.kind)}: ${ttbRangeText(state.ttb)}`, () => { state.ttb.min = state.ttb.max = null; update(); }, h('b', {}, ttbKindLabel(state.ttb.kind)), ttbRangeText(state.ttb)));
+    if (state.ttb.unknown) active.push(pill(state.ttb.unknown === 'ex' ? '.ex' : '', `${ttbKindLabel(state.ttb.kind)}: ${state.ttb.unknown === 'ex' ? 'not unknown' : 'unknown'}`, () => { state.ttb.unknown = ''; update(); }, h('b', {}, ttbKindLabel(state.ttb.kind)), state.ttb.unknown === 'ex' ? 'not unknown' : 'unknown'));
     const nFilters = activeCount(state);
     saveBtn.hidden = !(view && dirty());
     saveAsBtn.hidden = view ? false : isPristine(state);
     const revert = (nFilters || state.q) && h('button.pill.reset', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset');
     if (narrow.matches) {
-      meta.replaceChildren(h('span.count', {}, `${list.length} of ${store.games.length} games`), revert, saveBtn, saveAsBtn, ...active);
+      meta.replaceChildren(count, revert, saveBtn, saveAsBtn, ...active);
     } else {
-      meta.replaceChildren(h('span.count', {}, `${list.length} of ${store.games.length} games`), ...active, revert);
+      meta.replaceChildren(count, ...active, revert);
       head.insertBefore(saveBtn, manageBtn || null);
       head.insertBefore(saveAsBtn, manageBtn || null);
     }
     filterBadge.hidden = !nFilters;
     filterBadge.textContent = nFilters;
-    showBtn.textContent = `Show ${list.length} games`;
+    count.textContent = `${list.length} of ${plural(store.games.length, 'game')}`;
+    showBtn.textContent = `Show ${plural(list.length, 'game')}`;
 
   }
   update();
@@ -320,5 +342,5 @@ export function renderLibrary(root, opts = {}) {
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {
-    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); sheetMode.removeEventListener('change', syncPanel); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
 }

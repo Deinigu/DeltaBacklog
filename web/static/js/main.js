@@ -1,5 +1,6 @@
 // App shell: hash router, navigation (bottom bar / sidebar), theme toggle, service worker.
 import { h, icon } from './util.js';
+import { pruneLayers } from './layers.js';
 import { load, store, loadLinkPending, loadDealsUnseen } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderViews } from './views.js';
@@ -9,7 +10,7 @@ import { renderUpcoming } from './upcomingview.js';
 import { renderSimilar } from './similarview.js';
 import { renderDeals } from './dealsview.js';
 import { renderHidden } from './hiddenview.js';
-import { closeDrawer } from './drawer.js';
+import { closeDrawer, drawerDirty } from './drawer.js';
 import { openAdd } from './add.js';
 import { renderLink } from './link.js';
 import { renderAttention } from './attentionview.js';
@@ -18,7 +19,7 @@ import { parseYearPath } from './yearreview.js';
 import { renderGallery } from './gallerypage.js';
 import { renderRankings } from './rankingspage.js';
 import { renderRanking } from './rankingedit.js';
-import { MORE_PAGES, isMorePath, openMore, closeMore } from './more.js';
+import { MORE_PAGES, isMorePath, openMore, closeMore, pageTitle } from './more.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
@@ -76,6 +77,7 @@ function buildNav() {
     h('div.spacer'),
     h('button.theme-toggle', { type: 'button', onclick: toggleTheme }, icon('sun'), h('span', {}, 'Theme')));
   markActive();
+  syncTheme();
 }
 
 function markActive() {
@@ -88,23 +90,57 @@ function markActive() {
   if (more) { if (isMorePath(path, morePages())) more.setAttribute('aria-current', 'page'); else more.removeAttribute('aria-current'); }
 }
 
+const THEME_COLOR = { dark: '#0f1115', light: '#f5f6f8' }; // the page backgrounds (--bg in styles.css)
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+const currentTheme = () => document.documentElement.dataset.theme || (systemDark.matches ? 'dark' : 'light');
+/** The browser bar colour and the Theme button's name follow the theme that is really on, forced or from the system. */
+function syncTheme() {
+  const cur = currentTheme();
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[cur]);
+  nav.querySelector('.theme-toggle')?.setAttribute('aria-label', `Theme: ${cur}, switch to ${cur === 'dark' ? 'light' : 'dark'}`);
+}
 function toggleTheme() {
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-  const cur = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
-  const next = cur === 'dark' ? 'light' : 'dark';
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem('theme', next); } catch { /* private mode */ }
+  syncTheme();
 }
 try {
   const t = localStorage.getItem('theme');
   if (t) document.documentElement.dataset.theme = t;
 } catch { /* ignore */ }
+systemDark.addEventListener('change', syncTheme);
 
-async function route() {
+let stopFocusWatch = null;
+/**
+ * Keyboard and screen reader users start at the top of the new page, not on the link they used. Pages that draw
+ * after a fetch (Deals, Upcoming) replace what was focused, so for a moment the focus follows: while it is lost
+ * (on the body or the page itself) it goes to the h1 as it appears. Any key press or tap ends that.
+ */
+function focusPage() {
+  stopFocusWatch?.();
+  const go = () => {
+    const head = view.querySelector('h1');
+    if (head) head.tabIndex = -1;
+    (head || view).focus({ preventScroll: true });
+  };
+  const lost = () => { const a = document.activeElement; return !a || a === document.body || a === view; };
+  go();
+  const ctl = new AbortController();
+  const mo = new MutationObserver(() => { if (lost()) go(); });
+  const stop = () => { mo.disconnect(); clearTimeout(timer); ctl.abort(); stopFocusWatch = null; };
+  const timer = setTimeout(stop, 2000);
+  mo.observe(view, { childList: true, subtree: true });
+  for (const ev of ['keydown', 'pointerdown']) addEventListener(ev, stop, { capture: true, signal: ctl.signal });
+  stopFocusWatch = stop;
+}
+
+/** Render the page for the current route. `moved`: the route really changed (not a rebuild of the same page). */
+async function route({ moved = false } = {}) {
   if (!store.loaded) {
     view.replaceChildren(h('div.grid', {}, Array.from({ length: 8 }, () => h('div.skeleton'))));
     try { await load(); } catch {
-      view.replaceChildren(h('div.empty', {}, 'Could not load games. ', h('button.btn', { onclick: route }, 'Retry')));
+      view.replaceChildren(h('div.empty', {}, 'Could not load games. ', h('button.btn', { onclick: () => route({ moved }) }, 'Retry')));
       return;
     }
     buildNav();
@@ -115,10 +151,15 @@ async function route() {
   markActive();
   syncFab(r.path);
   if (cleanup) { cleanup(); cleanup = null; }
-  closeDrawer();
+  // A drawer with unsaved edits is never closed behind the owner's back; Back, ✕ and the scrim ask first. A rebuild of
+  // the same page (a game was added) leaves the drawer alone.
+  if (moved && !drawerDirty()) closeDrawer();
   closeMore(false);
   cleanup = r.render(view) || null;
+  pruneLayers(); // sheets that lived in the old page are gone now
+  document.title = pageTitle(r.path, store.views);
   window.scrollTo(0, 0);
+  if (moved) focusPage();
 }
 
 buildNav();
@@ -126,7 +167,7 @@ buildNav();
 let lastPath = currentPath();
 window.addEventListener('hashchange', () => {
   const p = currentPath();
-  if (p !== lastPath) { lastPath = p; route(); }
+  if (p !== lastPath) { lastPath = p; route({ moved: true }); }
 });
 // Views changed (saved, pinned, renamed...): refresh navigation without re-rendering the open page.
 window.addEventListener('views-changed', buildNav);

@@ -1,7 +1,7 @@
 // The "Price" row of the game drawer, for a game on the Deals page (not owned, not played, not hidden): the best price now and the historical low,
 // as the server has cached them (never ITAD on open). Also where a wrong or missing match is fixed. It stays out of the way:
 // nothing is drawn until the cache answers, when ITAD is not set up, or for other statuses.
-import { h, toast } from './util.js';
+import { h, toast, NO_AUTOCORRECT, newTab } from './util.js';
 import { store, dealsList, dealsSearch, dealsSetMatch, dealsMute, dealsUnmute } from './api.js';
 import { alertOf, isMuted, ALERT_LABEL, badgeOf, BADGE_LABEL, formatMoney, formatDate, isWatched, matchOf, priceOf, priceLine, safeLink } from './deals.js';
 
@@ -30,7 +30,7 @@ export function dealsSection(game) {
         : m ? (m.source === 'user' ? 'You said IsThereAnyDeal has no such game.' : 'No exact match on IsThereAnyDeal.') : 'Not checked yet. Press Refresh prices on the Deals page.'));
     }
     const actions = h('div.deal-actions', {},
-      link ? h('a.btn', { href: link, target: '_blank', rel: 'noopener noreferrer' }, 'View deal ↗') : null,
+      link ? h('a.btn', { href: link, target: '_blank', rel: 'noopener noreferrer' }, newTab('View deal')) : null,
       h('button.btn', { type: 'button', onclick: openFix }, matched ? 'Wrong game?' : 'Pick the game'),
       matched ? h('button.btn', { type: 'button', 'aria-pressed': String(!muted), onclick: toggleMute }, muted ? 'Price alerts: off' : 'Price alerts: on') : null,
       m && m.source === 'user' ? h('button.btn', { type: 'button', onclick: () => save({ reset: true }, 'Back to automatic matching.') }, 'Match automatically') : null);
@@ -67,7 +67,7 @@ export function dealsSection(game) {
   function openFix() {
     const fix = box.querySelector('.deal-fix');
     if (!fix.hidden) { fix.hidden = true; return; }
-    const input = h('input', { type: 'search', value: game.title, 'aria-label': 'Search IsThereAnyDeal by title', maxlength: 200 });
+    const input = h('input', { type: 'search', ...NO_AUTOCORRECT, value: game.title, 'aria-label': 'Search IsThereAnyDeal by title', maxlength: 200 });
     const list = h('ul.deal-cands');
     const status = h('p.hint', { role: 'status' });
     async function search(ev) {
