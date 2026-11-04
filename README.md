@@ -50,7 +50,7 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
 - **One binary, one SQLite file.** No CGO, no frontend build step, no login. The web app is compiled into the binary.
 - **Phone first.** A PWA you can add to your home screen (needs HTTPS or `localhost`), just as comfortable on a PC.
 - **Light on a Pi 3B+.** Built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use).
-- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat and, if you set `STEAM_ID`, your public Steam wishlist (`api.steampowered.com`) are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's daily price check for Deals, which can also send your price alerts to Telegram (`api.telegram.org`) if you set up a bot.
+- **Lookups only when you ask.** IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat and, if you set `STEAM_ID`, your public Steam wishlist (`api.steampowered.com`) are only called when you add or fill in a game, press a refresh button or search for a time to beat; nothing is read when a page opens, and there is no telemetry. The one scheduled read is the Raspberry Pi's price check for Deals, every 6 hours, which can also send your price alerts to Telegram (`api.telegram.org`) if you set up a bot.
 - **Yours to keep.** Covers and posters are stored next to the database (or upload your own), so the app keeps working when those websites do not. Nightly backups on the Raspberry Pi, plus a `backup` command for anywhere else.
 - **Tidy as it grows.** A **Needs attention** page lists the games that lack a link, cover, poster, time or platform with a one-tap fix, and a **Hidden** page keeps everything you hid in one place.
 
@@ -67,7 +67,7 @@ Browse and filter every game you own, keep lists like *Playing now* and *Up next
   data/  app.db (SQLite)  +  covers/  +  screenshots/
 
   optional, only when you press a refresh button
-  (or on the Pi, the daily price check):
+  (or on the Pi, the price check that runs every 6 hours):
   IGDB   SteamGridDB   IsThereAnyDeal   HowLongToBeat
   Steam wishlist (api.steampowered.com)
   Telegram alerts (api.telegram.org)
@@ -158,7 +158,7 @@ The app starts with an empty library: use the **+** button to add games. The web
 
 ## Raspberry Pi install
 
-DeltaBacklog is built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use). The deploy script cross-compiles on your PC, uploads over `ssh` and installs a systemd service that starts at boot, a nightly backup timer, a daily price-check timer for Deals and the friendly address `http://deltabacklog.local`.
+DeltaBacklog is built and tested for a Raspberry Pi 3B+ (armv7, about 15 MB of memory in use). The deploy script cross-compiles on your PC, uploads over `ssh` and installs a systemd service that starts at boot, a nightly backup timer, a price-check timer for Deals (every 6 hours) and the friendly address `http://deltabacklog.local`.
 
 ```sh
 # on your PC, in the cloned repo, with Go installed and passwordless ssh + sudo on the Pi (Raspberry Pi OS / Debian)
@@ -212,7 +212,7 @@ A page whose key is missing says it is not set up; without any key the app still
 | `deltabacklog backup <file>` | Write a consistent copy of the database (safe while it runs; never migrates it). |
 | `deltabacklog backup-screenshots <dir>` | Copy the screenshot files `<dir>` does not have yet (never deletes). |
 | `deltabacklog check <file>` | Verify a database or backup (read-only). |
-| `deltabacklog deals-check` | Refresh the Deals prices and send the price alerts (the Pi's daily timer runs it; needs `ITAD_API_KEY`). |
+| `deltabacklog deals-check` | Refresh the Deals prices and send the price alerts (the Pi's timer runs it every 6 hours; needs `ITAD_API_KEY`). |
 | `deltabacklog sync-igdb [--dry-run]` | Link games to IGDB (needs the keys); add `--enrich` to fill in details, times, dates and the Series and Similar games caches. |
 | `deltabacklog fetch-posters [--dry-run] [--limit N]` | Make the ranking posters for every game (IGDB / SteamGridDB keys help). |
 
@@ -250,9 +250,9 @@ go run ./cmd/import -csv games.csv -data ./data [-nocodb http://<nocodb-host>:80
 
 **Does it work offline?** The app and your covers are served from your own machine. Lookups need internet. The offline cache of the installed PWA needs HTTPS (browsers do not allow service workers on plain `http://` outside `localhost`).
 
-**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, when you press the refresh button (and once a day on the Pi, for the alerts); your public Steam wishlist is read from `api.steampowered.com` at the same moments when `STEAM_ID` is set; HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
+**Where does the game data come from?** From you. IGDB and SteamGridDB are used, with your own keys, to fill in details and covers; IsThereAnyDeal gives prices, when you press the refresh button (and every 6 hours on the Pi, for the alerts); your public Steam wishlist is read from `api.steampowered.com` at the same moments when `STEAM_ID` is set; HowLongToBeat can supply a time to beat when you ask for it. IGDB scores and ratings are never fetched or stored.
 
-**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above (IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat, the Steam wishlist at `api.steampowered.com` and Telegram messages at `api.telegram.org`), to the services you set up; they happen when you press a refresh button or search, or in the Pi's daily price check, and no page reads them just by being opened.
+**Does it phone home?** No telemetry. The only outgoing requests are the optional lookups above (IGDB, SteamGridDB, IsThereAnyDeal, HowLongToBeat, the Steam wishlist at `api.steampowered.com` and Telegram messages at `api.telegram.org`), to the services you set up; they happen when you press a refresh button or search, or in the Pi's price check (every 6 hours), and no page reads them just by being opened.
 
 ## Ideas
 

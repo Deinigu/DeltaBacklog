@@ -1071,37 +1071,32 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .hb-count small { color: var(--muted); font-size: 11px; }
 
 /* ---- Deals: one compact row per game (SteamDB style); a sortable table from 900px up ---- */
-.deals-page { max-width: 760px; }
-@media (min-width: 900px) { .deals-page { max-width: 1180px; } }
+.deals-page { max-width: none; } /* the Library's width: the page uses all the room next to the menu */
 .dl-title-row { display: flex; align-items: center; gap: 8px; }
 .dl-title-row h1 { margin: 6px 0 4px; }
+.dl-spacer { flex: 1; }
 .dl-info { width: 44px; height: 44px; border: 0; background: none; color: var(--muted); font-weight: 700; font-style: italic; border-radius: 50%; }
 .dl-info[aria-expanded="true"] { color: var(--accent); }
-.dl-toolbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 8px; margin: 0 0 4px; min-width: 0; }
-.dl-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.dl-seg button { min-height: 44px; padding: 0 11px; border: 0; background: var(--surface); }
-.dl-seg button + button { border-left: 1px solid var(--border); }
-.dl-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
-.dl-seg .c { font-size: 12px; opacity: .8; }
-.dl-check { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-size: 12px; min-width: 0; flex: 1 1 auto; }
+.dl-check { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); }
 .dl-checked { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 599px) { .dl-seg .c { display: none; } }
-@media (min-width: 600px) { .dl-toolbar { gap: 4px 12px; } .dl-check { flex: none; font-size: 13px; } }
-.dl-refresh { flex: none; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); font-size: 20px; line-height: 1; display: grid; place-items: center; }
+.dl-refresh { flex: none; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 20px; line-height: 1; display: grid; place-items: center; }
 .dl-refresh[disabled] { opacity: .6; }
 .dl-refresh .spin { display: inline-block; animation: dl-spin 1s linear infinite; }
 @keyframes dl-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .dl-refresh .spin { animation: none; } }
-.dl-country { flex: none; margin-left: auto; }
-.dl-country input { width: 2.9em; min-height: 44px; text-transform: uppercase; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.dl-view { display: flex; width: max-content; max-width: 100%; margin: 0 0 6px; }
+.dl-view button { height: 44px; padding: 0 16px; font-size: 14px; }
+.dl-view .c { font-size: 12px; opacity: .8; margin-left: 2px; }
+.dl-country { display: flex; align-items: center; gap: 10px; padding: 10px 0 4px; color: var(--muted); font-size: 13px; }
+.dl-country input { width: 3.2em; min-height: 44px; text-transform: uppercase; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .dl-tg { min-height: 44px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 0 12px; font-size: 13px; }
-.dl-filters { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
-.dl-filters::-webkit-scrollbar { display: none; }
-.dl-filters > * { flex: none; }
-.dl-sortsel { min-height: 44px; max-width: none; }
 .dl-info-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 6px; }
+.dl-info-panel[hidden] { display: none; }
 .dl-info-panel .hint { margin: 0; }
-@media (min-width: 900px) { .dl-sortsel { display: none; } .dl-filters { flex-wrap: wrap; overflow: visible; } }
+.dl-results { container: dl / inline-size; } /* the table below picks its columns from the room the list really has, next to the panel or not */
+.deals-page .toolbar { padding-top: 6px; }
+.deals-page .toolbar.stuck { padding-top: calc(6px + var(--safe-t)); }
+.dl-reverse { margin-top: 12px; }
 
 .dl-list { list-style: none; margin: 0 0 10px; padding: 0; }
 .dl-row { position: relative; display: grid; grid-template-columns: 108px minmax(0, 1fr) auto; grid-template-areas: "img name cut" "img name price"; column-gap: 10px; align-items: center;
@@ -1116,17 +1111,17 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-open::after { content: ""; position: absolute; inset: 0; } /* the whole row is the tap target */
 .dl-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dl-tags { display: flex; gap: 4px; overflow: hidden; }
-.dl-tag { flex: none; font-size: 11px; font-weight: 700; line-height: 16px; padding: 0 6px; border-radius: 4px; white-space: nowrap; border: 1px solid transparent; }
+.dl-tag { flex: none; font-size: 12px; font-weight: 700; line-height: 16px; padding: 0 6px; border-radius: 4px; white-space: nowrap; border: 1px solid transparent; }
 .dl-tag.low { background: #4c6b22; color: #beee11; }
 .dl-tag.near { border-color: var(--accent); color: var(--accent); }
 .dl-tag.alert { background: #b45309; color: #fff; }
 .dl-tag.new { border-color: var(--text); color: var(--text); }
-.dl-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dl-cut { grid-area: cut; justify-self: end; }
 .dl-pct { display: inline-block; background: #4c6b22; color: #beee11; font-weight: 700; font-size: 13px; line-height: 20px; padding: 0 6px; border-radius: 3px; }
 .dl-price { grid-area: price; justify-self: end; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
-.dl-price b { font-size: 15px; }
-.dl-price s, .dl-none { color: var(--muted); font-size: 12px; }
+.dl-price b { font-size: 16px; }
+.dl-price s, .dl-none { color: var(--muted); font-size: 13px; }
 .dl-low, .dl-shop, .dl-ends, .dl-added, .dl-more, .dl-headrow { display: none; }
 .dl-plain .dl-cut, .dl-plain .dl-price { display: none; }
 
@@ -1140,7 +1135,7 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-act { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 600; padding: 0 14px; }
 .dl-act.dl-close { margin-top: 6px; width: 100%; background: none; color: var(--muted); }
 .dl-panel-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.dl-altline { display: block; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.dl-altline { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .dl-stores { max-width: 460px; }
 .dl-stores-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .dl-stores-body .hint { margin: 0; }
@@ -1160,45 +1155,44 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-stores-err { color: var(--danger); }
 .dl-act.dl-save { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
-@media (min-width: 900px) {
-  /* Columns are fractional where they can be and the fixed ones add up to far less than the content next to the 210px sidebar
-     (about 640px at 900px): Shop, Ends and Added only appear from 1200px, so the page never scrolls sideways. */
-  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 44px; grid-template-areas: none; column-gap: 12px; }
+/* The table. The columns come from the width the list really has (container "dl", set on .dl-results), not from the window:
+   next to the 290px filter panel a 1280px window leaves about 700px, a 1600px one about 1000px. Name takes what is left. */
+@container dl (min-width: 700px) {
+  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 104px 96px 44px; grid-template-areas: none; column-gap: 12px; }
   .dl-row > * { grid-area: auto; }
   .dl-img { width: 112px; }
   .dl-shop, .dl-ends, .dl-added, .dl-h-shop, .dl-h-ends, .dl-h-added { display: none; }
   .dl-plain .dl-row, .dl-plain.dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 44px; }
   .dl-row:not(.dl-headrow):hover { background: var(--surface-2); }
-  .dl-low { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-low { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dl-low, .dl-cut, .dl-h-cut, .dl-h-price, .dl-h-lowest { text-align: right; justify-self: end; }
   .dl-price { justify-self: end; flex-direction: row-reverse; }
-  .dl-price b { font-size: 14px; }
+  .dl-price b { font-size: 15px; }
   .dl-sub { display: none; }
   .dl-row.no-price .dl-sub { display: block; }
   .dl-plain .dl-low { display: none; }
   .dl-more { display: grid; place-items: center; position: relative; z-index: 1; width: 44px; height: 44px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 20px; }
   .dl-more:hover { background: var(--surface-2); color: var(--text); }
   .dl-headrow { display: grid; min-height: 44px; padding-top: 0; padding-bottom: 0; border-bottom-width: 2px; }
-  .dl-h button { min-height: 44px; padding: 0; white-space: nowrap; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; text-align: inherit; }
+  .dl-h button { min-height: 44px; padding: 0; white-space: nowrap; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; text-align: inherit; }
   .dl-h[aria-sort="ascending"] button, .dl-h[aria-sort="descending"] button { color: var(--text); }
-  .dl-sheet { border-radius: 16px; margin: auto; }
 }
-@media (min-width: 1200px) {
-  /* Shop from 1200px; Ends and Added only from 1440px, so the name keeps room for a full title. */
-  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 44px; }
+@container dl (min-width: 840px) {
+  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 104px 96px 130px 44px; }
   .dl-plain .dl-row, .dl-plain.dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 44px; }
-  .dl-shop { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-shop { display: block; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dl-h-shop { display: block; }
   .dl-plain .dl-shop { display: none; }
 }
-@media (min-width: 1440px) {
-  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 96px 44px; }
-  .dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 112px 92px 120px 96px 96px 44px; }
+@container dl (min-width: 980px) {
+  .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 104px 96px 130px 104px 44px; }
+  .dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 64px 104px 96px 130px 104px 104px 44px; }
   .dl-plain .dl-row, .dl-plain.dl-wish .dl-row { grid-template-columns: 112px minmax(0, 1fr) 44px; }
-  .dl-ends, .dl-added { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl-ends, .dl-added { display: block; font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dl-h-ends, .dl-h-added { display: block; }
   .dl-plain .dl-ends, .dl-plain .dl-added { display: none; }
 }
+@media (min-width: 900px) { .dl-sheet { border-radius: 16px; margin: auto; } }
 
 /* ---- hover on a mouse: one subtle rule for the controls that have a border or a surface (accent tint, like .tile and .jump) ---- */
 @media (hover: hover) {

@@ -1,22 +1,26 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
-import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab, toastError, errorText, emptyBox, brand } from './util.js';
-import { openLayer } from './layers.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab, toastError, errorText, emptyBox, brand, debounce, norm, icon, plural } from './util.js';
+import { openLayer, replaceUrl } from './layers.js';
+import { createSearchBox, createFilterButton, createFilterShell, filterGroup, createSheet, pill } from './filtershell.js';
+import { hashWithGame, gameIdFromHash } from './gameurl.js';
+import { LOCALE } from './format.js';
 import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsStores, dealsSetStores, dealsShops, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
   dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import { formatDate } from './format.js';
-import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel, altLine, moveStore, addStore, removeStore, parseThreshold, unusedShops, DEFAULT_THRESHOLD, MAX_STORES } from './deals.js';
+import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, MIN_CUTS, MAX_PRICES, LOW_TYPES, ENDS_DAYS, ADDED_DAYS, emptyDealsFilter, dealsFilterCount, rowPasses, storesOf, dealsStateFromQuery, dealsStateToQuery, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel, altLine, moveStore, addStore, removeStore, parseThreshold, unusedShops, DEFAULT_THRESHOLD, MAX_STORES } from './deals.js';
 
 export function renderDeals(root) {
   let info = { configured: false, country: 'ES', matches: [], prices: [], refresh: { running: false } };
-  let statuses = new Set(); // empty = all three
-  let sort = 'cut';
-  let dir = 1; // 1 = the sort's natural order, -1 = reversed (a click on the active column header)
-  let infoOpen = false; // the one-line explanation behind the (i) button
-  let alertsOnly = false; // the Alerts chip: only the games with a standing price alert
-  let view = 'library'; // 'library' (your games) or 'wishlist' (your Steam wishlist; only when the server has a STEAM_ID)
+  // The page state lives in the address (#/deals?view=wishlist&min=50...), so a reload and Back keep it.
+  const start = dealsStateFromQuery(location.hash.split('?')[1]);
+  const filter = start.filter; // see emptyDealsFilter in deals.js
+  let sort = start.sort;
+  let dir = start.dir; // 1 = the sort's natural order, -1 = reversed (a click on the active column header)
+  let view = start.view; // 'library' (your games) or 'wishlist' (your Steam wishlist; only when the server has a STEAM_ID)
+  let loaded = false; // the server has answered (or failed): until then a Wishlist address is not given up for lack of a wishlist
   let newIds = new Set(); // the alerts that were new when this visit began (they are marked seen at once)
   let seenSent = false;
   let alive = true;
@@ -28,6 +32,7 @@ export function renderDeals(root) {
 
   async function load() {
     try { info = await dealsList(); } catch { /* offline or an old server: the page says nothing is cached */ }
+    loaded = true;
     if (!alive) return;
     if (!seenSent && info.unseen > 0) { // opening Deals is seeing the alerts: remember which ones were new, then tell the server
       seenSent = true;
@@ -293,119 +298,302 @@ export function renderDeals(root) {
   }
   const plainList = (rows, make) => h('ul.dl-list.dl-plain' + (view === 'wishlist' ? '.dl-wish' : ''), { role: 'table' }, rows.map(make));
 
-  function toolbar() {
-    const scope = scopeOf(info);
+  // ---- the toolbar: the Library's search, Filters and sort buttons, then the live count and the active filters ----
+  const searchBox = createSearchBox({ value: filter.q, placeholder: 'Search deals…', label: 'Search deals', onClear: () => { filter.q = ''; draw(); } });
+  const searchInput = searchBox.input;
+  searchInput.addEventListener('input', debounce(() => { filter.q = norm(searchInput.value.trim()); draw(); }, 90));
+  const filterBtn = createFilterButton(() => shell.setSheet(true));
+  const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort', 'aria-haspopup': 'dialog', onclick: openSort }, icon('sort'), h('span.sort-label'));
+  const meta = h('div.meta-row');
+  const count = h('span.count', { role: 'status' }); // one live region for the count: "12 of 80 games" is announced as the filters change
+  const toolbar = h('div.toolbar', {}, h('div.toolbar-row', {}, searchBox.el, filterBtn.btn, sortBtn), meta);
+
+  // ---- the sort sheet ----
+  const sortList = h('div.chips');
+  const reverseBtn = h('button.chip', { type: 'button', onclick: () => { dir = -dir; draw(); paintSort(); reverseBtn.focus(); } }, '↕ Reverse the order');
+  const sortSheet = createSheet({ label: 'Sort', title: 'Sort by',
+    body: [h('p.hint', {}, 'On a PC the column headers sort too.'), sortList, h('div.chips.dl-reverse', {}, reverseBtn)],
+    foot: (close) => [h('button.btn', { type: 'button', onclick: () => { sort = 'cut'; dir = 1; draw(); paintSort(); } }, 'Reset'), h('button.btn.primary', { type: 'button', onclick: close }, 'Done')] });
+  function paintSort() {
+    sortList.replaceChildren(...SORT_KEYS.filter((s) => !s.wish || view === 'wishlist').map((s) => h('button.chip', { type: 'button', 'data-key': s.key, 'aria-pressed': String(s.key === sort),
+      onclick: () => { sort = s.key; dir = 1; draw(); paintSort(); sortList.querySelector(`[data-key="${s.key}"]`)?.focus(); } }, s.label)));
+    reverseBtn.setAttribute('aria-pressed', String(dir === -1));
+  }
+  function openSort() { closeSheet(); paintSort(); sortSheet.toggle(true); }
+
+  // ---- the filter panel: the same chips and groups as the Library's, built from the filters of deals.js ----
+  const chipRefs = []; // {btn, label, text, count, on, none}
+  function chip(text, { on, toggle, count }) {
+    const label = h('span', {}, text), c = h('span.c');
+    const btn = h('button.chip', { type: 'button', 'aria-pressed': 'false', onclick: () => { toggle(); draw(); } }, label, c);
+    const ref = { btn, label, text, c, on, count };
+    chipRefs.push(ref);
+    return ref;
+  }
+  const flip = (key) => () => { filter[key] = !filter[key]; };
+  const setOne = (key, v) => () => { filter[key] = filter[key] === v ? 0 : v; };
+  const toggleIn = (set, v) => () => { if (set.has(v)) set.delete(v); else set.add(v); };
+  const group = (label, refs, o = {}) => ({ ...filterGroup(label, { open: true, chips: h('div.chips', {}, refs.map((r) => r.btn)), ...o }), refs });
+
+  const statusRefs = DEAL_STATUSES.map((s) => chip(s.label, { on: () => filter.statuses.has(s.code), toggle: toggleIn(filter.statuses, s.code),
+    count: () => { const scope = scopeOf(info); return store.games.filter((g) => g.status === s.code && scope.has(g.id)).length; } }));
+  const showRefs = [
+    chip('On sale', { on: () => filter.sale, toggle: flip('sale'), count: () => ({ sale: true }) }),
+    chip('Alerts', { on: () => filter.alerts, toggle: flip('alerts'), count: () => ({ alerts: true }) }),
+    chip(`Ends within ${ENDS_DAYS} days`, { on: () => filter.ends, toggle: flip('ends'), count: () => ({ ends: true }) }),
+    chip(`Added in the last ${ADDED_DAYS} days`, { on: () => filter.added, toggle: flip('added'), count: () => ({ added: true }) })];
+  const [saleChip, alertsChip, endsChip, addedChip] = showRefs;
+  alertsChip.btn.title = 'Games at their historical low or their lowest price in 2 years';
+  const cutRefs = [chip('Any', { on: () => !filter.minCut, toggle: () => { filter.minCut = 0; }, count: () => ({ minCut: 0 }) }),
+    ...MIN_CUTS.map((v) => chip(`${v}%+`, { on: () => filter.minCut === v, toggle: setOne('minCut', v), count: () => ({ minCut: v }) }))];
+  const priceRefs = [chip('Any', { on: () => !filter.maxPrice, toggle: () => { filter.maxPrice = 0; }, count: () => ({ maxPrice: 0 }) }),
+    ...MAX_PRICES.map((v) => chip('', { on: () => filter.maxPrice === v, toggle: setOne('maxPrice', v), count: () => ({ maxPrice: v }) }))];
+  priceRefs.slice(1).forEach((r, i) => { r.money = MAX_PRICES[i]; });
+  const lowRefs = LOW_TYPES.map((l) => chip(l.label, { on: () => filter.lows.has(l.key), toggle: toggleIn(filter.lows, l.key), count: () => ({ lows: new Set([l.key]) }) }));
+  const storeChips = h('div.chips');
+  let storeRefs = [], storeSig = '';
+
+  const groups = {
+    status: group('Status', statusRefs),
+    show: group('Show', showRefs),
+    cut: group('Minimum discount', cutRefs),
+    price: group('Maximum price', priceRefs),
+    low: group('Low price', lowRefs),
+    store: filterGroup('Store', { open: true, chips: storeChips }),
+  };
+  const countryInput = h('input', { value: info.country || 'ES', maxlength: 2, autocapitalize: 'characters', list: 'dl-countries', 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off',
+    onchange: (e) => saveCountry(e.target.value) });
+  const countryRow = h('label.dl-country', {}, h('span', {}, 'Prices for'), countryInput,
+    h('datalist', { id: 'dl-countries' }, ['ES', 'US', 'GB', 'DE', 'FR', 'IT', 'PT', 'NL', 'PL', 'SE', 'BR', 'MX', 'CA', 'AU', 'JP'].map((c) => h('option', { value: c }))));
+  const resetBtn = h('button.btn', { type: 'button', onclick: resetFilters }, 'Reset');
+  const showBtn = h('button.btn.primary', { type: 'button', onclick: () => shell.setSheet(false) });
+  const shell = createFilterShell({
+    body: [groups.status.el, groups.show.el, groups.cut.el, groups.price.el, groups.low.el, groups.store.el, countryRow],
+    foot: [resetBtn, showBtn] });
+  const results = h('section.dl-results', { 'aria-label': 'Deals' });
+
+  function resetFilters() {
+    const fresh = emptyDealsFilter();
+    Object.assign(filter, fresh);
+    searchInput.value = '';
+    draw();
+  }
+  function setView(v) {
+    if (v === view) return;
+    view = v;
+    // What only one list has (a status, an "added" date) or what differs between the lists (the shops) does not carry over.
+    filter.statuses.clear(); filter.stores.clear(); filter.added = false;
+    closeSheet();
+    draw();
+  }
+
+  // ---- the page head: title, (i), refresh and when it was checked, then the Library / Wishlist switch ----
+  let infoOpen = false; // the one-line explanation behind the (i) button
+  const infoBtn = h('button.dl-info', { type: 'button', 'aria-expanded': 'false', 'aria-label': 'About this page', onclick: () => { infoOpen = !infoOpen; paintHead(); } }, 'i');
+  const refreshBtn = h('button.dl-refresh', { type: 'button', onclick: refresh }, h('span', { 'aria-hidden': 'true' }, '↻'));
+  const checkedEl = h('span.dl-checked');
+  const infoPanel = h('div.dl-info-panel', { hidden: true });
+  const setupEl = h('p.hint', { hidden: true });
+  const libCount = h('span.c'), wishCount = h('span.c');
+  const libBtn = h('button', { type: 'button', onclick: () => setView('library') }, 'Library ', libCount);
+  const wishBtn = h('button', { type: 'button', onclick: () => setView('wishlist') }, 'Wishlist ', wishCount);
+  const seg = h('div.mode.dl-view', { role: 'group', 'aria-label': 'What to list', hidden: true }, libBtn, wishBtn);
+  const titleRow = h('div.dl-title-row', {}, h('h1', {}, 'Deals'), infoBtn, h('span.dl-spacer'), h('span.dl-check', {}, checkedEl, refreshBtn));
+  let infoKey = '';
+  function paintHead() {
+    const wl = view === 'wishlist';
     const r = info.refresh || {};
     const old = oldestCheck(info);
-    const views = info.wishlist ? h('div.dl-seg', { role: 'group', 'aria-label': 'What to list' },
-      h('button', { type: 'button', 'aria-pressed': String(view === 'library'), onclick: () => { view = 'library'; closeSheet(); draw(); } }, 'Library ', h('span.c', {}, String(scope.size))),
-      h('button', { type: 'button', 'aria-pressed': String(view === 'wishlist'), onclick: () => { view = 'wishlist'; closeSheet(); draw(); } }, 'Wishlist ', h('span.c', {}, String(info.wishlist.items.length)))) : null;
-    const btn = h('button.dl-refresh', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
-      'aria-label': r.running ? 'Reading prices' : 'Refresh prices',
-      title: info.configured ? 'Refresh prices' : 'IsThereAnyDeal is not set up (ITAD_API_KEY is missing from .env)' },
-    h('span' + (r.running ? '.spin' : ''), { 'aria-hidden': 'true' }, '↻'));
-    const checked = r.running ? `Reading prices… ${r.total ? `${r.done}/${r.total}` : ''}` : old ? `checked ${checkedLabel(old)}` : 'not checked yet';
-    const country = info.configured ? h('label.dl-country', {}, h('span.sr-only', {}, 'Country for prices'),
-      h('input', { value: info.country || 'ES', maxlength: 2, autocapitalize: 'characters', list: 'dl-countries', 'aria-label': 'Country code for prices, for example ES', autocomplete: 'off', title: 'Country for prices',
-        onchange: (e) => saveCountry(e.target.value) }),
-      h('datalist', { id: 'dl-countries' }, ['ES', 'US', 'GB', 'DE', 'FR', 'IT', 'PT', 'NL', 'PL', 'SE', 'BR', 'MX', 'CA', 'AU', 'JP'].map((c) => h('option', { value: c })))) : null;
-    return h('div.dl-toolbar', {}, views, h('span.dl-check', {}, btn, h('span.dl-checked', {}, checked)), country,
-      null);
+    infoBtn.setAttribute('aria-expanded', String(infoOpen));
+    infoPanel.hidden = !infoOpen;
+    const nStores = info.stores?.stores?.length || 0;
+    const key = [infoOpen, wl, nStores, !!info.telegram].join('|');
+    if (infoOpen && key !== infoKey) { // rebuilt only when it changes, so a focused button in it is not lost on a redraw
+      infoKey = key;
+      const text = wl ? 'Your Steam wishlist, not part of your library. A game leaves this list when you add it to your library or take it off your wishlist (for example by buying it); it is read from Steam when you press Refresh prices.'
+        : 'The price right now (at your preferred store when you set some, else the best price) and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
+      infoPanel.replaceChildren(h('p.hint', {}, text),
+        h('div.dl-panel-btns', {}, h('button.dl-tg', { type: 'button', onclick: openStores }, nStores ? `Preferred stores (${nStores})` : 'Preferred stores'),
+          info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null));
+    } else if (!infoOpen) infoKey = '';
+    const setup = !info.configured && !old ? 'IsThereAnyDeal is not set up: add ITAD_API_KEY to .env and restart the app (see the user manual, Deals).' : '';
+    setupEl.hidden = !setup;
+    setupEl.textContent = setup;
+    refreshBtn.disabled = !info.configured || r.running;
+    refreshBtn.setAttribute('aria-label', r.running ? 'Reading prices' : 'Refresh prices');
+    refreshBtn.title = info.configured ? 'Refresh prices' : 'IsThereAnyDeal is not set up (ITAD_API_KEY is missing from .env)';
+    refreshBtn.firstChild.className = r.running ? 'spin' : '';
+    checkedEl.textContent = r.running ? `Reading prices… ${r.total ? `${r.done}/${r.total}` : ''}` : old ? `Checked ${checkedLabel(old)}` : 'Not checked yet';
+    seg.hidden = !info.wishlist;
+    libBtn.setAttribute('aria-pressed', String(!wl));
+    wishBtn.setAttribute('aria-pressed', String(wl));
+    libCount.textContent = String(scopeOf(info).size);
+    wishCount.textContent = String(info.wishlist?.items?.length ?? 0);
+    countryRow.hidden = !info.configured;
+    if (document.activeElement !== countryInput) countryInput.value = info.country || 'ES';
   }
 
-  function filters() {
-    const scope = scopeOf(info);
-    const chips = view === 'wishlist' ? [] : DEAL_STATUSES.map((s) => {
-      const count = store.games.filter((g) => g.status === s.code && scope.has(g.id)).length;
-      return h('button.chip', { type: 'button', 'aria-pressed': String(statuses.has(s.code)), onclick: () => {
-        if (statuses.has(s.code)) statuses.delete(s.code); else statuses.add(s.code);
-        draw();
-      } }, s.label, ' ', h('span.c', {}, String(count)));
-    });
-    const alertCount = view === 'wishlist' ? buildWishlist(info, { alertsOnly: true }).rows.length : buildDeals(store.games, info, { alertsOnly: true }).rows.length;
-    const alertChip = h('button.chip' + (alertCount ? '' : '.zero'), { type: 'button', 'aria-pressed': String(alertsOnly), title: 'Games at their historical low or their lowest price in 2 years',
-      onclick: () => { alertsOnly = !alertsOnly; draw(); } }, 'Alerts ', h('span.c', {}, String(alertCount)));
-    const select = h('select.dl-sortsel', { 'aria-label': 'Sort by', onchange: (e) => { sort = e.target.value; dir = 1; draw(); } },
-      SORT_KEYS.filter((s) => !s.wish || view === 'wishlist').map((s) => h('option', { value: s.key, selected: s.key === sort || null }, s.label)));
-    return h('div.dl-filters', {}, select, ...chips, alertChip);
-  }
-
+  // ---- filling the page ----
+  const money = (units, currency) => {
+    try { return new Intl.NumberFormat(LOCALE, { style: 'currency', currency, maximumFractionDigits: 0 }).format(units); } catch { return `${units} ${currency}`; }
+  };
   const sectionNote = (rows, nameOf) => {
     const unsold = rows.filter((r) => r.p.price == null).map(nameOf);
     return unsold.length ? `No shop lists ${unsold.slice(0, 5).join(', ')}${unsold.length > 5 ? ` and ${unsold.length - 5} more` : ''}.` : '';
   };
   const waitingNote = (n) => `${n} ${n === 1 ? 'game is' : 'games are'} waiting for their prices: press Refresh prices.`;
-
-  function header(extra) {
-    const wl = view === 'wishlist';
-    const text = wl ? 'Your Steam wishlist, not part of your library. A game leaves this list when you add it to your library or take it off your wishlist (for example by buying it); it is read from Steam when you press Refresh prices.'
-      : 'The price right now (at your preferred store when you set some, else the best price) and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
-    const setup = !info.configured && !oldestCheck(info) ? 'IsThereAnyDeal is not set up: add ITAD_API_KEY to .env and restart the app (see the user manual, Deals).' : '';
-    return [
-      h('div.dl-title-row', {}, h('h1', {}, 'Deals'),
-        h('button.dl-info', { type: 'button', 'aria-expanded': String(infoOpen), 'aria-label': 'About this page', onclick: () => { infoOpen = !infoOpen; draw(); } }, 'i')),
-      infoOpen ? h('div.dl-info-panel', {}, h('p.hint', {}, text),
-        h('div.dl-panel-btns', {}, h('button.dl-tg', { type: 'button', onclick: openStores }, info.stores?.stores?.length ? `Preferred stores (${info.stores.stores.length})` : 'Preferred stores'),
-          info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null)) : null,
-      setup ? h('p.hint', {}, setup) : null,
-      toolbar(),
-      extra,
-      filters(),
-    ].filter(Boolean);
-  }
+  const clearBtn = () => h('button.btn', { type: 'button', onclick: resetFilters }, 'Clear filters');
 
   // The Wishlist view: the Steam wishlist games, with the same rows.
-  function drawWishlist() {
+  function resultsWishlist(now) {
     const w = info.wishlist;
-    const { rows, unmatched, waiting } = buildWishlist(info, { sort, dir, alertsOnly });
-    const empty = alertsOnly ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
+    const { rows, unmatched, waiting } = buildWishlist(info, { filter, sort, dir, now });
+    const filtered = dealsFilterCount(filter, true) > 0 || filter.q;
+    const onlyAlerts = filter.alerts && dealsFilterCount(filter, true) === 1 && !filter.q;
+    const empty = onlyAlerts ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
       : w.items.length ? 'No games match these filters.'
       : w.hidden.length ? 'All your wishlist games are hidden. Show them again below.'
       : w.status ? '' : 'Press Refresh prices to read your Steam wishlist.';
     const unsold = sectionNote(rows, (r) => r.item.title);
-    page.replaceChildren(...[
-      ...header(w.status ? h('p.hint.deal-note', { role: 'status' }, w.status) : null),
+    return { rowCount: rows.length, nodes: [
+      w.status ? h('p.hint.deal-note', { role: 'status' }, w.status) : null,
       rows.length ? list(rows, (r) => wishRow(r, r.badge)) : null,
       unsold ? h('p.hint', {}, unsold) : null,
-      !rows.length && empty ? emptyBox(empty) : null,
-      !alertsOnly && waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
-      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
+      !rows.length && empty ? emptyBox(empty, filtered && w.items.length ? clearBtn() : null) : null,
+      waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
+      unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'IsThereAnyDeal does not know these Steam apps (it is tried again after a week).'),
         plainList(unmatched, (u) => wishPlainRow(u, 'No match on IsThereAnyDeal'))) : null,
       w.hidden.length ? h('details.hidden-list', {},
         h('summary', {}, `Hidden (${w.hidden.length})`),
         h('ul', {}, w.hidden.map((i) => h('li', {}, h('span', {}, i.title),
           h('button.hide-chip', { type: 'button', 'aria-label': `Show ${i.title} again`, onclick: () => setWishHidden(i, false) }, 'Show again'))))) : null,
-    ].filter(Boolean));
+    ].filter(Boolean) };
   }
 
-  function draw() {
-    if (!info.wishlist) view = 'library';
-    if (view === 'wishlist') { drawWishlist(); return; }
-    const { rows, unmatched, waiting } = buildDeals(store.games, info, { statuses, sort, dir, alertsOnly });
+  function resultsLibrary(now) {
+    const { rows, unmatched, waiting } = buildDeals(store.games, info, { filter, sort, dir, now });
     const scope = rows.length + unmatched.length + waiting.length;
     const hiddenList = hiddenGames(store.games, info);
-    const empty = alertsOnly ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
+    const filtered = dealsFilterCount(filter) > 0 || filter.q;
+    const onlyAlerts = filter.alerts && dealsFilterCount(filter) === 1 && !filter.q;
+    const empty = onlyAlerts ? 'No price alerts right now. A game gets one when its price reaches its historical low or its lowest in 2 years.'
       : scopeOf(info).size ? 'No games match these filters.'
       : hiddenList.length ? 'All your deals games are hidden. Show them again below.'
       : 'Deals shows games you don’t own and haven’t played yet: in the backlog or up next, with no years played, and ownership Borrowed, Family Share, Nope or empty.';
     // Matched, but no shop sells it: often the match is an old or delisted entry (a game and its "Final Cut"), so say where to look.
     const unsold = sectionNote(rows, (r) => r.game.title);
-    page.replaceChildren(...[
-      ...header(null),
+    return { rowCount: rows.length, nodes: [
       rows.length ? list(rows, (r) => libRow(r, r.badge)) : null,
       unsold ? h('p.hint', {}, `${unsold} Wrong game? Open one and tap “Wrong game?” to pick another.`) : null,
-      !rows.length && info.configured ? emptyBox(scope && !alertsOnly ? 'No prices yet. Press Refresh prices.' : empty) : null,
-      !alertsOnly && waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
-      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
+      !rows.length && info.configured ? emptyBox(scope && !filtered ? 'No prices yet. Press Refresh prices.' : empty, filtered && scopeOf(info).size ? clearBtn() : null) : null,
+      waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
+      unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'Open a game to pick the right one by hand.'),
         plainList(unmatched, (u) => libPlainRow(u, u.match.source === 'user' ? 'You said there is no match' : 'No exact match found'))) : null,
       hiddenList.length ? h('details.hidden-list', {},
         h('summary', {}, `Hidden (${hiddenList.length})`),
         h('ul', {}, hiddenList.map((g) => h('li', {}, h('span', {}, g.title),
           h('button.hide-chip', { type: 'button', 'aria-label': `Show ${g.title} again`, onclick: () => setHidden(g, false) }, 'Show again'))))) : null,
-    ].filter(Boolean));
+    ].filter(Boolean) };
   }
+
+  /** An active-filter pill: tapping it removes the filter (the Library's pills). */
+  function paintPills(base, wl, rowCount) {
+    const off = (fn) => () => { fn(); draw(); };
+    const cur = base.find((r) => r.p?.currency)?.p.currency || 'EUR';
+    const pills = [];
+    if (!wl) for (const s of DEAL_STATUSES) if (filter.statuses.has(s.code)) pills.push(pill('', `Status: ${s.label}`, off(() => filter.statuses.delete(s.code)), h('b', {}, 'Status'), s.label));
+    if (filter.sale) pills.push(pill('', 'On sale', off(() => { filter.sale = false; }), 'On sale'));
+    if (filter.minCut) pills.push(pill('', `Discount ${filter.minCut}% or more`, off(() => { filter.minCut = 0; }), h('b', {}, 'Discount'), `${filter.minCut}%+`));
+    if (filter.maxPrice) pills.push(pill('', `Price under ${money(filter.maxPrice, cur)}`, off(() => { filter.maxPrice = 0; }), h('b', {}, 'Price'), `under ${money(filter.maxPrice, cur)}`));
+    for (const l of LOW_TYPES) if (filter.lows.has(l.key)) pills.push(pill('', l.label, off(() => filter.lows.delete(l.key)), l.label));
+    if (filter.alerts) pills.push(pill('', 'Alerts', off(() => { filter.alerts = false; }), 'Alerts'));
+    for (const s of filter.stores) pills.push(pill('', `Store: ${s}`, off(() => filter.stores.delete(s)), h('b', {}, 'Store'), s));
+    if (filter.ends) pills.push(pill('', `Ends within ${ENDS_DAYS} days`, off(() => { filter.ends = false; }), `Ends within ${ENDS_DAYS} days`));
+    if (wl && filter.added) pills.push(pill('', `Added in the last ${ADDED_DAYS} days`, off(() => { filter.added = false; }), `Added in the last ${ADDED_DAYS} days`));
+    const revert = (pills.length || filter.q) && h('button.pill.reset', { type: 'button', onclick: resetFilters }, 'Reset');
+    meta.replaceChildren(count, ...pills, revert);
+    count.textContent = base.length ? `${rowCount} of ${plural(base.length, 'game')}` : '';
+  }
+
+  /** Brings the panel's chips in line with the filter: states, the counts they would give, the shops that exist. */
+  function paintPanel(base, wl, now, cur) {
+    // the shops present in this list (and the ones in the filter, so a saved link never loses a condition)
+    const shops = storesOf(base);
+    for (const s of filter.stores) if (!shops.some((x) => x.name === s)) shops.push({ name: s, count: 0 });
+    const sig = shops.map((s) => s.name).join('\u0001');
+    if (sig !== storeSig) {
+      storeSig = sig;
+      storeRefs = shops.map((s) => {
+        const c = h('span.c');
+        const btn = h('button.chip', { type: 'button', onclick: () => { toggleIn(filter.stores, s.name)(); draw(); } }, h('span', {}, s.name), c);
+        return { btn, c, on: () => filter.stores.has(s.name), count: () => ({ stores: new Set([s.name]) }) };
+      });
+      storeChips.replaceChildren(...storeRefs.map((r) => r.btn));
+    }
+    for (const r of priceRefs) if (r.money) r.label.textContent = `Under ${money(r.money, cur)}`;
+    for (const r of [...chipRefs, ...storeRefs]) {
+      const selected = r.on();
+      let n = r.count();
+      if (typeof n === 'object') n = base.filter((row) => rowPasses({ ...filter, ...n }, row, now)).length;
+      r.c.textContent = n;
+      r.btn.setAttribute('aria-pressed', String(selected));
+      r.btn.classList.toggle('zero', n === 0 && !selected);
+    }
+    addedChip.btn.hidden = !wl;
+    groups.status.el.hidden = wl;
+    groups.store.el.hidden = !shops.length;
+    const n = (set) => set.size || '';
+    groups.status.n.textContent = n(filter.statuses);
+    groups.show.n.textContent = (filter.sale ? 1 : 0) + (filter.alerts ? 1 : 0) + (filter.ends ? 1 : 0) + (wl && filter.added ? 1 : 0) || '';
+    groups.cut.n.textContent = filter.minCut ? 1 : '';
+    groups.price.n.textContent = filter.maxPrice ? 1 : '';
+    groups.low.n.textContent = n(filter.lows);
+    groups.store.n.textContent = n(filter.stores);
+  }
+
+  function draw() {
+    if (!alive) return;
+    if (loaded && !info.wishlist) view = 'library';
+    const wl = view === 'wishlist';
+    const now = new Date();
+    const nFilters = dealsFilterCount(filter, wl);
+    let rowCount = 0;
+    const base = wl ? (info.wishlist ? buildWishlist(info, { now }).rows : []) : buildDeals(store.games, info, { now }).rows;
+    if (wl && !info.wishlist) results.replaceChildren(); // the list is not known yet (the page was opened on the Wishlist and the answer is still on its way)
+    else { const r = wl ? resultsWishlist(now) : resultsLibrary(now); results.replaceChildren(...r.nodes); rowCount = r.rowCount; }
+    const keys = SORT_KEYS.filter((s) => !s.wish || wl);
+    if (!keys.some((s) => s.key === sort)) { sort = 'cut'; dir = 1; }
+    sortBtn.querySelector('.sort-label').textContent = (SORT_KEYS.find((s) => s.key === sort)?.label || '') + (dir === -1 ? ' ↑' : '');
+    paintHead();
+    paintPanel(base, wl, now, base.find((r) => r.p?.currency)?.p.currency || 'EUR');
+    paintPills(base, wl, rowCount);
+    filterBtn.setCount(nFilters);
+    showBtn.textContent = `Show ${plural(rowCount, 'game')}`;
+    if (sortSheet.sheet.classList.contains('open')) paintSort();
+    const qs = dealsStateToQuery({ view, filter, sort, dir });
+    replaceUrl(hashWithGame('#/deals' + (qs ? '?' + qs : ''), gameIdFromHash(location.hash))); // an open game stays in the address
+  }
+
+  // The filter panel sticks below the toolbar, whose height varies (wrapped pills). On a phone the toolbar is pinned to the
+  // top of the screen once the title has scrolled away; then it also clears the notch.
+  const syncToolbar = () => {
+    document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--head-h', '0px');
+  };
+  const syncStuck = () => toolbar.classList.toggle('stuck', toolbar.getBoundingClientRect().top <= 1);
+  window.addEventListener('scroll', syncStuck, { passive: true });
+  const ro = new ResizeObserver(syncToolbar);
+  ro.observe(toolbar);
+  const onKey = (e) => {
+    if (e.key === '/' && document.activeElement !== searchInput && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector('dialog[open]')) { e.preventDefault(); searchInput.focus(); }
+    if (e.key === 'Escape') shell.setSheet(false);
+  };
+  document.addEventListener('keydown', onKey);
+
+  page.replaceChildren(titleRow, infoPanel, setupEl, seg, toolbar, h('div.library', {}, shell.panel, shell.scrim, results), ...sortSheet.el);
+  syncToolbar();
 
   // A game edited elsewhere may enter or leave the scope (ownership, years played): draw at once, then ask the server again (cache only, no ITAD).
   let reloadTimer = null;
@@ -414,5 +602,9 @@ export function renderDeals(root) {
   draw();
   load();
   window.addEventListener('games-changed', onGames);
-  return () => { alive = false; clearTimeout(timer); clearTimeout(reloadTimer); closeSheet(); window.removeEventListener('games-changed', onGames); window.removeEventListener('deals-changed', load); };
+  return () => {
+    alive = false; clearTimeout(timer); clearTimeout(reloadTimer); closeSheet();
+    window.removeEventListener('games-changed', onGames); window.removeEventListener('deals-changed', load);
+    window.removeEventListener('scroll', syncStuck); document.removeEventListener('keydown', onKey); ro.disconnect(); shell.destroy();
+  };
 }

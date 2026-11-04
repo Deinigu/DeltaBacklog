@@ -169,7 +169,7 @@ await shot(p, 'similar-phone');
 await go(p, '#/deals'); await wait(1200); // made-up prices from the demo data (nothing is read from IsThereAnyDeal)
 await shot(p, 'deals-phone');
 if (!process.env.BASE_URL) { // the Wishlist section (the demo server has a made-up STEAM_ID)
-  await clickText(p, '.dl-seg button', 'Wishlist'); await wait(600);
+  await clickText(p, '.dl-view button', 'Wishlist'); await wait(600);
   await shot(p, 'deals-wishlist-phone');
 }
 
@@ -303,7 +303,7 @@ await shot(p, 'library-desktop');
 await go(p, '#/library?layout=table&sort=title:asc');
 await shot(p, 'table-desktop');
 await go(p, '#/deals'); await wait(1200);
-if (!process.env.BASE_URL) { await clickText(p, '.dl-seg button', 'Wishlist'); await wait(600); }
+if (!process.env.BASE_URL) { await clickText(p, '.dl-view button', 'Wishlist'); await wait(600); }
 await shot(p, 'deals-desktop');
 await go(p, '#/screenshots');
 await shot(p, 'gallery-desktop');

@@ -35,7 +35,7 @@ func TestMergeSettingsKeepsTelegram(t *testing.T) {
 	}
 }
 
-// The daily price check is shipped, installed and enabled like the nightly backup, and runs as the service user with the
+// The price check (every 6 hours) is shipped, installed and enabled like the nightly backup, and runs as the service user with the
 // same settings file.
 func TestDealsTimerIsInstalled(t *testing.T) {
 	read := func(name string) string {

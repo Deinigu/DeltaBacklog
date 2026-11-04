@@ -41,7 +41,7 @@ const (
 	lockStale = 30 * time.Minute
 )
 
-// ErrBusy: another price run (the app's Refresh or the daily check) is going on.
+// ErrBusy: another price run (the app's Refresh or the scheduled check) is going on.
 var ErrBusy = errors.New("another price check is running")
 
 // Who holds the run lock.
@@ -319,7 +319,7 @@ func fillTwoYearLows(ctx context.Context, d *sql.DB, hs HistorySource, now time.
 	return fillWishTwoYearLows(ctx, d, hs, now, &budget)
 }
 
-// ---------------- the daily check ----------------
+// ---------------- the scheduled check ----------------
 
 // CheckResult is what a `deals-check` run did.
 type CheckResult struct {
@@ -328,7 +328,7 @@ type CheckResult struct {
 	Sent   bool // a notifier was set up and took the messages
 }
 
-// Check is the daily run: it refreshes the prices (same rules as the app's Refresh), reads the two-year lows that are
+// Check is the scheduled run (every 6 hours): it refreshes the prices (same rules as the app's Refresh), reads the two-year lows that are
 // needed, applies the alert rule and sends the alerts to notify (nil: only recorded for the app). The caller holds AcquireRun.
 func Check(ctx context.Context, d *sql.DB, src Source, notify Notifier) (CheckResult, error) {
 	return CheckWith(ctx, d, src, nil, notify)

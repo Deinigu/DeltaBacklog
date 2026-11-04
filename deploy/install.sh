@@ -3,7 +3,7 @@
 #
 #   sudo ./install.sh <stage-dir>
 #
-# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service and the daily price check, deltabacklog-deals), backup.sh, name.sh, and optionally
+# <stage-dir> contains: deltabacklog (the armv7 binary), the .service/.timer files (including deltabacklog-name.service and the price check that runs every 6 hours, deltabacklog-deals), backup.sh, name.sh, and optionally
 #   env       the settings file; installed to /etc/deltabacklog.env (root only) when given, kept otherwise
 #   seed/     app.db and covers/ for a first install; only used when no database exists yet
 # It is safe to run again: data is never overwritten, the service is restarted only if the program, the settings or the

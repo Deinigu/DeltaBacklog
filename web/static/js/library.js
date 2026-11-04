@@ -1,8 +1,9 @@
 // Library view (and saved views): instant search, tri-state faceted filters, multi-level sort, cover grid.
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { createTtbFilter } from './ttbfilter.js';
+import { createSearchBox, createFilterButton, createFilterShell, filterGroup, pill } from './filtershell.js';
 import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
-import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, NO_AUTOCORRECT, toastError } from './util.js';
+import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, toastError } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -11,7 +12,7 @@ import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
-import { openLayer, replaceUrl } from './layers.js';
+import { replaceUrl } from './layers.js';
 import { hashWithGame, gameIdFromHash } from './gameurl.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
@@ -47,16 +48,14 @@ export function renderLibrary(root, opts = {}) {
   const label = (grp, v) => (grp.key === 'ownership' ? ownershipLabel(v) : null) ?? (grp.key === 'status' ? store.statusByCode.get(v)?.label : null) ?? (grp.key === 'year' && isNaN(v) ? v[0].toUpperCase() + v.slice(1) : v);
 
   // ---------- header + toolbar ----------
-  const input = h('input', { type: 'search', placeholder: 'Search games…', autocomplete: 'off', ...NO_AUTOCORRECT, enterkeyhint: 'search', 'aria-label': 'Search', value: state.q });
-  const clearBtn = h('button.clear', { type: 'button', 'aria-label': 'Clear search', onclick: () => { input.value = ''; state.q = ''; input.focus(); update(); } }, '✕');
-  const filterBadge = h('span.badge', { hidden: true });
-  const filterBtn = h('button.btn.open-filters', { type: 'button', 'aria-label': 'Filters', onclick: () => setSheet(true) }, icon('filter'), filterBadge);
+  const searchBox = createSearchBox({ value: state.q, onClear: () => { state.q = ''; update(); } });
+  const input = searchBox.input;
+  const filter = createFilterButton(() => setSheet(true));
+  const filterBtn = filter.btn;
   const sortSheet = createSortSheet(state, () => update());
   const sortBtn = h('button.btn.sort-btn', { type: 'button', 'aria-label': 'Sort and group', onclick: () => sortSheet.open() }, icon('sort'), h('span.sort-label'));
   const meta = h('div.meta-row');
   const count = h('span.count', { role: 'status' }); // one live region for the whole page: "12 of 600 games" is announced as the filters change
-  /** An active-filter pill: tapping it removes the filter. */
-  const pill = (cls, name, onclick, ...kids) => h('button.pill' + cls, { type: 'button', 'aria-label': `Remove filter: ${name}`, onclick }, ...kids.slice(0, -1), h('span', {}, kids[kids.length - 1], h('span', { 'aria-hidden': 'true' }, ' ✕'))); // the label and ✕ are one flex item, as before
 
   let reordering = false;
   let tableInst = null, tableBox = null;
@@ -78,7 +77,7 @@ export function renderLibrary(root, opts = {}) {
   narrow.addEventListener('change', onNarrow);
 
   const toolbar = h('div.toolbar', {}, head,
-    h('div.toolbar-row', {}, h('div.search', {}, icon('search'), input, clearBtn), filterBtn, sortBtn), meta);
+    h('div.toolbar-row', {}, searchBox.el, filterBtn, sortBtn), meta);
 
   input.addEventListener('input', debounce(() => { state.q = norm(input.value.trim()); update(); }, 90));
 
@@ -87,7 +86,6 @@ export function renderLibrary(root, opts = {}) {
   const groupRefs = {};
   const modeRefs = {};
   const groupEls = GROUPS.map((grp) => {
-    const nSel = h('span.n');
     const chips = h('div.chips', {}, order[grp.key].map((v) => {
       const count = h('span.c');
       const dot = grp.key === 'status' ? h('span.dot', { style: `background:${store.statusByCode.get(v)?.color}` }) : null;
@@ -102,10 +100,11 @@ export function renderLibrary(root, opts = {}) {
       mode = h('div.mode', { role: 'group', 'aria-label': `${grp.label}: match any or all` }, any, all);
       modeRefs[grp.key] = { el: mode, any, all };
     }
-    groupRefs[grp.key] = nSel;
     const open = grp.key === 'status' || state.in[grp.key].size > 0 || state.ex[grp.key].size > 0;
     // Groups that only IGDB fills (game mode, perspective) stay hidden until some game has a value.
-    return h('details.group', { open: open || null, hidden: order[grp.key].length === 0 }, h('summary', {}, h('span', {}, grp.label), nSel), mode, chips);
+    const group = filterGroup(grp.label, { open, hidden: order[grp.key].length === 0, lead: mode, chips });
+    groupRefs[grp.key] = group.n;
+    return group.el;
   });
   const flagRefs = FLAGS.map((f) => {
     const btn = h('button.chip', { type: 'button', hidden: !!f.test && !state.flags.has(f.key) && !store.games.some(f.test), onclick: () => { state.flags.has(f.key) ? state.flags.delete(f.key) : state.flags.add(f.key); update(); } }, f.label);
@@ -114,31 +113,11 @@ export function renderLibrary(root, opts = {}) {
   const ttbFilter = createTtbFilter(state, () => update());
   const showBtn = h('button.btn.primary', { type: 'button', onclick: () => setSheet(false) });
   const resetBtn = h('button.btn', { type: 'button', onclick: reset }, view ? 'Revert' : 'Reset');
-  const panel = h('aside.filters', { 'aria-label': 'Filters' },
-    h('div.filters-head', {}, h('span', {}, 'Filters'), h('button.btn.close-sheet', { type: 'button', onclick: () => setSheet(false), 'aria-label': 'Close filters' }, '✕')),
-    h('div.filters-body', {},
-      h('p.chip-hint', {}, 'Tap a chip to include it, tap again to exclude it.'),
-      h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls, ttbFilter.el),
-    h('div.filters-foot', {}, resetBtn, showBtn));
-  const scrim = h('div.scrim', { onclick: () => setSheet(false) });
-  // Below 900px the panel is a bottom sheet that is only moved off screen when closed: `inert` keeps Tab and screen
-  // readers out of it then. From 900px it is a sidebar that is always there.
-  const sheetMode = window.matchMedia('(max-width: 899px)');
-  let releasePanel = null;
-  const syncPanel = () => {
-    if (!sheetMode.matches && panel.classList.contains('open')) setSheet(false); // the window grew into a sidebar
-    panel.inert = sheetMode.matches && !panel.classList.contains('open');
-  };
-  function setSheet(on) {
-    if (on === panel.classList.contains('open')) return;
-    if (on) panel.inert = false;
-    panel.classList.toggle('open', on);
-    scrim.classList.toggle('show', on);
-    if (on) releasePanel = openLayer(panel, { requestClose: () => setSheet(false) }); // Back closes it, Tab stays inside
-    else { releasePanel?.(); releasePanel = null; syncPanel(); }
-  }
-  sheetMode.addEventListener('change', syncPanel);
-  syncPanel();
+  // The panel is a bottom sheet below 900px and a sidebar from there (see filtershell.js).
+  const shell = createFilterShell({ body: [
+    h('p.chip-hint', {}, 'Tap a chip to include it, tap again to exclude it.'),
+    h('div.chips', {}, flagRefs.map((r) => r.btn)), groupEls, ttbFilter.el], foot: [resetBtn, showBtn] });
+  const { panel, scrim, setSheet } = shell;
 
   // ---------- results ----------
   const results = h('section', { 'aria-label': 'Games' });
@@ -314,8 +293,7 @@ export function renderLibrary(root, opts = {}) {
       head.insertBefore(saveBtn, manageBtn || null);
       head.insertBefore(saveAsBtn, manageBtn || null);
     }
-    filterBadge.hidden = !nFilters;
-    filterBadge.textContent = nFilters;
+    filter.setCount(nFilters);
     count.textContent = `${list.length} of ${plural(store.games.length, 'game')}`;
     showBtn.textContent = `Show ${plural(list.length, 'game')}`;
 
@@ -343,5 +321,5 @@ export function renderLibrary(root, opts = {}) {
   window.addEventListener('games-changed', onGames);
   document.addEventListener('keydown', onKey);
   return () => {
-    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); sheetMode.removeEventListener('change', syncPanel); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
+    window.removeEventListener('games-changed', onGames); document.removeEventListener('keydown', onKey); narrow.removeEventListener('change', onNarrow); shell.destroy(); window.removeEventListener('scroll', syncStuck); ro.disconnect(); };
 }
