@@ -322,8 +322,9 @@ export function seriesProgress(games) {
  * y just under the sticky chips. It is the section whose top has passed the line last and that is still on screen;
  * before the first section it is the first one, and past the end of the last one it stays the last.
  */
-export function currentSection(rects, line) {
+export function currentSection(rects, line, atEnd = false) {
   if (!rects.length) return null;
+  if (atEnd) return rects[rects.length - 1].id; // the page cannot scroll further: the last section is the one being read
   let best = null;
   for (const r of rects) if (r.top <= line && r.bottom > line && (!best || r.top > best.top)) best = r;
   if (best) return best.id;

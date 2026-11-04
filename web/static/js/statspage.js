@@ -256,9 +256,10 @@ export function renderStats(root) {
     size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`));
 
   // The chips stick under the top of the screen on a phone (CSS); the one for the section being read is marked.
+  let picked = () => {}; // set below: a tapped chip is the current one until the person scrolls by hand
   const jump = h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
     type: 'button', 'data-to': id,
-    onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
+    onclick: () => { picked(id); const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
   }, label)));
 
   root.replaceChildren(h('div.stats-page', {},
@@ -275,24 +276,41 @@ export function renderStats(root) {
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
 
-  if (typeof IntersectionObserver === 'function') {
+  {
     const secs = SECTIONS.map(([id]) => root.querySelector(`[data-sec="${id}"]`)).filter(Boolean);
-    let shown = null;
+    let shown = null; // what the chips show now: a section id, or null while they are not sticky
+    let tapped = null; // a chip the person pressed: it stays the current one until they scroll by hand
     const mark = () => {
-      const line = jump.getBoundingClientRect().bottom + 8;
-      const id = currentSection(secs.map((el) => { const b = el.getBoundingClientRect(); return { id: el.dataset.sec, top: b.top, bottom: b.bottom }; }), line);
+      // Only the phone layout has sticky chips and a highlight; elsewhere nothing is announced as current
+      const sticky = getComputedStyle(jump).position === 'sticky';
+      let id = null;
+      if (sticky) {
+        const line = jump.getBoundingClientRect().bottom + 16; // more than the cards' scroll margin, so a jumped-to section counts
+        const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+        id = tapped ?? currentSection(secs.map((el) => { const b = el.getBoundingClientRect(); return { id: el.dataset.sec, top: b.top, bottom: b.bottom }; }), line, atEnd);
+      }
       if (id === shown) return;
       shown = id;
-      for (const b of jump.children) {
-        const on = b.dataset.to === id;
-        if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
-        if (on) jump.scrollLeft = b.offsetLeft - (jump.clientWidth - b.offsetWidth) / 2; // keep the chip in view in the row
+      for (const btn of jump.children) {
+        const on = btn.dataset.to === id;
+        if (on) btn.setAttribute('aria-current', 'true'); else btn.removeAttribute('aria-current');
+        if (on) jump.scrollLeft = btn.offsetLeft - (jump.clientWidth - btn.offsetWidth) / 2; // keep the chip in view in the row
       }
     };
-    // A section entering or leaving the strip just under the chips is the moment the current one can change.
-    const io = new IntersectionObserver(mark, { rootMargin: '-60px 0px -50% 0px', threshold: [0, 1] });
-    secs.forEach((el) => io.observe(el));
-    cleanups.push(() => io.disconnect());
+    let raf = 0;
+    const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; mark(); }); }; // a scroll event per frame at most: 9 rects
+    const free = () => { tapped = null; soon(); }; // a wheel, touch or key press ends a tapped chip's hold
+    picked = (id) => { tapped = id; mark(); };
+    window.addEventListener('scroll', soon, { passive: true });
+    for (const ev of ['wheel', 'touchstart', 'keydown']) window.addEventListener(ev, free, { passive: true });
+    const mq = matchMedia('(max-width: 899px)');
+    mq.addEventListener('change', soon);
+    cleanups.push(() => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', soon);
+      for (const ev of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(ev, free);
+      mq.removeEventListener('change', soon);
+    });
     mark();
   }
   return () => cleanups.forEach((f) => f());

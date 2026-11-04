@@ -284,4 +284,8 @@ test('currentSection: the section under the sticky chips, the one just passed in
   assert.equal(currentSection(r, 1300), 'c'); // past the end
   const s = r.map((x) => ({ ...x, top: x.top - 600, bottom: x.bottom - 600 })); // scrolled by 600
   assert.equal(currentSection(s, 60), 'b');
+  assert.equal(currentSection(r, 50, true), 'c'); // at the bottom of the page the last section wins, even if it never reaches the line
+  assert.equal(currentSection([], 50, true), null);
+  // a section jumped to sits a little below the line (scroll margin): the line has slack, so it still counts
+  assert.equal(currentSection([{ id: 'a', top: -300, bottom: 64 }, { id: 'b', top: 64.3, bottom: 800 }], 72), 'b');
 });

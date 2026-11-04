@@ -200,13 +200,17 @@ export function renderTable(ctx) {
       const raw = input.value;
       // Where Enter/Tab go next is decided now: the commit below can re-sort the list under us.
       const target = move === 'down' ? ctx.list[ctx.list.indexOf(g) + 1] : g;
+      let saving = null;
       if (save && raw !== initial) {
         if (c.key === 'title' && !raw.trim()) toast('A title can\u2019t be empty');
-        else if (c.kind === 'number') commit(g, c, raw === '' ? 0 : Number(raw)); // 0 is how the API clears a number (a JSON null means "leave it"); patchGame then stores null locally
-        else if (c.kind === 'select' || c.kind === 'longtext') commit(g, c, raw);
-        else commit(g, c, raw.trim());
+        else if (c.kind === 'number') saving = commit(g, c, raw === '' ? 0 : Number(raw)); // 0 is how the API clears a number (a JSON null means "leave it"); patchGame then stores null locally
+        else if (c.kind === 'select' || c.kind === 'longtext') saving = commit(g, c, raw);
+        else saving = commit(g, c, raw.trim());
       }
       show(el, g, c, i);
+      // A failed save: the game is back to what the server has, but this row was kept as it is (it was being edited when
+      // the refresh came), so it still shows the typed value. Draw it again from the game, unless a new edit began.
+      saving?.then((ok) => { if (!ok && el.isConnected && !el.classList.contains('editing')) show(el, g, c, i); });
       // Left with the keyboard: the cell keeps the focus (a click elsewhere took it on purpose, so do not steal it back)
       if (byKey) { setActive(g.id, i); el.focus({ preventScroll: true }); }
       if (move && target) moveEdit(target, i, move);

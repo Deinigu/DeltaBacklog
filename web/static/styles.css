@@ -1209,12 +1209,10 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 /* ---- batch 3: per-page usability ---- */
 .act-more { min-width: 44px; padding: 0 12px; font-weight: 700; }
 .att-actions { flex-wrap: nowrap; } /* the main button and "⋯" stay on one line */
-.dl-act.danger-text { color: #b91c1c; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dl-act.danger-text { color: #f87171; } }
-:root[data-theme="dark"] .dl-act.danger-text { color: #f87171; }
+.dl-act.danger-text { color: var(--danger); }
 
 /* Hidden: the compact Deals-style row (picture, title, where it came from, date) with a small button at its end */
-.hidden-page .up-row, .up-page.hidden-page .up-row { flex-wrap: nowrap; }
+.up-page.hidden-page .up-row { flex-wrap: nowrap; }
 .up-page.hidden-page .up-row .si-actions { flex: none; flex-direction: row; padding-left: 0; }
 .up-page.hidden-page .up-row .si-actions > * { flex: none; padding: 0 12px; }
 
