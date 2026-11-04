@@ -4,6 +4,9 @@ import { store, coverURL, listAllShots } from './api.js';
 import { openDrawer } from './drawer.js';
 import { PAGE, galleryQuery, groupRuns, remaining, shotsLabel, runLabel, stepAcross, emptyText } from './gallery.js';
 import { openShotViewer } from './shotviewer.js';
+import { replaceUrl } from './layers.js';
+import { hashWithGame, gameIdFromHash } from './gameurl.js';
+import { params, qOf } from './listfilter.js';
 
 const SORT_KEY = 'gallery-sort';
 const MAX_RELOAD = 500; // the most pictures a refresh asks for at once (the API's own limit)
@@ -20,9 +23,9 @@ export function renderGallery(root) {
   let paging = null; // the promise of a "Show more" in flight
   let groups = []; // by game: {gameId, n, grid, nEl}, one per header drawn
   let flat = null; // newest first: the one grid
-  const f = { q: '', year: '', sort: readSort() };
+  const f = { q: qOf(params(location.hash.split('?')[1])), year: '', sort: readSort() }; // the search is in the address (#/screenshots?q=hades): a reload keeps it
 
-  const input = h('input', { type: 'search', placeholder: 'Search by game or caption', 'aria-label': 'Search screenshots', autocomplete: 'off', ...NO_AUTOCORRECT });
+  const input = h('input', { type: 'search', placeholder: 'Search by game or caption', 'aria-label': 'Search screenshots', autocomplete: 'off', ...NO_AUTOCORRECT, value: f.q });
   const year = h('select', { 'aria-label': 'Year' }, h('option', { value: '' }, 'Any year'));
   const sort = h('select', { 'aria-label': 'Layout' },
     h('option', { value: 'game' }, 'By game'), h('option', { value: 'newest' }, 'All, newest first'));
@@ -182,7 +185,11 @@ export function renderGallery(root) {
     }, i);
   }
 
-  input.addEventListener('input', debounce(() => { f.q = input.value; load(); }, 250));
+  input.addEventListener('input', debounce(() => {
+    f.q = input.value;
+    replaceUrl(hashWithGame('#/screenshots' + (f.q.trim() ? '?q=' + encodeURIComponent(f.q.trim()) : ''), gameIdFromHash(location.hash)));
+    load();
+  }, 250));
   year.addEventListener('change', () => { f.year = year.value; load(); });
   sort.addEventListener('change', () => {
     f.sort = sort.value;

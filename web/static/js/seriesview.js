@@ -128,7 +128,7 @@ export function renderSeries(root, openKey = null) {
       })),
       h('span.stitle', {}, s.name),
       bar(s),
-      h('small', {}, `${s.finished}/${s.total} finished`, done ? h('b.sdone', { 'aria-hidden': 'true' }, 'Completed ✓') : null, n ? h('b.newn', {}, `+${n} not in library`) : null));
+      h('small', {}, `${s.finished}/${s.owned} finished${s.notOwned ? ` · ${s.notOwned} not owned` : ''}`, done ? h('b.sdone', { 'aria-hidden': 'true' }, 'Completed ✓') : null, n ? h('b.newn', {}, `+${n} not in library`) : null));
   }
 
   function refreshBar() {

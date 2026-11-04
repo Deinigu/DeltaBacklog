@@ -1,6 +1,6 @@
 // The Series page's search, filters and sort. Pure (no DOM): unit-tested. The series themselves come from series.js
 // (buildSeries); this module only decides which of them are shown and in what order.
-import { isFinished, extraOf } from './series.js';
+import { extraOf } from './series.js';
 import { matchesText, override, params, qOf, setOf, appendSet, byName, tally } from './listfilter.js';
 
 /** How far through a series the owner is. `completed` is isCompleted; `progress` has a played game; `notstarted` has none. */
@@ -23,18 +23,14 @@ export function emptySeriesFilter() {
 
 export const seriesFilterCount = (f) => f.progress.size + (f.left ? 1 : 0) + (f.missing ? 1 : 0) + f.platforms.size;
 
-const isNotOwned = (g) => String(g.ownership ?? '').trim().toLowerCase() === 'nope';
-
 /**
  * A series is *completed* when every game of it that the owner has is finished. Games the library does not have (the
  * "not in library" ones read from IGDB, hidden or not, whole families included: see missingIndex) are not in `s.games` at
  * all, so they never count. A library game with the ownership "Nope" is one the owner does not have: it is ignored while it is
- * not finished (a finished one counts, the owner did play it). A series needs at least one finished game to be completed.
+ * not finished (a finished one counts, the owner did play it): buildSeries (series.js) counts them out of `owned`, which the
+ * progress bar, the card text and the % finished sort use too, so the mark and the numbers always agree.
  */
-export function isCompleted(s) {
-  const mine = s.games.filter((g) => isFinished(g) || !isNotOwned(g));
-  return mine.length > 0 && mine.every(isFinished);
-}
+export const isCompleted = (s) => s.owned > 0 && s.finished === s.owned;
 
 /** 'completed', 'progress' or 'notstarted'. */
 export const progressOf = (s) => (isCompleted(s) ? 'completed' : s.played > 0 ? 'progress' : 'notstarted');
@@ -59,7 +55,7 @@ export function seriesPasses(f, s, index) {
   return true;
 }
 
-const share = (s) => (s.total ? s.finished / s.total : 0);
+const share = (s) => (s.owned ? s.finished / s.owned : 0);
 const COMPARE = {
   name: (a, b) => byName(a.name, b.name),
   finished: (a, b) => share(b) - share(a) || b.finished - a.finished || byName(a.name, b.name),

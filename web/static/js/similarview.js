@@ -39,16 +39,27 @@ export function renderSimilar(root) {
     onChange: () => draw(),
     onReset: () => Object.assign(filter, emptySimilarFilter()),
   });
-  const pool = () => poolOf(index, { ...filter, withHidden: true }); // the options come from every suggestion, hidden or not
-  const sourceTitle = (id) => sourcesOf(pool()).find((x) => x.value === id)?.title ?? `Game ${id}`;
-  ui.chips('Genre', { open: true, options: () => withSelected(genresOf(pool()).map((x) => x.value), filter.genres).map((v) => ({ value: v, text: v })),
+  // The options (genres, platforms, source games) come from every suggestion, hidden or not, and only change with the index:
+  // worked out once per index (similarIndex makes a new one on every load and games-changed), not on every redraw.
+  let facetsOf = null, facets = null;
+  const fac = () => {
+    if (facetsOf !== index) {
+      const pool = poolOf(index, { withHidden: true });
+      const sources = sourcesOf(pool);
+      facets = { genres: genresOf(pool).map((x) => x.value), platforms: platformsOf(pool).map((x) => x.value), sources: sources.map((x) => x.value), title: new Map(sources.map((x) => [x.value, x.title])) };
+      facetsOf = index;
+    }
+    return facets;
+  };
+  const sourceTitle = (id) => fac().title.get(id) ?? `Game ${id}`;
+  ui.chips('Genre', { open: true, options: () => withSelected(fac().genres, filter.genres).map((v) => ({ value: v, text: v })),
     has: (v) => filter.genres.has(v), toggle: (v) => toggleIn(filter.genres, v), selected: () => filter.genres.size, count: (v) => countSimilar(index, filter, 'genres', v) });
-  ui.chips('Platform', { open: false, lazy: true, options: () => withSelected(platformsOf(pool()).map((x) => x.value), filter.platforms).map((v) => ({ value: v, text: v })),
+  ui.chips('Platform', { open: false, lazy: true, options: () => withSelected(fac().platforms, filter.platforms).map((v) => ({ value: v, text: v })),
     has: (v) => filter.platforms.has(v), toggle: (v) => toggleIn(filter.platforms, v), selected: () => filter.platforms.size, count: (v) => countSimilar(index, filter, 'platforms', v) });
   ui.range('Release year', { min: MIN_YEAR, max: MAX_YEAR, get: () => ({ from: filter.from, to: filter.to }),
     set: (from, to) => { filter.from = intIn(from, MIN_YEAR, MAX_YEAR); filter.to = intIn(to, MIN_YEAR, MAX_YEAR); } });
   ui.chips('Because of', { open: false, lazy: true,
-    options: () => withSelected(sourcesOf(pool()).map((x) => x.value), filter.because).map((v) => ({ value: v, text: sourceTitle(v) })),
+    options: () => withSelected(fac().sources, filter.because).map((v) => ({ value: v, text: sourceTitle(v) })),
     has: (v) => filter.because.has(v), toggle: (v) => toggleIn(filter.because, v), selected: () => filter.because.size, count: (v) => countSimilar(index, filter, 'because', v) });
   ui.chips('Games you hid', { open: true, options: () => (index.hidden.length || filter.withHidden ? [{ value: 'withHidden', text: 'Include the games I hid' }] : []),
     has: () => filter.withHidden, toggle: () => { filter.withHidden = !filter.withHidden; }, selected: () => (filter.withHidden ? 1 : 0),
@@ -169,7 +180,7 @@ export function renderSimilar(root) {
       ...[...filter.because].map((id) => ({ name: `Because of ${sourceTitle(id)}`, kids: [h('b', {}, 'Because of'), sourceTitle(id)], remove: () => filter.because.delete(id) })),
       filter.withHidden ? { name: 'Including the games you hid', kids: ['Including hidden'], remove: () => { filter.withHidden = false; } } : null,
     ].filter(Boolean);
-    ui.paint({ filters: similarFilterCount(filter), shown: shown.length, of: total, pills });
+    ui.paint({ filters: similarFilterCount(filter), shown: shown.length, of: Math.max(items.length, shown.length), pills }); // 'of' is the size without the hidden games, like the other pages
     ui.writeUrl('similar', similarStateToQuery({ filter, sort }));
   }
 

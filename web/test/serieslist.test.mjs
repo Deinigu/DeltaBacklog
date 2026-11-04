@@ -113,3 +113,20 @@ test('the address round-trips and drops what is unknown', () => {
   assert.equal(bad.filter.left, false);
   assert.equal(bad.sort, 'name');
 });
+
+test('a finished game plus an unfinished Nope game: the numbers, the bar, the mark and the sort agree', async () => {
+  const { barShares, progressText } = await import('../static/js/series.js');
+  const games = [
+    fin('A1', 'Alpha'), g('A2', 'Alpha', { ownership: 'Nope' }), // 1 of 1 owned: completed
+    fin('B1', 'Beta'), fin('B2', 'Beta'), g('B3', 'Beta'), // 2 of 3
+    g('C1', 'Gamma'), g('C2', 'Gamma'), // 0 of 2
+  ];
+  const all = buildSeries(games);
+  const alpha = all.find((s) => s.name === 'Alpha');
+  assert.deepEqual([alpha.total, alpha.owned, alpha.notOwned, alpha.finished], [2, 1, 1, 1]);
+  assert.ok(isCompleted(alpha));
+  assert.deepEqual(barShares(alpha), { finished: 100, played: 0, rest: 0 });
+  assert.equal(progressText(alpha), '1 finished · 1 played · 2 games · 1 not owned');
+  assert.deepEqual(filterSeries(all, emptySeriesFilter(), 'finished', none).map((s) => s.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.deepEqual(filterSeries(all, { ...emptySeriesFilter(), progress: new Set(['completed']) }, 'name', none).map((s) => s.name), ['Alpha']);
+});

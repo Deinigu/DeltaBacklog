@@ -103,3 +103,17 @@ test('the address round-trips and drops what is unknown', () => {
   assert.deepEqual([...bad.filter.because], [5]);
   assert.equal(bad.sort, 'sources');
 });
+
+test('a big list (2,200 suggestions, 250 source games) is cheap to filter and to tally', () => {
+  const srcs = Array.from({ length: 250 }, (_, i) => done(`Source ${i}`, 1000 + i, [2000 + (i % 24)]));
+  const suggestions = Array.from({ length: 2200 }, (_, i) => sugg(5000 + i, `Game ${i}`, [1000 + (i % 250), 1000 + ((i * 7) % 250)], { year: 1990 + (i % 35), genres: [`G${i % 12}`], platforms: [`P${i % 6}`] }));
+  const big = similarIndex({ owned_roots: [], suggestions }, srcs);
+  const t = performance.now();
+  const sources = sourcesOf(poolOf(big, F({})));
+  const shown = filterSimilar(big, F({ genres: new Set(['G3']), from: 2000 }), 'year');
+  const counts = sources.slice(0, 50).map((s) => countSimilar(big, F({}), 'because', s.value));
+  const ms = performance.now() - t;
+  assert.equal(sources.length, 250);
+  assert.ok(shown.length > 0 && counts.every((c) => c > 0));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`); // a generous bound: it is a few tens of ms, and the page does it once per index
+});
