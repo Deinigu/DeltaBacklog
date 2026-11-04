@@ -35,6 +35,7 @@ export function ensureDatalist(id, options) {
  */
 export function listRow(f, label, key, options, { suggestions = [], hint = 'Also on IGDB:', validate, pickerHint, invalidHint } = {}) {
   const val = h('span.fval');
+  const editBtn = h('button.listbtn', { type: 'button' }, val, h('span.edit', { 'aria-hidden': 'true' }, '✎'));
   const chips = suggestions.map((name) => h('button.chip', { type: 'button', onclick: () => {
     f[key] = f[key].includes(name) ? f[key].filter((v) => v !== name) : [...f[key], name];
     draw();
@@ -42,6 +43,7 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
   const draw = () => {
     val.textContent = f[key].length ? f[key].join(', ') : 'none';
     val.classList.toggle('none', !f[key].length);
+    editBtn.setAttribute('aria-label', `${label}: ${val.textContent}. Edit`); // the field's name, not just its value
     chips.forEach((c) => { const on = f[key].includes(c.textContent); c.dataset.state = on ? 'in' : 'off'; c.setAttribute('aria-pressed', String(on)); });
   };
   draw();
@@ -49,7 +51,8 @@ export function listRow(f, label, key, options, { suggestions = [], hint = 'Also
     const next = await pickMany({ title: label, options, selected: f[key], ...(validate ? { validate } : {}), ...(pickerHint ? { hint: pickerHint } : {}), ...(invalidHint ? { invalidHint } : {}) });
     if (next) { f[key] = next; draw(); }
   };
-  const row = h('div.frow', {}, h('span.flabel', {}, label), h('button.listbtn', { type: 'button', onclick: edit }, val, h('span.edit', {}, '✎')));
+  editBtn.addEventListener('click', edit);
+  const row = h('div.frow', {}, h('span.flabel', {}, label), editBtn);
   if (!chips.length) return row;
   return h('div.rowgroup', {}, row, h('div.suggest', {}, h('span.hint', {}, hint), ...chips));
 }

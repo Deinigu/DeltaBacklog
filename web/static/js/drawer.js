@@ -1,5 +1,6 @@
 // Game detail drawer: facts at a glance, quick status/favorite changes, and an Edit mode for every field.
 import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
+import { openLayer, guardUnload } from './layers.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, openPosterPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
@@ -15,6 +16,12 @@ import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect
 
 let open = null;
 
+/** True while the open drawer has unsaved edits (the edit form or the HowLongToBeat form). */
+export const drawerDirty = () => !!(open?.isDirty?.() || open?.ttb?.isDirty());
+
+/** The Favorite button's label; the star is decoration, the state is in aria-pressed. */
+const favLabel = (btn, on) => btn.replaceChildren(h('span', { 'aria-hidden': 'true' }, on ? '★' : '☆'), ' Favorite');
+
 /** "3 of 5 in Name" by release year, or "Name (5 games)" while some game of the series has no year. */
 function seriesFact(game) {
   const p = seriesPosition(game, store.games);
@@ -26,11 +33,12 @@ function seriesFact(game) {
 function quickActions(game) {
   const sel = h('select.btn', { 'aria-label': 'Status', onchange: () => change({ status: sel.value }) },
     store.statuses.map((s) => h('option', { value: s.key, selected: s.key === game.status }, s.label)));
-  const fav = h('button.btn', { type: 'button', 'aria-pressed': String(game.favorite), onclick: () => change({ favorite: !game.favorite }) }, game.favorite ? '★ Favorite' : '☆ Favorite');
+  const fav = h('button.btn', { type: 'button', 'aria-pressed': String(game.favorite), onclick: () => change({ favorite: !game.favorite }) });
+  favLabel(fav, game.favorite);
   async function change(patch) {
     try { await patchGame(game.id, patch); } catch { toast('Could not save the change'); }
     sel.value = game.status;
-    fav.textContent = game.favorite ? '★ Favorite' : '☆ Favorite';
+    favLabel(fav, game.favorite);
     fav.setAttribute('aria-pressed', String(game.favorite));
     const st = store.statusByCode.get(game.status);
     const badge = open?.drawer.querySelector('.cover .st');
@@ -47,25 +55,28 @@ function storeLinks(game) {
   const links = (game.links || []).filter((l) => STORE_LABELS[l.kind] && /^https?:\/\//.test(l.url))
     .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   if (!links.length) return null;
-  return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, STORE_LABELS[l.kind], ' ↗')));
+  return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, STORE_LABELS[l.kind], h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)'))));
 }
 
 export function closeDrawer() {
   if (!open) return;
   const { opener } = open;
   const hadFocus = open.drawer.contains(document.activeElement);
+  const { release, offUnload } = open;
   open.drawer.remove();
   open.scrim.remove();
   document.removeEventListener('keydown', open.onKey);
   window.removeEventListener('games-changed', open.onGames);
   open = null;
+  offUnload();
+  release();
   // Back to what opened it (a card, a table row), unless the page under it was replaced meanwhile
   if (hadFocus && opener?.isConnected && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
 }
 
 /** Close because the user asked to: when there are unsaved edits, ask first. */
 async function requestClose() {
-  if (open?.isDirty?.() || open?.ttb?.isDirty()) {
+  if (drawerDirty()) {
     const ok = await confirmDialog({ title: 'Discard your changes?', message: 'You have edits that are not saved.', confirm: 'Discard' });
     if (!ok) return;
   }
@@ -113,7 +124,7 @@ export function openDrawer(game, opts = {}) {
     storeLinks(game),
     screenshotsSection(game),
     h('div.drawer-actions', {},
-      h('button.btn.primary', { type: 'button', onclick: () => startEdit() }, '✎ Edit'),
+      h('button.btn.primary', { type: 'button', onclick: () => startEdit() }, h('span', { 'aria-hidden': 'true' }, '✎'), ' Edit'),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
       h('button.btn', { type: 'button', onclick: () => openPosterPicker(game) }, 'Change poster'),
       h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete game')));
@@ -253,7 +264,7 @@ export function openDrawer(game, opts = {}) {
   };
   window.addEventListener('games-changed', onGames);
   document.body.append(scrim, drawer);
-  open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb };
+  open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb, release: openLayer(drawer, { requestClose }), offUnload: guardUnload(() => open?.drawer === drawer && drawerDirty()) };
   if (opts.relink) relinkPrompt(game, opts.relink.name, relinkMount);
   if (opts.edit) startEdit(opts.edit);
   else if (opts.ttb) readView.querySelector('.ttb-actions [data-act="hltb"]')?.click();

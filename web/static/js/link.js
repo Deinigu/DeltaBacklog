@@ -88,7 +88,7 @@ export function renderLink(root) {
       it.candidates.length
         ? h('div.link-cands', {}, h('p.hint', {}, it.candidates[0].score < 60 ? 'No close match. These are the top results on IGDB, in case one is right:' : 'IGDB suggests:'),
           ...it.candidates.map((c) => h('div.link-row', {}, candidate(it, c),
-            c.slug ? h('a.link-page-link', { href: `https://www.igdb.com/games/${encodeURIComponent(c.slug)}`, target: '_blank', rel: 'noopener', 'aria-label': `Open ${c.name} on IGDB` }, 'IGDB ↗') : null)))
+            c.slug ? h('a.link-page-link', { href: `https://www.igdb.com/games/${encodeURIComponent(c.slug)}`, target: '_blank', rel: 'noopener', 'aria-label': `Open ${c.name} on IGDB (opens in a new tab)` }, 'IGDB ↗') : null)))
         : h('p.hint', {}, 'IGDB did not find a close match for this title.'),
       h('div.link-actions', {},
         h('button.btn', { type: 'button', onclick: () => search(it) }, 'Search IGDB…'),

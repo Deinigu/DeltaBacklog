@@ -1,6 +1,6 @@
 // The "Time to beat" block of the game drawer: three tiles, a source note, typed edits and the HowLongToBeat picker.
 // The formatting and parsing live in ttb.js (pure, unit-tested); this file only builds the DOM.
-import { h, toast } from './util.js';
+import { h, toast, NO_AUTOCORRECT } from './util.js';
 import { patchGame, hltbSearch } from './api.js';
 import { TTB_KINDS, ttbTiles, hasTimes, ttbSourceNote, parseTime, timeInputValue, hltbPatch, formatTime } from './ttb.js';
 
@@ -70,7 +70,7 @@ export function ttbSection(game) {
   }
 
   function hltbMode() {
-    const queryIn = h('input', { type: 'search', value: game.title, 'aria-label': 'Title to search on HowLongToBeat', autocomplete: 'off', enterkeyhint: 'search' });
+    const queryIn = h('input', { type: 'search', value: game.title, 'aria-label': 'Title to search on HowLongToBeat', autocomplete: 'off', ...NO_AUTOCORRECT, enterkeyhint: 'search' });
     const out = h('div.ttb-results', { 'aria-live': 'polite' });
     const run = async () => {
       const q = queryIn.value.trim();

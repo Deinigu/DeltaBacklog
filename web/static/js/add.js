@@ -1,6 +1,7 @@
 // Quick add: search IGDB by title or store link, pick a match, review the pre-filled form and cover, save.
 // Also the IGDB match picker and the cover and poster pickers used by the game drawer and the ranking board.
-import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog } from './util.js';
+import { h, icon, toast, norm, debounce, gradientFor, initials, confirmDialog, NO_AUTOCORRECT } from './util.js';
+import { openLayer, guardUnload } from './layers.js';
 import { store, lookup, coverSearch, createGame, setCover, setPoster, uploadImage } from './api.js';
 import { uploadProblem, PICK_TYPES } from './uploadcheck.js';
 import { openDrawer } from './drawer.js';
@@ -12,9 +13,11 @@ import { validateForm } from './editpatch.js';
 export function makeSheet(titleText, extraClass = '') {
   let onClose = null;
   let guard = null; // async () => boolean: false keeps the sheet open (scrim, ✕ and Escape ask it first)
+  let dirty = null; // () => boolean: unsaved input (a reload or a closed tab asks first)
   const opener = document.activeElement;
   const close = () => {
     scrim.remove(); sheet.remove(); document.removeEventListener('keydown', onKey);
+    offUnload(); release();
     // not into a text field: on iOS that would pop the keyboard back up
     if (opener?.isConnected && typeof opener.focus === 'function' && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
     onClose && onClose();
@@ -39,6 +42,8 @@ export function makeSheet(titleText, extraClass = '') {
   };
   document.addEventListener('keydown', onKey);
   document.body.append(scrim, sheet);
+  const release = openLayer(sheet, { requestClose: attempt }); // Back asks the same question as ✕
+  const offUnload = guardUnload(() => !!dirty?.());
   sheet.focus({ preventScroll: true });
   /**
    * Run a re-render without losing keyboard focus: a control marked data-fk keeps focus when it comes back
@@ -51,7 +56,7 @@ export function makeSheet(titleText, extraClass = '') {
     (again || sheet.querySelector('.filters-foot .btn.primary:not(:disabled)') || sheet).focus({ preventScroll: true });
   };
   const say = (text) => { live.textContent = text; };
-  return { sheet, head, body, foot, back, title, close, render, say, set onClose(fn) { onClose = fn; }, set guard(fn) { guard = fn; } };
+  return { sheet, head, body, foot, back, title, close, render, say, set onClose(fn) { onClose = fn; }, set guard(fn) { guard = fn; }, set dirty(fn) { dirty = fn; } };
 }
 
 /** The game already in the library that a lookup result is: matched by IGDB id first, then by title. */
@@ -65,7 +70,7 @@ function inLibrary(c, excludeId) {
  * state: {query} (kept by the caller so going back restores it). handlers: {onPick(candidate), onManual(typedText) | null, excludeId}
  */
 function renderSearch(ui, state, { onPick, onManual, excludeId }) {
-  const input = h('input', { type: 'search', placeholder: 'Game title…', autocomplete: 'off', enterkeyhint: 'search', 'aria-label': 'Game title', value: state.query });
+  const input = h('input', { type: 'search', placeholder: 'Game title…', autocomplete: 'off', ...NO_AUTOCORRECT, enterkeyhint: 'search', 'aria-label': 'Game title', value: state.query });
   const results = h('div.cands');
   const manual = onManual && h('button.btn.manual', { type: 'button', onclick: () => onManual(input.value.trim()) });
   // replaceChildren is the DOM method, which would print a null as the text "null": only pass what exists
@@ -127,6 +132,7 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
 
   function toSearch() {
     ui.guard = null;
+    ui.dirty = null;
     ui.back.hidden = true;
     ui.foot.hidden = true;
     ui.title.textContent = 'Add a game';
@@ -162,6 +168,7 @@ export function openAdd({ query = '', candidate = null, status = 'backlog' } = {
     const confirmLeave = async () => !dirty() || confirmDialog({ title: 'Discard your changes?', message: 'You have entered details that are not saved.', confirm: 'Discard' });
     const back = async () => { if (await confirmLeave()) toSearch(); };
     ui.guard = confirmLeave;
+    ui.dirty = dirty;
     ui.back.onclick = back;
 
     const titleIn = text(f, 'title', { placeholder: 'Title', 'aria-label': 'Title', required: true });
@@ -303,7 +310,7 @@ function openImagePicker(game, kind) {
   let source = 'steamgriddb';
   try { const saved = localStorage.getItem(LAST_SOURCE); if (SOURCES.some((s) => s.key === saved)) source = saved; } catch { /* private mode */ }
 
-  const input = h('input', { type: 'search', value: game.title, placeholder: 'Search a different title…', 'aria-label': 'Title to search', enterkeyhint: 'search' });
+  const input = h('input', { type: 'search', ...NO_AUTOCORRECT, value: game.title, placeholder: 'Search a different title…', 'aria-label': 'Title to search', enterkeyhint: 'search' });
   const tabs = SOURCES.map((s) => h('button', { type: 'button', onclick: () => { source = s.key; try { localStorage.setItem(LAST_SOURCE, s.key); } catch { /* ignore */ } load(); } }, s.label));
   const status = h('p.hint', {});
   const grid = h('div.cover-grid');

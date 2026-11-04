@@ -132,7 +132,7 @@ func TestServiceWorkerCachesTheWholeShell(t *testing.T) {
 	if strings.Contains(list, "'/") {
 		t.Error("sw.js SHELL_FILES must be relative (the app may be served under a sub-path)")
 	}
-	want := []string{"'./'", "'styles.css'", "'icon.svg'"}
+	want := []string{"'./'", "'styles.css'", "'icon.svg'", "'icon-192.png'", "'icon-512.png'", "'icon-maskable-512.png'", "'apple-touch-icon.png'"}
 	sub, _ := fs.Sub(files, "static")
 	entries, _ := fs.ReadDir(sub, "js")
 	for _, e := range entries {

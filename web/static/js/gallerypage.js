@@ -1,5 +1,5 @@
 // The Screenshots page (#/screenshots): every screenshot of the library, by game or newest first.
-import { h, emptyBox, toast, debounce, icon, gradientFor, initials } from './util.js';
+import { h, emptyBox, toast, debounce, icon, gradientFor, initials, NO_AUTOCORRECT } from './util.js';
 import { store, coverURL, listAllShots } from './api.js';
 import { openDrawer } from './drawer.js';
 import { PAGE, galleryQuery, groupRuns, remaining, shotsLabel, runLabel, stepAcross, emptyText } from './gallery.js';
@@ -22,7 +22,7 @@ export function renderGallery(root) {
   let flat = null; // newest first: the one grid
   const f = { q: '', year: '', sort: readSort() };
 
-  const input = h('input', { type: 'search', placeholder: 'Search by game or caption', 'aria-label': 'Search screenshots', autocomplete: 'off' });
+  const input = h('input', { type: 'search', placeholder: 'Search by game or caption', 'aria-label': 'Search screenshots', autocomplete: 'off', ...NO_AUTOCORRECT });
   const year = h('select', { 'aria-label': 'Year' }, h('option', { value: '' }, 'Any year'));
   const sort = h('select', { 'aria-label': 'Layout' },
     h('option', { value: 'game' }, 'By game'), h('option', { value: 'newest' }, 'All, newest first'));

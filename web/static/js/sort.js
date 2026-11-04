@@ -1,5 +1,6 @@
 // Multi-level sorting and group-by, shared by every view.
 import { h, icon } from './util.js';
+import { openLayer } from './layers.js';
 import { store } from './api.js';
 import { ownershipLabel } from './ownership.js';
 import { ttbMinutes } from './ttb.js';
@@ -113,7 +114,7 @@ export function createSortSheet(state, onChange) {
     Object.entries(GROUP_FIELDS).map(([k, v]) => h('option', { value: k }, v.label)));
 
   const scrim = h('div.scrim', { onclick: () => toggle(false) });
-  const sheet = h('div.sheet', { role: 'dialog', 'aria-label': 'Sort and group' },
+  const sheet = h('div.sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Sort and group', inert: true },
     h('div.filters-head', {}, h('span', {}, 'Sort & group'), h('button.btn', { type: 'button', 'aria-label': 'Close', onclick: () => toggle(false) }, '✕')),
     h('div.filters-body', {},
       h('p.hint', {}, 'Games are sorted by the first level; ties fall through to the next.'),
@@ -124,7 +125,26 @@ export function createSortSheet(state, onChange) {
       h('button.btn', { type: 'button', onclick: () => { state.sorts = []; state.group = ''; render(); onChange(); } }, 'Reset'),
       h('button.btn.primary', { type: 'button', onclick: () => toggle(false) }, 'Done')));
 
-  function toggle(on) { sheet.classList.toggle('open', on); scrim.classList.toggle('show', on); }
+  // Closed, the sheet is only moved off screen: `inert` keeps Tab and screen readers out of it.
+  let release = null;
+  const onKey = (e) => {
+    if (!sheet.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    if (e.key === 'Escape' && !document.querySelector('.dialog')) toggle(false);
+  };
+  function toggle(on) {
+    if (on === sheet.classList.contains('open')) return;
+    sheet.classList.toggle('open', on);
+    scrim.classList.toggle('show', on);
+    if (on) {
+      sheet.inert = false;
+      document.addEventListener('keydown', onKey);
+      release = openLayer(sheet, { requestClose: () => toggle(false) });
+    } else {
+      document.removeEventListener('keydown', onKey);
+      release?.(); release = null;
+      sheet.inert = true;
+    }
+  }
 
   function addLevel() {
     if (!state.sorts.length) state.sorts = DEFAULT_SORT.map((l) => ({ ...l }));
