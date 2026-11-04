@@ -87,7 +87,7 @@ export function dealsSection(game) {
       }
     }
     fix.replaceChildren(h('form', { onsubmit: search }, input, h('button.btn', { type: 'submit' }, 'Search')), status, list,
-      h('button.btn', { type: 'button', onclick: () => save({ none: true }, 'Marked as having no match.') }, 'No match on ', brand('IsThereAnyDeal')));
+      h('button.btn', { type: 'button', onclick: () => save({ none: true }, 'Marked as having no match.') }, h('span', {}, 'No match on ', brand('IsThereAnyDeal'))));
     fix.hidden = false;
     input.focus();
   }

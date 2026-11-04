@@ -130,7 +130,7 @@ export function renderAttention(root) {
     const extra = !row.ignored && group.fix === 'confirm' && row.candidate
       ? h('button.btn', { type: 'button', onclick: () => ctx.linkByHand(g) }, 'Change…') : null;
     const absent = !row.ignored && (group.fix === 'link' || group.fix === 'confirm')
-      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, 'Not on ', brand('IGDB')) : null;
+      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, h('span', {}, 'Not on ', brand('IGDB'))) : null;
     const skip = row.ignored ? null : h('button.btn.att-ignore', { type: 'button', 'aria-label': `Ignore “${g.title}” in this list`, onclick: () => setIgnored(group.key, g, true) }, 'Ignore');
     return h('li.att-row' + (row.ignored ? '.is-ignored' : ''), {},
       h('button.att-name', { type: 'button', onclick: () => openDrawer(g) }, h('span.att-title', {}, g.title), sub && h('span.att-sub', {}, sub)),

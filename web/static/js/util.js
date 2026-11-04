@@ -127,9 +127,15 @@ export function toast(msg, ms) {
 /** "Could not save the change. Check that the server is reachable, then try again.": a failure always says what to do next. */
 export const couldNot = (what) => `Could not ${what}. Check that the server is reachable, then try again.`;
 
-/** Toast for a failed action. `what` is the verb phrase ("save the change"). A message the server sent (`err.message`, when given) wins. */
+/**
+ * The text for a failed action: the server's own message when it sent one (`err.status` and `err.data.error`), else the
+ * helpful sentence. `err.message` alone is not used: with the server down it is "Failed to fetch", or "POST api/x: 500".
+ */
+export const errorText = (what, err) => (err?.status && err?.data?.error) || couldNot(what);
+
+/** Toast for a failed action. `what` is the verb phrase ("save the change"). */
 export function toastError(what, err) {
-  toast(err?.message || couldNot(what));
+  toast(errorText(what, err));
 }
 
 /** The box for a page or list that failed to load: what failed, the next step, and a "Try again" button. */

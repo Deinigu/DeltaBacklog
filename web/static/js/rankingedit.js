@@ -163,7 +163,7 @@ export function renderRanking(root, id) {
         h('button.rk-label', { type: 'button', style: `background:${t.color};color:${textOn(t.color)}`, 'aria-label': `Tier ${t.label}: ${selected != null ? 'move the selected game here' : 'settings'}`, onclick: () => (selected != null ? moveSelectedTo(t.id) : openTierSheet(t.id)) },
           h('span.rk-label-text', {}, t.label)),
         h('div.rk-cell', { 'data-tier': t.id, role: 'group', 'aria-label': `Tier ${t.label}` }, tiles(t.games))))
-      : [h('div.empty.rk-notiers', {}, 'No tiers yet. Add the first one below.')]));
+      : [Object.assign(emptyBox('No tiers yet. Add the first one below.'), { className: 'empty rk-notiers' })]));
     addRowBox.replaceChildren(h('button.btn', { type: 'button', onclick: addTierClicked }, icon('add'), 'Add tier'),
       ...(board.tiers.length ? [] : [h('button.btn', { type: 'button', onclick: addPreset }, 'Add S to F')]));
     const free = board.pool.filter(byId);

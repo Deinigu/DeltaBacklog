@@ -720,7 +720,7 @@ ol.shortest { list-style: none; margin: 8px 0 0; padding: 0; }
 .link-cand-name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .link-score { flex: none; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--surface); border: 1px solid var(--border); }
 .link-score.high { color: #15803d; }
-.link-score.mid { color: #b45309; }
+.link-score.mid { color: var(--amber); }
 .link-score.low { color: var(--muted); }
 :root[data-theme="dark"] .link-score.high { color: #4ade80; }
 :root[data-theme="dark"] .link-score.mid { color: #fbbf24; }
@@ -847,7 +847,7 @@ ol.shortest { list-style: none; margin: 8px 0 0; padding: 0; }
 /* ---- rankings (TierMaker style): a dark board of tiers with big poster tiles ---- */
 .rk-page { --tw: 64px; --th: 96px; --label-w: 72px; display: flex; flex-direction: column; gap: 12px; }
 .rk-page > h1 { margin: 6px 0 0; } /* like Stats and Series: the title, its description, then the buttons */
-.rk-page > .hint { margin: -8px 0 0; }
+.rk-page > h1 + .hint { margin: -8px 0 0; }
 .rk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .rk-title { margin: 0; }
 .rk-list { display: grid; gap: 12px; grid-template-columns: 1fr; }
@@ -1015,11 +1015,9 @@ body.rk-selecting #view { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 17
 .ttb-in { display: flex; align-items: center; gap: 6px; }
 .ttb-in input { flex: 1; min-width: 0; height: 46px; text-align: right; }
 .ttb-in em { color: var(--muted); font-style: normal; width: 12px; }
-.ttb-err { grid-column: 1 / -1; color: #dc2626; font-size: 13px; }
+.ttb-err { grid-column: 1 / -1; color: var(--danger); font-size: 13px; }
 .ttb-err:empty { display: none; }
-.ttb-field input[aria-invalid="true"] { border-color: #dc2626; }
-:root[data-theme="dark"] .ttb-err { color: #f87171; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ttb-err { color: #f87171; } }
+.ttb-field input[aria-invalid="true"] { border-color: var(--danger); }
 .ttb-search { display: flex; gap: 8px; }
 .ttb-search input { flex: 1; min-width: 0; height: 46px; }
 .ttb-results { margin-top: 10px; }
@@ -1159,7 +1157,7 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-store-th { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .dl-store-th input { width: 4.5em; min-height: 44px; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
 .dl-stores-err:empty { display: none; }
-.dl-stores-err { color: #dc2626; }
+.dl-stores-err { color: var(--danger); }
 .dl-act.dl-save { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
 @media (min-width: 900px) {
@@ -1204,6 +1202,6 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 
 /* ---- hover on a mouse: one subtle rule for the controls that have a border or a surface (accent tint, like .tile and .jump) ---- */
 @media (hover: hover) {
-  .btn:not(.primary):not(:disabled):hover, .chip:not([aria-pressed="true"]):not([data-state]):hover, .cand:hover, .link-cand:hover, .vrow .btn:not(:disabled):hover { border-color: var(--accent); }
+  .btn:not(.primary):not(:disabled):hover, .chip:not([aria-pressed="true"]):not([data-state="in"]):not([data-state="ex"]):hover, .cand:hover, .link-cand:hover, .vrow .btn:not(:disabled):hover { border-color: var(--accent); }
   .pill:not(.reset):hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
 }

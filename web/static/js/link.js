@@ -88,8 +88,8 @@ export function renderLink(root) {
             c.slug ? h('a.link-page-link', { href: `https://www.igdb.com/games/${encodeURIComponent(c.slug)}`, target: '_blank', rel: 'noopener', 'aria-label': `Open ${c.name} on IGDB (opens in a new tab)` }, 'IGDB ↗') : null)))
         : h('p.hint', {}, 'IGDB did not find a close match for this title.'),
       h('div.link-actions', {},
-        h('button.btn', { type: 'button', onclick: () => search(it) }, 'Search ', brand('IGDB'), '…'),
-        h('button.btn', { type: 'button', onclick: () => none(it) }, 'Not on ', brand('IGDB')),
+        h('button.btn', { type: 'button', onclick: () => search(it) }, h('span', {}, 'Search ', brand('IGDB'), '…')),
+        h('button.btn', { type: 'button', onclick: () => none(it) }, h('span', {}, 'Not on ', brand('IGDB'))),
         h('button.btn', { type: 'button', onclick: () => { skipped.add(it.game_id); draw(true); } }, 'Skip')));
     if (focus) card.querySelector('.link-title')?.focus({ preventScroll: true });
   }

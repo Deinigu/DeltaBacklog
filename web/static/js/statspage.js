@@ -2,7 +2,7 @@
 // All numbers come from stats.js (pure); this file only draws them. Every hour figure is an estimate and says how many games it rests on.
 import { h, plural } from './util.js';
 import { store } from './api.js';
-import { formatNumber } from './format.js';
+import { formatNumber, formatCalendarDate } from './format.js';
 import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import {
@@ -142,7 +142,7 @@ function outcomeRows(rows, what) {
 function waitingTable(time) {
   const rows = time.rows.filter((r) => r.count > 0);
   if (!time.waiting) return h('p.hint', {}, 'No games are waiting.');
-  const since = time.untouched > 0 ? `${plural(time.untouched, 'waiting game is', 'waiting games are')} untouched since the import on ${time.importDate}.` : '';
+  const since = time.untouched > 0 ? `${plural(time.untouched, 'waiting game is', 'waiting games are')} untouched since the import on ${formatCalendarDate(time.importDate)}.` : '';
   if (!time.hasHistory) return h('p.hint', {}, `Not enough history to compare yet: the waiting games were all added or last changed around the same time (a fresh import, perhaps). Waiting times appear as you change games over the coming weeks. ${since}`.trim());
   return h('div', {},
     h('div.tscroll', {}, h('table.wait', {},

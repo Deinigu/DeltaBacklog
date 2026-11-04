@@ -184,7 +184,7 @@ export function openDrawer(game, opts = {}) {
         h('div.frow.col', {}, h('span.flabel', {}, 'Notes'), notesField(f)),
         linked,
         h('div.frow.col', {},
-          h('button.btn', { type: 'button', onclick: fill }, 'Fill from ', brand('IGDB'), '…'),
+          h('button.btn', { type: 'button', onclick: fill }, h('span', {}, 'Fill from ', brand('IGDB'), '…')),
           h('p.hint', {}, 'Looks the game up on IGDB and replaces its genres, themes, developer, series and release year. Platforms, notes and ownership are kept.'))));
     }
 

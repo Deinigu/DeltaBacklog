@@ -1,6 +1,6 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
-import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab, toastError, couldNot, emptyBox, brand } from './util.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab, toastError, errorText, emptyBox, brand } from './util.js';
 import { openLayer } from './layers.js';
 import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsStores, dealsSetStores, dealsShops, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
   dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
@@ -203,7 +203,7 @@ export function renderDeals(root) {
         closeSheet();
         toast(list.length ? 'Preferred stores saved. Press Refresh prices to apply them.' : 'Preferred stores cleared. Press Refresh prices to apply.', 4000);
         draw();
-      } catch (e) { err.textContent = e.message || couldNot('save'); }
+      } catch (e) { err.textContent = errorText('save', e); }
     }
     dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); });
     dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; });
