@@ -558,20 +558,24 @@ func (a Alert) html() string {
 	return strings.Join(lines, "\n")
 }
 
-// entry is one game of a list: the kind, the title linked to the deal, the price and the cut.
+// entry is one game of a list, on two lines: the kind and the title linked to the deal, then the price line (price,
+// struck regular price, cut and shop), the same as in a single alert.
 func (a Alert) entry() string {
 	t := "<b>" + esc(clip(a.Title, 100)) + "</b>"
 	if h := href(a.URL); h != "" {
 		t = `<a href="` + h + `">` + t + `</a>`
 	}
-	s := kindEmoji(a.Kind) + " " + t + " " + esc(Money{a.Price, a.Currency}.String())
-	if a.Cut > 0 {
-		s += fmt.Sprintf(" −%d%%", a.Cut)
-	}
+	return kindEmoji(a.Kind) + " " + t + "\n" + a.priceLine()
+}
+
+// listHeadings are the sections of a list: library games first, then the wishlist.
+var listHeadings = [2]string{"📚 <b>Your library</b>", "💙 <b>Your wishlist</b>"}
+
+func section(a Alert) int {
 	if a.AppID > 0 {
-		s += " 💙"
+		return 1
 	}
-	return s
+	return 0
 }
 
 // TestMessage is the text sent by the "send a test" button: it says the bot works and shows what an alert looks like.
@@ -616,12 +620,26 @@ func messageGroups(alerts []Alert) []message {
 		}
 		return out
 	}
-	m := message{text: fmt.Sprintf("🔥 <b>%d price alerts</b>\n", len(alerts))}
-	for i, a := range alerts {
-		item := "\n" + a.entry()
+	// Library games first, then the wishlist, each under its heading, with a blank line between games.
+	ordered := make([]Alert, 0, len(alerts))
+	for s := range listHeadings {
+		for _, a := range alerts {
+			if section(a) == s {
+				ordered = append(ordered, a)
+			}
+		}
+	}
+	m := message{text: fmt.Sprintf("🔔 <b>%d price alerts</b>\n🔥 historical low  ·  📉 lowest in 2 years", len(alerts))}
+	current := -1
+	for i, a := range ordered {
+		item := ""
+		if s := section(a); s != current {
+			item, current = "\n\n"+listHeadings[s], s
+		}
+		item += "\n\n" + a.entry()
 		if utf16Len(m.text)+utf16Len(item) > listLimit {
-			m.text += fmt.Sprintf("\n…and %d more: open Deals in the app", len(alerts)-i)
-			for _, rest := range alerts[i:] {
+			m.text += fmt.Sprintf("\n\n…and %d more: open Deals in the app", len(ordered)-i)
+			for _, rest := range ordered[i:] {
 				m.add(rest)
 			}
 			return []message{m}
