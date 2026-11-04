@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,11 +69,11 @@ func TestSimilarSourcesAndHide(t *testing.T) {
 	f := newSim()
 	f.similar[1] = []meta.CollectionGame{
 		{IGDBID: 8, Name: "Original", Year: 2001, CoverID: "c8"}, // owned through its remaster
-		{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10"},
+		{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10", Genres: []string{"RPG", "Adventure"}, Platforms: []string{"PC", "PS5"}},
 		{IGDBID: 12, Name: "Hidden", Year: 2012, CoverID: "c12"},
 		{IGDBID: 13, Name: "No image", Year: 2013},
 	}
-	f.similar[2] = []meta.CollectionGame{{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10"}}
+	f.similar[2] = []meta.CollectionGame{{IGDBID: 10, Name: "Both", Year: 2010, CoverID: "c10", Genres: []string{"RPG", "Adventure"}, Platforms: []string{"PC", "PS5"}}}
 	f.similar[3] = []meta.CollectionGame{{IGDBID: 99, Name: "Never asked", CoverID: "c99"}}
 	opt, fetched := opts(t)
 	if err := HideSimilar(d, 12); err != ErrUnknownSimilar {
@@ -99,7 +100,8 @@ func TestSimilarSourcesAndHide(t *testing.T) {
 	if _, ok := got[99]; ok {
 		t.Error("a game that was not played suggested something")
 	}
-	if g := got[10]; len(g.Sources) != 2 || g.Sources[0] != 1 || g.Sources[1] != 2 || g.Hidden {
+	if g := got[10]; len(g.Sources) != 2 || g.Sources[0] != 1 || g.Sources[1] != 2 || g.Hidden ||
+		strings.Join(g.Genres, ",") != "RPG,Adventure" || strings.Join(g.Platforms, ",") != "PC,PS5" || len(got[13].Genres) != 0 {
 		t.Errorf("game 10: %+v", g)
 	}
 	if !got[12].Hidden {

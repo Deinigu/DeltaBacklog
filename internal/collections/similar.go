@@ -237,13 +237,14 @@ func storeSimilar(d *sql.DB, got map[int64][]meta.CollectionGame, res resolver) 
 				img = g.CoverID
 			}
 			// the file survives while the image id stays the same
-			if _, err := tx.Exec(`INSERT INTO similar_game(igdb_id, title, release_year, game_type, parent_igdb_id, cover_image, first_release_date, release_date_format)
-				VALUES (?,?,?,?,?,?,?,?)
+			if _, err := tx.Exec(`INSERT INTO similar_game(igdb_id, title, release_year, game_type, parent_igdb_id, cover_image, first_release_date, release_date_format, platforms, genres)
+				VALUES (?,?,?,?,?,?,?,?,?,?)
 				ON CONFLICT(igdb_id) DO UPDATE SET title = excluded.title, release_year = excluded.release_year, game_type = excluded.game_type,
 					parent_igdb_id = excluded.parent_igdb_id, first_release_date = excluded.first_release_date, release_date_format = excluded.release_date_format,
+					platforms = excluded.platforms, genres = excluded.genres,
 					cover_file = CASE WHEN similar_game.cover_image IS excluded.cover_image THEN similar_game.cover_file END,
 					cover_image = excluded.cover_image`,
-				g.IGDBID, g.Name, year, g.GameType, res.root(g.IGDBID), img, date, format); err != nil {
+				g.IGDBID, g.Name, year, g.GameType, res.root(g.IGDBID), img, date, format, strings.Join(g.Platforms, ", "), strings.Join(g.Genres, ", ")); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(`INSERT OR IGNORE INTO similar_link(source_igdb_id, similar_igdb_id) VALUES (?, ?)`, source, g.IGDBID); err != nil {
@@ -311,16 +312,18 @@ func pruneSimilar(d *sql.DB, coverDir string, fam family) error {
 
 // Suggestion is a game IGDB lists as similar to games of the library, and that the library does not have.
 type Suggestion struct {
-	IGDBID  int64   `json:"igdb_id"`
-	Title   string  `json:"title"`
-	Year    *int    `json:"year"`
-	Cover   *string `json:"cover"`  // poster file name under /covers/, nil until downloaded
-	V       string  `json:"v"`      // IGDB's image id of the cover: the cache key of the poster URL
-	Parent  int64   `json:"parent"` // root of its version chain, 0 = itself (the browser applies the family rule too)
-	Date    *int64  `json:"date"`
-	Format  *int    `json:"format"`
-	Sources []int64 `json:"sources"` // IGDB ids of the games that suggested it
-	Hidden  bool    `json:"hidden"`
+	IGDBID    int64    `json:"igdb_id"`
+	Title     string   `json:"title"`
+	Year      *int     `json:"year"`
+	Cover     *string  `json:"cover"`  // poster file name under /covers/, nil until downloaded
+	V         string   `json:"v"`      // IGDB's image id of the cover: the cache key of the poster URL
+	Parent    int64    `json:"parent"` // root of its version chain, 0 = itself (the browser applies the family rule too)
+	Date      *int64   `json:"date"`
+	Format    *int     `json:"format"`
+	Sources   []int64  `json:"sources"` // IGDB ids of the games that suggested it
+	Hidden    bool     `json:"hidden"`
+	Platforms []string `json:"platforms"` // IGDB platforms (abbreviated), empty until the next refresh
+	Genres    []string `json:"genres"`    // IGDB genres, empty until the next refresh
 }
 
 // SimilarList is what the Similar page needs.
@@ -367,6 +370,7 @@ func LoadSimilar(d *sql.DB) (*SimilarList, error) {
 	}
 	out := &SimilarList{Suggestions: []Suggestion{}, OwnedRoots: owned}
 	rows, err := d.Query(`SELECT g.igdb_id, g.title, g.release_year, g.cover_file, coalesce(g.cover_image,''), g.parent_igdb_id, g.first_release_date, g.release_date_format,
+			coalesce(g.platforms,''), coalesce(g.genres,''),
 			EXISTS (SELECT 1 FROM similar_hidden h WHERE h.igdb_id = g.igdb_id), group_concat(l.source_igdb_id)
 		FROM similar_game g JOIN similar_link l ON l.similar_igdb_id = g.igdb_id GROUP BY g.igdb_id ORDER BY g.igdb_id`)
 	if err != nil {
@@ -377,8 +381,8 @@ func LoadSimilar(d *sql.DB) (*SimilarList, error) {
 		var s Suggestion
 		var year sql.NullInt64
 		var cover sql.NullString
-		var srcs string
-		if err := rows.Scan(&s.IGDBID, &s.Title, &year, &cover, &s.V, &s.Parent, &s.Date, &s.Format, &s.Hidden, &srcs); err != nil {
+		var srcs, plats, gens string
+		if err := rows.Scan(&s.IGDBID, &s.Title, &year, &cover, &s.V, &s.Parent, &s.Date, &s.Format, &plats, &gens, &s.Hidden, &srcs); err != nil {
 			return nil, err
 		}
 		if ownedSet[rootOf(s.IGDBID, s.Parent)] {
@@ -391,6 +395,7 @@ func LoadSimilar(d *sql.DB) (*SimilarList, error) {
 		if cover.Valid && cover.String != "" {
 			s.Cover = &cover.String
 		}
+		s.Platforms, s.Genres = splitList(plats), splitList(gens)
 		s.Sources = []int64{}
 		for _, f := range strings.Split(srcs, ",") {
 			if id, err := strconv.ParseInt(f, 10, 64); err == nil {
@@ -432,4 +437,15 @@ func HideSimilar(d *sql.DB, igdbID int64) error {
 func UnhideSimilar(d *sql.DB, igdbID int64) error {
 	_, err := d.Exec(`DELETE FROM similar_hidden WHERE igdb_id = ?`, igdbID)
 	return err
+}
+
+// splitList reads a ", " separated list stored in one column; nil-safe (never null in the JSON).
+func splitList(s string) []string {
+	out := []string{}
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -2,17 +2,17 @@
 // route (#/series/<key>) as a poster shelf in release order. The games of the series' IGDB collection that the
 // library does not have sit in the shelf as "Not in your library", with Add and Hide.
 import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction, toastError } from './util.js';
+import { createListShell } from './listshell.js';
+import { toggleIn, withSelected } from './listfilter.js';
+import { PROGRESS, SORTS, DEFAULT_SORT, emptySeriesFilter, seriesFilterCount, isCompleted, filterSeries, countSeries, seriesPlatforms, seriesStateFromQuery, seriesStateToQuery } from './serieslist.js';
 import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
 import { formatDate } from './format.js';
 import {
-  buildSeries, collapseMissing, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
+  buildSeries, collapseMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
 } from './series.js';
 
-// The filters survive going into a series and back (the route re-renders the page).
-let onlyLeft = false;
-let onlyNew = false;
 const SHOW_MISSING = 6; // a series with more games that you do not have than this is collapsed behind "Show all"
 
 const imageOf = (g) => posterURL(g) || coverURL(g);
@@ -42,7 +42,7 @@ export function renderSeries(root, openKey = null) {
   let timer = null;
   let focused = false;
   const live = h('div.sr-only', { role: 'status', 'aria-live': 'polite' });
-  const page = h('div.manage.series-page.sv-page');
+  const page = h('div.manage.series-page.sv-page' + (openKey == null ? '.list-page' : ''));
   root.replaceChildren(page, live);
   const say = (t) => { live.textContent = t; };
 
@@ -119,7 +119,8 @@ export function renderSeries(root, openKey = null) {
     const extra = extraOf(index, s);
     const games = fanGames(s, hasPoster, 4, (g) => !!imageOf(g), (g) => g.igdb_id != null);
     const n = extra.missing.length;
-    return h('a.tile', { href: href(s.key), 'aria-label': `${s.name}: ${seriesSummary(s, extra)}` },
+    const done = isCompleted(s);
+    return h('a.tile' + (done ? '.done' : ''), { href: href(s.key), 'aria-label': `${s.name}: ${seriesSummary(s, extra)}${done ? ', completed' : ''}` },
       h('span.fan', { 'aria-hidden': 'true', 'data-n': String(games.length) }, games.map((g, i) => {
         const p = poster(g);
         p.style.setProperty('--i', String(i - (games.length - 1) / 2));
@@ -127,7 +128,7 @@ export function renderSeries(root, openKey = null) {
       })),
       h('span.stitle', {}, s.name),
       bar(s),
-      h('small', {}, `${s.finished}/${s.total} finished`, n ? h('b.newn', {}, `+${n} not in library`) : null));
+      h('small', {}, `${s.finished}/${s.total} finished`, done ? h('b.sdone', { 'aria-hidden': 'true' }, 'Completed ✓') : null, n ? h('b.newn', {}, `+${n} not in library`) : null));
   }
 
   function refreshBar() {
@@ -141,25 +142,59 @@ export function renderSeries(root, openKey = null) {
     return [btn, note];
   }
 
+  // ---- the list: the search, filters and sort of the shared toolbar, then the tiles ----
+  // The page state is in the address (#/series?progress=completed&left=1...), so a reload, Back from a series and a shared link keep it.
+  const { filter, sort: startSort } = openKey == null ? seriesStateFromQuery(location.hash.split('?')[1]) : { filter: emptySeriesFilter(), sort: DEFAULT_SORT };
+  let sort = startSort;
+  let all = [];
+  let ui = null, results = null, tools = null;
+  if (openKey == null) {
+    results = h('section.sv-results', { 'aria-label': 'Series' });
+    tools = h('div.sv-top');
+    ui = createListShell({
+      label: 'Search series', placeholder: 'Search series or games…', noun: ['series', 'series'],
+      getQ: () => filter.q, setQ: (v) => { filter.q = v; },
+      sorts: SORTS, getSort: () => sort, setSort: (k) => { sort = k; }, defaultSort: DEFAULT_SORT,
+      onChange: () => draw(),
+      onReset: () => Object.assign(filter, emptySeriesFilter()),
+    });
+    ui.chips('Progress', { open: true, options: () => PROGRESS.map((p) => ({ value: p.key, text: p.label })),
+      has: (v) => filter.progress.has(v), toggle: (v) => toggleIn(filter.progress, v), selected: () => filter.progress.size,
+      count: (v) => countSeries(all, filter, index, 'progress', v) });
+    ui.chips('Show', { open: true, options: () => [{ value: 'left', text: 'Left to play' }, { value: 'missing', text: 'Not in library' }],
+      has: (v) => filter[v], toggle: (v) => { filter[v] = !filter[v]; }, selected: () => (filter.left ? 1 : 0) + (filter.missing ? 1 : 0),
+      count: (v) => countSeries(all, filter, index, v, true) });
+    ui.chips('Platform', { open: false, lazy: true, options: () => withSelected(seriesPlatforms(all).map((x) => x.value), filter.platforms).map((v) => ({ value: v, text: v })),
+      has: (v) => filter.platforms.has(v), toggle: (v) => toggleIn(filter.platforms, v), selected: () => filter.platforms.size,
+      count: (v) => countSeries(all, filter, index, 'platforms', v) });
+    page.replaceChildren(h('h1', {}, 'Series'), h('p.hint', {}, 'Progress through each series. Open one for its games in release order.'), tools, ...ui.nodes(results));
+  }
+
   function drawList() {
-    const all = buildSeries(store.games);
-    let shown = onlyLeft ? withLeft(all) : all;
-    if (onlyNew) shown = withMissing(shown, index);
+    all = buildSeries(store.games);
+    const shown = filterSeries(all, filter, sort, index);
     const noYear = all.reduce((n, s) => n + (s.total > 1 ? s.noYear : 0), 0); // a game alone in its series has no order to get wrong
-    const leftBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyLeft), onclick: () => { onlyLeft = !onlyLeft; draw(); } }, 'Left to play');
-    const newBtn = h('button.chip', { type: 'button', 'aria-pressed': String(onlyNew), onclick: () => { onlyNew = !onlyNew; draw(); } }, 'Not in library');
     const [rbtn, note] = refreshBar();
-    page.replaceChildren(...[ // replaceChildren would print a null as the text "null"
-      h('h1', {}, 'Series'),
-      h('p.hint', {}, 'Progress through each series. Open one for its games in release order.'),
-      h('div.chips', {}, leftBtn, newBtn, rbtn),
-      all.length || note ? h('p.hint', {}, [all.length ? `${shown.length} of ${all.length} series` : '', note].filter(Boolean).join(' · ')) : null,
+    const reset = () => { Object.assign(filter, emptySeriesFilter()); ui.input.value = ''; draw(); };
+    tools.replaceChildren(...[
+      h('div.chips', {}, rbtn),
+      note ? h('p.hint', {}, note) : null,
       noYear ? h('p.hint', {}, `${noYear} ${noYear === 1 ? 'game has' : 'games have'} no release year, so ${noYear === 1 ? 'its' : 'their'} order is only by title. Use Fill from IGDB in a game’s details to set it.`) : null,
+    ].filter(Boolean));
+    results.replaceChildren(...[
       shown.length ? h('div.series-list.tiles', {}, shown.map(tile))
         : !all.length ? emptyBox('No game has a series yet. Set one in a game’s details.', h('a.btn.primary', { href: '#/library' }, 'Open the Library'))
-          : onlyNew ? emptyBox(oldestFetch(index) ? 'No series has a game you do not have yet.' : 'Nothing was read from IGDB yet.', info.configured && !oldestFetch(index) && rbtn)
-            : emptyBox('Nothing left to play in any series.', h('button.chip', { type: 'button', onclick: () => { onlyLeft = false; draw(); } }, 'Show all series')),
-    ].filter(Boolean));
+          : filter.missing && !seriesFilterCount({ ...filter, missing: false }) && !filter.q && !oldestFetch(index) ? emptyBox('Nothing was read from IGDB yet.', info.configured && rbtn)
+            : emptyBox('No series match these filters.', h('button.btn', { type: 'button', onclick: reset }, 'Clear filters')),
+    ]);
+    const pills = [
+      ...PROGRESS.filter((p) => filter.progress.has(p.key)).map((p) => ({ name: `Progress: ${p.label}`, kids: [h('b', {}, 'Progress'), p.label], remove: () => filter.progress.delete(p.key) })),
+      filter.left ? { name: 'Left to play', kids: ['Left to play'], remove: () => { filter.left = false; } } : null,
+      filter.missing ? { name: 'Not in library', kids: ['Not in library'], remove: () => { filter.missing = false; } } : null,
+      ...[...filter.platforms].sort().map((p) => ({ name: `Platform: ${p}`, kids: [h('b', {}, 'Platform'), p], remove: () => filter.platforms.delete(p) })),
+    ].filter(Boolean);
+    ui.paint({ filters: seriesFilterCount(filter), shown: shown.length, of: all.length, pills });
+    ui.writeUrl('series', seriesStateToQuery({ filter, sort }));
   }
 
   // ---- one series as a poster shelf ----
@@ -224,5 +259,5 @@ export function renderSeries(root, openKey = null) {
   draw();
   loadMissing();
   window.addEventListener('games-changed', onGames);
-  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); };
+  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); ui?.destroy(); };
 }

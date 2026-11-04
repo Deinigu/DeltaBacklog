@@ -1,5 +1,9 @@
 // The rankings list (#/rankings): every ranking with a strip of its best games, and the way to make a new one.
-import { h, toast, gradientFor, initials, promptDialog, confirmDialog, icon, toastError, loadErrorBox, emptyBox } from './util.js';
+import { h, toast, gradientFor, initials, promptDialog, confirmDialog, icon, toastError, loadErrorBox, emptyBox, debounce } from './util.js';
+import { createSearchBox } from './filtershell.js';
+import { filterByName, params, qOf } from './listfilter.js';
+import { replaceUrl } from './layers.js';
+import { hashWithGame, gameIdFromHash } from './gameurl.js';
 import { store, posterURL, coverURL, listRankings, createRanking, patchRanking, deleteRanking, duplicateRanking, reorderRankings, refreshPosters } from './api.js';
 import { moveItem } from './order.js';
 
@@ -28,12 +32,17 @@ function newRankingDialog() {
 export function renderRankings(root) {
   let alive = true;
   let list = [];
+  let q = qOf(params(location.hash.split('?')[1])); // the search is in the address (#/rankings?q=best), so a reload and Back keep it
   const box = h('div.rk-list');
+  const search = createSearchBox({ value: q, placeholder: 'Search rankings…', label: 'Search rankings', onClear: () => { q = ''; draw(); } });
+  search.input.addEventListener('input', debounce(() => { q = search.input.value.trim(); draw(); }, 90));
+  const count = h('p.hint.rk-count', { role: 'status' });
+  const searchRow = h('div.rk-search', { hidden: true }, search.el, count);
   root.replaceChildren(h('div.rk-page', {},
     h('h1', {}, 'Rankings'),
     h('p.hint', {}, 'Rank any set of games your way: your own tiers, your own labels, big posters. Export the result as a picture.'),
     h('div.rk-actions', {}, h('button.btn.primary', { type: 'button', onclick: create }, icon('add'), 'New ranking')),
-    box));
+    searchRow, box));
 
   async function load() {
     try { list = await listRankings(); } catch {
@@ -45,11 +54,21 @@ export function renderRankings(root) {
   }
 
   function draw() {
+    const qs = q ? '?q=' + encodeURIComponent(q) : '';
+    replaceUrl(hashWithGame('#/rankings' + qs, gameIdFromHash(location.hash)));
+    searchRow.hidden = !list.length;
     if (!list.length) {
       box.replaceChildren(emptyBox('No rankings yet. Make one, then add games from your library, or open “Rank this year” on a Year in review page.'));
       return;
     }
-    box.replaceChildren(...list.map((r, i) => {
+    const shown = filterByName(list, q, (r) => [r.name, r.description]);
+    count.textContent = q ? `${shown.length} of ${list.length} rankings` : '';
+    if (!shown.length) {
+      box.replaceChildren(emptyBox('No ranking matches this search.', h('button.btn', { type: 'button', onclick: () => { q = ''; search.input.value = ''; draw(); } }, 'Clear search')));
+      return;
+    }
+    box.replaceChildren(...shown.map((r) => {
+      const i = list.indexOf(r);
       const strip = r.preview.map(previewTile).filter(Boolean);
       const stripes = h('span.rkc-tiers', { 'aria-hidden': 'true' }, r.tiers.map((t) => h('i', { style: `background:${t.color}`, title: t.label })));
       const card = h('a.rkc-main', { href: `#/rankings/${r.id}` },
@@ -59,8 +78,8 @@ export function renderRankings(root) {
           r.description && h('span.rkc-desc', {}, r.description),
           stripes));
       const btn = (label, glyph, fn, off, cls = '') => h('button.btn' + cls, { type: 'button', 'aria-label': `${label}: ${r.name}`, title: label, disabled: off || null, onclick: fn }, glyph);
-      // The arrows only exist when there is something to reorder; at the ends the missing one leaves its place empty.
-      const arrows = list.length > 1 ? [btn('Move up', '▲', () => move(i, -1), i === 0, '.arrow'), btn('Move down', '▼', () => move(i, 1), i === list.length - 1, '.arrow')] : [];
+      // The arrows only exist when there is something to reorder (and not while a search hides some of the rankings); at the ends the missing one leaves its place empty.
+      const arrows = list.length > 1 && !q ? [btn('Move up', '▲', () => move(i, -1), i === 0, '.arrow'), btn('Move down', '▼', () => move(i, 1), i === list.length - 1, '.arrow')] : [];
       return h('article.rkc', {}, card,
         h('div.rkc-actions', {},
           ...arrows,

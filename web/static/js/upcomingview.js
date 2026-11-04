@@ -1,11 +1,15 @@
 // Upcoming page: the games that are not out yet (or just came out), grouped by month. They are the games of the user's
 // series that the library lacks (cached from IGDB, see seriesview.js).
 // Nothing here asks IGDB on its own: the data is read when the owner presses Refresh from IGDB.
+// The search and filters are the shared toolbar (listshell.js) over the pure filters of upcomingfilter.js.
 import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction, toastError } from './util.js';
 import { store, load as reloadGames, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openAdd } from './add.js';
 import { missingIndex, moveHidden, oldestFetch } from './series.js';
 import { buildUpcoming, formatRelease } from './upcoming.js';
+import { createListShell } from './listshell.js';
+import { toggleIn, withSelected } from './listfilter.js';
+import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery } from './upcomingfilter.js';
 import { formatDate } from './format.js';
 
 function poster(item) {
@@ -18,10 +22,31 @@ export function renderUpcoming(root) {
   let info = { configured: false, refresh: { running: false } };
   let alive = true;
   let timer = null;
+  let res = { groups: [], recent: [], total: 0 }; // what buildUpcoming gave for the last draw, before the filters
   const live = h('div.sr-only', { role: 'status', 'aria-live': 'polite' });
-  const page = h('div.manage.series-page.up-page');
+  const page = h('div.manage.series-page.up-page.list-page');
   root.replaceChildren(page, live);
   const say = (t) => { live.textContent = t; };
+
+  // The page state is in the address (#/upcoming?when=month&series=Zelda...), so a reload and Back keep it.
+  const { filter } = upcomingStateFromQuery(location.hash.split('?')[1]);
+  const results = h('section.sv-results', { 'aria-label': 'Upcoming games' });
+  const tools = h('div.sv-top');
+  const ui = createListShell({
+    label: 'Search upcoming games', placeholder: 'Search upcoming games…', noun: ['game', 'games'],
+    getQ: () => filter.q, setQ: (v) => { filter.q = v; },
+    onChange: () => draw(),
+    onReset: () => Object.assign(filter, emptyUpcomingFilter()),
+  });
+  ui.chips('When', { open: true, options: () => WHEN.map((w) => ({ value: w.key, text: w.label })),
+    has: (v) => filter.when.has(v), toggle: (v) => toggleIn(filter.when, v), selected: () => filter.when.size, count: (v) => countUpcoming(res, filter, 'when', v) });
+  ui.chips('Series', { open: false, lazy: true, options: () => withSelected(seriesOf(res).map((x) => x.value), filter.series).map((v) => ({ value: v, text: v })),
+    has: (v) => filter.series.has(v), toggle: (v) => toggleIn(filter.series, v), selected: () => filter.series.size, count: (v) => countUpcoming(res, filter, 'series', v) });
+  ui.chips('Platform', { open: false, lazy: true, options: () => withSelected(platformsOf(res).map((x) => x.value), filter.platforms).map((v) => ({ value: v, text: v })),
+    has: (v) => filter.platforms.has(v), toggle: (v) => toggleIn(filter.platforms, v), selected: () => filter.platforms.size, count: (v) => countUpcoming(res, filter, 'platforms', v) });
+  page.replaceChildren(h('h1', {}, 'Upcoming'),
+    h('p.hint', {}, 'New games of your series that are not out yet or just came out, and that you do not have, with release dates from IGDB.'),
+    tools, ...ui.nodes(results));
 
   async function load() {
     try {
@@ -107,24 +132,36 @@ export function renderUpcoming(root) {
   }
 
   function draw() {
-    const { groups, recent, total } = buildUpcoming(store.games, index);
+    res = buildUpcoming(store.games, index);
+    const { groups, recent, total } = filterUpcoming(res, filter);
     const [btn, note] = refreshBar();
-    const nothing = !groups.length && !recent.length;
-    page.replaceChildren(...[
-      h('h1', {}, 'Upcoming'),
-      h('p.hint', {}, 'New games of your series that are not out yet or just came out, and that you do not have, with release dates from IGDB.'),
+    const nothing = !res.groups.length && !res.recent.length;
+    const shown = recent.length + groups.reduce((n, g) => n + g.items.length, 0);
+    const of = res.recent.length + res.groups.reduce((n, g) => n + g.items.length, 0);
+    const reset = () => { Object.assign(filter, emptyUpcomingFilter()); ui.input.value = ''; draw(); };
+    tools.replaceChildren(...[
       nothing && info.configured ? null : h('div.chips', {}, btn),
       note && !(nothing && info.configured) ? h('p.hint', {}, note) : null,
+    ].filter(Boolean));
+    results.replaceChildren(...[
       recent.length ? h('section.up-group', {}, h('h2', {}, 'Recently released'), h('ul.up-list', {}, recent.map((it) => row(it, true)))) : null,
       ...groups.map((g) => h('section.up-group', {}, h('h2', {}, g.label, h('small', {}, ` ${g.items.length}`)), h('ul.up-list', {}, g.items.map((it) => row(it, false))))),
       nothing ? emptyBox('Nothing is coming up yet. Read your series from IGDB to see their new games here.', info.configured && btn) : null,
+      !nothing && !shown ? emptyBox('No games match these filters.', h('button.btn', { type: 'button', onclick: reset }, 'Clear filters')) : null,
       total ? h('p.hint', {}, `${total} ${total === 1 ? 'game' : 'games'} to look forward to.`) : null,
     ].filter(Boolean));
+    const pills = [
+      ...WHEN.filter((w) => filter.when.has(w.key)).map((w) => ({ name: `When: ${w.label}`, kids: [h('b', {}, 'When'), w.label], remove: () => filter.when.delete(w.key) })),
+      ...[...filter.series].sort().map((s) => ({ name: `Series: ${s}`, kids: [h('b', {}, 'Series'), s], remove: () => filter.series.delete(s) })),
+      ...[...filter.platforms].sort().map((p) => ({ name: `Platform: ${p}`, kids: [h('b', {}, 'Platform'), p], remove: () => filter.platforms.delete(p) })),
+    ];
+    ui.paint({ filters: upcomingFilterCount(filter), shown, of, pills });
+    ui.writeUrl('upcoming', upcomingStateToQuery({ filter }));
   }
 
   function onGames() { index = missingIndex(info, store.games); draw(); }
   draw();
   load();
   window.addEventListener('games-changed', onGames);
-  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); };
+  return () => { alive = false; clearTimeout(timer); window.removeEventListener('games-changed', onGames); ui.destroy(); };
 }

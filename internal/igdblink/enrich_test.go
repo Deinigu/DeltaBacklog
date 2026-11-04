@@ -453,7 +453,7 @@ func TestMigration007OnAPopulatedDatabase(t *testing.T) {
 	if err := d.QueryRow("SELECT release_year, igdb_enriched_at, time_to_beat_normally FROM game WHERE id = ?", id).Scan(&year, &enriched, &ttb); err != nil {
 		t.Fatal(err)
 	}
-	if v != 23 || year != 2020 || enriched.Valid || ttb.Valid {
+	if v != 24 || year != 2020 || enriched.Valid || ttb.Valid {
 		t.Errorf("version %d, year %d, enriched %v, ttb %v", v, year, enriched, ttb)
 	}
 	for _, bad := range []string{
