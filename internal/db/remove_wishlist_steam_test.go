@@ -74,7 +74,7 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 		d.QueryRow(q).Scan(&n)
 		return
 	}
-	if v := count(`PRAGMA user_version`); v != 22 {
+	if v := count(`PRAGMA user_version`); v != 23 {
 		t.Fatalf("version %d", v)
 	}
 	if n := count(`SELECT count(*) FROM game`); n != 3 {

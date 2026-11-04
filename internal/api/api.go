@@ -147,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ttb/sync", s.ttbSyncStatus)
 	mux.HandleFunc("POST /api/ttb/sync", s.ttbSyncStart)
 	mux.HandleFunc("POST /api/ttb/sync/cancel", s.ttbSyncCancel)
+	mux.HandleFunc("POST /api/ttb/none", s.ttbNone)
 	mux.HandleFunc("POST /api/attention/ignore", s.attentionIgnore)
 	mux.HandleFunc("GET /api/views", s.listViews)
 	mux.HandleFunc("POST /api/views", s.createView)

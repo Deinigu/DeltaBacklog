@@ -1,13 +1,14 @@
-// The #/stats page: summary tiles, then cards for time spent, time left, years, outcomes, shortest wins, composition, series.
+// The #/stats page: summary tiles, then cards for time spent, years, outcomes, shortest wins, composition, series.
 // All numbers come from stats.js (pure); this file only draws them. Every hour figure is an estimate and says how many games it rests on.
 import { h, plural } from './util.js';
 import { store } from './api.js';
 import { formatNumber, formatCalendarDate } from './format.js';
 import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
+import { ttbGroupOfStatus } from './ttbscope.js';
 import {
-  backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP, DEFAULT_HOURS_PER_WEEK,
-  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration, currentSection,
+  backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP,
+  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, currentSection,
 } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -20,7 +21,6 @@ function svg(tag, attrs, ...children) {
 
 const statusLabel = (key) => store.statusByCode.get(key)?.label ?? key;
 const num = formatNumber;
-const HOURS_KEY = 'deltabacklog.statsHoursPerWeek';
 
 /** A card with a heading and an optional one-line explanation. `id` is the jump target; `wide` spans both columns on a desktop. */
 const card = (id, title, hint, ...body) => h('section.stat-card', { 'data-sec': id, tabindex: '-1' }, h('h2', {}, title), hint && h('p.hint', {}, hint), ...body);
@@ -37,12 +37,21 @@ function barList(rows, { empty = 'Nothing to show yet.', value = (r) => r.count,
     h('span.hb-count', {}, text(r)))));
 }
 
-/** "≈ 1,240 h across 142 of 189 finished games (the rest have no time to beat)": what an hours figure rests on. */
-function basis(e, noun) {
+/**
+ * What an hours figure rests on: "Rests on 142 of 189 finished games; the other 47 have no time to beat (3 have none on
+ * HowLongToBeat), so the real figure is higher." The games HowLongToBeat does not know are "no time exists", not missing;
+ * when some are missing the sentence ends with a link to the Needs attention list that holds them (`group`).
+ */
+function basis(e, noun, group) {
+  const one = noun.replace(/s$/, '');
   if (!e.total) return `No ${noun} yet.`;
-  if (!e.known) return `None of the ${plural(e.total, noun.replace(/s$/, ''), noun)} has a time to beat yet.`;
-  if (e.known === e.total) return `Rests on the time to beat of all ${plural(e.total, noun.replace(/s$/, ''), noun)}.`;
-  return `Rests on ${e.known} of ${e.total} ${noun}; the other ${e.total - e.known} ${e.total - e.known === 1 ? 'has' : 'have'} no time to beat, so the real figure is higher.`;
+  const link = e.missing > 0 && group ? [' ', h('a', { href: `#/attention?group=${group}` }, e.missing === 1 ? 'Find the missing time' : `Find the ${e.missing} missing times`)] : null;
+  const noneNote = e.none > 0 ? ` (${e.none} ${e.none === 1 ? 'has' : 'have'} none on HowLongToBeat)` : '';
+  const gap = e.total - e.known;
+  if (!e.known) return h('span', {}, `None of the ${plural(e.total, one, noun)} has a time to beat yet${noneNote}.`, link);
+  if (!gap) return `Rests on the time to beat of all ${plural(e.total, one, noun)}.`;
+  const tail = e.missing > 0 ? ', so the real figure is higher.' : `; ${gap === 1 ? 'it adds' : 'they add'} nothing, because no time exists.`;
+  return h('span', {}, `Rests on ${e.known} of ${e.total} ${noun}; the other ${gap} ${gap === 1 ? 'has' : 'have'} no time to beat${noneNote}${tail}`, link);
 }
 const approx = (e) => `≈ ${num(e.hours)} h`;
 
@@ -156,34 +165,11 @@ function waitingTable(time) {
     since && h('p.hint', {}, since));
 }
 
-const loadHours = () => { try { return cleanHoursPerWeek(localStorage.getItem(HOURS_KEY) ?? DEFAULT_HOURS_PER_WEEK); } catch { return DEFAULT_HOURS_PER_WEEK; } };
-const saveHours = (n) => { try { localStorage.setItem(HOURS_KEY, String(n)); } catch { /* private window: it just is not remembered */ } };
-
-/** Hours left in Up next and Backlog, and how long that takes at N hours a week (N is remembered on this device). */
-function timeLeftCard(left) {
-  const line = (label, e) => h('li', {}, h('span.hb-label', {}, label), h('b', {}, e.known ? approx(e) : 'no times'), h('small', {}, ` ${e.known} of ${e.total}`));
-  const out = h('p.big', {});
-  const input = h('input', { id: 'stats-hpw', type: 'number', inputmode: 'numeric', min: '1', max: '168', step: '1', value: String(loadHours()) });
-  const update = () => {
-    const perWeek = cleanHoursPerWeek(input.value);
-    const when = formatDuration(monthsToClear(left.both.hours, perWeek));
-    out.replaceChildren(when || 'Nothing to clear', h('small', {}, when ? `to play the ≈ ${num(left.both.hours)} h of Up next and Backlog at ${perWeek} h a week` : 'No time to beat is known for the games waiting.'));
-  };
-  input.addEventListener('input', update);
-  input.addEventListener('change', () => { const n = cleanHoursPerWeek(input.value); input.value = String(n); saveHours(n); update(); });
-  update();
-  return card('left', 'Time left', 'Hours to clear the games still waiting. An estimate from the time to beat.',
-    h('ul.lines', {}, line('Up next', left.upNext), line('Backlog', left.backlog)),
-    h('p.hint', {}, basis(left.both, 'waiting games')),
-    h('div.hpw', {}, h('label', { for: 'stats-hpw' }, 'I play'), input, h('span', {}, 'hours a week')),
-    out);
-}
-
 function tile(value, label, sub) {
   return h('div.tile-stat', {}, h('b', {}, value), h('span', {}, label), sub && h('small', {}, sub));
 }
 
-const SECTIONS = [['finished', 'Finished'], ['left', 'Time left'], ['backlog', 'Backlog'], ['years', 'Years'], ['outcomes', 'Outcomes'],
+const SECTIONS = [['finished', 'Finished'], ['backlog', 'Backlog'], ['years', 'Years'], ['outcomes', 'Outcomes'],
   ['short', 'Shortest'], ['series', 'Series'], ['library', 'Library'], ['waiting', 'Waiting']];
 
 export function renderStats(root) {
@@ -200,7 +186,7 @@ export function renderStats(root) {
 
   const finishedCard = card('finished', 'Time spent finishing games', 'About how long the games you finished take to beat, from their time to beat (not the time you actually played).',
     fin.all.known ? h('p.big', {}, approx(fin.all), h('small', {}, `across ${fin.all.known} of ${fin.all.total} finished games`)) : null,
-    h('p.hint', {}, basis(fin.all, 'finished games')),
+    h('p.hint', {}, basis(fin.all, 'finished games', ttbGroupOfStatus('finished'))),
     fin.all.known ? h('div', {},
       h('h3', {}, 'Hours by genre'), barList(fin.genres, { value: (r) => r.minutes, text: (r) => [`${num(r.hours)} h`, r.known < r.count && h('small', { title: `${r.known} of ${r.count} finished games have a time to beat` }, ` ${r.known}/${r.count}`)], cls: 'wide-count' }),
       h('h3', {}, 'Hours by platform'), barList(fin.platforms, { value: (r) => r.minutes, text: (r) => [`${num(r.hours)} h`, r.known < r.count && h('small', { title: `${r.known} of ${r.count} finished games have a time to beat` }, ` ${r.known}/${r.count}`)], cls: 'wide-count' }),
@@ -269,10 +255,10 @@ export function renderStats(root) {
       tile(num(games.length), 'games'),
       tile(num(finishedCount), 'finished'),
       tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
-      tile(left.both.known ? approx(left.both) : '—', 'left to play', left.both.known ? `${left.both.known} of ${left.both.total} timed` : 'no times yet')),
+      tile(left.known ? approx(left) : '—', 'left to play', left.known ? `${left.known} of ${left.total} timed` : 'no times yet')),
     jump,
     h('div.stat-grid', {},
-      tall(finishedCard), timeLeftCard(left), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
+      tall(finishedCard), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
 
@@ -298,7 +284,7 @@ export function renderStats(root) {
       }
     };
     let raf = 0;
-    const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; mark(); }); }; // a scroll event per frame at most: 9 rects
+    const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; mark(); }); }; // a scroll event per frame at most: 8 rects
     const free = () => { tapped = null; soon(); }; // a wheel, touch or key press ends a tapped chip's hold
     picked = (id) => { tapped = id; mark(); };
     window.addEventListener('scroll', soon, { passive: true });

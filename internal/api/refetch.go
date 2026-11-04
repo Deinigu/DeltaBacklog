@@ -67,7 +67,7 @@ func (s *Server) igdbDetails(w http.ResponseWriter, r *http.Request) {
 const attentionIgnoredKey = "attention_ignored"
 
 // attentionGroups are the groups of the Needs attention page (web/static/js/attention.js GROUPS): the only keys accepted.
-var attentionGroups = map[string]bool{"unlinked": true, "uncertain": true, "no_cover": true, "poster": true, "no_ttb": true,
+var attentionGroups = map[string]bool{"unlinked": true, "uncertain": true, "no_cover": true, "poster": true, "no_ttb": true, "no_ttb_finished": true,
 	"no_platform": true, "no_year": true, "no_ownership": true, "no_genres": true}
 
 // attentionIgnored answers {"ignored": {"<group>": [game ids]}}: the games hidden from each group of the page. Ids of

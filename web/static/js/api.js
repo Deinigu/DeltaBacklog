@@ -330,6 +330,9 @@ export async function attentionIgnore(group, gameId, ignore = true) {
   return (await request('POST', 'api/attention/ignore', { group, game_id: gameId, ignore })).ignored || {};
 }
 
+/** Mark (or unmark) a game as having no time on HowLongToBeat: the lookups skip it and Stats counts it as "no time exists". */
+export const ttbNone = (gameId, none = true) => request('POST', 'api/ttb/none', { game_id: gameId, none });
+
 // ---- bulk HowLongToBeat lookup (Needs attention) ----
 /** The run's state: {running, done, total, found, manual:[game ids needing a hand pick], report, failed}. */
 export const ttbSyncStatus = () => request('GET', 'api/ttb/sync');
