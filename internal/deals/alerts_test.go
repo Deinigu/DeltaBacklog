@@ -343,15 +343,22 @@ func TestMessageShapes(t *testing.T) {
 		t.Errorf("%q", three)
 	}
 
-	// List: header and one compact entry per game; no preview even with wishlist games.
-	four := messageGroups([]Alert{a("A"), a("B"), a("C"), {AppID: 9, Title: "D", Kind: KindTwoYear, Price: 100, Currency: "SEK", Cut: 40, URL: "https://x.example/D"}})
+	// List: a header, then the library and the wishlist under their headings (library first even when the wishlist game
+	// comes first), each game on two lines with the shop, a blank line between games; no preview.
+	wishD := Alert{AppID: 9, Title: "D", Kind: KindTwoYear, Price: 100, Regular: 200, Currency: "SEK", Cut: 40, Shop: "GOG", URL: "https://x.example/D"}
+	four := messageGroups([]Alert{wishD, a("A"), a("B"), a("C")})
 	if len(four) != 1 || four[0].preview != "" {
 		t.Fatalf("%+v", four)
 	}
 	lt := four[0].text
-	if !strings.HasPrefix(lt, "🔥 <b>4 price alerts</b>\n") || !strings.Contains(lt, `🔥 <a href="https://x.example/A"><b>A</b></a> €7.49`) ||
-		!strings.Contains(lt, `📉 <a href="https://x.example/D"><b>D</b></a> 1.00 SEK −40% 💙`) {
+	want = "🔔 <b>4 price alerts</b>\n🔥 historical low  ·  📉 lowest in 2 years\n\n📚 <b>Your library</b>\n\n" +
+		"🔥 <a href=\"https://x.example/A\"><b>A</b></a>\n" + a("A").priceLine() + "\n\n"
+	if !strings.HasPrefix(lt, want) || !strings.Contains(lt, "€7.49</b> at GOG") ||
+		!strings.HasSuffix(lt, "\n\n💙 <b>Your wishlist</b>\n\n📉 <a href=\"https://x.example/D\"><b>D</b></a>\n<b>1.00 SEK</b>  <s>2.00 SEK</s>  −40% at GOG") {
 		t.Errorf("list: %q", lt)
+	}
+	if strings.Count(lt, "Your library") != 1 || strings.Count(lt, "Your wishlist") != 1 {
+		t.Errorf("one heading per section: %q", lt)
 	}
 	checkHTML(t, lt)
 	if len(four[0].ids) != 3 || len(four[0].wish) != 1 {

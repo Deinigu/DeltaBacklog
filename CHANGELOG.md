@@ -36,6 +36,7 @@ All notable changes to DeltaBacklog are documented here. The format follows [Kee
 
 ### Changed
 
+- Telegram lists of more than three price alerts are easier to read: each game on two lines with the store that has the price, a blank line between games, and the library and the wishlist under their own headings.
 - **Nicer Telegram messages**: price alerts use Telegram's HTML formatting: a 🔥 / 📉 headline, the bold title, the price with the regular price struck through, the cut, the shop, the low to compare with and a *View deal* link; wishlist games are tagged 💙 and show a large preview of their Steam page; lists of more than three games have a header and one compact line per game. The test message says DeltaBacklog is connected and shows an example alert. Titles and shops are escaped.
 - **A fuller Stats page**: summary tiles and jump buttons; estimated hours spent on finished games (by year, genre and platform) and left in Up next and Backlog (with your own hours a week); games played and finished per year; finished against dropped by genre and platform (groups of 5+); the 10 shortest games waiting; library by ownership, platform and decade; series completed. Every estimate says how many games it rests on.
 - **Default order is now Status, then Title** (it was Status, Manual order, Title). The starter *Up next* and *Playing now* views set *Manual order* explicitly and are unchanged; add *Manual order* as a sort level to any view that should show your ranking. No migration.
