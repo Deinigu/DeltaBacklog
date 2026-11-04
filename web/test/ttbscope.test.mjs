@@ -44,10 +44,15 @@ test('Stats and Needs attention agree on which games lack a time', () => {
   const listed = (pred) => new Set(groups.flatMap((g) => g.rows.filter(pred).map((r) => r.game.id)));
   const listedAll = listed(() => true), listedOpen = listed((r) => !r.ignored), listedMarked = listed((r) => r.ignored);
 
-  // what Stats would count as "without a time": in the rule's statuses, no time
-  const withoutTime = library.filter((g) => TTB_STATUSES.has(g.status) && estimate([g]).known === 0);
-  const statsMissing = new Set(withoutTime.filter((g) => estimate([g]).missing === 1).map((g) => g.id));
-  const statsNone = new Set(withoutTime.filter((g) => estimate([g]).none === 1).map((g) => g.id));
+  // what Stats computes for one game: the finished figure, the left-to-play figure (and Playing, which Needs attention also lists)
+  const statsOf = (g) => {
+    const parts = [finishedTime([g]).all, timeLeft([g])];
+    if (g.status === 'playing') parts.push(estimate([g]));
+    return parts.reduce((a, e) => ({ total: a.total + e.total, known: a.known + e.known, missing: a.missing + e.missing, none: a.none + e.none }), { total: 0, known: 0, missing: 0, none: 0 });
+  };
+  const withoutTime = library.filter((g) => { const s = statsOf(g); return s.total > 0 && s.known === 0; });
+  const statsMissing = new Set(withoutTime.filter((g) => statsOf(g).missing === 1).map((g) => g.id));
+  const statsNone = new Set(withoutTime.filter((g) => statsOf(g).none === 1).map((g) => g.id));
 
   assert.deepEqual([...listedAll].sort((a, b) => a - b), withoutTime.map((g) => g.id).sort((a, b) => a - b), 'every game without a time is listed, and only those');
   assert.deepEqual([...listedOpen].sort(), [...statsMissing].sort(), 'open rows = what Stats calls missing');

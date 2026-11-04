@@ -255,7 +255,7 @@ export function renderStats(root) {
       tile(num(games.length), 'games'),
       tile(num(finishedCount), 'finished'),
       tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
-      tile(left.known ? approx(left) : '—', 'left to play', left.known ? `${left.known} of ${left.total} timed` : 'no times yet')),
+      tile(left.known ? approx(left) : '—', 'left to play', left.known ? [`${left.known} of ${left.total} timed`, left.missing > 0 ? [' · ', h('a', { href: '#/attention?group=no_ttb' }, 'find the rest')] : null] : 'no times yet')),
     jump,
     h('div.stat-grid', {},
       tall(finishedCard), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),

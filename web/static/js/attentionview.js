@@ -60,7 +60,15 @@ export function renderAttention(root) {
       if (!alive || !st) return;
       const was = sync?.running;
       sync = st;
-      if (!st.running) { clearInterval(poll); if (was) await refreshGames().catch(() => {}); }
+      if (!st.running) {
+        clearInterval(poll);
+        if (was) {
+          await refreshGames().catch(() => {});
+          // the run may have emptied both lists, taking their report with them: say it once as a message
+          const left = buildGroups(store.games, queue, ignored, false).some((g) => TTB_GROUPS.includes(g.key));
+          if (!left && st.report) toast(st.report);
+        }
+      }
       draw();
     }, 1000);
   }
@@ -75,14 +83,17 @@ export function renderAttention(root) {
     draw();
   }
 
-  function syncBar(group, groups) {
-    const open = groups.filter((g) => TTB_GROUPS.includes(g.key)).reduce((n, g) => n + g.rows.filter((r) => !r.ignored).length, 0); // the run covers both lists
+  // One bar for the run, in the first time group shown; it covers both lists, so it counts and says so.
+  function syncBar(groups) {
+    const ttb = groups.filter((g) => TTB_GROUPS.includes(g.key));
+    const open = ttb.reduce((n, g) => n + g.rows.filter((r) => !r.ignored).length, 0);
+    const both = ttb.length > 1;
     if (!open && !sync?.report) return null;
     const line = syncLine(sync);
     return h('div.att-sync', {},
       sync?.running
         ? h('button.btn', { type: 'button', onclick: stopSync }, 'Stop')
-        : open ? h('button.btn.primary', { type: 'button', onclick: startSync }, `Find times for all ${open}`) : null,
+        : open ? h('button.btn.primary', { type: 'button', onclick: startSync }, `Find times for all ${open}${both ? ' (both lists)' : ''}`) : null,
       line && h('span.att-sync-line', { role: 'status', class: sync?.failed ? 'bad' : '' }, line),
       sync?.running ? h('progress', { max: String(sync.total || 1), value: String(sync.done), 'aria-label': 'Progress' }) : null);
   }
@@ -169,7 +180,7 @@ export function renderAttention(root) {
     const d = h('details.att-group', { 'data-group': group.key, open: groupOpen(openState, group.key, n) },
       h('summary', {}, h('span.att-gtitle', {}, group.title), h('span.att-count', {}, String(n)),
         group.ignoredCount && !showIgnored ? h('span.att-ign-n', {}, `${group.ignoredCount} ignored`) : null),
-      TTB_GROUPS.includes(group.key) ? syncBar(group, groups) : null,
+      TTB_GROUPS.includes(group.key) && groups.find((g) => TTB_GROUPS.includes(g.key)) === group ? syncBar(groups) : null,
       group.hint ? h('p.hint', {}, group.hint, group.key === 'uncertain' ? [' ', h('a', { href: '#/link' }, 'Review them one by one')] : null) : null,
       h('ul.att-list', {}, group.rows.map((r) => rowEl(group, r))));
     d.addEventListener('toggle', () => { if (d.open !== groupOpen(openState, group.key, n)) { openState = withGroupOpen(openState, group.key, d.open); saveState(); } });
@@ -184,6 +195,7 @@ export function renderAttention(root) {
     const top = [];
     if (!left && !nIgnored) {
       body.replaceChildren(emptyBox('Nothing needs attention. Every game is linked and has its cover, poster and basic details.', h('a.btn', { href: '#/library' }, 'Back to the Library')));
+      useWanted();
       return;
     }
     top.push(h('p.hint', {}, left ? `${left} ${left === 1 ? 'thing' : 'things'} to fix, in ${groups.filter((g) => g.rows.some((r) => !r.ignored)).length} lists.` : 'Everything is fixed.'));
@@ -192,9 +204,21 @@ export function renderAttention(root) {
         showIgnored ? 'Hide ignored' : `Show ${nIgnored} ignored`));
     }
     body.replaceChildren(...top, ...groups.map((g) => groupEl(g, groups)));
-    if (wanted) {
-      const el = body.querySelector(`[data-group="${wanted}"]`);
-      if (el) { el.scrollIntoView({ block: 'start' }); wanted = null; }
+    useWanted();
+  }
+
+  // The group a link asked for is opened and scrolled to by the first draw with data, found or not, then forgotten
+  // (also in the address, so coming back or tapping "Show ignored" does not jump again).
+  function useWanted() {
+    if (!wanted) return;
+    body.querySelector(`[data-group="${wanted}"]`)?.scrollIntoView({ block: 'start' });
+    wanted = null;
+    const [path, query = ''] = location.hash.split('?');
+    const p = new URLSearchParams(query);
+    if (p.has('group')) {
+      p.delete('group');
+      const rest = p.toString();
+      try { history.replaceState(history.state, '', location.pathname + location.search + path + (rest ? `?${rest}` : '')); } catch { /* the address keeps ?group=: harmless */ }
     }
   }
 

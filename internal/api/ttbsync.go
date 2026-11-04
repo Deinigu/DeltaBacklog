@@ -244,7 +244,9 @@ func (s *Server) ttbSkipped(id int64) bool {
 		return true
 	}
 	var marked bool
-	s.DB.QueryRow("SELECT ttb_not_found FROM game WHERE id = ?", id).Scan(&marked)
+	if err := s.DB.QueryRow("SELECT ttb_not_found FROM game WHERE id = ?", id).Scan(&marked); err != nil {
+		log.Printf("time to beat mark of game %d: %v", id, err)
+	}
 	return marked
 }
 
