@@ -31,3 +31,22 @@ jobs:
         run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/deltabacklog
       - name: Cross-build (linux/armv7, Raspberry Pi)
         run: GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/deltabacklog
+
+  # Opens every page of the demo app in headless Chrome at phone and PC width, clicks its controls and fails on
+  # any JavaScript error (docs/tools/smoke.mjs).
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install puppeteer
+        working-directory: docs/tools
+        run: npm install --no-save --no-package-lock puppeteer
+      - name: Browser smoke test
+        working-directory: docs/tools
+        run: node smoke.mjs
