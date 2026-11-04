@@ -1,5 +1,5 @@
 // App shell: hash router, navigation (bottom bar / sidebar), theme toggle, service worker.
-import { h, icon } from './util.js';
+import { h, icon, loadErrorBox } from './util.js';
 import { pruneLayers } from './layers.js';
 import { load, store, loadLinkPending, loadDealsUnseen } from './api.js';
 import { renderLibrary } from './library.js';
@@ -140,7 +140,7 @@ async function route({ moved = false } = {}) {
   if (!store.loaded) {
     view.replaceChildren(h('div.grid', {}, Array.from({ length: 8 }, () => h('div.skeleton'))));
     try { await load(); } catch {
-      view.replaceChildren(h('div.empty', {}, 'Could not load games. ', h('button.btn', { onclick: () => route({ moved }) }, 'Retry')));
+      view.replaceChildren(loadErrorBox('your games', () => route({ moved })));
       return;
     }
     buildNav();

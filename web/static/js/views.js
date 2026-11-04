@@ -1,5 +1,5 @@
 // Manage saved views: open, rename, pin, reorder, duplicate, delete (with undo).
-import { h, emptyBox, toast, toastAction, askNameDialog } from './util.js';
+import { h, emptyBox, toastAction, askNameDialog, toastError } from './util.js';
 import { stateFromView } from './filters.js';
 import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
@@ -13,28 +13,28 @@ export function renderViews(root) {
     list));
 
   async function guard(fn, msg) {
-    try { await fn(); } catch { toast(msg || 'Something went wrong'); }
+    try { await fn(); } catch { toastError(msg || 'save the change'); }
     draw();
   }
 
   async function remove(v) {
     const copy = { name: v.name, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned };
-    await guard(() => deleteView(v.id), 'Could not delete the view');
-    toastAction(`Deleted “${v.name}”`, 'Undo', () => guard(() => createView(copy), 'Could not restore'));
+    await guard(() => deleteView(v.id), 'delete the view');
+    toastAction(`Deleted “${v.name}”`, 'Undo', () => guard(() => createView(copy), 'restore the view'));
   }
 
   function move(i, d) {
     const ids = store.views.map((v) => v.id);
     const [x] = ids.splice(i, 1);
     ids.splice(i + d, 0, x);
-    return guard(() => reorderViews(ids), 'Could not reorder');
+    return guard(() => reorderViews(ids), 'reorder the views');
   }
 
   function draw() {
     if (!store.views.length) { list.replaceChildren(emptyBox('No saved views yet. Filter the Library, then tap Save as view.', h('a.btn.primary', { href: '#/library' }, 'Open the Library'))); return; }
     list.replaceChildren(...store.views.map((v, i) => h('div.vrow', {},
       h('span.emoji', {}, v.icon || '⭐'),
-      h('a.name', { href: `#/view/${v.id}`, style: 'text-decoration:none;color:inherit' }, v.name, h('small', {}, summary(v))),
+      h('a.name', { href: `#/view/${v.id}`, style: 'text-decoration:none;color:inherit' }, v.name, h('small', { title: summary(v) }, summary(v))),
       h('div.tools', {},
         h('button.btn.pin', { type: 'button', 'aria-label': v.pinned ? 'Unpin from navigation' : 'Pin to navigation', 'aria-pressed': String(v.pinned), title: 'Pin to navigation', onclick: () => guard(() => updateView(v.id, { pinned: !v.pinned })) }, h('span', { 'aria-hidden': 'true' }, '📌')),
         h('button.btn', { type: 'button', 'aria-label': 'Move up', disabled: i === 0 || null, onclick: () => move(i, -1) }, '▲'),
@@ -43,7 +43,7 @@ export function renderViews(root) {
           const r = await askNameDialog({ title: 'Rename view', name: v.name, icon: v.icon || '⭐' });
           if (r) guard(() => updateView(v.id, r));
         } }, '✎'),
-        h('button.btn', { type: 'button', 'aria-label': 'Duplicate', onclick: () => guard(() => createView({ name: `${v.name} copy`, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned }), 'Could not duplicate') }, '⧉'),
+        h('button.btn', { type: 'button', 'aria-label': 'Duplicate', onclick: () => guard(() => createView({ name: `${v.name} copy`, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned }), 'duplicate the view') }, '⧉'),
         h('button.btn', { type: 'button', 'aria-label': 'Delete', onclick: () => remove(v) }, '🗑')))));
   }
 

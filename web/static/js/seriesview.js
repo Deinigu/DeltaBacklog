@@ -1,11 +1,11 @@
 // Series page: a grid of series tiles (a fan of the series' posters, progress), and each series opened on its own
 // route (#/series/<key>) as a poster shelf in release order. The games of the series' IGDB collection that the
 // library does not have sit in the shelf as "Not in your library", with Add and Hide.
-import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction, toastError } from './util.js';
 import { store, coverURL, posterURL, seriesMissing, seriesRefresh, seriesHide, seriesUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
-import { formatDay } from './upcoming.js';
+import { formatDate } from './format.js';
 import {
   buildSeries, collapseMissing, withLeft, withMissing, moveHidden, barShares, isFinished, isPlayed, missingIndex, extraOf, shelfItems, fanGames, seriesSummary, oldestFetch,
 } from './series.js';
@@ -72,7 +72,7 @@ export function renderSeries(root, openKey = null) {
       info.refresh = await seriesRefresh();
       say('Reading your series from IGDB.');
     } catch (e) {
-      toast(e.message || 'Could not start the refresh');
+      toastError('start the refresh', e);
       return;
     }
     draw();
@@ -93,7 +93,7 @@ export function renderSeries(root, openKey = null) {
   async function hide(m) {
     try {
       await seriesHide(m.collection_id, m.igdb_id);
-    } catch (e) { toast(e.message || 'Could not hide the game'); return; }
+    } catch (e) { toastError('hide the game', e); return; }
     moveTo(m, 'hidden');
     draw();
     say(`${m.title} hidden.`);
@@ -102,7 +102,7 @@ export function renderSeries(root, openKey = null) {
   async function unhide(m) {
     try {
       await seriesUnhide(m.collection_id, m.igdb_id);
-    } catch (e) { toast(e.message || 'Could not show the game again'); return; }
+    } catch (e) { toastError('show the game again', e); return; }
     moveTo(m, 'missing');
     draw();
     say(`${m.title} is back in the list.`);
@@ -136,7 +136,7 @@ export function renderSeries(root, openKey = null) {
       title: info.configured ? 'Refresh from IGDB' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh');
     const old = oldestFetch(index);
-    const note = old ? `Missing games read from IGDB on ${formatDay(old)}.`
+    const note = old ? `Missing games read from IGDB on ${formatDate(old)}.`
       : info.configured ? 'Press Refresh to read the games of your series that you do not have yet.' : '';
     return [btn, note];
   }
@@ -197,7 +197,7 @@ export function renderSeries(root, openKey = null) {
     const s = buildSeries(store.games).find((x) => x.key === openKey);
     const back = h('a.chip.back', { href: '#/series' }, '‹ All series');
     if (!s) {
-      page.replaceChildren(back, h('div.empty', {}, 'That series is not in your library (any more).'));
+      page.replaceChildren(back, emptyBox('That series is not in your library (any more).'));
       return;
     }
     const extra = extraOf(index, s);

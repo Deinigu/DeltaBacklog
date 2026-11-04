@@ -1,5 +1,5 @@
 // The "Screenshots" section of the game drawer: thumbnail grid, upload with progress, and the full-screen viewer.
-import { h, toast, toastAction } from './util.js';
+import { h, toast, toastAction, toastError, couldNot } from './util.js';
 import { listShots, uploadShot, setShotCaption, deleteShot, deleteShotKeepalive, orderShots } from './api.js';
 import { openShotViewer } from './shotviewer.js';
 import { moveShot, countLabel, pickImages, uploadSummary, thumbPlan, BIG_UPLOAD, pendingIds, withoutPending, clampIndex } from './shots.js';
@@ -112,7 +112,7 @@ export function screenshotsSection(game) {
       available = r.available;
     } catch {
       notice.hidden = false;
-      notice.textContent = 'Could not load the screenshots.';
+      notice.textContent = couldNot('load the screenshots');
       return;
     }
     draw();
@@ -195,7 +195,7 @@ export function screenshotsSection(game) {
         s.caption = fresh.caption || '';
         savedCaption = v;
         shotsChanged();
-      } catch { toast('Could not save the caption'); }
+      } catch { toastError('save the caption'); }
     }
 
     async function move(dir) {
@@ -214,7 +214,7 @@ export function screenshotsSection(game) {
         shots = before;
         viewer.show(cur - dir);
         draw();
-        toast('Could not save the new order');
+        toastError('save the new order');
       }
     }
 
@@ -236,7 +236,7 @@ export function screenshotsSection(game) {
           if (e.status === 404) { forgetThumb(s.thumb); shotsChanged(); return; } // already gone
           shots.splice(Math.min(at, shots.length), 0, s); // the server still has it
           draw();
-          toast(e.status === 503 ? STORAGE_DOWN : 'Could not delete the screenshot');
+          if (e.status === 503) toast(STORAGE_DOWN); else toastError('delete the screenshot');
         }
       }, UNDO_MS);
       entry.toast = toastAction('Screenshot deleted', 'Undo', () => {

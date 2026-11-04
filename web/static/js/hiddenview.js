@@ -1,7 +1,7 @@
 // Hidden page: one list of everything the owner hid (Deals, Similar games, Series), each with Show again. The per-page
 // Hidden lists stay where they are; this is the overview. It reads the database only (GET api/hidden): no IGDB or
 // IsThereAnyDeal call when it opens.
-import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toastAction, toastError } from './util.js';
 import { hiddenList, dealsHide, dealsUnhide, similarHide, similarUnhide, seriesHide, seriesUnhide, coverURL, posterURL, missingPosterURL } from './api.js';
 import { groupHidden, hiddenCount, withoutItem } from './hidden.js';
 
@@ -28,12 +28,12 @@ export function renderHidden(root) {
   }
 
   async function showAgain(it) {
-    try { await SHOW[it.kind](it.ref); } catch (e) { toast(e.message || 'Could not show the game again'); return; }
+    try { await SHOW[it.kind](it.ref); } catch (e) { toastError('show the game again', e); return; }
     groups = withoutItem(groups, it.key);
     draw();
     say(`${it.title} shown again.`);
     toastAction(`Showing “${it.title}” again`, 'Undo', async () => {
-      try { await HIDE[it.kind](it.ref); } catch (e) { toast(e.message || 'Could not hide the game'); return; }
+      try { await HIDE[it.kind](it.ref); } catch (e) { toastError('hide the game', e); return; }
       await load();
       say(`${it.title} hidden.`);
     });

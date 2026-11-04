@@ -4,18 +4,9 @@
 // as a day. Everything is read in UTC so a release on the 1st stays in its month in every time zone; only "today"
 // is the viewer's own calendar date.
 import { buildSeries } from './series.js';
+import { LOCALE, noSept } from './format.js'; // dates and numbers are written the same way on every page
 
 const DAY_MS = 86400000;
-/** "3 Nov 2026" for a date or timestamp, like every other date in the app ('' when absent or unreadable). */
-export function formatDay(value, locale = 'en-GB') {
-  const t = value ? new Date(value) : null;
-  if (!t || Number.isNaN(t.getTime())) return '';
-  return noSept(t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
-}
-
-export const LOCALE = 'en-GB'; // the UI text is English, so dates are too, whatever the browser's language
-/** Newer ICU writes en-GB September as "Sept"; every other short month has three letters, so use "Sep" too. */
-export const noSept = (s) => s.replace(/\bSept\b/, 'Sep');
 export const RECENT_DAYS = 60;
 export const HORIZON_MONTHS = 18; // a release starting later than this goes under "Later / TBA"
 

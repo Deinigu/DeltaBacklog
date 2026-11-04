@@ -1,12 +1,13 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
-import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab } from './util.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab, toastError, errorText, emptyBox, brand } from './util.js';
 import { openLayer } from './layers.js';
 import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsStores, dealsSetStores, dealsShops, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
   dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
-import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, formatDate, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel, altLine, moveStore, addStore, removeStore, parseThreshold, unusedShops, DEFAULT_THRESHOLD, MAX_STORES } from './deals.js';
+import { formatDate } from './format.js';
+import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel, altLine, moveStore, addStore, removeStore, parseThreshold, unusedShops, DEFAULT_THRESHOLD, MAX_STORES } from './deals.js';
 
 export function renderDeals(root) {
   let info = { configured: false, country: 'ES', matches: [], prices: [], refresh: { running: false } };
@@ -54,7 +55,7 @@ export function renderDeals(root) {
       info.refresh = await dealsRefresh();
       say('Reading prices from IsThereAnyDeal.');
     } catch (e) {
-      toast(e.message || 'Could not start the refresh');
+      toastError('start the refresh', e);
       return;
     }
     draw();
@@ -67,7 +68,7 @@ export function renderDeals(root) {
       info = await dealsSetCountry(code);
       toast(`Prices are read for ${info.country}. Press Refresh prices to read them.`, 4000);
     } catch (e) {
-      toast(e.message || 'Could not change the country');
+      toastError('change the country', e);
     }
     draw();
   }
@@ -76,7 +77,7 @@ export function renderDeals(root) {
     try {
       const refresh = info.refresh;
       info = { ...(hide ? await dealsHide(game.id) : await dealsUnhide(game.id)), refresh };
-    } catch (e) { toast(e.message || (hide ? 'Could not hide the game' : 'Could not show the game again')); return; }
+    } catch (e) { toastError(hide ? 'hide the game' : 'show the game again', e); return; }
     draw();
     if (hide) {
       say(`${game.title} hidden.`);
@@ -88,7 +89,7 @@ export function renderDeals(root) {
     try {
       const refresh = info.refresh;
       info = { ...(hide ? await dealsWishHide(item.appid) : await dealsWishUnhide(item.appid)), refresh };
-    } catch (e) { toast(e.message || (hide ? 'Could not hide the game' : 'Could not show the game again')); return; }
+    } catch (e) { toastError(hide ? 'hide the game' : 'show the game again', e); return; }
     draw();
     if (hide) {
       say(`${item.title} hidden.`);
@@ -99,7 +100,7 @@ export function renderDeals(root) {
     try {
       const refresh = info.refresh;
       info = { ...(off ? await dealsWishMute(item.appid) : await dealsWishUnmute(item.appid)), refresh };
-    } catch (e) { toast(e.message || 'Could not change the alerts'); return; }
+    } catch (e) { toastError('change the alerts', e); return; }
     store.dealsUnseen = info.unseen || 0;
     window.dispatchEvent(new Event('deals-unseen'));
     draw();
@@ -110,7 +111,7 @@ export function renderDeals(root) {
     try {
       const refresh = info.refresh;
       info = { ...(await dealsMute(game.id)), refresh };
-    } catch (e) { toast(e.message || 'Could not turn the alerts off'); return; }
+    } catch (e) { toastError('turn the alerts off', e); return; }
     store.dealsUnseen = info.unseen || 0; // a muted game's alert leaves the count
     window.dispatchEvent(new Event('deals-unseen'));
     draw();
@@ -202,7 +203,7 @@ export function renderDeals(root) {
         closeSheet();
         toast(list.length ? 'Preferred stores saved. Press Refresh prices to apply them.' : 'Preferred stores cleared. Press Refresh prices to apply.', 4000);
         draw();
-      } catch (e) { err.textContent = e.message || 'Could not save'; }
+      } catch (e) { err.textContent = errorText('save', e); }
     }
     dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); });
     dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; });
@@ -366,9 +367,9 @@ export function renderDeals(root) {
       ...header(w.status ? h('p.hint.deal-note', { role: 'status' }, w.status) : null),
       rows.length ? list(rows, (r) => wishRow(r, r.badge)) : null,
       unsold ? h('p.hint', {}, unsold) : null,
-      !rows.length && empty ? h('div.empty', {}, empty) : null,
+      !rows.length && empty ? emptyBox(empty) : null,
       !alertsOnly && waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
-      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
+      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'IsThereAnyDeal does not know these Steam apps (it is tried again after a week).'),
         plainList(unmatched, (u) => wishPlainRow(u, 'No match on IsThereAnyDeal'))) : null,
       w.hidden.length ? h('details.hidden-list', {},
@@ -394,9 +395,9 @@ export function renderDeals(root) {
       ...header(null),
       rows.length ? list(rows, (r) => libRow(r, r.badge)) : null,
       unsold ? h('p.hint', {}, `${unsold} Wrong game? Open one and tap “Wrong game?” to pick another.`) : null,
-      !rows.length && info.configured ? h('div.empty', {}, scope && !alertsOnly ? 'No prices yet. Press Refresh prices.' : empty) : null,
+      !rows.length && info.configured ? emptyBox(scope && !alertsOnly ? 'No prices yet. Press Refresh prices.' : empty) : null,
       !alertsOnly && waiting.length ? h('p.hint', {}, waitingNote(waiting.length)) : null,
-      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on IsThereAnyDeal', h('small', {}, ` ${unmatched.length}`)),
+      !alertsOnly && unmatched.length ? h('section.up-group', {}, h('h2', {}, 'No match on ', brand('IsThereAnyDeal'), h('small', {}, ` ${unmatched.length}`)),
         h('p.hint', {}, 'Open a game to pick the right one by hand.'),
         plainList(unmatched, (u) => libPlainRow(u, u.match.source === 'user' ? 'You said there is no match' : 'No exact match found'))) : null,
       hiddenList.length ? h('details.hidden-list', {},

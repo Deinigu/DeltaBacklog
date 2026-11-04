@@ -1,5 +1,5 @@
 // Multi-select sheet: search, tick existing values, optionally add a new one. Used for the table's list cells.
-import { h, norm, icon } from './util.js';
+import { h, norm, icon, emptyBox } from './util.js';
 import { openLayer } from './layers.js';
 
 /**
@@ -32,8 +32,8 @@ export function pickMany({ title, options, selected, allowNew = true, label = (v
       if (allowNew && clean && !all.some((v) => norm(v) === norm(clean))) {
         rows.unshift(h('button.pick-row.add', { type: 'button', onclick: () => { all.unshift(clean); chosen.add(clean); search.value = ''; draw(); search.focus(); } }, h('span.box', {}, '+'), `Add “${clean}”`));
       }
-      if (allowNew && typed && !clean && invalidHint && /^\d+$/.test(typed)) rows.unshift(h('div.empty', {}, invalidHint));
-      list.replaceChildren(...(rows.length ? rows : [h('div.empty', {}, 'Nothing matches.')]));
+      if (allowNew && typed && !clean && invalidHint && /^\d+$/.test(typed)) rows.unshift(emptyBox(invalidHint));
+      list.replaceChildren(...(rows.length ? rows : [emptyBox('Nothing matches.')]));
     }
     search.addEventListener('input', draw);
     search.addEventListener('keydown', (e) => {

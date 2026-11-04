@@ -2,7 +2,7 @@
 // With opts.view it shows a saved view and tracks unsaved changes; without, it is the scratch Library (URL-backed).
 import { createTtbFilter } from './ttbfilter.js';
 import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
-import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, NO_AUTOCORRECT } from './util.js';
+import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, NO_AUTOCORRECT, toastError } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { createReorderList } from './reorder.js';
@@ -202,7 +202,7 @@ export function renderLibrary(root, opts = {}) {
       baseline = signature(state);
       toast('View saved');
       update();
-    } catch { toast('Could not save the view'); }
+    } catch { toastError('save the view'); }
   }
   async function saveAs() {
     const r = await askNameDialog({ title: 'Save as a new view', name: view ? `${view.name} copy` : '', icon: view?.icon || '⭐' });
@@ -211,7 +211,7 @@ export function renderLibrary(root, opts = {}) {
       const created = await createView({ ...r, ...payload() });
       toast(`Saved “${created.name}”`);
       location.hash = `#/view/${created.id}`;
-    } catch { toast('Could not save the view'); }
+    } catch { toastError('save the view'); }
   }
   title.addEventListener('click', async () => {
     if (!view) return;
@@ -220,7 +220,7 @@ export function renderLibrary(root, opts = {}) {
     try {
       Object.assign(view, await updateView(view.id, r));
       title.replaceChildren(h('span', {}, view.icon ? view.icon + ' ' : ''), view.name);
-    } catch { toast('Could not rename the view'); }
+    } catch { toastError('rename the view'); }
   });
 
   function update() {
@@ -254,7 +254,7 @@ export function renderLibrary(root, opts = {}) {
       const byPos = [...list].sort((a, b) => (a.queue_pos ?? 1e9) - (b.queue_pos ?? 1e9) || a.id - b.id);
       results.replaceChildren(
         h('p.hint', {}, `Drag ⠿ (or use ▲▼) to reorder ${list.length === 1 ? 'this' : 'these'} ${plural(list.length, 'game')}. The order is shared by every view that sorts by Manual order.`),
-        createReorderList(byPos, async (ids) => { try { await reorderGames(ids); } catch { toast('Could not save the order'); } }, openDrawer));
+        createReorderList(byPos, async (ids) => { try { await reorderGames(ids); } catch { toastError('save the order'); } }, openDrawer));
     } else results.replaceChildren(...groupGames(list, state.group).map((grp) => h('div.group-block', {},
       state.group && h('h3.group-title', {}, grp.label, h('span.count', {}, grp.games.length)),
       h('div.grid', {}, grp.games.map(card)))));

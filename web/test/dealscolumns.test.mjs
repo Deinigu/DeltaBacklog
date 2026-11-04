@@ -62,7 +62,7 @@ test('checked label: the time today, the day and time before', () => {
 });
 
 test('September is "Sep" like every other short month', async () => {
-  const { formatDate, noSept } = await import('../static/js/deals.js');
+  const { formatDate, noSept } = await import('../static/js/format.js');
   assert.equal(formatDate('2025-09-04T10:00:00Z'), '4 Sep 2025');
   assert.equal(formatDate('2025-10-04T10:00:00Z'), '4 Oct 2025');
   assert.equal(noSept('Septimus, 4 Sept'), 'Septimus, 4 Sep');

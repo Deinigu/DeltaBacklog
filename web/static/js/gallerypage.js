@@ -1,5 +1,5 @@
 // The Screenshots page (#/screenshots): every screenshot of the library, by game or newest first.
-import { h, emptyBox, toast, debounce, icon, gradientFor, initials, NO_AUTOCORRECT } from './util.js';
+import { h, emptyBox, debounce, icon, gradientFor, initials, NO_AUTOCORRECT, toastError, loadErrorBox } from './util.js';
 import { store, coverURL, listAllShots } from './api.js';
 import { openDrawer } from './drawer.js';
 import { PAGE, galleryQuery, groupRuns, remaining, shotsLabel, runLabel, stepAcross, emptyText } from './gallery.js';
@@ -106,8 +106,8 @@ export function renderGallery(root) {
     try { r = await listAllShots(galleryQuery({ ...f, offset: 0, limit })); } catch {
       if (!alive || mine !== ticket) return;
       loading = false;
-      if (keep && list.length) { toast('Could not refresh the screenshots'); } // a refresh that fails keeps what is on screen
-      else body.replaceChildren(h('div.empty', {}, 'Could not load the screenshots. ', h('button.btn', { type: 'button', onclick: () => load() }, 'Retry')));
+      if (keep && list.length) { toastError('refresh the screenshots'); } // a refresh that fails keeps what is on screen
+      else body.replaceChildren(loadErrorBox('the screenshots', () => load()));
       updateMore();
       if (!(keep && list.length)) more.hidden = true;
       return;

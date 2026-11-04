@@ -8,10 +8,19 @@ export function emptyBox(text, ...actions) {
   return h('div.empty', {}, h('p', {}, text), acts.length ? h('div.empty-actions', {}, ...acts) : null);
 }
 
+/**
+ * Classes whose text is a game title or a store name: Chrome's auto-translate would garble them, so h() marks them translate="no".
+ * Brand names inside a sentence or a button use brand().
+ */
+const NO_TRANSLATE = new Set(['card-title', 'att-title', 'dl-title', 'dl-sheet-title', 'dl-store-name', 'pk-name', 'up-title', 'rk-tname', 'stitle', 'si-name', 'sv-title', 's-title', 'pick-title', 'link-title', 'yname', 'cname', 'ttb-cand-name', 'year-bar-name', 'tile-name', 'rk-name']);
+/** A name that must stay as written (IGDB, HowLongToBeat, IsThereAnyDeal) inside text that may be translated. */
+export const brand = (name) => h('span', { translate: 'no' }, name);
+
 export function h(tag, attrs, ...children) {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');
   if (classes.length) node.className = classes.join(' ');
+  if (classes.some((c) => NO_TRANSLATE.has(c))) node.setAttribute('translate', 'no');
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === false || v == null) continue;
     if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
@@ -113,6 +122,25 @@ function showToast(t, ms) {
 
 export function toast(msg, ms) {
   showToast(h('div.toast', {}, msg), toastMs(msg, ms));
+}
+
+/** "Could not save the change. Check that the server is reachable, then try again.": a failure always says what to do next. */
+export const couldNot = (what) => `Could not ${what}. Check that the server is reachable, then try again.`;
+
+/**
+ * The text for a failed action: the server's own message when it sent one (`err.status` and `err.data.error`), else the
+ * helpful sentence. `err.message` alone is not used: with the server down it is "Failed to fetch", or "POST api/x: 500".
+ */
+export const errorText = (what, err) => (err?.status && err?.data?.error) || couldNot(what);
+
+/** Toast for a failed action. `what` is the verb phrase ("save the change"). */
+export function toastError(what, err) {
+  toast(errorText(what, err));
+}
+
+/** The box for a page or list that failed to load: what failed, the next step, and a "Try again" button. */
+export function loadErrorBox(what, onRetry) {
+  return emptyBox(`Could not load ${what}. Check that the server is reachable, then try again.`, h('button.btn', { type: 'button', onclick: onRetry }, 'Try again'));
 }
 
 /** A toast with one action button (for example Undo). onAction runs when it is tapped; the toast then closes. */

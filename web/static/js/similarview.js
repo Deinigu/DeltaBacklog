@@ -1,11 +1,11 @@
 // Similar page: games IGDB lists as similar to the games the user finished or marked as a favourite, that the library
 // does not have, ranked by how many of those games suggest them, with Add and Hide. The list is read from the
 // server's cache; nothing here asks IGDB unless the owner presses Refresh from IGDB.
-import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastAction, toastError } from './util.js';
 import { store, similarList, similarRefresh, similarHide, similarUnhide, igdbGame, missingPosterURL } from './api.js';
 import { openAdd } from './add.js';
 import { similarIndex, setHiddenFlag, becauseText, isSource } from './similar.js';
-import { formatDay } from './upcoming.js';
+import { formatDate } from './format.js';
 
 function poster(s) {
   const url = missingPosterURL(s.cover, s.v);
@@ -49,7 +49,7 @@ export function renderSimilar(root) {
       info.refresh = await similarRefresh();
       say('Reading similar games from IGDB.');
     } catch (e) {
-      toast(e.message || 'Could not start the refresh');
+      toastError('start the refresh', e);
       return;
     }
     draw();
@@ -68,7 +68,7 @@ export function renderSimilar(root) {
   async function setHidden(s, hide) {
     try {
       await (hide ? similarHide : similarUnhide)(s.igdb_id);
-    } catch (e) { toast(e.message || (hide ? 'Could not hide the game' : 'Could not show the game again')); return; }
+    } catch (e) { toastError(hide ? 'hide the game' : 'show the game again', e); return; }
     // Keep the answer we hold in step with the server: the index is rebuilt from it on every games-changed.
     setHiddenFlag(info, s.igdb_id, hide);
     index = similarIndex(info, store.games);
@@ -93,7 +93,7 @@ export function renderSimilar(root) {
     const btn = h('button.chip', { type: 'button', disabled: !info.configured || r.running || null, onclick: refresh,
       title: info.configured ? '' : 'IGDB is not set up (keys are missing from .env)' },
     r.running ? `Reading IGDB… ${r.total ? `${r.done}/${r.total}` : ''}` : '↻ Refresh from IGDB');
-    const note = info.fetched_at ? `Read from IGDB on ${formatDay(info.fetched_at)}.`
+    const note = info.fetched_at ? `Read from IGDB on ${formatDate(info.fetched_at)}.`
       : info.configured ? 'Press Refresh from IGDB to find games similar to the ones you finished or marked as favourites.' : '';
     return [btn, note];
   }

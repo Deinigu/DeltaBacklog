@@ -1,6 +1,7 @@
 // Excel-like table: sticky header and title column, resizable and hideable columns, sortable headers,
 // inline editing, windowed rendering (only the visible rows exist in the DOM), CSV export.
-import { h, toast } from './util.js';
+import { h, toast, toastError } from './util.js';
+import { formatCalendarDate } from './format.js';
 import { openLayer } from './layers.js';
 import { store, patchGame } from './api.js';
 import { pickMany } from './picker.js';
@@ -39,7 +40,7 @@ export const COLUMNS = [
   { key: 'vr', label: 'VR', w: 64, kind: 'bool', text: (g) => (g.vr ? 'yes' : ''), patch: (v) => ({ vr: v }) },
   { key: 'completed', label: '100%', w: 74, kind: 'bool', sort: 'completed', text: (g) => (g.completed ? 'yes' : ''), patch: (v) => ({ completed: v }) },
   { key: 'notes', label: 'Notes', w: 280, kind: 'longtext', text: (g) => g.notes, patch: (v) => ({ notes: v }) },
-  { key: 'added_at', label: 'Added', w: 110, kind: 'readonly', sort: 'added', text: (g) => (g.added_at || '').slice(0, 10) },
+  { key: 'added_at', label: 'Added', w: 110, kind: 'readonly', sort: 'added', text: (g) => (g.added_at || '').slice(0, 10), show: (g) => formatCalendarDate(g.added_at) },
 ];
 const DEFAULT_HIDDEN = new Set(['themes', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
 
@@ -114,7 +115,7 @@ export function renderTable(ctx) {
 
   // ---------- cells ----------
   async function commit(g, c, value) {
-    try { await patchGame(g.id, c.patch(value)); } catch { toast('Could not save the change'); }
+    try { await patchGame(g.id, c.patch(value)); } catch { toastError('save the change'); }
   }
 
   function cell(g, c, i) {
@@ -132,9 +133,9 @@ export function renderTable(ctx) {
       el.onclick = (e) => { if (e.target !== box) { box.checked = !box.checked; commit(g, c, box.checked); } };
       return;
     }
-    const text = c.text(g);
+    const text = c.show ? c.show(g) : c.text(g); // c.text is the plain value (CSV, editing); c.show how the cell reads
     if (c.key === 'title') {
-      el.replaceChildren(h('button.open', { type: 'button', 'aria-label': `Open ${g.title}`, onclick: (e) => { e.stopPropagation(); ctx.onOpen(g); } }, '↗'), h('span.txt', { title: text }, text));
+      el.replaceChildren(h('button.open', { type: 'button', 'aria-label': `Open ${g.title}`, onclick: (e) => { e.stopPropagation(); ctx.onOpen(g); } }, '↗'), h('span.txt', { title: text, translate: 'no' }, text));
     } else if (c.key === 'ownership' && text) {
       el.replaceChildren(h('span.oicon', { 'aria-hidden': 'true' }, ownershipIcon(text)), h('span.txt', { title: text }, text));
     } else if (c.key === 'status') {

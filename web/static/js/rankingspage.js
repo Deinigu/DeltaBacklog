@@ -1,5 +1,5 @@
 // The rankings list (#/rankings): every ranking with a strip of its best games, and the way to make a new one.
-import { h, toast, gradientFor, initials, promptDialog, confirmDialog, icon } from './util.js';
+import { h, toast, gradientFor, initials, promptDialog, confirmDialog, icon, toastError, loadErrorBox, emptyBox } from './util.js';
 import { store, posterURL, coverURL, listRankings, createRanking, patchRanking, deleteRanking, duplicateRanking, reorderRankings, refreshPosters } from './api.js';
 import { moveItem } from './order.js';
 
@@ -30,14 +30,14 @@ export function renderRankings(root) {
   let list = [];
   const box = h('div.rk-list');
   root.replaceChildren(h('div.rk-page', {},
-    h('header.rk-listhead', {}, h('h1', {}, 'Rankings'),
-      h('button.btn.primary', { type: 'button', onclick: create }, icon('add'), 'New ranking')),
+    h('h1', {}, 'Rankings'),
     h('p.hint', {}, 'Rank any set of games your way: your own tiers, your own labels, big posters. Export the result as a picture.'),
+    h('div.rk-actions', {}, h('button.btn.primary', { type: 'button', onclick: create }, icon('add'), 'New ranking')),
     box));
 
   async function load() {
     try { list = await listRankings(); } catch {
-      if (alive) box.replaceChildren(h('div.empty', {}, 'Could not load the rankings. ', h('button.btn', { type: 'button', onclick: load }, 'Retry')));
+      if (alive) box.replaceChildren(loadErrorBox('the rankings', load));
       return;
     }
     if (alive) draw();
@@ -46,7 +46,7 @@ export function renderRankings(root) {
 
   function draw() {
     if (!list.length) {
-      box.replaceChildren(h('div.empty', {}, 'No rankings yet.', h('br'), 'Make one, then add games from your library, or open “Rank this year” on a Year in review page.'));
+      box.replaceChildren(emptyBox('No rankings yet. Make one, then add games from your library, or open “Rank this year” on a Year in review page.'));
       return;
     }
     box.replaceChildren(...list.map((r, i) => {
@@ -71,26 +71,26 @@ export function renderRankings(root) {
   async function create() {
     const v = await newRankingDialog();
     if (!v || !alive) return;
-    try { const r = await createRanking({ name: v.name, preset: v.preset }); location.hash = `#/rankings/${r.id}`; } catch { toast('Could not create the ranking'); }
+    try { const r = await createRanking({ name: v.name, preset: v.preset }); location.hash = `#/rankings/${r.id}`; } catch { toastError('create the ranking'); }
   }
   async function rename(r) {
     const name = await promptDialog({ title: 'Rename the ranking', value: r.name });
     if (!name || name === r.name || !alive) return;
-    try { await patchRanking(r.id, { name }); r.name = name; draw(); } catch { toast('Could not rename'); }
+    try { await patchRanking(r.id, { name }); r.name = name; draw(); } catch { toastError('rename'); }
   }
   async function duplicate(r) {
-    try { await duplicateRanking(r.id); toast('Duplicated'); await load(); } catch { toast('Could not duplicate'); }
+    try { await duplicateRanking(r.id); toast('Duplicated'); await load(); } catch { toastError('duplicate'); }
   }
   async function remove(r) {
     if (!await confirmDialog({ title: `Delete “${r.name}”?`, message: 'The games stay in your library; only this ranking is deleted.' })) return;
-    try { await deleteRanking(r.id); list = list.filter((x) => x.id !== r.id); draw(); } catch { toast('Could not delete'); }
+    try { await deleteRanking(r.id); list = list.filter((x) => x.id !== r.id); draw(); } catch { toastError('delete'); }
   }
   async function move(i, delta) {
     const next = moveItem(list, i, i + delta);
     if (next.every((x, k) => x === list[k])) return;
     const before = list;
     list = next; draw();
-    try { await reorderRankings(next.map((x) => x.id)); } catch { list = before; draw(); toast('Could not change the order'); }
+    try { await reorderRankings(next.map((x) => x.id)); } catch { list = before; draw(); toastError('change the order'); }
   }
 
   load();

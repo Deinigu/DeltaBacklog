@@ -2,9 +2,7 @@
 // The server decides which games those are (info.watched, without the ones the owner hid, info.hidden); the client only filters.
 // Pure (no DOM): unit-tested. Amounts are cents of the price's own currency; they are only formatted when shown.
 
-export const LOCALE = 'en-GB'; // the UI text is English, so money and dates are too, whatever the browser's language
-/** Newer ICU writes en-GB September as "Sept"; every other short month has three letters, so use "Sep" too. */
-export const noSept = (s) => s.replace(/\bSept\b/, 'Sep');
+import { LOCALE, noSept, formatDate } from './format.js'; // dates and numbers are written the same way on every page
 export const NEAR_LOW = 0.10; // "near the historical low": within 10% of it
 /** The statuses Deals can cover (a game also has to be unowned and unplayed: the server's rule), in the order of the filter chips. */
 export const DEAL_STATUSES = [
@@ -53,13 +51,6 @@ export function checkedLabel(iso, now = new Date(), locale = LOCALE) {
   if (!t || Number.isNaN(t.getTime())) return '';
   if (t.toDateString() === now.toDateString()) return t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return noSept(t.toLocaleDateString(locale, { day: 'numeric', month: 'short' })) + ' ' + t.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-}
-
-/** "27 Nov 2025" for an ITAD timestamp; '' when absent or invalid. */
-export function formatDate(iso, locale = LOCALE) {
-  const t = iso ? new Date(iso) : null;
-  if (!t || Number.isNaN(t.getTime())) return '';
-  return noSept(t.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }));
 }
 
 /**

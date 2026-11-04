@@ -1,7 +1,7 @@
 // "Needs attention": games that need a fix, in collapsible groups, each row with a one-tap fix. The grouping lives in
 // attention.js (pure); this file builds the DOM and opens the right screen. Nothing here reads the network on its own:
 // the list comes from the games already loaded, plus the IGDB review queue and the ignore list (both local API calls).
-import { h, toast, toastAction } from './util.js';
+import { h, toast, toastAction, toastError, emptyBox, brand } from './util.js';
 import { store, linkQueue, linkAccept, linkNone, loadLinkPending, attentionIgnored, attentionIgnore, ttbSyncStatus, ttbSyncStart, ttbSyncCancel, refreshGames } from './api.js';
 import { pickCandidate, openCoverPicker, openPosterPicker } from './add.js';
 import { openDrawer } from './drawer.js';
@@ -57,12 +57,12 @@ export function renderAttention(root) {
   }
 
   async function startSync() {
-    try { sync = await ttbSyncStart(); } catch { toast('Could not start the lookup'); return; }
+    try { sync = await ttbSyncStart(); } catch { toastError('start the lookup'); return; }
     watch();
     draw();
   }
   async function stopSync() {
-    try { sync = await ttbSyncCancel(); } catch { toast('Could not stop the lookup'); }
+    try { sync = await ttbSyncCancel(); } catch { toastError('stop the lookup'); }
     draw();
   }
 
@@ -87,7 +87,7 @@ export function renderAttention(root) {
         toast(`Linked “${game.title}”`);
         relinkPrompt(game, cand.name);
       } catch (e) {
-        toast(e.status === 409 ? e.message : 'Could not link the game. Check the connection and try again');
+        if (e.status === 409) toast(e.message); else toastError('link the game');
       }
       draw();
     },
@@ -99,7 +99,7 @@ export function renderAttention(root) {
         loadLinkPending();
         toast(`“${game.title}” marked as not on IGDB`);
       } catch (e) {
-        toast(e.status === 409 ? 'That game is linked to IGDB already' : 'Could not save that. Try again');
+        if (e.status === 409) toast('That game is linked to IGDB already'); else toastError('save that');
       }
       draw();
     },
@@ -112,7 +112,7 @@ export function renderAttention(root) {
   async function setIgnored(group, game, on) {
     try {
       ignored = await attentionIgnore(group, game.id, on);
-    } catch { toast('Could not save that. Try again'); return; }
+    } catch { toastError('save that'); return; }
     draw();
     if (on) toastAction(`Ignoring “${game.title}” here`, 'Undo', () => setIgnored(group, game, false));
   }
@@ -130,7 +130,7 @@ export function renderAttention(root) {
     const extra = !row.ignored && group.fix === 'confirm' && row.candidate
       ? h('button.btn', { type: 'button', onclick: () => ctx.linkByHand(g) }, 'Change…') : null;
     const absent = !row.ignored && (group.fix === 'link' || group.fix === 'confirm')
-      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, 'Not on IGDB') : null;
+      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, h('span', {}, 'Not on ', brand('IGDB'))) : null;
     const skip = row.ignored ? null : h('button.btn.att-ignore', { type: 'button', 'aria-label': `Ignore “${g.title}” in this list`, onclick: () => setIgnored(group.key, g, true) }, 'Ignore');
     return h('li.att-row' + (row.ignored ? '.is-ignored' : ''), {},
       h('button.att-name', { type: 'button', onclick: () => openDrawer(g) }, h('span.att-title', {}, g.title), sub && h('span.att-sub', {}, sub)),
@@ -156,8 +156,7 @@ export function renderAttention(root) {
     const left = totalOpen(groups);
     const top = [];
     if (!left && !nIgnored) {
-      body.replaceChildren(h('div.empty', {}, 'Nothing needs attention. Every game is linked and has its cover, poster and basic details.',
-        h('p', {}, h('a.btn', { href: '#/library' }, 'Back to the Library'))));
+      body.replaceChildren(emptyBox('Nothing needs attention. Every game is linked and has its cover, poster and basic details.', h('a.btn', { href: '#/library' }, 'Back to the Library')));
       firstDraw = false;
       return;
     }

@@ -1,5 +1,5 @@
 // Year in review page (#/years/<year>): what was played, a breakdown, and a way into that year's ranking.
-import { h, toast, gradientFor, initials, lazyImg, retargetImg } from './util.js';
+import { h, gradientFor, initials, lazyImg, retargetImg, toastError, emptyBox } from './util.js';
 import { store, coverURL, listRankings, createRanking, addRankingGames } from './api.js';
 import { openDrawer } from './drawer.js';
 import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking } from './yearreview.js';
@@ -38,7 +38,7 @@ export function renderYear(root, year) {
   if (cur) strip.scrollLeft = cur.offsetLeft - (strip.clientWidth - cur.offsetWidth) / 2;
 
   if (!total) {
-    body.append(h('div.empty', {}, `Nothing is recorded for ${year}.`, h('br'), 'A game counts for a year when it has that year in its “Years played” (moving a game to Playing or Finished adds the current year).'));
+    body.append(emptyBox(`Nothing is recorded for ${year}. A game counts for a year when it has that year in its “Years played” (moving a game to Playing or Finished adds the current year).`));
     return () => { alive = false; };
   }
 
@@ -71,7 +71,7 @@ export function renderYear(root, year) {
         r = await createRanking({ name: yearRankingName(year), year, preset: 'sabcdf', game_ids: pool.map((g) => g.id) });
       }
       if (alive) location.hash = `#/rankings/${r.id}`;
-    } catch { toast('Could not open the ranking'); rankBtn.disabled = false; }
+    } catch { toastError('open the ranking'); rankBtn.disabled = false; }
   }
 
   // ---- what was played, by outcome ----
