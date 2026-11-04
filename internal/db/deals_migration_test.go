@@ -53,7 +53,7 @@ func TestDealsMigration(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM deal_match`).Scan(&matches)
 	d.QueryRow(`SELECT count(*) FROM deal_price`).Scan(&prices)
 	d.QueryRow(`SELECT count(*) FROM setting`).Scan(&settings)
-	if version != 21 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
+	if version != 22 || games != 2 || matches != 0 || prices != 0 || settings != 0 {
 		t.Fatalf("version %d games %d matches %d prices %d settings %d", version, games, matches, prices, settings)
 	}
 	for _, q := range []string{
@@ -117,7 +117,7 @@ func TestDealHiddenMigration(t *testing.T) {
 	d.QueryRow(`PRAGMA user_version`).Scan(&version)
 	d.QueryRow(`SELECT count(*) FROM game`).Scan(&games)
 	d.QueryRow(`SELECT count(*) FROM deal_hidden`).Scan(&hidden)
-	if version != 21 || games != 1 || hidden != 0 {
+	if version != 22 || games != 1 || hidden != 0 {
 		t.Fatalf("version %d games %d hidden %d", version, games, hidden)
 	}
 	if _, err := d.Exec(`INSERT INTO deal_hidden(game_id, hidden_at) VALUES (1, '2026-01-01T00:00:00Z')`); err != nil {

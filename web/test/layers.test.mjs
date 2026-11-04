@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { popAction, rewindBy, pushAction, trapTarget } from '../static/js/layerlogic.js';
+import { popAction, rewindBy, pushAction, trapTarget, carryUrl } from '../static/js/layerlogic.js';
 import { guardUnload, hasLayer } from '../static/js/layers.js';
 import { plural, toastMs, NO_AUTOCORRECT } from '../static/js/util.js';
 import { pageTitle, MORE_PAGES } from '../static/js/more.js';
@@ -74,4 +74,13 @@ test('the tab title names the page', () => {
   assert.equal(pageTitle('view/9', []), 'DeltaBacklog');
   assert.equal(pageTitle('nowhere'), 'DeltaBacklog');
   for (const p of MORE_PAGES) assert.match(pageTitle(p.path), /^.+ · DeltaBacklog$/, p.path);
+});
+
+test('closing a layer carries the current URL of the page to the entry it lands on', () => {
+  // filters set while the sheet was open (Back, "Show N games" and the sort sheet all close through the same path)
+  assert.equal(carryUrl('#/library?favorite=1&vr=1', '#/library'), '#/library?favorite=1&vr=1');
+  assert.equal(carryUrl('#/library?sort=title:asc', '#/library?favorite=1'), '#/library?sort=title:asc');
+  assert.equal(carryUrl('#/library?favorite=1', '#/library?favorite=1'), null); // nothing to do
+  assert.equal(carryUrl('#/stats', '#/library'), null); // another page: never overwrite its entry
+  assert.equal(carryUrl(null, '#/library'), null);
 });

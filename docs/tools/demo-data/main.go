@@ -243,7 +243,7 @@ func main() {
 		{"Celeste", "Steam", 499, 1999, 75, 459, "GOG", "2025-03-12T09:00:00Z"},
 		{"Baldur's Gate 3", "Steam", 5999, 5999, 0, 4799, "GreenManGaming", "2025-07-03T16:00:00Z"},
 		{"Elden Ring", "Steam", 3999, 5999, 33, 2999, "Steam", "2025-11-27T18:00:00Z"},
-		{"Subnautica", "Epic Games Store", 1049, 2999, 65, 749, "Steam", "2024-06-27T17:00:00Z"},
+		{"Subnautica", "Epic Game Store", 1049, 2999, 65, 749, "Steam", "2024-06-27T17:00:00Z"},
 		{"Pentiment", "", 0, 0, 0, 0, "", ""},
 	} {
 		var gid int64
@@ -313,6 +313,14 @@ func main() {
 			must(err)
 		}
 	}
+	// Preferred stores: a few games show a clearly cheaper offer at a lower-ranked shop (the hint under the price).
+	_, err = tx.Exec(`UPDATE deal_price SET alt_shop = 'Epic Game Store', alt_price = max(cur_price * 7 / 10, coalesce(low_price, 0)), alt_url = 'https://example.org/deal'
+		WHERE game_id IN (SELECT game_id FROM deal_price WHERE cur_price > 500 AND cur_shop <> 'Epic Game Store'
+			AND max(cur_price * 7 / 10, coalesce(low_price, 0)) * 100 < cur_price * 85 AND game_id NOT IN (SELECT game_id FROM deal_alert) ORDER BY game_id LIMIT 3)`)
+	must(err)
+	_, err = tx.Exec(`UPDATE wish_price SET alt_shop = 'GOG', alt_price = max(cur_price * 7 / 10, coalesce(low_price, 0)), alt_url = 'https://example.org/deal'
+		WHERE appid IN (SELECT appid FROM wish_price WHERE cur_price > 500 AND cur_shop <> 'GOG' AND max(cur_price * 7 / 10, coalesce(low_price, 0)) * 100 < cur_price * 85 ORDER BY appid LIMIT 1)`)
+	must(err)
 	must(tx.Commit())
 
 	for i, g := range games {

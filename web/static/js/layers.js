@@ -8,13 +8,21 @@
 // and the returned release() when it takes `el` away. requestClose() is what Back calls: it may ask "Discard your
 // changes?" first and simply not close.
 
-import { popAction, rewindBy, pushAction, trapTarget } from './layerlogic.js';
+import { popAction, rewindBy, pushAction, trapTarget, carryUrl } from './layerlogic.js';
 
 // ---------------------------------------------------------------- the stack
 
 const stack = []; // {el, requestClose, trap, opener}
 const layerOf = () => history.state?.layer ?? 0;
 let rewindTimer = 0;
+let lastHref = typeof location !== 'undefined' ? location.href : ''; // the page's URL now, as the layers last saw it
+let carry = null; // the URL to restore on the entry a rewind lands on
+
+/** Change the URL of the current history entry (a page's own query). Use this instead of history.replaceState: it keeps the layer state and lets closing layers carry the new URL to the entry below. */
+export function replaceUrl(url) {
+  history.replaceState(history.state, '', url);
+  lastHref = location.href;
+}
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 const visible = (n) => n.getClientRects().length > 0 && !n.closest('[inert]');
@@ -51,7 +59,9 @@ function detach(layer) {
 
 function rewind() {
   const by = rewindBy(layerOf(), stack.length);
-  if (by) history.go(by);
+  if (!by) return;
+  carry = location.href;
+  history.go(by);
 }
 
 /**
@@ -80,8 +90,13 @@ export function openLayer(el, { requestClose, trap = true } = {}) {
     // on a phone that would bring the keyboard back up.
     const a = document.activeElement;
     const lost = !a || a === document.body || el.contains(a) || !a.isConnected;
-    if (lost && opener?.isConnected && typeof opener.focus === 'function' && !opener.matches('input, textarea, select') && !opener.closest('[inert]')) {
-      opener.focus({ preventScroll: true });
+    if (!lost) return;
+    const usable = (n) => n?.isConnected && typeof n.focus === 'function' && !n.closest('[inert]');
+    if (usable(opener) && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
+    else {
+      // The opener was a text field (a dialog opened by Back while typing): the layer below, if any, takes the focus
+      const below = stack[stack.length - 1];
+      if (below && usable(below.el)) below.el.focus({ preventScroll: true });
     }
   };
 }
@@ -102,15 +117,20 @@ if (typeof window !== 'undefined' && typeof history !== 'undefined') {
   // Back / swipe-back: close the top layer (asking first when it has unsaved edits).
   window.addEventListener('popstate', () => {
     pruneLayers();
+    const keep = carryUrl(carry, location.href);
+    carry = null;
+    if (keep) history.replaceState(history.state, '', keep); // a layer closed: the entry it landed on gets the page's current URL
     const act = popAction(layerOf(), stack.length);
     if (act === 'skip') { history.back(); return; }
-    if (act !== 'close') return;
+    if (act !== 'close') { lastHref = location.href; return; }
     const top = stack[stack.length - 1];
-    // Put the entry back first: the layer may stay open (a "Discard your changes?" answered with Cancel), and a dialog
-    // opened by the question pushes its own entry on top of it.
-    history.pushState({ ...history.state, layer: stack.length }, '');
+    // Put the entry back first (with the URL the page had before Back): the layer may stay open (a "Discard your
+    // changes?" answered with Cancel), and a dialog opened by the question pushes its own entry on top of it.
+    history.pushState({ ...history.state, layer: stack.length }, '', carryUrl(lastHref, location.href) ?? location.href);
+    lastHref = location.href;
     top.requestClose?.();
   });
+  window.addEventListener('hashchange', () => { lastHref = location.href; });
 
   // A reload keeps history.state: do not let a stale layer index from the last session confuse the first push.
   if (history.state?.layer) history.replaceState({ ...history.state, layer: 0 }, '');

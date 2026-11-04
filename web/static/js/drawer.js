@@ -1,5 +1,5 @@
 // Game detail drawer: facts at a glance, quick status/favorite changes, and an Edit mode for every field.
-import { h, gradientFor, initials, toast, confirmDialog } from './util.js';
+import { h, gradientFor, initials, toast, confirmDialog, newTab, glyphLabel } from './util.js';
 import { openLayer, guardUnload } from './layers.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, openPosterPicker, pickCandidate } from './add.js';
@@ -20,7 +20,7 @@ let open = null;
 export const drawerDirty = () => !!(open?.isDirty?.() || open?.ttb?.isDirty());
 
 /** The Favorite button's label; the star is decoration, the state is in aria-pressed. */
-const favLabel = (btn, on) => btn.replaceChildren(h('span', { 'aria-hidden': 'true' }, on ? '★' : '☆'), ' Favorite');
+const favLabel = (btn, on) => btn.replaceChildren(glyphLabel(on ? '★' : '☆', 'Favorite'));
 
 /** "3 of 5 in Name" by release year, or "Name (5 games)" while some game of the series has no year. */
 function seriesFact(game) {
@@ -55,7 +55,7 @@ function storeLinks(game) {
   const links = (game.links || []).filter((l) => STORE_LABELS[l.kind] && /^https?:\/\//.test(l.url))
     .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   if (!links.length) return null;
-  return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, STORE_LABELS[l.kind], h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)'))));
+  return h('div.store-links', {}, links.map((l) => h('a.btn', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, newTab(STORE_LABELS[l.kind]))));
 }
 
 export function closeDrawer() {
@@ -124,7 +124,7 @@ export function openDrawer(game, opts = {}) {
     storeLinks(game),
     screenshotsSection(game),
     h('div.drawer-actions', {},
-      h('button.btn.primary', { type: 'button', onclick: () => startEdit() }, h('span', { 'aria-hidden': 'true' }, '✎'), ' Edit'),
+      h('button.btn.primary', { type: 'button', onclick: () => startEdit() }, glyphLabel('✎', 'Edit')),
       h('button.btn', { type: 'button', onclick: () => openCoverPicker(game) }, 'Change cover'),
       h('button.btn', { type: 'button', onclick: () => openPosterPicker(game) }, 'Change poster'),
       h('button.btn.danger-text', { type: 'button', onclick: remove }, 'Delete game')));

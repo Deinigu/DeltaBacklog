@@ -111,6 +111,30 @@ try {
 } catch { /* ignore */ }
 systemDark.addEventListener('change', syncTheme);
 
+let stopFocusWatch = null;
+/**
+ * Keyboard and screen reader users start at the top of the new page, not on the link they used. Pages that draw
+ * after a fetch (Deals, Upcoming) replace what was focused, so for a moment the focus follows: while it is lost
+ * (on the body or the page itself) it goes to the h1 as it appears. Any key press or tap ends that.
+ */
+function focusPage() {
+  stopFocusWatch?.();
+  const go = () => {
+    const head = view.querySelector('h1');
+    if (head) head.tabIndex = -1;
+    (head || view).focus({ preventScroll: true });
+  };
+  const lost = () => { const a = document.activeElement; return !a || a === document.body || a === view; };
+  go();
+  const ctl = new AbortController();
+  const mo = new MutationObserver(() => { if (lost()) go(); });
+  const stop = () => { mo.disconnect(); clearTimeout(timer); ctl.abort(); stopFocusWatch = null; };
+  const timer = setTimeout(stop, 2000);
+  mo.observe(view, { childList: true, subtree: true });
+  for (const ev of ['keydown', 'pointerdown']) addEventListener(ev, stop, { capture: true, signal: ctl.signal });
+  stopFocusWatch = stop;
+}
+
 /** Render the page for the current route. `moved`: the route really changed (not a rebuild of the same page). */
 async function route({ moved = false } = {}) {
   if (!store.loaded) {
@@ -135,12 +159,7 @@ async function route({ moved = false } = {}) {
   pruneLayers(); // sheets that lived in the old page are gone now
   document.title = pageTitle(r.path, store.views);
   window.scrollTo(0, 0);
-  if (moved) {
-    // Keyboard and screen reader users start at the top of the new page, not on the link they used
-    const head = view.querySelector('h1');
-    if (head) head.tabIndex = -1;
-    (head || view).focus({ preventScroll: true });
-  }
+  if (moved) focusPage();
 }
 
 buildNav();

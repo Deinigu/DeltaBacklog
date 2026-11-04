@@ -11,7 +11,7 @@ import { playedBadges, playedSummary } from './years.js';
 import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
-import { openLayer } from './layers.js';
+import { openLayer, replaceUrl } from './layers.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState, facetSignature,
@@ -55,7 +55,7 @@ export function renderLibrary(root, opts = {}) {
   const meta = h('div.meta-row');
   const count = h('span.count', { role: 'status' }); // one live region for the whole page: "12 of 600 games" is announced as the filters change
   /** An active-filter pill: tapping it removes the filter. */
-  const pill = (cls, name, onclick, ...kids) => h('button.pill' + cls, { type: 'button', 'aria-label': `Remove filter: ${name}`, onclick }, ...kids, h('span', { 'aria-hidden': 'true' }, ' ✕'));
+  const pill = (cls, name, onclick, ...kids) => h('button.pill' + cls, { type: 'button', 'aria-label': `Remove filter: ${name}`, onclick }, ...kids.slice(0, -1), h('span', {}, kids[kids.length - 1], h('span', { 'aria-hidden': 'true' }, ' ✕'))); // the label and ✕ are one flex item, as before
 
   let reordering = false;
   let tableInst = null, tableBox = null;
@@ -224,7 +224,7 @@ export function renderLibrary(root, opts = {}) {
   });
 
   function update() {
-    if (!view) history.replaceState(history.state, '', '#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
+    if (!view) replaceUrl('#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
     const list = store.games.filter((g) => matches(state, g));
     list.sort(buildComparator(state.sorts));
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');

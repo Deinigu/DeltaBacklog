@@ -109,7 +109,7 @@ type wishRow struct {
 func loadWishRows(d *sql.DB) ([]wishRow, error) {
 	rows, err := d.Query(`SELECT w.appid, coalesce(w.itad_id, ''), w.itad_slug, w.title, coalesce(w.added_at, ''), coalesce(w.matched_at, ''),
 		w.hidden_at IS NOT NULL, w.muted, w.last_alert_price, coalesce(w.last_alert_kind, ''), coalesce(w.last_alert_at, ''), w.seen, w.pending,
-		p.currency, p.cur_shop, p.cur_price, p.cur_regular, p.cur_cut, p.cur_url, p.cur_expiry, p.low_price, p.low_shop, p.low_at, p.low2y_price, p.fetched_at
+		p.currency, p.cur_shop, p.cur_price, p.cur_regular, p.cur_cut, p.cur_url, p.cur_expiry, p.low_price, p.low_shop, p.low_at, p.low2y_price, p.alt_shop, p.alt_price, p.alt_url, p.fetched_at
 		FROM wish_item w LEFT JOIN wish_price p ON p.appid = w.appid ORDER BY w.appid`)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func loadWishRows(d *sql.DB) ([]wishRow, error) {
 		var currency, fetched sql.NullString
 		var pd PriceData
 		if err := rows.Scan(&r.appid, &r.itadID, &r.slug, &r.title, &r.addedAt, &r.matched, &hidden, &muted, &r.lastP, &r.lastKind, &r.lastAt, &seen, &pending,
-			&currency, &pd.Shop, &pd.Price, &pd.Regular, &pd.Cut, &pd.URL, &pd.Expiry, &pd.LowPrice, &pd.LowShop, &pd.LowAt, &pd.Low2y, &fetched); err != nil {
+			&currency, &pd.Shop, &pd.Price, &pd.Regular, &pd.Cut, &pd.URL, &pd.Expiry, &pd.LowPrice, &pd.LowShop, &pd.LowAt, &pd.Low2y, &pd.AltShop, &pd.AltPrice, &pd.AltURL, &fetched); err != nil {
 			return nil, err
 		}
 		r.hidden, r.muted, r.seen, r.pending = hidden == 1, muted == 1, seen == 1, pending == 1
@@ -442,6 +442,11 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 	}
 	progress()
 	country := Country(d)
+	prefs := LoadStorePrefs(d)
+	offers, err := loadOffers(ctx, src, ids, country, prefs)
+	if err != nil {
+		return stop(err)
+	}
 	for len(ids) > 0 {
 		n := min(len(ids), MaxBatch)
 		batch := ids[:n]
@@ -452,7 +457,7 @@ func refreshWishlist(ctx context.Context, d *sql.DB, src Source, opt Options, re
 		}
 		for _, id := range batch {
 			for _, appid := range byID[id] {
-				ok, err := saveWishPrice(d, appid, id, country, res[id])
+				ok, err := saveWishPrice(d, appid, id, country, withChoice(res[id], offers[id], prefs))
 				if err != nil {
 					return rep, err
 				}
@@ -579,14 +584,16 @@ func matchWishBulk(ctx context.Context, d *sql.DB, bulk BulkSource, todo []wishR
 // wishlist, still matched with that ITAD game, not hidden, and the country is still the one the prices were read for.
 func saveWishPrice(d *sql.DB, appid int64, itadID, country string, o Overview) (bool, error) {
 	currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt := priceArgs(o)
+	altShop, altPrice, altURL := altArgs(o)
 	res, err := d.Exec(`INSERT INTO wish_price(appid, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
-		low_price, low_shop, low_at, fetched_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		low_price, low_shop, low_at, fetched_at, alt_shop, alt_price, alt_url) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?15, ?16, ?17
 		WHERE EXISTS (SELECT 1 FROM wish_item WHERE appid = ?1 AND itad_id = ?13 AND hidden_at IS NULL)
 		AND coalesce((SELECT value FROM setting WHERE key = 'deals_country'), 'ES') = ?14
 		ON CONFLICT(appid) DO UPDATE SET currency = excluded.currency, cur_shop = excluded.cur_shop, cur_price = excluded.cur_price,
 		cur_regular = excluded.cur_regular, cur_cut = excluded.cur_cut, cur_url = excluded.cur_url, cur_expiry = excluded.cur_expiry,
-		low_price = excluded.low_price, low_shop = excluded.low_shop, low_at = excluded.low_at, fetched_at = excluded.fetched_at`,
-		appid, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now(), itadID, country)
+		low_price = excluded.low_price, low_shop = excluded.low_shop, low_at = excluded.low_at, fetched_at = excluded.fetched_at,
+		alt_shop = excluded.alt_shop, alt_price = excluded.alt_price, alt_url = excluded.alt_url`,
+		appid, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now(), itadID, country, altShop, altPrice, altURL)
 	if err != nil {
 		return false, err
 	}
@@ -612,7 +619,7 @@ func evaluateWish(d *sql.DB, now, fetchedSince time.Time) ([]Alert, error) {
 		if kind == "" || !alertDue(r.muted, p.FetchedAt, deref(p.Expiry), *p.Price, r.lastP, r.lastAt, now, fetchedSince) {
 			continue
 		}
-		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: kind, Price: *p.Price, Currency: p.Currency, Cut: *p.Cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt)})
+		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: kind, Price: *p.Price, Currency: p.Currency, Cut: *p.Cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt), AltShop: deref(p.AltShop), AltPrice: deref64(p.AltPrice)})
 	}
 	for _, a := range out {
 		if _, err := d.Exec(`UPDATE wish_item SET last_alert_price = ?, last_alert_kind = ?, last_alert_at = ?, seen = 0, pending = 1 WHERE appid = ?`,
@@ -653,7 +660,7 @@ func pendingWishAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 		if p.Cut != nil {
 			cut = *p.Cut
 		}
-		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: r.lastKind, Price: *p.Price, Currency: p.Currency, Cut: cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt)})
+		out = append(out, Alert{AppID: r.appid, Title: r.title, Kind: r.lastKind, Price: *p.Price, Currency: p.Currency, Cut: cut, Shop: deref(p.Shop), URL: deref(p.URL), Regular: deref64(p.Regular), Low: deref64(p.LowPrice), LowAt: deref(p.LowAt), AltShop: deref(p.AltShop), AltPrice: deref64(p.AltPrice)})
 	}
 	return out, nil
 }

@@ -100,6 +100,9 @@ type PriceData struct {
 	LowShop   *string `json:"low_shop"`
 	LowAt     *string `json:"low_at"`
 	Low2y     *int64  `json:"low2y_price"` // lowest price of the last two years, when it was read (see fillTwoYearLows)
+	AltShop   *string `json:"alt_shop"`    // a clearly cheaper offer at another shop than the preferred one (see Choose)
+	AltPrice  *int64  `json:"alt_price"`
+	AltURL    *string `json:"alt_url"`
 	FetchedAt string  `json:"fetched_at"`
 }
 
@@ -158,7 +161,7 @@ func Load(d *sql.DB) (*List, error) {
 		return nil, err
 	}
 	rows, err = d.Query(`SELECT p.game_id, p.currency, p.cur_shop, p.cur_price, p.cur_regular, p.cur_cut, p.cur_url, p.cur_expiry,
-		p.low_price, p.low_shop, p.low_at, p.low2y_price, p.fetched_at
+		p.low_price, p.low_shop, p.low_at, p.low2y_price, p.alt_shop, p.alt_price, p.alt_url, p.fetched_at
 		FROM deal_price p JOIN game g ON g.id = p.game_id
 		WHERE ` + watchedSQL + ` ORDER BY p.game_id`)
 	if err != nil {
@@ -168,7 +171,7 @@ func Load(d *sql.DB) (*List, error) {
 	for rows.Next() {
 		var p Price
 		if err := rows.Scan(&p.GameID, &p.Currency, &p.Shop, &p.Price, &p.Regular, &p.Cut, &p.URL, &p.Expiry,
-			&p.LowPrice, &p.LowShop, &p.LowAt, &p.Low2y, &p.FetchedAt); err != nil {
+			&p.LowPrice, &p.LowShop, &p.LowAt, &p.Low2y, &p.AltShop, &p.AltPrice, &p.AltURL, &p.FetchedAt); err != nil {
 			return nil, err
 		}
 		l.Prices = append(l.Prices, p)
@@ -434,6 +437,11 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 	}
 	progress(done, total)
 	country := Country(d)
+	prefs := LoadStorePrefs(d)
+	offers, err := loadOffers(ctx, src, ids, country, prefs) // a few batched calls, only with a ranking
+	if err != nil {
+		return stop(err)
+	}
 	for len(ids) > 0 {
 		n := min(len(ids), MaxBatch)
 		batch := ids[:n]
@@ -444,7 +452,7 @@ func Refresh(ctx context.Context, d *sql.DB, src Source, opt Options) (Report, e
 		}
 		for _, id := range batch {
 			for _, gid := range byID[id] {
-				ok, err := savePrice(d, gid, id, country, res[id])
+				ok, err := savePrice(d, gid, id, country, withChoice(res[id], offers[id], prefs))
 				if err != nil {
 					return rep, err
 				}
@@ -477,11 +485,16 @@ func RefreshOne(ctx context.Context, d *sql.DB, src Source, gameID int64) error 
 		return err
 	}
 	country := Country(d)
+	prefs := LoadStorePrefs(d)
+	offers, err := loadOffers(ctx, src, []string{id}, country, prefs)
+	if err != nil {
+		return err
+	}
 	res, err := src.Overview(ctx, []string{id}, country)
 	if err != nil {
 		return err
 	}
-	_, err = savePrice(d, gameID, id, country, res[id])
+	_, err = savePrice(d, gameID, id, country, withChoice(res[id], offers[id], prefs))
 	return err
 }
 
@@ -592,20 +605,33 @@ func priceArgs(o Overview) (currency, shop, price, regular, cut, curURL, expiry,
 	return
 }
 
+// altArgs: the column values of the hint offer (NULL without one).
+func altArgs(o Overview) (shop, price, altURL any) {
+	if a := o.Alt; a != nil {
+		shop, price = a.Shop, a.Price.Cents
+		if a.URL != "" {
+			altURL = a.URL
+		}
+	}
+	return
+}
+
 // savePrice stores prices read for itadID in country. It does nothing (and says false) unless the game is still matched
 // with that ITAD game, still on Deals (not hidden, still unowned and unplayed) and the country is still the one the prices were read for: a refresh takes minutes, and the owner may
 // fix a match, reset it or change the country meanwhile.
 func savePrice(d *sql.DB, gameID int64, itadID, country string, o Overview) (bool, error) {
 	currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt := priceArgs(o)
+	altShop, altPrice, altURL := altArgs(o)
 	res, err := d.Exec(`INSERT INTO deal_price(game_id, currency, cur_shop, cur_price, cur_regular, cur_cut, cur_url, cur_expiry,
-		low_price, low_shop, low_at, fetched_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		low_price, low_shop, low_at, fetched_at, alt_shop, alt_price, alt_url) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?15, ?16, ?17
 		WHERE EXISTS (SELECT 1 FROM deal_match WHERE game_id = ?1 AND itad_id = ?13)
 		AND EXISTS (SELECT 1 FROM game g WHERE g.id = ?1 AND `+watchedSQL+`)
 		AND coalesce((SELECT value FROM setting WHERE key = 'deals_country'), 'ES') = ?14
 		ON CONFLICT(game_id) DO UPDATE SET currency = excluded.currency, cur_shop = excluded.cur_shop, cur_price = excluded.cur_price,
 		cur_regular = excluded.cur_regular, cur_cut = excluded.cur_cut, cur_url = excluded.cur_url, cur_expiry = excluded.cur_expiry,
-		low_price = excluded.low_price, low_shop = excluded.low_shop, low_at = excluded.low_at, fetched_at = excluded.fetched_at`,
-		gameID, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now(), itadID, country)
+		low_price = excluded.low_price, low_shop = excluded.low_shop, low_at = excluded.low_at, fetched_at = excluded.fetched_at,
+		alt_shop = excluded.alt_shop, alt_price = excluded.alt_price, alt_url = excluded.alt_url`,
+		gameID, currency, shop, price, regular, cut, curURL, expiry, lowPrice, lowShop, lowAt, now(), itadID, country, altShop, altPrice, altURL)
 	if err != nil {
 		return false, err
 	}

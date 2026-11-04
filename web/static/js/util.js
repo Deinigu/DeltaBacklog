@@ -82,6 +82,15 @@ export function icon(name) {
 /** For inputs that search game titles: a phone must not "correct" Celeste or Hades. */
 export const NO_AUTOCORRECT = { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' };
 
+/**
+ * The content of a link that opens in a new tab: its text, a decorative arrow and hidden "(opens in a new tab)".
+ * One element, so a flex parent (.btn has a gap) sees one item and the button does not grow.
+ */
+export const newTab = (label) => h('span', {}, label, h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)'));
+
+/** A glyph that is decoration (✎ ★) followed by its label, as one element for the same reason. */
+export const glyphLabel = (glyph, label) => h('span', {}, h('span', { 'aria-hidden': 'true' }, glyph), ` ${label}`);
+
 /** "1 game", "3 games". `many` defaults to `one` + "s". */
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 

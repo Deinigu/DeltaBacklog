@@ -1,12 +1,12 @@
 // Deals page: the current best price and the historical low of the games you don't own and haven't played yet, from
 // IsThereAnyDeal. Nothing here asks ITAD on its own: the prices are read when the owner presses Refresh prices.
-import { h, gradientFor, initials, lazyImg, toast, toastAction } from './util.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, newTab } from './util.js';
 import { openLayer } from './layers.js';
-import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
+import { store, coverURL, posterURL, dealsList, dealsRefresh, dealsSetCountry, dealsStores, dealsSetStores, dealsShops, dealsHide, dealsUnhide, dealsMute, dealsAlertsSeen, dealsTelegramTest,
   dealsWishHide, dealsWishUnhide, dealsWishMute, dealsWishUnmute } from './api.js';
 import { openDrawer } from './drawer.js';
 import { openAdd } from './add.js';
-import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, formatDate, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel } from './deals.js';
+import { DEAL_STATUSES, SORT_KEYS, COLUMNS, BADGE_LABEL, ALERT_LABEL, buildDeals, buildWishlist, hiddenGames, scopeOf, steamStoreURL, formatMoney, formatDate, oldestCheck, safeLink, priceLine, lowLine, tagsOf, checkedLabel, altLine, moveStore, addStore, removeStore, parseThreshold, unusedShops, DEFAULT_THRESHOLD, MAX_STORES } from './deals.js';
 
 export function renderDeals(root) {
   let info = { configured: false, country: 'ES', matches: [], prices: [], refresh: { running: false } };
@@ -139,10 +139,12 @@ export function renderDeals(root) {
     const link = p && p.price != null ? safeLink(p.url) : null;
     const act = (label, fn, cls = '') => h('button.dl-act' + cls, { type: 'button', onclick: () => { closeSheet(); fn(); } }, label);
     const actions = [
-      link ? h('a.dl-act', { href: link, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, 'View deal', h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)')) : null,
-      ...o.actions.map((a) => (a.href ? h('a.dl-act', { href: a.href, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, a.label.replace(/ ↗$/, ''), h('span', { 'aria-hidden': 'true' }, ' ↗'), h('span.sr-only', {}, ' (opens in a new tab)')) : act(a.label, a.run))),
+      link ? h('a.dl-act', { href: link, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab('View deal')) : null,
+      altLink ? h('a.dl-act', { href: altLink, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(`View at ${p.alt_shop}`)) : null,
+      ...o.actions.map((a) => (a.href ? h('a.dl-act', { href: a.href, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(a.label.replace(/ ↗$/, ''))) : act(a.label, a.run))),
     ];
-    const lines = p ? [priceLine(p), lowLine(p) + (p.low_at && p.low_price != null ? `, ${formatDate(p.low_at)}` : ''),
+    const altLink = p && altLine(p) ? safeLink(p.alt_url) : null;
+    const lines = p ? [priceLine(p), altLine(p) ? `Cheaper: ${altLine(p)}` : null, lowLine(p) + (p.low_at && p.low_price != null ? `, ${formatDate(p.low_at)}` : ''),
       p.price != null && p.expiry && formatDate(p.expiry) ? `Ends ${formatDate(p.expiry)}` : null] : [o.note];
     const dlg = h('dialog.dl-sheet', { 'aria-label': `${o.title}: actions` },
       h('div.dl-sheet-head', {}, imageCell(o.image, o.title),
@@ -159,6 +161,58 @@ export function renderDeals(root) {
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
   }
 
+  // ---- preferred stores ----
+  // A sheet to rank the shops (best first): the price of a game is the one at the highest-ranked shop that sells it, and a
+  // clearly cheaper offer elsewhere is shown as a hint. Edits a draft; Save sends it. It applies at the next refresh.
+  async function openStores() {
+    closeSheet();
+    let list = [...(info.stores?.stores || [])];
+    let threshold = info.stores?.threshold ?? DEFAULT_THRESHOLD;
+    let shops = [];
+    const body = h('div.dl-stores-body');
+    const err = h('p.hint.dl-stores-err', { role: 'alert' });
+    const dlg = h('dialog.dl-sheet.dl-stores', { 'aria-label': 'Preferred stores' }, body);
+    const paint = (focusKey) => {
+      const typed = body.querySelector('.dl-store-add input')?.value ?? '';
+      const rows = list.map((s, i) => h('li.dl-store', {},
+        h('span.dl-store-n', {}, String(i + 1)), h('span.dl-store-name', {}, s),
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} up`, disabled: i === 0 || null, 'data-fk': `up-${i}`, onclick: () => { list = moveStore(list, i, -1); paint(`up-${Math.max(i - 1, 0)}`); } }, '↑'),
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Move ${s} down`, disabled: i === list.length - 1 || null, 'data-fk': `down-${i}`, onclick: () => { list = moveStore(list, i, 1); paint(`down-${Math.min(i + 1, list.length - 1)}`); } }, '↓'),
+        h('button.dl-store-b', { type: 'button', 'aria-label': `Remove ${s}`, 'data-fk': `rm-${i}`, onclick: () => { list = removeStore(list, i); paint(`rm-${Math.min(i, list.length - 1)}`); } }, '✕')));
+      const input = h('input', { 'data-fk': 'add', value: typed, list: 'dl-shops', placeholder: 'Add a store…', 'aria-label': 'Store to add', maxlength: 60, autocomplete: 'off',
+        onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } } });
+      const add = () => { const next = addStore(list, input.value); if (next === list && input.value.trim()) err.textContent = list.length >= MAX_STORES ? `At most ${MAX_STORES} stores.` : 'That store is already in the list.'; else err.textContent = ''; if (next !== list) input.value = ''; list = next; paint('add'); };
+      const th = h('input', { type: 'number', min: 0, max: 100, step: 1, value: String(threshold), inputmode: 'numeric', 'aria-label': 'Percent cheaper before another store is shown',
+        oninput: (e) => { const n = parseThreshold(e.target.value); if (n != null) threshold = n; } });
+      body.replaceChildren(
+        h('b.dl-sheet-title', {}, 'Preferred stores'),
+        h('p.hint', {}, 'The price shown is the one at the first store on this list that sells the game. Stores you do not list come after, cheapest first. Leave the list empty to always show the cheapest price. Changes apply when you press Refresh prices; price alerts follow the store you rank first.'),
+        list.length ? h('ol.dl-stores-list', {}, ...rows) : h('p.hint', {}, 'No store ranked: the cheapest price is shown.'),
+        h('div.dl-store-add', {}, input, h('button.dl-act', { type: 'button', onclick: add }, 'Add'),
+          h('datalist', { id: 'dl-shops' }, unusedShops(shops, list).map((s) => h('option', { value: s })))),
+        h('label.dl-store-th', {}, h('span', {}, 'Also show a cheaper offer elsewhere when it is more than'), th, h('span', {}, '% cheaper')),
+        err,
+        h('div.dl-acts', {}, h('button.dl-act.dl-save', { type: 'button', onclick: save }, 'Save'), h('button.dl-act.dl-close', { type: 'button', onclick: closeSheet }, 'Cancel')));
+      if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]:not(:disabled)`) || body.querySelector('[data-fk="add"]'))?.focus();
+    };
+    async function save() {
+      try {
+        const refresh = info.refresh;
+        info = { ...(await dealsSetStores(list, threshold)), refresh };
+        closeSheet();
+        toast(list.length ? 'Preferred stores saved. Press Refresh prices to apply them.' : 'Preferred stores cleared. Press Refresh prices to apply.', 4000);
+        draw();
+      } catch (e) { err.textContent = e.message || 'Could not save'; }
+    }
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) closeSheet(); });
+    dlg.addEventListener('close', () => { dlg.remove(); if (sheetEl === dlg) sheetEl = null; });
+    document.body.append(dlg);
+    sheetEl = dlg;
+    paint();
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    if (info.configured) { try { shops = (await dealsShops()).shops || []; if (sheetEl === dlg) paint(); } catch { /* the box still takes a typed name */ } }
+  }
+
   function imageCell(url, title) {
     return h('span.dl-img', { role: 'cell' }, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(title)}` }, initials(title)));
   }
@@ -169,6 +223,7 @@ export function renderDeals(root) {
     const onSale = p && p.price != null && p.cut > 0;
     const tags = tagsOf(o.badge, o.alert, o.isNew);
     const ends = p && p.price != null && p.expiry && formatDate(p.expiry) ? formatDate(p.expiry) : '';
+    const alt = p ? altLine(p) : '';
     const sub = p ? lowLine(p) + (ends ? ` · Ends ${ends}` : '') : o.note;
     const open = () => openSheet({ ...o, tags });
     const cls = 'li.dl-row' + (o.badge === 'low' ? '.is-low' : '') + (o.alert ? '.has-alert' : '') + (p ? '' : '.no-price');
@@ -177,12 +232,13 @@ export function renderDeals(root) {
       h('span.dl-name', { role: 'cell' },
         h('button.dl-open', { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': o.aria, onclick: open }, h('span.dl-title', {}, o.title)),
         tags.length ? h('span.dl-tags', {}, tags.map((t) => h('span.dl-tag.' + t.cls, {}, t.text))) : null,
-        h('span.dl-sub', {}, sub)),
+        h('span.dl-sub', {}, sub),
+        alt ? h('span.dl-altline', {}, alt) : null),
       h('span.dl-cut', { role: 'cell' }, onSale ? h('span.dl-pct', {}, `-${p.cut}%`) : null),
       h('span.dl-price', { role: 'cell' }, p && p.price != null ? [h('b', {}, formatMoney(p.price, p.currency)), onSale && p.regular > p.price ? h('s', {}, formatMoney(p.regular, p.currency)) : null]
         : p ? h('span.dl-none', {}, 'Not sold') : null),
       h('span.dl-low', { role: 'cell' }, p && p.low_price != null ? formatMoney(p.low_price, p.currency) : ''),
-      h('span.dl-shop', { role: 'cell' }, p && p.price != null ? p.shop || '' : ''),
+      h('span.dl-shop', { role: 'cell', title: alt ? `Cheaper: ${alt}` : null }, p && p.price != null ? p.shop || '' : ''),
       h('span.dl-ends', { role: 'cell' }, ends),
       view === 'wishlist' ? h('span.dl-added', { role: 'cell' }, o.added ? formatDate(o.added) : '') : null,
       h('button.dl-more', { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': `Actions for ${o.title}`, onclick: open }, '⋯'));
@@ -282,13 +338,14 @@ export function renderDeals(root) {
   function header(extra) {
     const wl = view === 'wishlist';
     const text = wl ? 'Your Steam wishlist, not part of your library. A game leaves this list when you add it to your library or take it off your wishlist (for example by buying it); it is read from Steam when you press Refresh prices.'
-      : 'The best price right now and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
+      : 'The price right now (at your preferred store when you set some, else the best price) and the historical low of the games you don’t own and haven’t played yet, from IsThereAnyDeal. A game at its historical low or its lowest price in 2 years gets an alert.';
     const setup = !info.configured && !oldestCheck(info) ? 'IsThereAnyDeal is not set up: add ITAD_API_KEY to .env and restart the app (see the user manual, Deals).' : '';
     return [
       h('div.dl-title-row', {}, h('h1', {}, 'Deals'),
         h('button.dl-info', { type: 'button', 'aria-expanded': String(infoOpen), 'aria-label': 'About this page', onclick: () => { infoOpen = !infoOpen; draw(); } }, 'i')),
       infoOpen ? h('div.dl-info-panel', {}, h('p.hint', {}, text),
-        info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null) : null,
+        h('div.dl-panel-btns', {}, h('button.dl-tg', { type: 'button', onclick: openStores }, info.stores?.stores?.length ? `Preferred stores (${info.stores.stores.length})` : 'Preferred stores'),
+          info.telegram ? h('button.dl-tg', { type: 'button', onclick: (e) => telegramTest(e.currentTarget) }, 'Send test message') : null)) : null,
       setup ? h('p.hint', {}, setup) : null,
       toolbar(),
       extra,
