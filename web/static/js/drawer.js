@@ -1,6 +1,7 @@
 // Game detail drawer: facts at a glance, quick status/favorite changes, and an Edit mode for every field.
 import { h, gradientFor, initials, toast, confirmDialog, newTab, glyphLabel, toastError, brand } from './util.js';
-import { openLayer, guardUnload } from './layers.js';
+import { openLayer, guardUnload, replaceUrl } from './layers.js';
+import { hashWithGame } from './gameurl.js';
 import { store, coverURL, patchGame, deleteGame } from './api.js';
 import { openCoverPicker, openPosterPicker, pickCandidate } from './add.js';
 import { ownershipLabel } from './ownership.js';
@@ -68,11 +69,21 @@ export function closeDrawer() {
   document.removeEventListener('keydown', open.onKey);
   window.removeEventListener('games-changed', open.onGames);
   open = null;
+  syncUrl(null); // before the layer is released: closing it carries the page's current URL to the entry below
   offUnload();
   release();
   // Back to what opened it (a card, a table row), unless the page under it was replaced meanwhile
   if (hadFocus && opener?.isConnected && !opener.matches('input, textarea, select')) opener.focus({ preventScroll: true });
 }
+
+/** Put the open game in the address (or take it out) without touching the page or adding a history entry. */
+function syncUrl(id) {
+  const next = hashWithGame(location.hash, id);
+  if (next !== location.hash) replaceUrl(next);
+}
+
+/** The id of the game the drawer shows now, or null. */
+export const openGameId = () => open?.gameId ?? null;
 
 /** Close because the user asked to: when there are unsaved edits, ask first. */
 async function requestClose() {
@@ -264,7 +275,8 @@ export function openDrawer(game, opts = {}) {
   };
   window.addEventListener('games-changed', onGames);
   document.body.append(scrim, drawer);
-  open = { drawer, scrim, onKey, onGames, isDirty: null, opener, ttb, release: openLayer(drawer, { requestClose }), offUnload: guardUnload(() => open?.drawer === drawer && drawerDirty()) };
+  open = { gameId: game.id, drawer, scrim, onKey, onGames, isDirty: null, opener, ttb, release: openLayer(drawer, { requestClose }), offUnload: guardUnload(() => open?.drawer === drawer && drawerDirty()) };
+  syncUrl(game.id);
   if (opts.relink) relinkPrompt(game, opts.relink.name, relinkMount);
   if (opts.edit) startEdit(opts.edit);
   else if (opts.ttb) readView.querySelector('.ttb-actions [data-act="hltb"]')?.click();

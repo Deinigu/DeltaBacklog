@@ -12,6 +12,7 @@ import { badgeStyle } from './colors.js';
 import { openSurprise } from './surprise.js';
 import { ownershipIcon, ownershipLabel, isUsualOwnership } from './ownership.js';
 import { openLayer, replaceUrl } from './layers.js';
+import { hashWithGame, gameIdFromHash } from './gameurl.js';
 import { buildComparator, sortSummary, groupGames, yearOrder, createSortSheet, GROUP_FIELDS } from './sort.js';
 import {
   GROUPS, FLAGS, matches, cycle, chipState, activeCount, isPristine, emptyState, facetSignature,
@@ -224,7 +225,7 @@ export function renderLibrary(root, opts = {}) {
   });
 
   function update() {
-    if (!view) replaceUrl('#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''));
+    if (!view) replaceUrl(hashWithGame('#/library' + (stateToQuery(state) ? '?' + stateToQuery(state) : ''), gameIdFromHash(location.hash))); // an open game stays in the address
     const list = store.games.filter((g) => matches(state, g));
     list.sort(buildComparator(state.sorts));
     sortBtn.querySelector('.sort-label').textContent = sortSummary(state.sorts) + (state.group ? ` · by ${GROUP_FIELDS[state.group].label}` : '');

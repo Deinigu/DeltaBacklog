@@ -7,7 +7,7 @@ import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import {
   backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP, DEFAULT_HOURS_PER_WEEK,
-  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration,
+  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration, currentSection,
 } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -255,6 +255,13 @@ export function renderStats(root) {
     h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
     size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`));
 
+  // The chips stick under the top of the screen on a phone (CSS); the one for the section being read is marked.
+  let picked = () => {}; // set below: a tapped chip is the current one until the person scrolls by hand
+  const jump = h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
+    type: 'button', 'data-to': id,
+    onclick: () => { picked(id); const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
+  }, label)));
+
   root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
     h('p.hint', {}, `Computed from the ${games.length} games in your library. Hours are estimates: a game's time is its Main + extras time to beat, else the quickest, else the complete one; games with no time add nothing.`),
@@ -263,13 +270,48 @@ export function renderStats(root) {
       tile(num(finishedCount), 'finished'),
       tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
       tile(left.both.known ? approx(left.both) : '—', 'left to play', left.both.known ? `${left.both.known} of ${left.both.total} timed` : 'no times yet')),
-    h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
-      type: 'button',
-      onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
-    }, label))),
+    jump,
     h('div.stat-grid', {},
       tall(finishedCard), timeLeftCard(left), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
+
+  {
+    const secs = SECTIONS.map(([id]) => root.querySelector(`[data-sec="${id}"]`)).filter(Boolean);
+    let shown = null; // what the chips show now: a section id, or null while they are not sticky
+    let tapped = null; // a chip the person pressed: it stays the current one until they scroll by hand
+    const mark = () => {
+      // Only the phone layout has sticky chips and a highlight; elsewhere nothing is announced as current
+      const sticky = getComputedStyle(jump).position === 'sticky';
+      let id = null;
+      if (sticky) {
+        const line = jump.getBoundingClientRect().bottom + 16; // more than the cards' scroll margin, so a jumped-to section counts
+        const atEnd = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+        id = tapped ?? currentSection(secs.map((el) => { const b = el.getBoundingClientRect(); return { id: el.dataset.sec, top: b.top, bottom: b.bottom }; }), line, atEnd);
+      }
+      if (id === shown) return;
+      shown = id;
+      for (const btn of jump.children) {
+        const on = btn.dataset.to === id;
+        if (on) btn.setAttribute('aria-current', 'true'); else btn.removeAttribute('aria-current');
+        if (on) jump.scrollLeft = btn.offsetLeft - (jump.clientWidth - btn.offsetWidth) / 2; // keep the chip in view in the row
+      }
+    };
+    let raf = 0;
+    const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; mark(); }); }; // a scroll event per frame at most: 9 rects
+    const free = () => { tapped = null; soon(); }; // a wheel, touch or key press ends a tapped chip's hold
+    picked = (id) => { tapped = id; mark(); };
+    window.addEventListener('scroll', soon, { passive: true });
+    for (const ev of ['wheel', 'touchstart', 'keydown']) window.addEventListener(ev, free, { passive: true });
+    const mq = matchMedia('(max-width: 899px)');
+    mq.addEventListener('change', soon);
+    cleanups.push(() => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', soon);
+      for (const ev of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(ev, free);
+      mq.removeEventListener('change', soon);
+    });
+    mark();
+  }
   return () => cleanups.forEach((f) => f());
 }

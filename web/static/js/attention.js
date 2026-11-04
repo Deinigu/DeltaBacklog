@@ -82,3 +82,15 @@ export function ignoredTotal(games, queue = [], ignored = {}) {
   return buildGroups(games, queue, ignored, true).reduce((n, g) => n + g.rows.filter((r) => r.ignored).length, 0);
 }
 
+
+// ---- which groups are open ----
+// A group with this many open items or fewer starts open; a longer one starts collapsed (showing only its count).
+export const OPEN_AT_MOST = 3;
+
+/** Is the group open? `state` maps a group key to what the person chose (true/false); with no choice the size decides. */
+export function groupOpen(state, key, count) {
+  return key in state ? !!state[key] : count <= OPEN_AT_MOST;
+}
+
+/** The state after the person opened or closed a group (a new object). */
+export const withGroupOpen = (state, key, open) => ({ ...state, [key]: !!open });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { syncLine, problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, TTB_STATUSES } from '../static/js/attention.js';
+import { syncLine, problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, TTB_STATUSES, groupOpen, withGroupOpen, OPEN_AT_MOST } from '../static/js/attention.js';
 
 const ok = (o = {}) => ({ id: 1, title: 'A', status: 'finished', cover: 'c.jpg', poster: 'p.jpg', poster_src: 'igdb', poster_user: false, igdb_id: 5, igdb_not_found: false,
   platforms: ['PC'], genres: ['RPG'], release_year: 2020, ownership: 'Owned', ttb_normally: 600, ...o });
@@ -63,4 +63,16 @@ test('the bulk lookup line shows progress, then the report', () => {
   assert.equal(syncLine(null), '');
   assert.equal(syncLine({ running: true, done: 3, total: 12 }), 'Looking up times: 3 of 12');
   assert.equal(syncLine({ running: false, report: 'Found times for 2 games; 1 need a manual pick.' }), 'Found times for 2 games; 1 need a manual pick.');
+});
+
+test('groups start collapsed unless they have 3 items or fewer; a choice wins and is kept', () => {
+  assert.equal(OPEN_AT_MOST, 3);
+  assert.equal(groupOpen({}, 'no_cover', 3), true);
+  assert.equal(groupOpen({}, 'no_cover', 4), false);
+  assert.equal(groupOpen({}, 'no_cover', 38), false);
+  const opened = withGroupOpen({}, 'no_cover', true);
+  assert.equal(groupOpen(opened, 'no_cover', 38), true);
+  assert.equal(groupOpen(opened, 'no_year', 38), false); // other groups are not touched
+  assert.equal(groupOpen(withGroupOpen(opened, 'no_cover', false), 'no_cover', 2), false); // closed on purpose stays closed
+  assert.deepEqual(opened, { no_cover: true }); // a new object, the old state is not changed
 });

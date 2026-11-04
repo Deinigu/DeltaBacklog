@@ -166,7 +166,7 @@ A **view** is a name for a set of filters, a sort order and a layout, so you can
 
 ![The Views page](img/views-phone.jpg)
 
-**Manage views.** Open **Views** (**More** on a phone, or the sidebar). For each view you can open it, **📌 pin** it to the bar, move it **▲▼**, rename it **✎**, duplicate it **⧉**, or delete it **🗑**. After a delete there is an **Undo** for a few seconds.
+**Manage views.** Open **Views** (**More** on a phone, or the sidebar). For each view you can open it, **📌 pin** it to the bar and move it **▲▼**. The **⋯** button opens a small sheet with **Rename**, **Duplicate** and **Delete** (Esc, Close or Back closes it). After a delete there is an **Undo** for a few seconds.
 
 ## 7. Changing a game
 
@@ -225,6 +225,7 @@ Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Ca
 - **Sort** by tapping a column heading. Tap again to reverse it.
 - **Resize** a column by dragging the edge of its heading.
 - **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, time to beat, developer, released, ownership, played with, favorite, VR, 100%, notes, added). **Defaults** brings the original set back. Your choices are remembered on this device.
+- **Keyboard (on a PC):** Tab goes into the table once; then the **arrow keys** move between cells, **Home** / **End** go to the ends of the row (with Ctrl, to the corners), **PageUp** / **PageDown** jump a page. **Enter** or **F2** edits the cell, **Space** toggles a checkbox cell, **Shift+Enter** opens the game. While editing, **Esc** cancels and puts the focus back on the cell.
 - **Edit in place:** tap a cell and type. **Enter** saves and moves down, **Tab** saves and moves right, **Esc** cancels. Status is a drop-down, checkboxes toggle with one tap, and lists (platforms, genres, years...) open a sheet. Notes can have several lines (**Shift+Enter** for a new line).
 - The ↗ button at the start of a row opens the game.
 - **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets.
@@ -426,7 +427,7 @@ Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap 
 
 ### The Hidden page
 
-**Hidden** (**More** on a phone, near the bottom, or the sidebar) is one list of everything you hid: **Deals**, **Similar games** and **Series** (also what you hid on Upcoming), each group with its count (a group with nothing hidden is not shown). A row has the cover, the title, where it came from (*Because you played X* for a suggestion, your series name for a series game) and the date it was hidden. **Show again** puts the game back on its page and offers **Undo**. The Hidden (N) lists on those pages stay as they are. The page reads only what is saved on the server, so opening it never asks IGDB or IsThereAnyDeal.
+**Hidden** (**More** on a phone, near the bottom, or the sidebar) is one list of everything you hid: **Deals**, **Similar games** and **Series** (also what you hid on Upcoming), each group with its count (a group with nothing hidden is not shown). A compact row (like Deals) has the cover, the title, where it came from (*Because you played X* for a suggestion, your series name for a series game) and the date it was hidden, with a small **Show again** button at its end. **Show again** puts the game back on its page and offers **Undo**. The Hidden (N) lists on those pages stay as they are. The page reads only what is saved on the server, so opening it never asks IGDB or IsThereAnyDeal.
 
 ![The Hidden page](img/hidden-phone.jpg)
 
@@ -434,7 +435,7 @@ Prices are saved on the server. Opening the page never asks IsThereAnyDeal: tap 
 
 Open **Stats** in the navigation (**More** on a phone). Everything is worked out from the games you already have; nothing is stored (only the *hours a week* you type under **Time left**, kept in this browser).
 
-The top has four tiles (games, finished, estimated hours finished, estimated hours left) and a row of buttons that jump to a section.
+The top has four tiles (games, finished, estimated hours finished, estimated hours left) and a row of buttons that jump to a section. On a phone the row stays under the top of the screen while you scroll, and the button of the section you are reading is highlighted.
 
 **About the hours.** Every hours figure is an estimate and says how many games it rests on, for example *≈ 1,240 h across 142 of 189 finished games*. A game's time is its **Main + extras** time to beat; when it has none, the quickest time, then the complete one (whatever the source: IGDB, HowLongToBeat or typed by you). Games with no time to beat add nothing, so the real figure is higher. It is how long the games take to beat, not how long you actually played them.
 
@@ -563,14 +564,14 @@ Your status, ownership, notes, years played, favourite, covers and any poster yo
 
 ### Needs attention
 
-**Needs attention** (More menu on a phone, sidebar on a PC) lists the games that need a fix, in groups you can open and close, each with how many games it holds:
+**Needs attention** (More menu on a phone, sidebar on a PC) lists the games that need a fix, in groups you can open and close, each with how many games it holds. A group starts closed unless it has 3 games or fewer; the app remembers which ones you opened until you close it. Each row has its main button (**Link…**, **Confirm**, **Pick cover**…); the **⋯** button opens a sheet with the other choices (**Not on IGDB**, **Change…**, **Ignore in this list**):
 - **Not linked to IGDB**: **Link…** searches IGDB for the game; **Not on IGDB** settles it for good (the app never asks again, and the game leaves the list). Games you already marked that way are not listed.
 - **Uncertain IGDB match**: the sync found a likely match but was not sure. **Confirm** keeps the top suggestion (shown with its percentage), **Change…** lets you pick another, and *Review them one by one* opens the Link IGDB screen.
 - **No cover** and **No poster, or only a crop of the cover**: open the cover or the poster picker. A poster you chose yourself is never listed.
 - **No time to beat**: only for games in Backlog, Up Next and Playing; **Find time** opens the HowLongToBeat search in the game's details. **Find times for all** at the top of the group searches HowLongToBeat for every game in it, one after the other (about a second apart; a progress bar shows how far it is, **Stop** ends it). It saves a time only when it is sure: the same title (ignoring capitals and punctuation) and, when both are known, the same release year, with a single such game on HowLongToBeat. The other games stay in the list marked *Needs a manual pick*; use **Find time** on them. It never changes a game that already has a time, and skips the games you ignored here. At the end it says, for example, *Found times for 12 games; 5 need a manual pick.* The run goes on in the app's server if you leave the page; open the page again to see how it is doing.
 - **No platform**, **No release year**, **No ownership** and **No genres**: open the game's edit form at that field.
 
-Tap a game's name to open its details. **Ignore** hides the game from that one list only (a *Undo* message appears; **Show n ignored** brings the hidden ones back, each with **Stop ignoring**). Opening the page never contacts IGDB: it works from the games already loaded in the app. The list updates as you fix things.
+Tap a game's name to open its details. **Ignore in this list** (in **⋯**) hides the game from that one list only (a *Undo* message appears; **Show n ignored** brings the hidden ones back, each with **Stop ignoring**). Opening the page never contacts IGDB: it works from the games already loaded in the app. The list updates as you fix things.
 
 ![Needs attention](img/attention-phone.jpg)
 
