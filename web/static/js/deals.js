@@ -236,3 +236,46 @@ export function priceLine(p) {
   const cut = p.cut > 0 ? ` (-${p.cut}%${p.regular > p.price ? `, was ${formatMoney(p.regular, p.currency)}` : ''})` : '';
   return `${formatMoney(p.price, p.currency)}${p.shop ? ` at ${p.shop}` : ''}${cut}`;
 }
+
+// ---- preferred stores ----
+export const MAX_STORES = 30;
+export const DEFAULT_THRESHOLD = 15;
+
+/** "€9.99 at Epic": a clearly cheaper offer at another shop than the preferred one (the server's alt_*); '' without one. */
+export function altLine(p) {
+  if (!p || p.alt_shop == null || p.alt_price == null || (p.price != null && p.alt_price >= p.price)) return '';
+  return `${formatMoney(p.alt_price, p.currency)} at ${p.alt_shop}`;
+}
+
+/** The ranking with the shop at index i moved up (delta -1) or down (+1); the same list at an edge. Never changes its input. */
+export function moveStore(list, i, delta) {
+  const j = i + delta;
+  if (i < 0 || i >= list.length || j < 0 || j >= list.length) return list;
+  const out = [...list];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
+}
+
+/** The ranking with a shop added at the end; the same list for a blank name, a shop already in it (case aside) or a full list. */
+export function addStore(list, name) {
+  const n = String(name ?? '').trim();
+  if (!n || n.length > 60 || list.length >= MAX_STORES || list.some((s) => s.toLowerCase() === n.toLowerCase())) return list;
+  return [...list, n];
+}
+
+/** The ranking without the shop at index i. */
+export const removeStore = (list, i) => list.filter((_, k) => k !== i);
+
+/** A threshold from an input: a whole number from 0 to 100, or null when it is not one. */
+export function parseThreshold(v) {
+  const s = String(v ?? '').trim();
+  if (!/^\d{1,3}$/.test(s)) return null;
+  const n = Number(s);
+  return n <= 100 ? n : null;
+}
+
+/** The shop names ITAD lists that are not in the ranking yet, for the add box. */
+export const unusedShops = (shops, list) => {
+  const used = new Set(list.map((s) => s.toLowerCase()));
+  return (shops || []).filter((s) => !used.has(s.toLowerCase()));
+};

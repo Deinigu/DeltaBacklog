@@ -1130,6 +1130,26 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-acts { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .dl-act { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 600; padding: 0 14px; }
 .dl-act.dl-close { margin-top: 6px; width: 100%; background: none; color: var(--muted); }
+.dl-panel-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.dl-altline { display: none; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-stores { max-width: 460px; }
+.dl-stores-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dl-stores-body .hint { margin: 0; }
+.dl-stores-list { list-style: none; margin: 0; padding: 0; }
+.dl-store { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); }
+.dl-store-n { flex: none; width: 1.6em; color: var(--muted); font-size: 13px; }
+.dl-store-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.dl-store-b { flex: none; width: 44px; height: 44px; border: 0; border-radius: 8px; background: none; color: var(--text); font-size: 18px; }
+.dl-store-b:disabled { opacity: .3; }
+.dl-store-b:not(:disabled):hover { background: var(--surface-2); }
+.dl-store-add { display: flex; gap: 6px; }
+.dl-store-add input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 10px; }
+.dl-store-add .dl-act { flex: none; }
+.dl-store-th { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.dl-store-th input { width: 4.5em; min-height: 44px; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.dl-stores-err:empty { display: none; }
+.dl-stores-err { color: #dc2626; }
+.dl-act.dl-save { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
 @media (min-width: 900px) {
   /* Columns are fractional where they can be and the fixed ones add up to far less than the content next to the 210px sidebar
@@ -1146,6 +1166,7 @@ button.up-open { cursor: pointer; border-radius: 8px; }
   .dl-price b { font-size: 14px; }
   .dl-sub { display: none; }
   .dl-row.no-price .dl-sub { display: block; }
+  .dl-altline { display: block; }
   .dl-plain .dl-low { display: none; }
   .dl-more { display: grid; place-items: center; position: relative; z-index: 1; width: 44px; height: 44px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 20px; }
   .dl-more:hover { background: var(--surface-2); color: var(--text); }

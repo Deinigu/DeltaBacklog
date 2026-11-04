@@ -116,6 +116,8 @@ type Alert struct {
 	Regular  int64  // the regular price (0 = unknown)
 	Low      int64  // the historical low as read (0 = unknown)
 	LowAt    string // when that low was seen (RFC 3339, may be empty)
+	AltShop  string // a clearly cheaper offer at a lower-ranked shop, for the message only (see Choose); "" = none
+	AltPrice int64
 }
 
 // expired reports whether a deal's end time (RFC 3339, empty = none given) has passed.
@@ -131,7 +133,7 @@ func expired(expiry string, now time.Time) bool {
 func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Alert, error) {
 	rows, err := d.Query(`SELECT p.game_id, g.title, p.currency, coalesce(p.cur_shop, ''), p.cur_price, p.cur_cut, coalesce(p.cur_url, ''),
 		p.low_price, p.low2y_price, coalesce(a.muted, 0), a.last_alert_price, coalesce(a.last_alert_at, ''), p.fetched_at, coalesce(p.cur_expiry, ''),
-			coalesce(p.cur_regular, 0), coalesce(p.low_at, '')
+			coalesce(p.cur_regular, 0), coalesce(p.low_at, ''), coalesce(p.alt_shop, ''), coalesce(p.alt_price, 0)
 		FROM deal_price p JOIN game g ON g.id = p.game_id LEFT JOIN deal_alert a ON a.game_id = p.game_id
 		WHERE ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
 	if err != nil {
@@ -144,7 +146,7 @@ func Evaluate(d *sql.DB, now, fetchedSince time.Time, withWishlist bool) ([]Aler
 		var cut *int
 		var muted int
 		var lastAt, fetchedAt, expiry string
-		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt, &fetchedAt, &expiry, &a.Regular, &a.LowAt); err != nil {
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Currency, &a.Shop, &price, &cut, &a.URL, &low, &low2y, &muted, &lastPrice, &lastAt, &fetchedAt, &expiry, &a.Regular, &a.LowAt, &a.AltShop, &a.AltPrice); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -413,7 +415,7 @@ func deliver(ctx context.Context, d *sql.DB, notify Notifier, now time.Time, wit
 func pendingAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 	rows, err := d.Query(`SELECT a.game_id, g.title, a.last_alert_kind, p.cur_price, p.currency, coalesce(p.cur_cut, 0), coalesce(p.cur_shop, ''),
 		coalesce(p.cur_url, ''), coalesce(p.cur_expiry, ''),
-			coalesce(p.cur_regular, 0), coalesce(p.low_price, 0), coalesce(p.low_at, '')
+			coalesce(p.cur_regular, 0), coalesce(p.low_price, 0), coalesce(p.low_at, ''), coalesce(p.alt_shop, ''), coalesce(p.alt_price, 0)
 		FROM deal_alert a JOIN deal_price p ON p.game_id = a.game_id JOIN game g ON g.id = a.game_id
 		WHERE a.pending = 1 AND a.muted = 0 AND a.last_alert_kind IS NOT NULL AND p.cur_price IS NOT NULL AND p.cur_price <= a.last_alert_price
 		AND ` + watchedSQL + ` ORDER BY g.title_sort, g.id`)
@@ -425,7 +427,7 @@ func pendingAlerts(d *sql.DB, now time.Time) ([]Alert, error) {
 	for rows.Next() {
 		var a Alert
 		var expiry string
-		if err := rows.Scan(&a.GameID, &a.Title, &a.Kind, &a.Price, &a.Currency, &a.Cut, &a.Shop, &a.URL, &expiry, &a.Regular, &a.Low, &a.LowAt); err != nil {
+		if err := rows.Scan(&a.GameID, &a.Title, &a.Kind, &a.Price, &a.Currency, &a.Cut, &a.Shop, &a.URL, &expiry, &a.Regular, &a.Low, &a.LowAt, &a.AltShop, &a.AltPrice); err != nil {
 			return nil, err
 		}
 		if !expired(expiry, now) {
@@ -511,6 +513,9 @@ func (a Alert) priceLine() string {
 	}
 	if a.Shop != "" {
 		s += " at " + esc(clip(a.Shop, 60))
+	}
+	if a.AltShop != "" && a.AltPrice > 0 && a.AltPrice < a.Price {
+		s += " <i>(" + esc(Money{a.AltPrice, a.Currency}.String()) + " at " + esc(clip(a.AltShop, 60)) + ")</i>"
 	}
 	return s
 }

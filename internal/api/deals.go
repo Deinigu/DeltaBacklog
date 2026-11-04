@@ -59,7 +59,7 @@ func (s *Server) dealsList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"configured": s.dealsConfigured(), "lib_images": libImages, "country": l.Country, "matches": l.Matches, "prices": l.Prices,
 		"watched": l.Watched, "hidden": l.Hidden, "alerts": l.Alerts, "muted": l.Muted, "unseen": unseen, "wishlist": wish,
-		"telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
+		"stores": deals.LoadStorePrefs(s.DB), "telegram": s.Notify != nil, "refresh": s.dealsJob.status()})
 }
 
 // fillWishImages sets the local picture of each wishlist game that has one (the files the refresh downloaded).
@@ -266,6 +266,52 @@ func (s *Server) dealsSetCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.dealsList(w, r)
+}
+
+// dealsStores answers the preferred-stores ranking.
+func (s *Server) dealsStores(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, deals.LoadStorePrefs(s.DB))
+}
+
+// dealsSetStores replaces the ranking (an ordered list of shop names and the threshold in percent). Cached prices change
+// at the next refresh.
+func (s *Server) dealsSetStores(w http.ResponseWriter, r *http.Request) {
+	var in deals.StorePrefs
+	if !readJSON(w, r, &in, 8<<10) {
+		return
+	}
+	for i := range in.Shops {
+		in.Shops[i] = strings.TrimSpace(in.Shops[i])
+	}
+	if err := deals.SaveStorePrefs(s.DB, in); err != nil {
+		bad(w, err.Error())
+		return
+	}
+	s.dealsList(w, r)
+}
+
+// dealsShops lists the shops ITAD tracks in the current country (cached for a day), for the Stores sheet.
+func (s *Server) dealsShops(w http.ResponseWriter, r *http.Request) {
+	if !s.dealsConfigured() {
+		writeErr(w, http.StatusServiceUnavailable, deals.ErrNotConfigured.Error(), nil)
+		return
+	}
+	sl, ok := s.Deals.(deals.ShopLister)
+	if !ok {
+		writeJSON(w, map[string]any{"shops": []string{}})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	list, err := sl.Shops(ctx, deals.Country(s.DB))
+	if err != nil {
+		s.dealsError(w, err)
+		return
+	}
+	if list == nil {
+		list = []string{}
+	}
+	writeJSON(w, map[string]any{"shops": list})
 }
 
 // dealsMute turns the alerts of a game off (PUT) or on again (DELETE); the answer is the new list.

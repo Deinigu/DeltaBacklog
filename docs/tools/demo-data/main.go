@@ -313,6 +313,12 @@ func main() {
 			must(err)
 		}
 	}
+	// Preferred stores: a few games show a clearly cheaper offer at a lower-ranked shop (the hint under the price).
+	_, err = tx.Exec(`UPDATE deal_price SET alt_shop = 'Epic Game Store', alt_price = cur_price * 7 / 10, alt_url = 'https://example.org/deal'
+		WHERE game_id IN (SELECT game_id FROM deal_price WHERE cur_price > 500 AND game_id NOT IN (SELECT game_id FROM deal_alert) ORDER BY game_id LIMIT 3)`)
+	must(err)
+	_, err = tx.Exec(`UPDATE wish_price SET alt_shop = 'GOG', alt_price = cur_price * 7 / 10, alt_url = 'https://example.org/deal' WHERE appid IN (SELECT appid FROM wish_price WHERE cur_price > 500 ORDER BY appid LIMIT 1)`)
+	must(err)
 	must(tx.Commit())
 
 	for i, g := range games {

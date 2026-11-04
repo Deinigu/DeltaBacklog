@@ -473,3 +473,8 @@ export const dealsWishMute = (appid) => request('PUT', `api/deals/wishlist/${app
 export const dealsWishUnmute = (appid) => request('DELETE', `api/deals/wishlist/${appid}/muted`);
 /** The country (two letters, such as ES) the prices are read for. Resolves the dealsList() answer. */
 export const dealsSetCountry = (country) => request('PUT', 'api/deals/country', { country });
+/** The preferred stores: {stores: [shop names, best first], threshold: percent}. Resolves that; the PUT resolves the dealsList() answer. */
+export const dealsStores = () => request('GET', 'api/deals/stores');
+export const dealsSetStores = (stores, threshold) => request('PUT', 'api/deals/stores', { stores, threshold });
+/** The shop names IsThereAnyDeal lists for the country: {shops: [...]}. */
+export const dealsShops = () => request('GET', 'api/deals/shops');
