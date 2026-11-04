@@ -8,7 +8,7 @@
 // and the returned release() when it takes `el` away. requestClose() is what Back calls: it may ask "Discard your
 // changes?" first and simply not close.
 
-import { popAction, rewindBy, pushAction, trapTarget, carryUrl } from './layerlogic.js';
+import { popAction, rewindBy, pushAction, trapTarget, carryUrl, leavesPage } from './layerlogic.js';
 
 // ---------------------------------------------------------------- the stack
 
@@ -54,8 +54,17 @@ function detach(layer) {
   stack.splice(i, 1);
   unlockScroll();
   clearTimeout(rewindTimer);
+  // Leaving the page through a link inside the layer (the More sheet's pages, a drawer's series link): no rewind. The
+  // link's own navigation adds the next entry; stepping back as well raced it, and where the browser applies the link a
+  // moment after the click (Safari) the step back won and undid the page change. The layer's entry stays behind and
+  // Back steps over it ('skip' in popstate).
+  if (leaving) return;
   rewindTimer = setTimeout(rewind, 0); // after the current work: a layer closed and another opened at once keep one entry
 }
+
+// Set by a click on an in-app link inside an open layer, until that navigation has happened (or soon after, if it did not).
+let leaving = false;
+let leavingTimer = 0;
 
 function rewind() {
   const by = rewindBy(layerOf(), stack.length);
@@ -130,7 +139,18 @@ if (typeof window !== 'undefined' && typeof history !== 'undefined') {
     lastHref = location.href;
     top.requestClose?.();
   });
-  window.addEventListener('hashchange', () => { lastHref = location.href; });
+  window.addEventListener('hashchange', () => { lastHref = location.href; leaving = false; clearTimeout(leavingTimer); });
+
+  // A tap on an in-app link inside a layer leaves the page: the layers it closes must not step history back (see detach).
+  // Capture phase, so the flag is set before the link's own onclick closes its layer.
+  document.addEventListener('click', (e) => {
+    const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+    if (!a || !stack.some((l) => l.el.contains(a))) return;
+    if (!leavesPage(a.getAttribute('href'), a.target, e)) return;
+    leaving = true;
+    clearTimeout(leavingTimer);
+    leavingTimer = setTimeout(() => { leaving = false; }, 1000); // the click was cancelled after all: back to normal
+  }, true);
 
   // A reload keeps history.state: do not let a stale layer index from the last session confuse the first push.
   if (history.state?.layer) history.replaceState({ ...history.state, layer: 0 }, '');

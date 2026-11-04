@@ -23,6 +23,16 @@ export function carryUrl(saved, now) {
   return saved.split('?')[0] === now.split('?')[0] ? saved : null;
 }
 
+/**
+ * True when a click on a link with this `href` and `target` changes the app's page in this tab: an in-app route
+ * (`#/…`) clicked without a modifier key. Other links (another tab, another site, `#` alone) leave the page as it is.
+ */
+export function leavesPage(href, target, { button = 0, ctrlKey = false, metaKey = false, shiftKey = false, altKey = false } = {}) {
+  if (typeof href !== 'string' || !href.startsWith('#/')) return false;
+  if (target && target !== '_self') return false;
+  return button === 0 && !ctrlKey && !metaKey && !shiftKey && !altKey;
+}
+
 /** The index Tab should go to inside a trap of `count` focusable elements: -1 means "let the browser decide". */
 export function trapTarget(index, count, shift) {
   if (count === 0) return -2; // nothing focusable: keep focus on the layer itself

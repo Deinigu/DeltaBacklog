@@ -84,3 +84,16 @@ test('closing a layer carries the current URL of the page to the entry it lands 
   assert.equal(carryUrl('#/stats', '#/library'), null); // another page: never overwrite its entry
   assert.equal(carryUrl(null, '#/library'), null);
 });
+
+test('leavesPage: only in-app routes clicked plainly in this tab', async () => {
+  const { leavesPage } = await import('../static/js/layerlogic.js');
+  assert.equal(leavesPage('#/stats', ''), true);
+  assert.equal(leavesPage('#/deals?view=wishlist', '_self'), true);
+  assert.equal(leavesPage('#/stats', '_blank'), false);
+  assert.equal(leavesPage('https://store.steampowered.com/app/1', '_blank'), false);
+  assert.equal(leavesPage('#', ''), false);
+  assert.equal(leavesPage(null, ''), false);
+  assert.equal(leavesPage('#/stats', '', { ctrlKey: true }), false);
+  assert.equal(leavesPage('#/stats', '', { metaKey: true }), false);
+  assert.equal(leavesPage('#/stats', '', { button: 1 }), false);
+});
