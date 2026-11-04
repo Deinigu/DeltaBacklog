@@ -106,7 +106,7 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .library { display: block; }
 @media (min-width: 900px) {
   .library { display: grid; grid-template-columns: 290px 1fr; gap: 24px; align-items: start; }
-  .filters { position: sticky; z-index: 10; top: calc(var(--toolbar-h, 126px) + 8px); max-height: calc(100vh - var(--toolbar-h, 126px) - 24px); } /* below the sticky toolbar (20), so it never slides over it */
+  .filters { position: sticky; top: calc(var(--toolbar-h, 126px) + 8px); }
   .library { min-height: calc(100vh - var(--toolbar-h, 126px)); } /* tall enough for the panel to stay put, however short the list */
 }
 
@@ -125,7 +125,8 @@ select.btn { appearance: none; padding-right: 14px; max-width: 150px; }
 .filters-foot { padding: 10px 16px 14px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
 .filters-foot .btn { flex: 1; }
 @media (min-width: 900px) {
-  .filters { position: sticky; transform: none; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: none; }
+  /* below the sticky toolbar (20). A sticky panel cannot leave its container, whose bottom is the page padding (136px with the + button) above the window edge, so it must fit above that or it is pushed up over the toolbar */
+  .filters { position: sticky; z-index: 10; max-height: calc(100vh - var(--toolbar-h, 126px) - 144px); transform: none; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: none; }
   .filters .filters-head::before, .filters .filters-foot, .close-sheet { display: none; }
   .open-filters { display: none; }
 }
