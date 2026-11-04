@@ -2,6 +2,7 @@
 import { h, emptyBox, toastAction, askNameDialog, toastError } from './util.js';
 import { stateFromView } from './filters.js';
 import { ttbRangeActive, ttbKindLabel, ttbRangeText } from './ttb.js';
+import { moreButton } from './actionsheet.js';
 import { store, createView, updateView, deleteView, reorderViews } from './api.js';
 
 export function renderViews(root) {
@@ -39,12 +40,14 @@ export function renderViews(root) {
         h('button.btn.pin', { type: 'button', 'aria-label': v.pinned ? 'Unpin from navigation' : 'Pin to navigation', 'aria-pressed': String(v.pinned), title: 'Pin to navigation', onclick: () => guard(() => updateView(v.id, { pinned: !v.pinned })) }, h('span', { 'aria-hidden': 'true' }, '📌')),
         h('button.btn', { type: 'button', 'aria-label': 'Move up', disabled: i === 0 || null, onclick: () => move(i, -1) }, '▲'),
         h('button.btn', { type: 'button', 'aria-label': 'Move down', disabled: i === store.views.length - 1 || null, onclick: () => move(i, 1) }, '▼'),
-        h('button.btn', { type: 'button', 'aria-label': 'Rename', onclick: async () => {
-          const r = await askNameDialog({ title: 'Rename view', name: v.name, icon: v.icon || '⭐' });
-          if (r) guard(() => updateView(v.id, r));
-        } }, '✎'),
-        h('button.btn', { type: 'button', 'aria-label': 'Duplicate', onclick: () => guard(() => createView({ name: `${v.name} copy`, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned }), 'duplicate the view') }, '⧉'),
-        h('button.btn', { type: 'button', 'aria-label': 'Delete', onclick: () => remove(v) }, '🗑')))));
+        moreButton(`More actions for “${v.name}”`, () => ({ title: v.name, lines: [summary(v)], actions: [
+          { label: 'Rename', run: async () => {
+            const r = await askNameDialog({ title: 'Rename view', name: v.name, icon: v.icon || '⭐' });
+            if (r) guard(() => updateView(v.id, r));
+          } },
+          { label: 'Duplicate', run: () => guard(() => createView({ name: `${v.name} copy`, icon: v.icon, filter: v.filter, sort: v.sort, group_by: v.group_by, layout: v.layout, pinned: v.pinned }), 'duplicate the view') },
+          { label: 'Delete', danger: true, run: () => remove(v) },
+        ] }))))));
   }
 
   /** One-line description of what a view filters on. */

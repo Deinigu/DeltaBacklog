@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tally, backlogSize, finishedPerYear, daysBetween, timeInStatus, isPlayed, topGenres, finishedVsDropped, formatDays, niceScale, importBatch,
-  estimate, finishedYear, finishedTime, cleanHoursPerWeek, monthsToClear, formatDuration, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress } from '../static/js/stats.js';
+  estimate, finishedYear, finishedTime, cleanHoursPerWeek, monthsToClear, formatDuration, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, currentSection } from '../static/js/stats.js';
 
 const g = (o) => ({ id: 1, title: 'T', status: 'backlog', platforms: [], genres: [], years: [], periods: [], added_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...o });
 
@@ -272,4 +272,16 @@ test('series progress: completed, in progress, not started; one-game series igno
   ]);
   assert.deepEqual([r.total, r.completed, r.inProgress, r.notStarted], [4, 1, 2, 1]);
   assert.deepEqual(r.closest.map((x) => x.name), ['B', 'C']);
+});
+
+test('currentSection: the section under the sticky chips, the one just passed in a gap, the first before the page starts', () => {
+  const r = [{ id: 'a', top: 100, bottom: 400 }, { id: 'b', top: 410, bottom: 900 }, { id: 'c', top: 910, bottom: 1200 }];
+  assert.equal(currentSection([], 50), null);
+  assert.equal(currentSection(r, 50), 'a'); // above everything: the first
+  assert.equal(currentSection(r, 200), 'a');
+  assert.equal(currentSection(r, 405), 'a'); // in the gap: the one just passed
+  assert.equal(currentSection(r, 500), 'b');
+  assert.equal(currentSection(r, 1300), 'c'); // past the end
+  const s = r.map((x) => ({ ...x, top: x.top - 600, bottom: x.bottom - 600 })); // scrolled by 600
+  assert.equal(currentSection(s, 60), 'b');
 });

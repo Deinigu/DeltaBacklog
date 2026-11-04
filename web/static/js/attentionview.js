@@ -6,7 +6,8 @@ import { store, linkQueue, linkAccept, linkNone, loadLinkPending, attentionIgnor
 import { pickCandidate, openCoverPicker, openPosterPicker } from './add.js';
 import { openDrawer } from './drawer.js';
 import { relinkPrompt } from './relinkprompt.js';
-import { buildGroups, totalOpen, ignoredTotal, syncLine } from './attention.js';
+import { buildGroups, totalOpen, ignoredTotal, syncLine, groupOpen, withGroupOpen } from './attention.js';
+import { moreButton } from './actionsheet.js';
 
 /** What each group's main button says and does. `run(game, row, ctx)` may return a promise. */
 const FIXES = {
@@ -21,13 +22,16 @@ const FIXES = {
   genres: { label: 'Set genres', run: (g) => openDrawer(g, { edit: 'Genres' }) },
 };
 
+// Which groups the person opened or closed, kept for the session (the page is rebuilt every time it is shown).
+const STATE_KEY = 'att-open';
+let openState = (() => { try { return JSON.parse(sessionStorage.getItem(STATE_KEY)) || {}; } catch { return {}; } })();
+const saveState = () => { try { sessionStorage.setItem(STATE_KEY, JSON.stringify(openState)); } catch { /* private window: kept in memory only */ } };
+
 export function renderAttention(root) {
   let queue = null; // null while loading
   let ignored = {};
   let showIgnored = false;
   let alive = true;
-  const open = new Set(); // group keys the person opened (the first group starts open)
-  let firstDraw = true;
   let sync = null; // the bulk HowLongToBeat run: {running, done, total, found, manual, report, failed}
   let poll = 0;
 
@@ -127,25 +131,27 @@ export function renderAttention(root) {
     const main = row.ignored
       ? h('button.btn', { type: 'button', onclick: () => setIgnored(group.key, g, false) }, 'Stop ignoring')
       : h('button.btn.primary', { type: 'button', onclick: () => fix.run(g, row, ctx) }, label);
-    const extra = !row.ignored && group.fix === 'confirm' && row.candidate
-      ? h('button.btn', { type: 'button', onclick: () => ctx.linkByHand(g) }, 'Change…') : null;
-    const absent = !row.ignored && (group.fix === 'link' || group.fix === 'confirm')
-      ? h('button.btn', { type: 'button', onclick: () => ctx.notOnIGDB(g) }, h('span', {}, 'Not on ', brand('IGDB'))) : null;
-    const skip = row.ignored ? null : h('button.btn.att-ignore', { type: 'button', 'aria-label': `Ignore “${g.title}” in this list`, onclick: () => setIgnored(group.key, g, true) }, 'Ignore');
+    // Secondary actions live behind "⋯" (an action sheet), so a long group is one button per row.
+    const more = [];
+    if (!row.ignored) {
+      if (group.fix === 'confirm' && row.candidate) more.push({ label: 'Change…', run: () => ctx.linkByHand(g) });
+      if (group.fix === 'link' || group.fix === 'confirm') more.push({ label: h('span', {}, 'Not on ', brand('IGDB')), run: () => ctx.notOnIGDB(g) });
+      more.push({ label: 'Ignore in this list', run: () => setIgnored(group.key, g, true) });
+    }
     return h('li.att-row' + (row.ignored ? '.is-ignored' : ''), {},
       h('button.att-name', { type: 'button', onclick: () => openDrawer(g) }, h('span.att-title', {}, g.title), sub && h('span.att-sub', {}, sub)),
-      h('div.att-actions', {}, main, extra, absent, skip));
+      h('div.att-actions', {}, main, more.length ? moreButton(`More actions for “${g.title}”`, () => ({ title: g.title, lines: [sub], actions: more })) : null));
   }
 
-  function groupEl(group, i) {
+  function groupEl(group) {
     const n = group.rows.filter((r) => !r.ignored).length;
-    const d = h('details.att-group', { open: open.has(group.key) || (firstDraw && i === 0) },
+    const d = h('details.att-group', { open: groupOpen(openState, group.key, n) },
       h('summary', {}, h('span.att-gtitle', {}, group.title), h('span.att-count', {}, String(n)),
         group.ignoredCount && !showIgnored ? h('span.att-ign-n', {}, `${group.ignoredCount} ignored`) : null),
       group.key === 'no_ttb' ? syncBar(group) : null,
       group.hint ? h('p.hint', {}, group.hint, group.key === 'uncertain' ? [' ', h('a', { href: '#/link' }, 'Review them one by one')] : null) : null,
       h('ul.att-list', {}, group.rows.map((r) => rowEl(group, r))));
-    d.addEventListener('toggle', () => { if (d.open) open.add(group.key); else open.delete(group.key); });
+    d.addEventListener('toggle', () => { if (d.open !== groupOpen(openState, group.key, n)) { openState = withGroupOpen(openState, group.key, d.open); saveState(); } });
     return d;
   }
 
@@ -157,7 +163,6 @@ export function renderAttention(root) {
     const top = [];
     if (!left && !nIgnored) {
       body.replaceChildren(emptyBox('Nothing needs attention. Every game is linked and has its cover, poster and basic details.', h('a.btn', { href: '#/library' }, 'Back to the Library')));
-      firstDraw = false;
       return;
     }
     top.push(h('p.hint', {}, left ? `${left} ${left === 1 ? 'thing' : 'things'} to fix, in ${groups.filter((g) => g.rows.some((r) => !r.ignored)).length} lists.` : 'Everything is fixed.'));
@@ -166,7 +171,6 @@ export function renderAttention(root) {
         showIgnored ? 'Hide ignored' : `Show ${nIgnored} ignored`));
     }
     body.replaceChildren(...top, ...groups.map(groupEl));
-    firstDraw = false;
   }
 
   let raf = 0;

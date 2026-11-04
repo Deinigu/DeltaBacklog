@@ -7,7 +7,7 @@ import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import {
   backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP, DEFAULT_HOURS_PER_WEEK,
-  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration,
+  finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, cleanHoursPerWeek, monthsToClear, formatDuration, currentSection,
 } from './stats.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -255,6 +255,12 @@ export function renderStats(root) {
     h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
     size.morePlatforms > 0 && h('p.hint', {}, `+${size.morePlatforms} more ${size.morePlatforms === 1 ? 'platform' : 'platforms'}`));
 
+  // The chips stick under the top of the screen on a phone (CSS); the one for the section being read is marked.
+  const jump = h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
+    type: 'button', 'data-to': id,
+    onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
+  }, label)));
+
   root.replaceChildren(h('div.stats-page', {},
     h('h1', {}, 'Stats'),
     h('p.hint', {}, `Computed from the ${games.length} games in your library. Hours are estimates: a game's time is its Main + extras time to beat, else the quickest, else the complete one; games with no time add nothing.`),
@@ -263,13 +269,31 @@ export function renderStats(root) {
       tile(num(finishedCount), 'finished'),
       tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
       tile(left.both.known ? approx(left.both) : '—', 'left to play', left.both.known ? `${left.both.known} of ${left.both.total} timed` : 'no times yet')),
-    h('nav.jump', { 'aria-label': 'Jump to a section' }, SECTIONS.map(([id, label]) => h('button', {
-      type: 'button',
-      onclick: () => { const s = root.querySelector(`[data-sec="${id}"]`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.focus({ preventScroll: true }); } },
-    }, label))),
+    jump,
     h('div.stat-grid', {},
       tall(finishedCard), timeLeftCard(left), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
+
+  if (typeof IntersectionObserver === 'function') {
+    const secs = SECTIONS.map(([id]) => root.querySelector(`[data-sec="${id}"]`)).filter(Boolean);
+    let shown = null;
+    const mark = () => {
+      const line = jump.getBoundingClientRect().bottom + 8;
+      const id = currentSection(secs.map((el) => { const b = el.getBoundingClientRect(); return { id: el.dataset.sec, top: b.top, bottom: b.bottom }; }), line);
+      if (id === shown) return;
+      shown = id;
+      for (const b of jump.children) {
+        const on = b.dataset.to === id;
+        if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+        if (on) jump.scrollLeft = b.offsetLeft - (jump.clientWidth - b.offsetWidth) / 2; // keep the chip in view in the row
+      }
+    };
+    // A section entering or leaving the strip just under the chips is the moment the current one can change.
+    const io = new IntersectionObserver(mark, { rootMargin: '-60px 0px -50% 0px', threshold: [0, 1] });
+    secs.forEach((el) => io.observe(el));
+    cleanups.push(() => io.disconnect());
+    mark();
+  }
   return () => cleanups.forEach((f) => f());
 }

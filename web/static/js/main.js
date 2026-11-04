@@ -10,7 +10,9 @@ import { renderUpcoming } from './upcomingview.js';
 import { renderSimilar } from './similarview.js';
 import { renderDeals } from './dealsview.js';
 import { renderHidden } from './hiddenview.js';
-import { closeDrawer, drawerDirty } from './drawer.js';
+import { closeDrawer, drawerDirty, openDrawer, openGameId } from './drawer.js';
+import { gameIdFromHash, hashWithGame } from './gameurl.js';
+import { replaceUrl } from './layers.js';
 import { openAdd } from './add.js';
 import { renderLink } from './link.js';
 import { renderAttention } from './attentionview.js';
@@ -135,6 +137,14 @@ function focusPage() {
   stopFocusWatch = stop;
 }
 
+/** Open the game named in the address (#/library?game=123), after a load, a reload or a pasted link. An unknown id is dropped from the address. */
+function showGame(id) {
+  if (id == null || openGameId() === id) return;
+  const g = store.games.find((x) => x.id === id);
+  if (g) openDrawer(g);
+  else replaceUrl(hashWithGame(location.hash, null));
+}
+
 /** Render the page for the current route. `moved`: the route really changed (not a rebuild of the same page). */
 async function route({ moved = false } = {}) {
   if (!store.loaded) {
@@ -147,6 +157,7 @@ async function route({ moved = false } = {}) {
     loadLinkPending().then(() => { if (store.linkPending > 0) buildNav(); });
     loadDealsUnseen().then(() => { if (store.dealsUnseen > 0) buildNav(); });
   }
+  const want = gameIdFromHash(location.hash); // closing the old page's drawer takes the game out of the address
   const r = resolve(currentPath());
   markActive();
   syncFab(r.path);
@@ -157,6 +168,7 @@ async function route({ moved = false } = {}) {
   closeMore(false);
   cleanup = r.render(view) || null;
   pruneLayers(); // sheets that lived in the old page are gone now
+  showGame(want);
   document.title = pageTitle(r.path, store.views);
   window.scrollTo(0, 0);
   if (moved) focusPage();
@@ -167,7 +179,10 @@ buildNav();
 let lastPath = currentPath();
 window.addEventListener('hashchange', () => {
   const p = currentPath();
-  if (p !== lastPath) { lastPath = p; route({ moved: true }); }
+  if (p !== lastPath) { lastPath = p; route({ moved: true }); return; }
+  // Same page, another game in the address (typed by hand): the drawer follows it.
+  const id = gameIdFromHash(location.hash);
+  if (id == null) { if (openGameId() != null && !drawerDirty()) closeDrawer(); } else showGame(id);
 });
 // Views changed (saved, pinned, renamed...): refresh navigation without re-rendering the open page.
 window.addEventListener('views-changed', buildNav);

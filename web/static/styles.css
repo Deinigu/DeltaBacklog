@@ -1205,3 +1205,25 @@ button.up-open { cursor: pointer; border-radius: 8px; }
   .btn:not(.primary):not(:disabled):hover, .chip:not([aria-pressed="true"]):not([data-state="in"]):not([data-state="ex"]):hover, .cand:hover, .link-cand:hover, .vrow .btn:not(:disabled):hover { border-color: var(--accent); }
   .pill:not(.reset):hover { background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
 }
+
+/* ---- batch 3: per-page usability ---- */
+.act-more { min-width: 44px; padding: 0 12px; font-weight: 700; }
+.att-actions { flex-wrap: nowrap; } /* the main button and "⋯" stay on one line */
+.dl-act.danger-text { color: #b91c1c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dl-act.danger-text { color: #f87171; } }
+:root[data-theme="dark"] .dl-act.danger-text { color: #f87171; }
+
+/* Hidden: the compact Deals-style row (picture, title, where it came from, date) with a small button at its end */
+.hidden-page .up-row, .up-page.hidden-page .up-row { flex-wrap: nowrap; }
+.up-page.hidden-page .up-row .si-actions { flex: none; flex-direction: row; padding-left: 0; }
+.up-page.hidden-page .up-row .si-actions > * { flex: none; padding: 0 12px; }
+
+/* Stats on a phone: the jump chips stay under the top of the screen; the one for the section being read is marked */
+@media (max-width: 899px) {
+  .stats-page .jump { position: sticky; top: 0; z-index: 15; background: var(--bg); margin: 0 -16px; padding: calc(4px + var(--safe-t)) 16px 8px; }
+  .stats-page .jump button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .stats-page .stat-card { scroll-margin-top: calc(64px + var(--safe-t)); }
+}
+
+/* The games table: the focus ring sits inside the cell so the neighbours do not hide it */
+.td:focus-visible { outline-offset: -2px; }

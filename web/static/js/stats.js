@@ -316,3 +316,18 @@ export function seriesProgress(games) {
     .sort((a, b) => (b.finished / b.total) - (a.finished / a.total) || b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
   return { total: list.length, completed: completed.length, inProgress: inProgress.length, notStarted: list.length - completed.length - inProgress.length, closest };
 }
+
+/**
+ * Which section the page is "in" while scrolling: `rects` are [{id, top, bottom}] (viewport coordinates), `line` is the
+ * y just under the sticky chips. It is the section whose top has passed the line last and that is still on screen;
+ * before the first section it is the first one, and past the end of the last one it stays the last.
+ */
+export function currentSection(rects, line) {
+  if (!rects.length) return null;
+  let best = null;
+  for (const r of rects) if (r.top <= line && r.bottom > line && (!best || r.top > best.top)) best = r;
+  if (best) return best.id;
+  const above = rects.filter((r) => r.bottom <= line);
+  if (above.length) return above.reduce((a, r) => (r.bottom > a.bottom ? r : a)).id; // in a gap: the one just passed
+  return rects.reduce((a, r) => (r.top < a.top ? r : a)).id;
+}
