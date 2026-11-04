@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +68,7 @@ type Low struct {
 type Overview struct {
 	Current *Current
 	Low     *Low
+	Alt     *Current // a clearly cheaper offer at a shop the owner ranks lower (see Choose); nil without a ranking
 }
 
 // Source is what the refresh needs from ITAD (the real Client, or a fake in tests).
@@ -115,6 +117,11 @@ type Client struct {
 
 	paceMu sync.Mutex
 	next   time.Time
+
+	shopsMu  sync.Mutex
+	shops    []string
+	shopsFor string
+	shopsAt  time.Time
 
 	// sleep is time.After; tests replace it so a Retry-After does not make them wait.
 	sleep func(time.Duration) <-chan time.Time
@@ -457,4 +464,72 @@ func (c *Client) LowSince(ctx context.Context, id, country string, since time.Ti
 		take(*start)
 	}
 	return low, ok, nil
+}
+
+// Offers is POST /games/prices/v3: every shop's current offer (its regular price when not on sale) for up to
+// MaxOffersBatch games, in one request.
+func (c *Client) Offers(ctx context.Context, ids []string, country string) (map[string][]Current, error) {
+	if len(ids) == 0 {
+		return map[string][]Current{}, nil
+	}
+	if len(ids) > MaxOffersBatch {
+		return nil, fmt.Errorf("at most %d games per call", MaxOffersBatch)
+	}
+	var out []struct {
+		ID    string `json:"id"`
+		Deals []struct {
+			Shop    apiShop  `json:"shop"`
+			Price   apiMoney `json:"price"`
+			Regular apiMoney `json:"regular"`
+			Cut     int      `json:"cut"`
+			URL     string   `json:"url"`
+			Expiry  string   `json:"expiry"`
+		} `json:"deals"`
+	}
+	q := url.Values{"country": {country}, "vouchers": {"false"}}
+	if err := c.call(ctx, http.MethodPost, "/games/prices/v3", q, ids, &out); err != nil {
+		return nil, err
+	}
+	res := make(map[string][]Current, len(out))
+	for _, g := range out {
+		for _, d := range g.Deals {
+			if d.Price.Currency == "" || d.Shop.Name == "" {
+				continue
+			}
+			res[g.ID] = append(res[g.ID], Current{Shop: d.Shop.Name, Price: Money{d.Price.AmountInt, d.Price.Currency},
+				Regular: Money{d.Regular.AmountInt, d.Regular.Currency}, Cut: clampCut(d.Cut), URL: webURL(d.URL), Expiry: d.Expiry})
+		}
+	}
+	return res, nil
+}
+
+// shopsTTL: the list of shops hardly changes, so one read serves a day.
+const shopsTTL = 24 * time.Hour
+
+// Shops is GET /service/shops/v1: the names of the shops ITAD tracks in a country, sorted. Cached for a day.
+func (c *Client) Shops(ctx context.Context, country string) ([]string, error) {
+	c.shopsMu.Lock()
+	if c.shopsFor == country && time.Since(c.shopsAt) < shopsTTL && c.shops != nil {
+		out := append([]string(nil), c.shops...)
+		c.shopsMu.Unlock()
+		return out, nil
+	}
+	c.shopsMu.Unlock()
+	var list []struct {
+		Title string `json:"title"`
+	}
+	if err := c.call(ctx, http.MethodGet, "/service/shops/v1", url.Values{"country": {country}}, nil, &list); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(list))
+	for _, s := range list {
+		if ValidShopName(s.Title) {
+			names = append(names, s.Title)
+		}
+	}
+	sort.Slice(names, func(i, j int) bool { return strings.ToLower(names[i]) < strings.ToLower(names[j]) })
+	c.shopsMu.Lock()
+	c.shops, c.shopsFor, c.shopsAt = names, country, time.Now()
+	c.shopsMu.Unlock()
+	return append([]string(nil), names...), nil
 }

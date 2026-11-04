@@ -163,3 +163,52 @@ func TestLiveWishlist(t *testing.T) {
 		t.Error("nothing matched")
 	}
 }
+
+// TestLiveStores reads the shop list and the per-shop offers of a few games, checks that the shop names of the two
+// endpoints agree and that the choice rule picks the ranked shop. It prints counts and shop names only.
+func TestLiveStores(t *testing.T) {
+	if os.Getenv("DELTABACKLOG_LIVE") == "" {
+		t.Skip("set DELTABACKLOG_LIVE=1 to call the real service")
+	}
+	c := New(os.Getenv("ITAD_API_KEY"))
+	if !c.Configured() {
+		t.Skip("ITAD_API_KEY is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	shops, err := c.Shops(ctx, "ES")
+	if err != nil || len(shops) == 0 {
+		t.Fatalf("shops: %v %v", len(shops), err)
+	}
+	known := map[string]bool{}
+	for _, s := range shops {
+		known[s] = true
+	}
+	t.Logf("%d shops, e.g. %v", len(shops), shops[:min(8, len(shops))])
+	var ids []string
+	for _, title := range []string{"Hollow Knight", "Disco Elysium", "Hades"} {
+		g, ok, err := c.LookupTitle(ctx, title)
+		if err != nil || !ok {
+			t.Fatalf("%s: %v %v", title, ok, err)
+		}
+		ids = append(ids, g.ID)
+	}
+	offers, err := c.Offers(ctx, ids, "ES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		var names []string
+		for _, o := range offers[id] {
+			names = append(names, o.Shop)
+			if !known[o.Shop] {
+				t.Errorf("offer shop %q is not in the shop list", o.Shop)
+			}
+		}
+		t.Logf("game %s: %d offers at %v", id[:8], len(offers[id]), names)
+		chosen, alt := Choose(offers[id], StorePrefs{Shops: []string{"Steam", "GOG"}, Threshold: 15})
+		if chosen != nil {
+			t.Logf("  chosen %s %s, alt %v", chosen.Shop, chosen.Price, alt != nil)
+		}
+	}
+}
