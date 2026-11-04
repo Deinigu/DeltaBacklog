@@ -1131,7 +1131,7 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .dl-act { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); text-decoration: none; font-weight: 600; padding: 0 14px; }
 .dl-act.dl-close { margin-top: 6px; width: 100%; background: none; color: var(--muted); }
 .dl-panel-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.dl-altline { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-altline { display: block; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .dl-stores { max-width: 460px; }
 .dl-stores-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .dl-stores-body .hint { margin: 0; }
