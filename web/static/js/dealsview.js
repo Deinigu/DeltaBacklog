@@ -138,13 +138,13 @@ export function renderDeals(root) {
     closeSheet();
     const p = o.p;
     const link = p && p.price != null ? safeLink(p.url) : null;
+    const altLink = p && altLine(p) ? safeLink(p.alt_url) : null;
     const act = (label, fn, cls = '') => h('button.dl-act' + cls, { type: 'button', onclick: () => { closeSheet(); fn(); } }, label);
     const actions = [
       link ? h('a.dl-act', { href: link, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab('View deal')) : null,
       altLink ? h('a.dl-act', { href: altLink, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(`View at ${p.alt_shop}`)) : null,
       ...o.actions.map((a) => (a.href ? h('a.dl-act', { href: a.href, target: '_blank', rel: 'noopener noreferrer', onclick: closeSheet }, newTab(a.label.replace(/ ↗$/, ''))) : act(a.label, a.run))),
     ];
-    const altLink = p && altLine(p) ? safeLink(p.alt_url) : null;
     const lines = p ? [priceLine(p), altLine(p) ? `Cheaper: ${altLine(p)}` : null, lowLine(p) + (p.low_at && p.low_price != null ? `, ${formatDate(p.low_at)}` : ''),
       p.price != null && p.expiry && formatDate(p.expiry) ? `Ends ${formatDate(p.expiry)}` : null] : [o.note];
     const dlg = h('dialog.dl-sheet', { 'aria-label': `${o.title}: actions` },
