@@ -2,6 +2,7 @@
 import { ttbMinutes } from './ttb.js';
 import { ttbState } from './ttbscope.js';
 import { buildSeries } from './series.js';
+import { progressOf } from './serieslist.js';
 
 export const WAITING = ['backlog', 'up_next'];                  // "the backlog" for the size and platform counts
 export const WAITING_STATUSES = ['backlog', 'up_next', 'hold']; // statuses where "time waiting" is meaningful
@@ -291,15 +292,17 @@ export function yearByYear(games) {
 
 /**
  * Series of the library with two games or more (a series of one has nothing to complete), from the games in the
- * library only: completed (every game finished), in progress (some played, not all finished), not started.
+ * library only: completed (every game you own finished), in progress (some played, not completed), not started. The rules and
+ * the numbers are the Series page's (progressOf and `owned` from serieslist.js / series.js), so the two pages always agree.
  */
 export function seriesProgress(games) {
   const list = buildSeries(games).filter((s) => s.total >= 2);
-  const completed = list.filter((s) => s.finished === s.total);
-  const inProgress = list.filter((s) => s.finished < s.total && s.played > 0);
-  const closest = inProgress.map((s) => ({ name: s.name, finished: s.finished, total: s.total }))
-    .sort((a, b) => (b.finished / b.total) - (a.finished / a.total) || b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
-  return { total: list.length, completed: completed.length, inProgress: inProgress.length, notStarted: list.length - completed.length - inProgress.length, closest };
+  const by = (key) => list.filter((s) => progressOf(s) === key);
+  const inProgress = by('progress');
+  const share = (x) => (x.total ? x.finished / x.total : 0);
+  const closest = inProgress.map((s) => ({ name: s.name, finished: s.finished, total: s.owned }))
+    .sort((a, b) => share(b) - share(a) || b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
+  return { total: list.length, completed: by('completed').length, inProgress: inProgress.length, notStarted: by('notstarted').length, closest };
 }
 
 /**

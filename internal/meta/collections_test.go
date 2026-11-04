@@ -24,7 +24,7 @@ func collectionFake(t *testing.T, queries *[]string) *Client {
 		switch {
 		case strings.Contains(q, "similar_games.name"): // SimilarGames: a DLC, a port and an unnamed game slip through the fake
 			w.Write([]byte(`[{"id":10,"similar_games":[
-			 {"id":20,"name":"Alpha","first_release_date":1104537600,"game_type":0,"cover":{"image_id":"ca"},"release_dates":[{"date":1104537600,"date_format":0}]},
+			 {"id":20,"name":"Alpha","first_release_date":1104537600,"game_type":0,"cover":{"image_id":"ca"},"release_dates":[{"date":1104537600,"date_format":0}],"genres":[{"name":"Adventure"}],"platforms":[{"abbreviation":"PC"},{"name":"Switch"}]},
 			 {"id":21,"name":"Alpha Remake","game_type":8,"parent_game":20},
 			 {"id":22,"name":"Alpha DLC","game_type":1},
 			 {"id":23,"name":"Alpha Port","game_type":11,"parent_game":20},
@@ -188,7 +188,8 @@ func TestSimilarGamesKeepsOnlyRealGames(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := got[10]
-	if len(list) != 2 || list[0].IGDBID != 20 || list[0].Year != 2005 || list[0].CoverID != "ca" || list[0].Release.Date != 1104537600 {
+	if len(list) != 2 || list[0].IGDBID != 20 || list[0].Year != 2005 || list[0].CoverID != "ca" || list[0].Release.Date != 1104537600 ||
+		strings.Join(list[0].Genres, ",") != "Adventure" || strings.Join(list[0].Platforms, ",") != "PC,Switch" {
 		t.Fatalf("%+v", list)
 	}
 	if list[1].IGDBID != 21 || list[1].GameType != 8 || list[1].ParentID != 0 { // a remake's parent_game is not a version link

@@ -281,3 +281,25 @@ test('currentSection: the section under the sticky chips, the one just passed in
   // a section jumped to sits a little below the line (scroll margin): the line has slack, so it still counts
   assert.equal(currentSection([{ id: 'a', top: -300, bottom: 64 }, { id: 'b', top: 64.3, bottom: 800 }], 72), 'b');
 });
+
+test('Stats and the Series page agree on which series are completed (a finished + unfinished Nope series is completed on both)', async () => {
+  const { buildSeries } = await import('../static/js/series.js');
+  const { filterSeries, emptySeriesFilter } = await import('../static/js/serieslist.js');
+  const s = (series, status, id, ownership = 'Owned') => g({ id, series, status, ownership });
+  const games = [
+    s('A', 'finished', 1), s('A', 'finished', 2),
+    s('N', 'finished', 3), s('N', 'backlog', 4, 'Nope'), // completed: the unfinished game is not owned
+    s('B', 'finished', 5), s('B', 'backlog', 6, 'Borrowed'), // not completed: owned and unfinished
+    s('C', 'backlog', 7), s('C', 'backlog', 8),
+    s('M', 'playing', 9), s('M', 'backlog', 10, 'Nope'), s('M', 'backlog', 11),
+  ];
+  const r = seriesProgress(games);
+  const page = (key) => filterSeries(buildSeries(games), { ...emptySeriesFilter(), progress: new Set([key]) }, 'name', new Map()).filter((x) => x.total >= 2);
+  assert.equal(r.completed, page('completed').length);
+  assert.equal(r.completed, 2);
+  assert.equal(r.inProgress, page('progress').length);
+  assert.equal(r.notStarted, page('notstarted').length);
+  assert.deepEqual([r.total, r.completed, r.inProgress, r.notStarted], [5, 2, 2, 1]);
+  assert.deepEqual(r.closest.find((x) => x.name === 'M'), { name: 'M', finished: 0, total: 2 }); // owned games only, like the Series tile
+  assert.deepEqual(r.closest.find((x) => x.name === 'B'), { name: 'B', finished: 1, total: 2 });
+});

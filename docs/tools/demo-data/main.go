@@ -102,6 +102,7 @@ func split(s string) []string {
 func main() {
 	dataDir := flag.String("data", "./demo-data", "data directory to create (app.db and covers/)")
 	envFile := flag.String("env", "", "a .env file with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET and STEAMGRIDDB_API_KEY, to download real covers")
+	fakeIGDB := flag.Bool("fake-igdb", false, "fill the series and similar-games caches with made-up games (for the browser smoke test; no IGDB needed)")
 	flag.Parse()
 	if *envFile != "" {
 		loadEnv(*envFile)
@@ -322,6 +323,9 @@ func main() {
 		WHERE appid IN (SELECT appid FROM wish_price WHERE cur_price > 500 AND cur_shop <> 'GOG' AND max(cur_price * 7 / 10, coalesce(low_price, 0)) * 100 < cur_price * 85 ORDER BY appid LIMIT 1)`)
 	must(err)
 	must(tx.Commit())
+	if *fakeIGDB {
+		seedFakeIGDB(d)
+	}
 
 	for i, g := range games {
 		name, err := covers.Save(bytes.NewReader(cover(g.title)), filepath.Join(*dataDir, "covers"), ids[i])

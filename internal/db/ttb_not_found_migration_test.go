@@ -53,7 +53,7 @@ func TestTTBNotFoundMigration(t *testing.T) {
 		}
 		return n
 	}
-	if v := count(`PRAGMA user_version`); v != 23 {
+	if v := count(`PRAGMA user_version`); v != 24 {
 		t.Fatalf("version %d", v)
 	}
 	if count(`SELECT count(*) FROM game`) != 2 || count(`SELECT time_to_beat_normally FROM game WHERE id = 1`) != 600 {

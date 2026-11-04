@@ -30,6 +30,7 @@ type CollectionGame struct {
 	CoverID   string   // IGDB image id ("" when the game has no cover)
 	Release   Release  // the full first release date (zero when IGDB has none or says TBD)
 	Platforms []string // IGDB platforms, abbreviated
+	Genres    []string // IGDB genres (read for similar games only)
 }
 
 // realGameTypes are the IGDB game_type values that count as a game of a series: 0 main game, 4 standalone expansion,
@@ -136,7 +137,8 @@ func (c *Client) SimilarGames(ctx context.Context, igdbIDs []int64) (map[int64][
 	}
 	var games []igdbGame
 	q := fmt.Sprintf("fields similar_games.name,similar_games.first_release_date,similar_games.release_dates.date,similar_games.release_dates.date_format,"+
-		"similar_games.game_type,similar_games.parent_game,similar_games.version_parent,similar_games.cover.image_id; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
+		"similar_games.game_type,similar_games.parent_game,similar_games.version_parent,similar_games.cover.image_id,"+
+		"similar_games.genres.name,similar_games.platforms.abbreviation,similar_games.platforms.name; where id = (%s); limit %d;", idList(igdbIDs), len(igdbIDs))
 	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {
 		return nil, err
 	}
@@ -147,6 +149,8 @@ func (c *Client) SimilarGames(ctx context.Context, igdbIDs []int64) (map[int64][
 				continue
 			}
 			cg := CollectionGame{IGDBID: s.ID, Name: strings.TrimSpace(s.Name), GameType: s.GameType, ParentID: s.parent(), CoverID: s.Cover.ImageID, Release: s.release()}
+			c := s.candidate()
+			cg.Platforms, cg.Genres = c.Platforms, c.Genres
 			if s.FirstReleaseDate > 0 {
 				cg.Year = time.Unix(s.FirstReleaseDate, 0).UTC().Year()
 			}

@@ -31,8 +31,8 @@ const ALL_PAGES = [
 const only = (process.env.SMOKE_PAGES || '').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGES = only.length ? ALL_PAGES.filter((p) => only.some((w) => p.includes(w))) : ALL_PAGES;
 const WIDTHS = [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 900 }];
-// Controls that change data in ways that end the page, or call services outside the demo, are not clicked.
-const SKIP = /delete|remove|refresh|send|sync|find times|fetch|export|download|import|upload|re-?link|unlink|test message|check now/i;
+// Controls that change data in ways that end the page, or call services outside the demo, are not clicked. (Add on a made-up IGDB game asks IGDB for it.)
+const SKIP = /add .* to your library|delete|remove|refresh|send|sync|find times|fetch|export|download|import|upload|re-?link|unlink|test message|check now/i;
 
 const freePort = () => new Promise((res, rej) => { const s = createServer(); s.on('error', rej); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => res(port)); }); });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -41,7 +41,7 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/IGD
 const tmp = mkdtempSync(join(tmpdir(), 'deltabacklog-smoke-'));
 const data = join(tmp, 'data');
 const exe = join(tmp, process.platform === 'win32' ? 'deltabacklog-smoke.exe' : 'deltabacklog-smoke');
-for (const args of [['run', './docs/tools/demo-data', '-data', data], ['build', '-buildvcs=false', '-o', exe, './cmd/deltabacklog']]) {
+for (const args of [['run', './docs/tools/demo-data', '-fake-igdb', '-data', data], ['build', '-buildvcs=false', '-o', exe, './cmd/deltabacklog']]) {
   if (spawnSync('go', args, { cwd: ROOT, env, stdio: 'inherit' }).status !== 0) { console.error('go failed (is Go on PATH?)'); process.exit(1); }
 }
 const port = await freePort();
@@ -91,7 +91,7 @@ try {
         await wait(250);
         // Close what the click opened (sheet, drawer, menu) and go back to the page if it navigated away.
         await p.keyboard.press('Escape'); await wait(100); await p.keyboard.press('Escape'); await wait(100);
-        if (!p.url().endsWith(hash)) { where = hash; await open(); }
+        if (p.url().split('?')[0] !== `${BASE}/${hash.split('?')[0]}`) { where = hash; await open(); } // a page rewrites its own query (filters): only leaving the page counts
       }
       console.log(`${vp.width}px ${hash}: ${clicked} controls clicked`);
     }

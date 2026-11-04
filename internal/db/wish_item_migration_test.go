@@ -56,7 +56,7 @@ func TestWishItemMigration(t *testing.T) {
 		}
 		return n
 	}
-	if v := count(`PRAGMA user_version`); v != 23 {
+	if v := count(`PRAGMA user_version`); v != 24 {
 		t.Fatalf("version %d", v)
 	}
 	if count(`SELECT count(*) FROM game`) != 1 || count(`SELECT count(*) FROM deal_match`) != 1 || count(`SELECT cur_price FROM deal_price`) != 500 ||

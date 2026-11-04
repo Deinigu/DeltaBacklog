@@ -19,6 +19,9 @@ export function compareInSeries(a, b) {
   return collator.compare(a.title, b.title) || a.id - b.id;
 }
 
+/** A library game the owner does not have (ownership "Nope") and has not finished: it is in the series' total but not in its progress. */
+export const isNotOwned = (g) => !isFinished(g) && String(g.ownership ?? '').trim().toLowerCase() === 'nope';
+
 const keyOf = (name) => name.trim().toLowerCase();
 
 /**
@@ -40,6 +43,9 @@ export function buildSeries(games) {
   for (const s of out) {
     s.games.sort(compareInSeries);
     s.total = s.games.length;
+    s.notOwned = s.games.filter(isNotOwned).length; // left out of the progress: owned = total - notOwned
+    s.owned = s.total - s.notOwned;
+    s.playedOwned = s.games.filter((g) => !isNotOwned(g) && isPlayed(g)).length;
     s.finished = s.games.filter(isFinished).length;
     s.played = s.games.filter(isPlayed).length;
     s.left = s.games.filter(isLeft).length;
@@ -53,15 +59,15 @@ export const withLeft = (series) => series.filter((s) => s.left > 0);
 
 /** Bar segment widths in percent: finished, played but not finished, and the rest. */
 export function barShares(s) {
-  if (!s.total) return { finished: 0, played: 0, rest: 100 };
-  const finished = (s.finished / s.total) * 100;
-  const played = ((s.played - s.finished) / s.total) * 100;
+  if (!s.owned) return { finished: 0, played: 0, rest: 100 };
+  const finished = (s.finished / s.owned) * 100;
+  const played = ((s.playedOwned - s.finished) / s.owned) * 100;
   return { finished, played, rest: 100 - finished - played };
 }
 
 /** "3 finished · 4 played · 5 games" for the series header and screen readers. */
 export function progressText(s) {
-  return `${s.finished} finished · ${s.played} played · ${s.total} ${s.total === 1 ? 'game' : 'games'}`;
+  return `${s.finished} finished · ${s.played} played · ${s.total} ${s.total === 1 ? 'game' : 'games'}${s.notOwned ? ` · ${s.notOwned} not owned` : ''}`;
 }
 
 /**
