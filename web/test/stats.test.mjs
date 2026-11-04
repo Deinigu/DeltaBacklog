@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tally, backlogSize, finishedPerYear, daysBetween, timeInStatus, isPlayed, topGenres, finishedVsDropped, formatDays, niceScale, importBatch,
-  estimate, finishedYear, finishedTime, cleanHoursPerWeek, monthsToClear, formatDuration, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, currentSection } from '../static/js/stats.js';
+  estimate, finishedYear, finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, currentSection } from '../static/js/stats.js';
 
 const g = (o) => ({ id: 1, title: 'T', status: 'backlog', platforms: [], genres: [], years: [], periods: [], added_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...o });
 
@@ -169,8 +169,16 @@ const t = (o) => g({ ttb_normally: null, ttb_hastily: null, ttb_completely: null
 
 test('estimate adds the usual time, falls back to quick then complete, and skips games with no time', () => {
   const r = estimate([t({ ttb_normally: 600 }), t({ ttb_hastily: 300 }), t({ ttb_completely: 900 }), t({}), t({ ttb_normally: 0 })]);
-  assert.deepEqual(r, { minutes: 1800, hours: 30, known: 3, total: 5 });
-  assert.deepEqual(estimate([]), { minutes: 0, hours: 0, known: 0, total: 0 });
+  assert.deepEqual(r, { minutes: 1800, hours: 30, known: 3, total: 5, missing: 2, none: 0 });
+  assert.deepEqual(estimate([]), { minutes: 0, hours: 0, known: 0, total: 0, missing: 0, none: 0 });
+});
+
+test('estimate only counts the statuses of the shared rule, and tells "no time exists" from missing', () => {
+  const r = estimate([
+    t({ status: 'finished', ttb_normally: 600 }), t({ status: 'finished' }), t({ status: 'finished', ttb_not_found: true }),
+    t({ status: 'dropped', ttb_normally: 6000 }), t({ status: 'evergreen' }), t({ status: 'hold', ttb_normally: 6000 }),
+  ]);
+  assert.deepEqual(r, { minutes: 600, hours: 10, known: 1, total: 3, missing: 1, none: 1 });
 });
 
 test('finished time: a game finished in several years counts once, in its latest; periods and unknowns are apart', () => {
@@ -182,7 +190,7 @@ test('finished time: a game finished in several years counts once, in its latest
     t({ status: 'finished', ttb_normally: 600 }),
     t({ status: 'dropped', years: [2022], ttb_normally: 6000 }),
   ]);
-  assert.deepEqual(r.all, { minutes: 3000, hours: 50, known: 4, total: 5 });
+  assert.deepEqual(r.all, { minutes: 3000, hours: 50, known: 4, total: 5, missing: 1, none: 0 });
   assert.deepEqual(r.perYear.map((b) => [b.year, b.count, b.hours, b.known]), [[2021, 2, 30, 2], [2022, 0, 0, 0], [2023, 1, 0, 0]]);
   assert.equal(r.periods, 1);
   assert.equal(r.unknown, 1);
@@ -199,25 +207,9 @@ test('finished time with nothing finished is empty, not an error', () => {
   assert.equal(finishedYear(g({})), null);
 });
 
-test('weekly hours maths: months, rounding of the input, durations', () => {
-  assert.equal(cleanHoursPerWeek('abc'), 10);
-  assert.equal(cleanHoursPerWeek(0), 10);
-  assert.equal(cleanHoursPerWeek(7.6), 8);
-  assert.equal(cleanHoursPerWeek(9999), 168);
-  assert.ok(Math.abs(monthsToClear(435, 10) - 10) < 0.05);          // 43.5 weeks
-  assert.equal(formatDuration(0), '');
-  assert.equal(formatDuration(0.5), 'about 2 weeks');
-  assert.equal(formatDuration(0.1), 'about 1 week');
-  assert.equal(formatDuration(1), 'about 1 month');
-  assert.equal(formatDuration(5.4), 'about 5 months');
-  assert.equal(formatDuration(30), 'about 2.5 years');
-});
-
-test('time left is split between up next and backlog and ignores other statuses', () => {
-  const r = timeLeft([t({ status: 'up_next', ttb_normally: 600 }), t({ status: 'backlog', ttb_normally: 1200 }), t({ status: 'backlog' }), t({ status: 'hold', ttb_normally: 6000 })]);
-  assert.deepEqual([r.upNext.hours, r.upNext.known, r.upNext.total], [10, 1, 1]);
-  assert.deepEqual([r.backlog.hours, r.backlog.known, r.backlog.total], [20, 1, 2]);
-  assert.deepEqual([r.both.hours, r.both.known, r.both.total], [30, 2, 3]);
+test('time left adds up Up next and Backlog, not the other statuses', () => {
+  const r = timeLeft([t({ status: 'up_next', ttb_normally: 600 }), t({ status: 'backlog', ttb_normally: 1200 }), t({ status: 'backlog' }), t({ status: 'hold', ttb_normally: 6000 }), t({ status: 'finished', ttb_normally: 6000 })]);
+  assert.deepEqual([r.hours, r.known, r.total, r.missing], [30, 2, 3, 1]);
 });
 
 test('outcomes need at least five finished + dropped games per group', () => {

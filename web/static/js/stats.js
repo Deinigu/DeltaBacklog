@@ -1,5 +1,6 @@
 // Backlog statistics computed from the games already in memory. Pure (no DOM): unit-tested.
 import { ttbMinutes } from './ttb.js';
+import { ttbState } from './ttbscope.js';
 import { buildSeries } from './series.js';
 
 export const WAITING = ['backlog', 'up_next'];                  // "the backlog" for the size and platform counts
@@ -156,20 +157,24 @@ export function niceScale(maxValue, wanted = 4) {
 // ---------------------------------------------------------------------------------------------------------------
 
 export const MIN_GROUP = 5;             // a genre or platform needs this many finished + dropped games to get a finish rate
-export const DEFAULT_HOURS_PER_WEEK = 10;
-export const MAX_HOURS_PER_WEEK = 168;
-const WEEKS_PER_MONTH = 52.1775 / 12;
 
 const hoursOf = (minutes) => Math.round(minutes / 60);
 
-/** Estimated time of a set of games: { minutes, hours (rounded), known (games with a time), total }. Games without a time add nothing. */
+/**
+ * Estimated time of a set of games: { minutes, hours (rounded), known (games with a time), total, missing, none }.
+ * Only games whose status needs a time (the rule in ttbscope.js, the same one Needs attention lists) are counted, so
+ * `total` is those games. Of the ones without a time, `none` are marked "no time on HowLongToBeat" (no time exists)
+ * and `missing` are the rest: the ones Needs attention lists to be fixed. Games without a time add nothing.
+ */
 export function estimate(games) {
-  let minutes = 0, known = 0;
+  let minutes = 0, known = 0, missing = 0, none = 0, total = 0;
   for (const g of games) {
-    const m = ttbMinutes(g);
-    if (m !== null) { minutes += m; known++; }
+    const state = ttbState(g);
+    if (state === null) continue;
+    total++;
+    if (state === 'known') { minutes += ttbMinutes(g); known++; } else if (state === 'none') none++; else missing++;
   }
-  return { minutes, hours: hoursOf(minutes), known, total: games.length };
+  return { minutes, hours: hoursOf(minutes), known, total, missing, none };
 }
 
 /** The year a finished game belongs to: the latest year played, or null (only periods, or nothing recorded). */
@@ -214,28 +219,8 @@ export function finishedTime(games, limit = 6) {
   return { all: estimate(fin), perYear, periods, unknown, genres: group((g) => g.genres, 'No genre'), platforms: group((g) => g.platforms, 'No platform') };
 }
 
-/** Hours a week -> a whole number from 1 to 168, or the default for anything unreadable. */
-export function cleanHoursPerWeek(v) {
-  const n = Math.round(Number(v));
-  return Number.isFinite(n) && n >= 1 ? Math.min(MAX_HOURS_PER_WEEK, n) : DEFAULT_HOURS_PER_WEEK;
-}
-
-/** Calendar months needed to play `hours` at `perWeek` hours a week (a month is 4.35 weeks). */
-export const monthsToClear = (hours, perWeek) => hours / cleanHoursPerWeek(perWeek) / WEEKS_PER_MONTH;
-
-/** "about 3 weeks", "about 5 months", "about 2.4 years"; "" for no hours. */
-export function formatDuration(months) {
-  if (!(months > 0)) return '';
-  if (months < 1) { const w = Math.max(1, Math.round(months * WEEKS_PER_MONTH)); return `about ${w} week${w === 1 ? '' : 's'}`; }
-  if (months < 24) { const m = Math.round(months); return `about ${m} month${m === 1 ? '' : 's'}`; }
-  return `about ${+(months / 12).toFixed(1)} years`;
-}
-
-/** Time left: the estimate for Up next and Backlog separately, and together. */
-export function timeLeft(games) {
-  const of = (s) => estimate(games.filter((g) => g.status === s));
-  return { upNext: of('up_next'), backlog: of('backlog'), both: estimate(games.filter((g) => WAITING.includes(g.status))) };
-}
+/** Time left: the estimate for the games waiting (Up next and Backlog together). */
+export const timeLeft = (games) => estimate(games.filter((g) => WAITING.includes(g.status)));
 
 /**
  * Finished against dropped per genre or per platform (`key` = 'genres' | 'platforms'), only for groups with at least

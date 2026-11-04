@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { syncLine, problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, TTB_STATUSES, groupOpen, withGroupOpen, OPEN_AT_MOST } from '../static/js/attention.js';
+import { syncLine, problemsOf, buildGroups, posterState, totalOpen, ignoredTotal, groupOpen, withGroupOpen, OPEN_AT_MOST } from '../static/js/attention.js';
 
 const ok = (o = {}) => ({ id: 1, title: 'A', status: 'finished', cover: 'c.jpg', poster: 'p.jpg', poster_src: 'igdb', poster_user: false, igdb_id: 5, igdb_not_found: false,
   platforms: ['PC'], genres: ['RPG'], release_year: 2020, ownership: 'Owned', ttb_normally: 600, ...o });
@@ -21,11 +21,23 @@ test('poster: none, crop, a crop the owner chose is fine', () => {
   assert.deepEqual(problemsOf(ok({ poster_src: 'crop' })), [['poster', 'Only a crop of the cover']]);
 });
 
-test('time to beat only matters for games about to be played', () => {
-  assert.deepEqual([...TTB_STATUSES].sort(), ['backlog', 'playing', 'up_next']);
+test('time to beat: waiting and finished games, in two groups; dropped and evergreen are not listed', () => {
   assert.deepEqual(keys(ok({ status: 'backlog', ttb_normally: null })), ['no_ttb']);
-  assert.deepEqual(keys(ok({ status: 'finished', ttb_normally: null })), []);
+  assert.deepEqual(keys(ok({ status: 'playing', ttb_normally: null })), ['no_ttb']);
+  assert.deepEqual(keys(ok({ status: 'finished', ttb_normally: null })), ['no_ttb_finished']);
+  for (const status of ['dropped', 'evergreen', 'playing_evergreen', 'hold']) assert.deepEqual(keys(ok({ status, ttb_normally: null })), [], status);
   assert.deepEqual(keys(ok({ status: 'backlog', ttb_normally: null, ttb_hastily: 90 })), []);
+});
+
+test('a game marked "no time on HowLongToBeat" is an ignored row, not an open one', () => {
+  const games = [ok({ id: 1, title: 'A', ttb_normally: null }), ok({ id: 2, title: 'B', ttb_normally: null, ttb_not_found: true }), ok({ id: 3, title: 'C', status: 'backlog', ttb_normally: null, ttb_not_found: true })];
+  let g = buildGroups(games);
+  assert.deepEqual(g.map((x) => [x.key, x.rows.length, x.ignoredCount]), [['no_ttb_finished', 1, 1]]);
+  g = buildGroups(games, [], {}, true);
+  assert.deepEqual(g.map((x) => [x.key, x.rows.map((r) => [r.game.id, r.ignored, r.marked])]), [['no_ttb', [[3, true, true]]], ['no_ttb_finished', [[1, false, false], [2, true, true]]]]);
+  assert.equal(ignoredTotal(games), 2);
+  // a time found later makes the mark irrelevant
+  assert.deepEqual(keys(ok({ ttb_normally: 300, ttb_not_found: true })), []);
 });
 
 test('missing fields', () => {

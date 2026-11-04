@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -11,8 +12,24 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/hltb"
 )
 
-// ttbSyncGroup is the Needs attention group the bulk lookup works for (its ignore list is honoured).
-const ttbSyncGroup = "no_ttb"
+// The statuses that need a time to beat. Keep in sync with web/static/js/ttbscope.js (the one rule Stats and Needs
+// attention share): Stats estimates finished games and the waiting ones, so those are the games a missing time matters for.
+const ttbStatusList = "'backlog', 'up_next', 'playing', 'finished'"
+
+// ttbSyncGroups are the Needs attention groups the bulk lookup works for (their ignore lists are honoured).
+var ttbSyncGroups = []string{"no_ttb", "no_ttb_finished"}
+
+// ttbIgnored is the set of games ignored in any of the groups the bulk lookup works for.
+func (s *Server) ttbIgnored() map[int64]bool {
+	skip := map[int64]bool{}
+	all := s.loadIgnored()
+	for _, g := range ttbSyncGroups {
+		for _, id := range all[g] {
+			skip[id] = true
+		}
+	}
+	return skip
+}
 
 // ttbJob is the state of the one background "Find times for all" run (the Needs attention page polls it).
 type ttbJob struct {
@@ -54,15 +71,13 @@ type ttbGame struct {
 	year  int
 }
 
-// ttbTodo lists the games the lookup is for: in Backlog, Up Next or Playing, with no time at all, not ignored in the group.
+// ttbTodo lists the games the lookup is for: in a status that needs a time, with no time at all, not ignored in a group
+// and not marked "no time on HowLongToBeat".
 func (s *Server) ttbTodo() ([]ttbGame, error) {
-	skip := map[int64]bool{}
-	for _, id := range s.loadIgnored()[ttbSyncGroup] {
-		skip[id] = true
-	}
+	skip := s.ttbIgnored()
 	rows, err := s.DB.Query(`SELECT g.id, g.title, coalesce(g.release_year, 0) FROM game g JOIN status s ON s.id = g.status_id
-		WHERE s.code IN ('backlog', 'up_next', 'playing') AND g.time_to_beat_hastily IS NULL AND g.time_to_beat_normally IS NULL
-		AND g.time_to_beat_completely IS NULL ORDER BY g.title_sort`)
+		WHERE s.code IN (` + ttbStatusList + `) AND g.time_to_beat_hastily IS NULL AND g.time_to_beat_normally IS NULL
+		AND g.time_to_beat_completely IS NULL AND g.ttb_not_found = 0 ORDER BY g.title_sort`)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +137,7 @@ loop:
 			break
 		}
 		// the owner may have ignored the game since the run started
-		ignored := false
-		for _, id := range s.loadIgnored()[ttbSyncGroup] {
-			ignored = ignored || id == g.id
-		}
-		if !ignored {
+		if !s.ttbSkipped(g.id) {
 			sctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 			res, err := client.Search(sctx, g.title, g.year)
 			cancel()
@@ -218,11 +229,48 @@ func (s *Server) saveHLTBTimes(id int64, c hltb.Candidate) (bool, error) {
 	}
 	res, err := s.DB.Exec(`UPDATE game SET time_to_beat_hastily = ?, time_to_beat_normally = ?, time_to_beat_completely = ?, time_to_beat_src = 'hltb'
 		WHERE id = ? AND time_to_beat_hastily IS NULL AND time_to_beat_normally IS NULL AND time_to_beat_completely IS NULL
-		AND status_id IN (SELECT id FROM status WHERE code IN ('backlog', 'up_next', 'playing'))`,
+		AND status_id IN (SELECT id FROM status WHERE code IN (`+ttbStatusList+`))`,
 		nz(c.Hastily), nz(c.Normally), nz(c.Completely), id)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// ttbSkipped: the owner ignored the game, or marked it as having no time on HowLongToBeat, since the run started.
+func (s *Server) ttbSkipped(id int64) bool {
+	if s.ttbIgnored()[id] {
+		return true
+	}
+	var marked bool
+	if err := s.DB.QueryRow("SELECT ttb_not_found FROM game WHERE id = ?", id).Scan(&marked); err != nil {
+		log.Printf("time to beat mark of game %d: %v", id, err)
+	}
+	return marked
+}
+
+// ttbNone marks (or unmarks) a game as having no time on HowLongToBeat: {"game_id": 3, "none": true}. It does not
+// touch updated_at (the mark is a note about the lookup, not an edit of the game).
+func (s *Server) ttbNone(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		GameID int64 `json:"game_id"`
+		None   bool  `json:"none"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.GameID <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid body", nil)
+		return
+	}
+	res, err := s.DB.Exec("UPDATE game SET ttb_not_found = ? WHERE id = ?", in.None, in.GameID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeErr(w, http.StatusNotFound, "game not found", nil)
+		return
+	}
+	s.cache.invalidate()
+	writeJSON(w, map[string]any{"game_id": in.GameID, "none": in.None})
 }

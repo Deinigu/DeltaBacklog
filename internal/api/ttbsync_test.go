@@ -3,9 +3,13 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -98,8 +102,8 @@ func TestBulkHLTBSavesOnlyConfidentMatches(t *testing.T) {
 	postJSON(t, srv.URL+"/api/attention/ignore", map[string]any{"group": "no_ttb", "game_id": 4, "ignore": true})
 
 	res, out := postJSON(t, srv.URL+"/api/ttb/sync", map[string]any{})
-	if res.StatusCode != http.StatusAccepted || out["total"] != float64(3) {
-		t.Fatalf("start: %d %v (the group is Portal, Doom and Zelda)", res.StatusCode, out)
+	if res.StatusCode != http.StatusAccepted || out["total"] != float64(4) {
+		t.Fatalf("start: %d %v (the groups are Portal, Doom, Zelda and the finished Tetris)", res.StatusCode, out)
 	}
 	st := waitIdle(t, s)
 	s.bg.Wait()
@@ -115,14 +119,14 @@ func TestBulkHLTBSavesOnlyConfidentMatches(t *testing.T) {
 	if n, src := normalTime(t, d, "Celeste"); n.Int64 != 777 || src.String != "manual" {
 		t.Errorf("a time set by hand was replaced: %v %v", n, src)
 	}
-	if len(st.Manual) != 2 || st.Found != 1 {
+	if len(st.Manual) != 3 || st.Found != 1 {
 		t.Errorf("status = %+v", st)
 	}
-	if st.Report != "Found times for 1 game; 2 need a manual pick." || st.Failed {
+	if st.Report != "Found times for 1 game; 3 need a manual pick." || st.Failed {
 		t.Errorf("report = %q failed=%v", st.Report, st.Failed)
 	}
 	for _, title := range f.seen {
-		if title == "Hollow Knight" || title == "Celeste" || title == "Tetris" {
+		if title == "Hollow Knight" || title == "Celeste" {
 			t.Errorf("%s must not be searched", title)
 		}
 	}
@@ -182,5 +186,95 @@ func TestHLTBConfident(t *testing.T) {
 	}
 	if !hltb.Confident("Portal", 2007, hltb.Candidate{Name: "Portal"}) {
 		t.Error("a candidate without a year matches on the title")
+	}
+}
+
+// A finished game is searched like the others, but a game marked "no time on HowLongToBeat" never is.
+func TestBulkHLTBSkipsMarkedGamesAndSearchesFinishedOnes(t *testing.T) {
+	f := &bulkHLTB{answers: map[string][]hltb.Candidate{
+		"Tetris": {{ID: 7, Name: "Tetris", Normally: 120}},
+		"Portal": {{ID: 1, Name: "Portal", Normally: 300}},
+	}}
+	s, srv, d := bulkServer(t, f)
+	res, out := postJSON(t, srv.URL+"/api/ttb/none", map[string]any{"game_id": 1, "none": true})
+	if res.StatusCode != http.StatusOK || out["none"] != true {
+		t.Fatalf("mark: %d %v", res.StatusCode, out)
+	}
+	res, _ = postJSON(t, srv.URL+"/api/ttb/sync", map[string]any{})
+	if res.StatusCode != http.StatusAccepted {
+		t.Fatalf("start: %d", res.StatusCode)
+	}
+	waitIdle(t, s)
+	s.bg.Wait()
+	if n, src := normalTime(t, d, "Tetris"); n.Int64 != 120 || src.String != "hltb" {
+		t.Errorf("finished Tetris = %v %v, want 120 from hltb", n, src)
+	}
+	if n, _ := normalTime(t, d, "Portal"); n.Valid {
+		t.Errorf("a marked game got a time (%d)", n.Int64)
+	}
+	for _, title := range f.seen {
+		if title == "Portal" {
+			t.Error("a marked game was searched")
+		}
+	}
+}
+
+func TestTTBNoneMarkUndoAndGamesJSON(t *testing.T) {
+	_, srv, d := bulkServer(t, &bulkHLTB{})
+	flag := func() bool {
+		var marked bool
+		d.QueryRow("SELECT ttb_not_found FROM game WHERE id = 1").Scan(&marked)
+		return marked
+	}
+	var before string
+	d.QueryRow("SELECT updated_at FROM game WHERE id = 1").Scan(&before)
+	if res, _ := postJSON(t, srv.URL+"/api/ttb/none", map[string]any{"game_id": 1, "none": true}); res.StatusCode != http.StatusOK || !flag() {
+		t.Fatalf("mark failed (%d)", res.StatusCode)
+	}
+	var after string
+	d.QueryRow("SELECT updated_at FROM game WHERE id = 1").Scan(&after)
+	if after != before {
+		t.Errorf("the mark changed updated_at: %s -> %s", before, after)
+	}
+	_, body := do(t, "GET", srv.URL+"/api/games", "")
+	var games []Game
+	json.Unmarshal(body, &games)
+	for _, g := range games {
+		if g.Title == "Portal" && !g.TTBNotFound {
+			t.Error("GET /api/games does not carry the mark")
+		}
+		if g.Title == "Doom" && g.TTBNotFound {
+			t.Error("Doom should not be marked")
+		}
+	}
+	if res, _ := postJSON(t, srv.URL+"/api/ttb/none", map[string]any{"game_id": 1, "none": false}); res.StatusCode != http.StatusOK || flag() {
+		t.Fatalf("undo failed (%d)", res.StatusCode)
+	}
+	if res, _ := postJSON(t, srv.URL+"/api/ttb/none", map[string]any{"game_id": 999, "none": true}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown game: %d, want 404", res.StatusCode)
+	}
+	if res, _ := postJSON(t, srv.URL+"/api/ttb/none", map[string]any{"none": true}); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("no game id: %d, want 400", res.StatusCode)
+	}
+}
+
+// The server's list of statuses and the browser's rule (web/static/js/ttbscope.js) are two copies of one rule.
+func TestTTBStatusListMatchesTheBrowserRule(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "web", "static", "js", "ttbscope.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var js []string
+	for _, m := range regexp.MustCompile(`\{ status: '(\w+)'`).FindAllStringSubmatch(string(src), -1) {
+		js = append(js, m[1])
+	}
+	var goList []string
+	for _, p := range strings.Split(ttbStatusList, ",") {
+		goList = append(goList, strings.Trim(strings.TrimSpace(p), "'"))
+	}
+	sort.Strings(js)
+	sort.Strings(goList)
+	if len(js) == 0 || strings.Join(js, ",") != strings.Join(goList, ",") {
+		t.Errorf("ttbscope.js has %v, ttbsync.go has %v", js, goList)
 	}
 }
