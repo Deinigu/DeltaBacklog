@@ -95,6 +95,12 @@ export function expansionStateToQuery({ filter: f, sort }) {
   return qs.toString();
 }
 
+/**
+ * The finish time of a run (GET api/expansions/sync) whose results the browser has not loaded yet, or null. `seen` is the finish
+ * time last loaded: a run that ended while the page was closed (or on another device) still gets its expansions into the store.
+ */
+export const runToLoad = (st, seen) => (st && !st.running && st.finished_at && st.finished_at !== seen ? st.finished_at : null);
+
 /** "N of M" text helper input: the pool size without the hidden ones (what the page counts as "all"). */
 export const poolCount = (pool, f) => pool.filter((r) => !!r.x.hidden === f.hidden).length;
 

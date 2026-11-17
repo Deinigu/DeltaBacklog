@@ -223,7 +223,7 @@ Every control saves at once. If you link the game to a different IGDB game, the 
 ![The sheet of an expansion](img/expansion-sheet-phone.jpg)
 
 **The Expansions page** (**More** on a phone, the sidebar on a PC) lists every expansion of your library in one place. It has the Library's search box (it finds the expansion's or the game's title), **Filters** (status including *Not tracked*, ownership *Owned* / *Not owned* / *Not tracked*, the platform of the game, *Base game finished*, and *Only the hidden ones*), a sort (**Game**, **Release date**, **Title**, **Recently changed**), a count (*12 of 31*), and the filters in the address so you can bookmark them. A row opens the same sheet; the game's name opens the game. At the top:
-- **↻ Find expansions for all games** reads the expansions of every game linked to IGDB that was not read in the last 30 days, one batch of 100 games per request, with progress and a **Stop** button. When it ends it says *Found 87 expansions for 41 games.*
+- **↻ Find expansions for all games** reads the expansions of every game linked to IGDB that was not read in the last 30 days, one batch of 100 games per request, with progress and a **Stop** button. When it ends it says *Found 87 expansions for 41 games.* You can leave the page while it runs: the run goes on, and the expansions it found appear when you come back to the page.
 - **Import owned expansions from Steam…**, below.
 
 ![The Expansions page](img/expansions-phone.jpg)
@@ -266,11 +266,11 @@ Tap **☰ Table** (next to the title) to see your games as a table. Tap **▦ Ca
 
 - **Sort** by tapping a column heading. Tap again to reverse it.
 - **Resize** a column by dragging the edge of its heading.
-- **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, time to beat, developer, released, ownership, played with, favorite, VR, 100%, notes, added). **Defaults** brings the original set back. Your choices are remembered on this device.
+- **Columns** lets you choose which columns to show (title, status, platforms, genres, themes, years played, series, time to beat, developer, released, ownership, played with, favorite, VR, 100%, notes, expansions, added). **Defaults** brings the original set back. Your choices are remembered on this device.
 - **Keyboard (on a PC):** Tab goes into the table once; then the **arrow keys** move between cells, **Home** / **End** go to the ends of the row (with Ctrl, to the corners), **PageUp** / **PageDown** jump a page. **Enter** or **F2** edits the cell, **Space** toggles a checkbox cell, **Shift+Enter** opens the game. While editing, **Esc** cancels and puts the focus back on the cell.
 - **Edit in place:** tap a cell and type. **Enter** saves and moves down, **Tab** saves and moves right, **Esc** cancels. Status is a drop-down, checkboxes toggle with one tap, and lists (platforms, genres, years...) open a sheet. Notes can have several lines (**Shift+Enter** for a new line).
 - The ↗ button at the start of a row opens the game.
-- **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets.
+- **Export CSV** saves exactly the rows and columns you see as a file you can open in Excel or Google Sheets, plus an **Expansions** column at the end when it is not shown.
 - On a phone the table scrolls sideways, with the title column kept in place.
 
 ## 10. Surprise me: let the app choose

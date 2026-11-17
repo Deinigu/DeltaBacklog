@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyExpansionFilter, expansionFilterCount, expansionPasses, filterExpansions, countExpansions, poolOf, platformsOf, statusKey, ownershipKey,
-  expansionStateFromQuery, expansionStateToQuery, DEFAULT_SORT, NOT_TRACKED, poolCount } from '../static/js/expansionlist.js';
+  expansionStateFromQuery, expansionStateToQuery, DEFAULT_SORT, NOT_TRACKED, poolCount, runToLoad } from '../static/js/expansionlist.js';
 
 const x = (id, o = {}) => ({ id, title: `Exp ${id}`, status: null, ownership: null, date: null, updated_at: '2026-01-01T00:00:00Z', ...o });
 const games = [
@@ -88,4 +88,14 @@ test('expansionPasses: a hidden expansion only shows when asked', () => {
   assert.equal(expansionPasses(emptyExpansionFilter(), row), false);
   const f = emptyExpansionFilter(); f.hidden = true;
   assert.equal(expansionPasses(f, row), true);
+});
+
+test('a run that ended while the page was closed is loaded once', () => {
+  const done = { running: false, finished_at: '2026-11-17T10:00:00Z', report: 'Found 3 expansions for 2 games.' };
+  assert.equal(runToLoad(done, null), '2026-11-17T10:00:00Z', 'never loaded: load it');
+  assert.equal(runToLoad(done, '2026-11-17T10:00:00Z'), null, 'already loaded');
+  assert.equal(runToLoad({ ...done, finished_at: '2026-11-17T11:00:00Z' }, '2026-11-17T10:00:00Z'), '2026-11-17T11:00:00Z', 'a newer run');
+  assert.equal(runToLoad({ running: true, finished_at: '2026-11-17T10:00:00Z' }, null), null, 'still going: the poll loads it');
+  assert.equal(runToLoad({ running: false }, null), null, 'no run since the server started');
+  assert.equal(runToLoad(null, null), null);
 });

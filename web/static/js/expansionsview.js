@@ -11,7 +11,7 @@ import { playedBadges } from './years.js';
 import { formatRelease } from './upcoming.js';
 import { expansionCoverURL, expansionRowLabel } from './expansions.js';
 import { SORTS, DEFAULT_SORT, NOT_TRACKED, OWNERSHIP, emptyExpansionFilter, expansionFilterCount, filterExpansions, countExpansions, poolOf, platformsOf, poolCount,
-  expansionStateFromQuery, expansionStateToQuery } from './expansionlist.js';
+  expansionStateFromQuery, expansionStateToQuery, runToLoad } from './expansionlist.js';
 import { openExpansionSheet } from './expansionsheet.js';
 import { openDrawer } from './drawer.js';
 import { openLayer } from './layers.js';
@@ -23,7 +23,11 @@ export function runLine(st) {
   return st.report || '';
 }
 
-const STEAM_URL = 'https://store.steampowered.com/dynamicstore/userdata/';
+// The finish time of the last run whose results were loaded into the store (kept across visits of the page: a run takes minutes
+// on the Pi, and the owner may leave the page while it goes).
+let loadedRun = null;
+
+const STEAM_URL ='https://store.steampowered.com/dynamicstore/userdata/';
 const STEAM_MAX_BYTES = 5 << 20; // the server's limit (expansions.MaxSteamFile)
 
 /** The sheet that explains the Steam import and takes the file. Resolves the run's status, or null when closed. */
@@ -108,7 +112,16 @@ export function renderExpansions(root) {
   // ---- the runs ----
   async function loadJob() {
     job = await expansionSyncStatus().catch(() => job);
-    if (alive) { drawTools(); if (job?.running) schedule(); }
+    if (!alive) return;
+    drawTools();
+    if (job?.running) { schedule(); return; }
+    // a run that ended while the page was closed: its expansions and marks are not in the store yet
+    const ended = runToLoad(job, loadedRun);
+    if (ended) {
+      loadedRun = ended;
+      await refreshGames().catch(() => {});
+      if (alive) onGames();
+    }
   }
   function schedule() {
     clearTimeout(timer);
@@ -117,6 +130,7 @@ export function renderExpansions(root) {
       job = await expansionSyncStatus().catch(() => job);
       if (!alive) return;
       if (was && job && !job.running) {
+        loadedRun = job.finished_at || loadedRun;
         await refreshGames().catch(() => {});
         toast(job.report || 'Done', 6000);
         live.textContent = job.report || '';
