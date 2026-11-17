@@ -54,8 +54,15 @@ async function resync(id) {
   try {
     const fresh = (await getJSON('api/games')).find((x) => x.id === id);
     const g = store.byId.get(id);
-    if (fresh && g) { Object.assign(g, fresh); indexGame(g); }
+    if (fresh && g) { adopt(g, fresh); indexGame(g); }
   } catch { /* offline: the next load fixes it */ }
+}
+
+/** Take the server's copy of a game, keeping the expansion objects that are already in it (a sheet may hold one of them). */
+function adopt(g, fresh) {
+  const { expansions, ...rest } = fresh;
+  Object.assign(g, rest);
+  if (expansions) applyExpansions(g, fresh);
 }
 
 const NULLABLE_TEXT = ['series', 'developer', 'ownership'];
@@ -89,7 +96,7 @@ export function patchGame(id, patch) {
   const run = async () => {
     try {
       const fresh = await send('PATCH', `api/games/${id}`, patch);
-      if (slot.count === 1) { Object.assign(g, fresh); indexGame(g); } // this is the newest edit: authoritative
+      if (slot.count === 1) { adopt(g, fresh); indexGame(g); } // this is the newest edit: authoritative
     } catch (e) {
       slot.failed = true;
       if (slot.count === 1) Object.assign(g, prev);
@@ -344,7 +351,7 @@ export async function refreshGames() {
   const fresh = await getJSON('api/games');
   for (const f of fresh) {
     const g = store.byId.get(f.id);
-    if (g) { const { expansions, ...rest } = f; Object.assign(g, rest); applyExpansions(g, f); indexGame(g); }
+    if (g) { adopt(g, f); indexGame(g); }
   }
   gamesChanged();
 }
