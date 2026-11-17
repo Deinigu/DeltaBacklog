@@ -54,7 +54,7 @@ func TestExpansionsMigration(t *testing.T) {
 		}
 		return n
 	}
-	if v := count(`PRAGMA user_version`); v != 25 {
+	if v := count(`PRAGMA user_version`); v != 26 {
 		t.Fatalf("version %d", v)
 	}
 	if count(`SELECT count(*) FROM game`) != 2 || count(`SELECT count(*) FROM play`) != 1 {

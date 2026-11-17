@@ -1,6 +1,6 @@
 // Expansions (IGDB game_type 2) of the library's games: the rules every page shares. Pure (no DOM): unit-tested.
 // An expansion lives inside its base game (game.expansions); it has the same statuses and ownership list as a game, but
-// both are empty ("Not tracked") until the owner sets them, and it is never counted as a game.
+// both are empty ("No status") until the owner sets them, and it is never counted as a game.
 import { norm } from './util.js';
 import { groupOf } from './yearreview.js';
 
@@ -15,7 +15,21 @@ export const visible = (g) => expansionsOf(g).filter((x) => !x.hidden);
 export const isOwned = (x) => !!x.ownership && norm(x.ownership).trim() !== 'nope';
 /** Tracked: the owner gave it a status. */
 export const isTracked = (x) => !!x.status;
+/**
+ * Added: one of "your" expansions. You own it (any ownership but Nope), gave it a status, recorded years played or wrote notes.
+ * The other expansions IGDB lists for a game are only offered, folded, in the game's details: every page and count leaves them out.
+ */
+export const isAdded = (x) => isOwned(x) || isTracked(x) || !!x.years?.length || !!x.periods?.length || !!(x.notes && x.notes.trim())
+  || x.ttb_source === 'manual' || x.ttb_source === 'hltb';
 export const isFinished = (x) => x.status === 'finished';
+/** A DLC (IGDB game_type 1), as opposed to an expansion (2). IGDB types some big add-ons as DLC (Skyrim's Dawnguard). */
+export const isDLC = (x) => x.kind === 'dlc';
+
+/** The order of IGDB's other add-ons in a game's details: the ones you own on Steam first, then expansions before DLC, then by release. */
+export function offeredOrder(list) {
+  return [...list].sort((a, b) => (b.steam_owned ? 1 : 0) - (a.steam_owned ? 1 : 0) || (isDLC(a) ? 1 : 0) - (isDLC(b) ? 1 : 0)
+    || (a.date ?? Infinity) - (b.date ?? Infinity) || a.title.localeCompare(b.title));
+}
 /** Out already: its release date is not in the future (no date counts as out: an owned expansion without one is an old one). */
 export const isReleased = (x, now = Date.now()) => !(x.date && x.date * 1000 > now);
 /** Owned, out, and not finished, dropped or not wanted (no status counts as not started). A pre-order is not left to play yet. */
@@ -26,7 +40,7 @@ export const hasLeftToPlay = (g, now = Date.now()) => visible(g).some((x) => lef
 
 /** The Library card's badge: finished / (owned or tracked, not hidden), e.g. "2/3 ✓". null when there is nothing to count. */
 export function expansionBadge(g) {
-  const counted = visible(g).filter((x) => isOwned(x) || isTracked(x));
+  const counted = visible(g).filter(isAdded);
   if (!counted.length) return null;
   const finished = counted.filter(isFinished).length;
   return { finished, total: counted.length, text: `${finished}/${counted.length} ✓`, label: `${finished} of ${counted.length} expansions finished` };
@@ -37,10 +51,13 @@ const byTitle = (a, b) => collator.compare(a.title, b.title);
 /** An expansion's release as a sortable number (unix seconds); TBA is Infinity. */
 export const releaseKey = (x) => (x.date ?? Infinity);
 
-/** Every expansion with its base game: [{x, game}], hidden ones left out unless asked for. */
-export function allExpansions(games, { hidden = false } = {}) {
+/**
+ * Your expansions (see isAdded) with their base game: [{x, game}]. Hidden ones are left out unless asked for; `all` also gives the
+ * ones IGDB lists that you have not added (the Hidden page counts every hidden one).
+ */
+export function allExpansions(games, { hidden = false, all = false } = {}) {
   const out = [];
-  for (const game of games) for (const x of expansionsOf(game)) if (hidden || !x.hidden) out.push({ x, game });
+  for (const game of games) for (const x of expansionsOf(game)) if ((hidden || !x.hidden) && (all || isAdded(x))) out.push({ x, game });
   return out;
 }
 
@@ -138,11 +155,11 @@ export const expansionYears = (games) => new Set(allExpansions(games).flatMap(({
 export const expansionCoverURL = (x) => (x.cover ? `covers/${encodeURIComponent(x.cover)}?v=${encodeURIComponent(x.cover_v || '')}` : null);
 
 /**
- * One text cell for the table and the CSV export: "Hearts of Stone (Finished, Owned); Blood and Wine (Not tracked)". Hidden
+ * One text cell for the table and the CSV export: "Hearts of Stone (Finished, Owned); Blood and Wine (No status)". Hidden
  * expansions are left out. statusLabel maps a status code to its label.
  */
 export function expansionsCell(g, statusLabel = (c) => c) {
-  return visible(g).map((x) => `${x.title} (${[x.status ? statusLabel(x.status) : 'Not tracked', x.ownership].filter(Boolean).join(', ')})`).join('; ');
+  return visible(g).filter(isAdded).map((x) => `${x.title} (${[x.status ? statusLabel(x.status) : 'No status', x.ownership].filter(Boolean).join(', ')})`).join('; ');
 }
 
 /**
@@ -151,8 +168,8 @@ export function expansionsCell(g, statusLabel = (c) => c) {
  */
 export function expansionRowLabel(x, statusLabel = (c) => c, game = null) {
   const played = [...(x.periods || []), ...(x.years || []).map(String)];
-  return [withYear(x) + (game ? `, expansion of ${game.title}` : ''), x.status ? statusLabel(x.status) : 'Not tracked', x.ownership || null,
-    played.length ? `played ${played.join(', ')}` : null, x.hidden ? 'hidden' : null].filter(Boolean).join(', ') + ': edit';
+  return [withYear(x) + (game ? `, ${isDLC(x) ? 'DLC' : 'expansion'} of ${game.title}` : isDLC(x) ? ', DLC' : ''), x.status ? statusLabel(x.status) : 'No status', x.ownership || null,
+    x.steam_owned && !isOwned(x) ? 'owned on Steam' : null, played.length ? `played ${played.join(', ')}` : null, x.hidden ? 'hidden' : null].filter(Boolean).join(', ') + ': edit';
 }
 
 /** "Hearts of Stone" -> "Hearts of Stone (2015)" */

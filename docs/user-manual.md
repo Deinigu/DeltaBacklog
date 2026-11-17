@@ -70,7 +70,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | Page | What it is for | Section |
 |---|---|---|
 | **Series** | how far you are through every series | [14](#14-series) |
-| **Expansions** | the expansions of your games: status, ownership, years played | [7](#expansions) |
+| **Expansions** | your expansions and DLC: status, ownership, years played | [7](#expansions) |
 | **Upcoming** | new games of your series that are not out yet | [15](#15-upcoming-releases) |
 | **Similar games** | games you might like, from the ones you finished | [16](#16-similar-games) |
 | **Deals** | what the games you don't own and haven't played yet cost right now | [17](#17-deals) |
@@ -113,7 +113,7 @@ The Library shows every game as a card.
 - The cover, with the game's **status** in the bottom-left corner (and a coloured line under the cover in the same colour).
 - A **★** in the top-right corner for favourites.
 - A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 13](#13-what-the-little-icons-mean)).
-- When the game has expansions you own or track, a small **2/3 ✓** next to its platforms: how many of them you finished, out of the ones you own or track (see [Expansions](#expansions)).
+- When the game has expansions or DLC you added (see below), a small **2/3 ✓** next to its platforms: how many of them you finished, out of the ones you own or track (see [Expansions](#expansions)).
 - Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
 
 **Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
@@ -204,13 +204,15 @@ Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, d
 
 ### Expansions
 
-*Needs IGDB for the list.* Some games have **expansions**: big add-ons that IGDB calls expansions (The Witcher 3's *Hearts of Stone* and *Blood and Wine*). They live **inside their game**, not as cards in the Library, and they are never counted as games. Small DLC, packs, cosmetics, soundtracks and season passes are not listed, and a standalone expansion (such as *Spider-Man: Miles Morales*) stays a normal game. An expansion you already have as a game of its own in the Library (a card you added for it) stays that card: it is not listed inside its base game as well, so it is never counted twice.
+*Needs IGDB for the list.* Some games have **expansions and DLC**: add-ons that IGDB calls expansions (The Witcher 3's *Hearts of Stone* and *Blood and Wine*, Skyrim's *Dragonborn*) or DLC (Skyrim's *Dawnguard* and *Hearthfire*: IGDB types some big add-ons as DLC). They live **inside their game**, not as cards in the Library, and they are never counted as games. Packs, bundles and season passes that IGDB types as such are not listed, and a standalone expansion (such as *Spider-Man: Miles Morales*) stays a normal game. An expansion you already have as a game of its own in the Library (a card you added for it) stays that card: it is not listed inside its base game as well, so it is never counted twice.
 
-**In a game's details**, after the facts, there is an **Expansions (n)** section: one row per expansion with a small poster, its title and year, its status (or *Not tracked*), an ownership emoji and the years you played it. The list comes from IGDB by itself: when you open a game that is linked to IGDB and its expansions were never read, or not in the last 30 days, the app reads them in the background (the details open at once and the section fills in a moment later). Tap **↻ Refresh from IGDB** to read them again (a message says so when IGDB is not set up or cannot be reached). A game that is not linked says so (link it first, see [section 22](#22-link-your-games-with-igdb)); a linked game with none says *No expansions on IGDB*.
+**Only the ones you own or added are yours.** An expansion or DLC is one of yours once you own it (any ownership but *Nope*), give it a status, record years you played it, write notes or set its time yourself. Only yours appear on the Expansions page, Upcoming, Stats, Year in review, Needs attention, the Library badge and the CSV export; the others IGDB lists stay folded in their game's details, ready to add.
+
+**In a game's details**, after the facts, there is an **Expansions (n)** section: one row per expansion or DLC of yours with a small poster, its title and year, its status (or *No status*), a **DLC** tag for a DLC, an ownership emoji and the years you played it. Under it, folded, **Other expansions and DLC on IGDB (n)** lists the rest: the ones you own on Steam first (tagged **Owned on Steam**, see the import below), then expansions, then DLC. Open one and set a status or an ownership to add it. The list comes from IGDB by itself: when you open a game that is linked to IGDB and its expansions were never read, or not in the last 30 days, the app reads them in the background (the details open at once and the section fills in a moment later). Tap **↻ Refresh from IGDB** to read them again (a message says so when IGDB is not set up or cannot be reached). A game that is not linked says so (link it first, see [section 22](#22-link-your-games-with-igdb)); a linked game with none says *No expansions on IGDB*.
 
 ![A game's expansions](img/expansions-drawer-phone.jpg)
 
-**A new expansion has no status and no ownership** (*Not tracked*) until you set one. **Tap a row** to open its sheet:
+**An expansion from IGDB has no status and no ownership** (*No status*) until you set one; setting either adds it to yours. **Tap a row** to open its sheet:
 - **Status**: the same statuses as games. Moving it to Playing, Playing - Evergreen or Finished adds the current year to its years played, as for games; nothing else records a year.
 - **Ownership**: the same list as games, with the same emojis.
 - **Played in**: the same years editor as a game's (years, *Childhood*, *Always*).
@@ -222,7 +224,7 @@ Every control saves at once. If you link the game to a different IGDB game, the 
 
 ![The sheet of an expansion](img/expansion-sheet-phone.jpg)
 
-**The Expansions page** (**More** on a phone, the sidebar on a PC) lists every expansion of your library in one place. It has the Library's search box (it finds the expansion's or the game's title), **Filters** (status including *Not tracked*, ownership *Owned* / *Not owned* / *Not tracked*, the platform of the game, *Base game finished*, and *Only the hidden ones*), a sort (**Game**, **Release date**, **Title**, **Recently changed**), a count (*12 of 31*), and the filters in the address so you can bookmark them. A row opens the same sheet; the game's name opens the game. At the top:
+**The Expansions page** (**More** on a phone, the sidebar on a PC) lists your expansions and DLC in one place (the ones you own or added). It has the Library's search box (it finds the expansion's or the game's title), **Filters** (status including *No status*, ownership *Owned* / *Not owned* / *Not set*, the platform of the game, *Base game finished*, and *Only the hidden ones*), a sort (**Game**, **Release date**, **Title**, **Recently changed**), a count (*12 of 31*), and the filters in the address so you can bookmark them. A row opens the same sheet; the game's name opens the game. At the top:
 - **↻ Find expansions for all games** reads the expansions of every game linked to IGDB that was not read in the last 30 days, one batch of 100 games per request, with progress and a **Stop** button. When it ends it says *Found 87 expansions for 41 games.* You can leave the page while it runs: the run goes on, and the expansions it found appear when you come back to the page.
 - **Import owned expansions from Steam…**, below.
 
@@ -233,14 +235,14 @@ Every control saves at once. If you link the game to a different IGDB game, the 
 2. Save that page as a file (Ctrl+S, or *Save page as…*). JSON, text or *Webpage* all work; it can be up to 5 MB.
 3. On the Expansions page press **Import owned expansions from Steam…**, choose the file and press **Import**.
 
-The app reads only the list of apps you own from the file and does not keep the file. First it reads the expansions of the games it has never read (with the same progress), then it sets the ownership **Owned** on every expansion whose Steam page is in your list **and that has no ownership yet**. A status or an ownership you already set is never changed, so you can run it again whenever you buy more. The message says how many it marked, how many already had an ownership (so a second run that marks nothing still shows what it found), and how many other owned Steam items are not expansions of games in your library (or not on IGDB): Steam's list holds every game you own too, so this number is normally large.
+The app reads only the list of apps you own from the file and does not keep the file. First it reads the expansions of the games it has never read (with the same progress), then it sets the ownership **Owned** on every expansion whose Steam page is in your list **and that has no ownership yet**. A **DLC** you own is not added (Steam lists cosmetic packs and soundtracks as DLC too, and they would flood your list): it is tagged **Owned on Steam** and shown first in its game's details, so adding the ones you care about (Skyrim's *Dawnguard*) is one tap and a choice. A status or an ownership you already set is never changed, so you can run it again whenever you buy more. The message says how many it marked, how many DLC you own on Steam it found, how many already had an ownership (so a second run that marks nothing still shows what it found), and how many other owned Steam items are not expansions of games in your library (or not on IGDB): Steam's list holds every game you own too, so this number is normally large.
 
 **Expansions in the other pages.**
-- **Upcoming** lists the expansions of your games that are not out yet or have no date, as *Expansion · <game>* (one without a date that you own, played or are playing counts as out and is not listed) (a filter **Type: Expansions** shows only those); they leave the page like games do. Tap a row for its sheet, the game's name for the game.
+- **Upcoming** lists your expansions and DLC (the ones you added: an announced one you want can be added with the status *Backlog* or *Up next*) that are not out yet or have no date, as *Expansion · <game>* (one without a date that you own, played or are playing counts as out and is not listed) (a filter **Type: Expansions** shows only those); they leave the page like games do. Tap a row for its sheet, the game's name for the game.
 - **Stats** has a tile and a card **Expansions**: how many you finished out of the ones you own, and the finished expansions per year (each once, in the last year you played it). They are never added to the numbers of games.
 - **Year in review** has an **Expansions** box under the games of the year: the expansions you played that year, grouped by how it ended (finished, dropped, still playing, played).
 - **Needs attention** has the group **Expansions left to play**: you finished the game, you own the expansion, it is out (a pre-order waits for its release day), and it is not finished, dropped or ruled out. **Edit** opens its sheet; **⋯** has *Mark as Playing / Finished / Dropped / Not interested*, *Open the game* and *Ignore in this list*.
-- **Export CSV** (table layout) always ends with an **Expansions** column such as *Hearts of Stone (Finished, Owned); Blood and Wine (Not tracked)*.
+- **Export CSV** (table layout) always ends with an **Expansions** column such as *Hearts of Stone (Finished, Owned); Blood and Wine (No status, Owned)* (only yours).
 
 ## 8. Putting games in your own order
 

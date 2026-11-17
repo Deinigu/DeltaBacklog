@@ -10,7 +10,7 @@ export const NOT_TRACKED = 'none';
 export const OWNERSHIP = [
   { key: 'owned', label: 'Owned' },
   { key: 'not_owned', label: 'Not owned' },
-  { key: 'unset', label: 'Not tracked' },
+  { key: 'unset', label: 'Not set' },
 ];
 const OWNERSHIP_KEYS = OWNERSHIP.map((o) => o.key);
 

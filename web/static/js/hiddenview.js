@@ -19,7 +19,7 @@ function poster(it) {
 
 /** Hidden expansions live inside their games: a line that opens them on the Expansions page (null when there are none). */
 function hiddenExpansionsLine() {
-  const n = allExpansions(store.games, { hidden: true }).filter(({ x }) => x.hidden).length;
+  const n = allExpansions(store.games, { hidden: true, all: true }).filter(({ x }) => x.hidden).length;
   if (!n) return null;
   return h('p.hint', {}, `Hidden expansions (${n}) are listed with their games: `, h('a', { href: '#/expansions?hidden=1' }, 'see them on the Expansions page'), '.');
 }

@@ -9,7 +9,7 @@ import { badgeStyle } from './colors.js';
 import { ownershipIcon } from './ownership.js';
 import { playedBadges } from './years.js';
 import { formatRelease } from './upcoming.js';
-import { expansionCoverURL, expansionRowLabel } from './expansions.js';
+import { expansionCoverURL, expansionRowLabel, isDLC, isOwned } from './expansions.js';
 import { SORTS, DEFAULT_SORT, NOT_TRACKED, OWNERSHIP, emptyExpansionFilter, expansionFilterCount, filterExpansions, countExpansions, poolOf, platformsOf, poolCount,
   expansionStateFromQuery, expansionStateToQuery, runToLoad } from './expansionlist.js';
 import { openExpansionSheet } from './expansionsheet.js';
@@ -50,7 +50,7 @@ function openSteamImport() {
         h('li', {}, 'In a browser where you are logged in to Steam, open ', h('a', { href: STEAM_URL, target: '_blank', rel: 'noopener noreferrer' }, STEAM_URL), ' (it shows plain text).'),
         h('li', {}, 'Save the page (Ctrl+S or “Save page as…”) as a file. JSON, text or a web page all work.'),
         h('li', {}, 'Choose that file here and press Import. Only the list of owned apps is read; the file is not kept.')),
-      h('p.hint', {}, 'It marks the expansions you own as Owned, only where you have not set an ownership. A status or an ownership you set is never changed. You can run it again later.'),
+      h('p.hint', {}, 'It marks the expansions you own as Owned, only where you have not set an ownership. DLC you own are not added (Steam counts cosmetic packs and soundtracks as DLC): they are shown first, marked Owned on Steam, in their game’s details, so adding the ones you want is a tap. A status or an ownership you set is never changed. You can run it again later.'),
       h('label.frow.col', {}, h('span.flabel', {}, 'The saved file (up to 5 MB)'), file),
       fail,
       h('div.dl-acts', {}, go, h('button.dl-act.dl-close', { type: 'button', onclick: () => dlg.close() }, 'Cancel')));
@@ -94,7 +94,7 @@ export function renderExpansions(root) {
     onReset: () => Object.assign(filter, emptyExpansionFilter()),
     sorts: SORTS, getSort: () => sort, setSort: (k) => { sort = k; }, defaultSort: DEFAULT_SORT,
   });
-  const statusName = (k) => (k === NOT_TRACKED ? 'Not tracked' : store.statusByCode.get(k)?.label || k);
+  const statusName = (k) => (k === NOT_TRACKED ? 'No status' : store.statusByCode.get(k)?.label || k);
   ui.chips('Status', { open: true, options: () => withSelected([NOT_TRACKED, ...store.statuses.map((s) => s.key)], filter.status).map((v) => ({ value: v, text: statusName(v) })),
     has: (v) => filter.status.has(v), toggle: (v) => toggleIn(filter.status, v), selected: () => filter.status.size, count: (v) => countExpansions(pool, filter, 'status', v) });
   ui.chips('Ownership', { open: true, options: () => OWNERSHIP.map((o) => ({ value: o.key, text: o.label })),
@@ -106,7 +106,7 @@ export function renderExpansions(root) {
   ui.chips('Hidden', { open: false, options: () => [{ value: 'hidden', text: 'Only the hidden ones' }],
     has: () => filter.hidden, toggle: () => { filter.hidden = !filter.hidden; }, selected: () => (filter.hidden ? 1 : 0), count: () => countExpansions(pool, filter, 'hidden', true) });
   page.replaceChildren(h('h1', {}, 'Expansions'),
-    h('p.hint', {}, 'The expansions IGDB lists for your games. They live inside their game: tap one to set its status, ownership, years played and notes. They are not counted as games.'),
+    h('p.hint', {}, 'Your expansions and DLC: the ones you own or added. They live inside their game: tap one to set its status, ownership, years played and notes. They are not counted as games. To add another, open its game: IGDB’s other expansions and DLC are listed there, folded.'),
     tools, ...ui.nodes(results));
 
   // ---- the runs ----
@@ -185,7 +185,9 @@ export function renderExpansions(root) {
         h('span.up-title', { translate: 'no' }, x.title),
         h('span.up-date', {}, date),
         h('span.exp-meta', {},
-          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : h('span.exp-st.none', {}, 'Not tracked'),
+          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : h('span.exp-st.none', {}, 'No status'),
+          isDLC(x) ? h('span.exp-kind', {}, 'DLC') : null,
+          x.steam_owned && !isOwned(x) ? h('span.exp-kind.steam', {}, 'Owned on Steam') : null,
           icon ? h('span.exp-own', { title: x.ownership, role: 'img', 'aria-label': x.ownership }, icon) : null,
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', {}, `+${played.earlier}`) : null,
@@ -200,7 +202,7 @@ export function renderExpansions(root) {
     const nothing = !pool.length;
     results.replaceChildren(...[
       rows.length ? h('ul.up-list', {}, rows.map(row)) : null,
-      nothing ? emptyBox('No expansions yet. Open a game linked to IGDB to read its expansions, or read them for every game at once.', h('button.btn', { type: 'button', onclick: () => start(expansionSyncStart, 'start the search') }, '↻ Find expansions for all games')) : null,
+      nothing ? emptyBox('No expansions yet. Open a game and add one from its expansions (set a status, or say you own it), or read them for every game at once and import the ones you own on Steam.', h('button.btn', { type: 'button', onclick: () => start(expansionSyncStart, 'start the search') }, '↻ Find expansions for all games')) : null,
       !nothing && !rows.length ? emptyBox(filter.hidden ? 'You have not hidden any expansion.' : 'No expansions match these filters.', h('button.btn', { type: 'button', onclick: () => { Object.assign(filter, emptyExpansionFilter()); ui.input.value = ''; draw(); } }, 'Clear filters')) : null,
     ].filter(Boolean));
     const pills = [

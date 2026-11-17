@@ -1256,6 +1256,8 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .exp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .exp-st { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .exp-st.none { background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-weight: 600; }
+.exp-kind { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px dashed var(--border); }
+.exp-kind.steam { border-style: solid; color: var(--text); }
 .exp-own { font-size: 14px; line-height: 1; }
 .exp-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 .exp-link[disabled] { color: var(--muted); cursor: default; }

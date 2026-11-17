@@ -33,7 +33,7 @@ export function openExpansionSheet(id) {
   const { x, game } = found;
   const body = h('div.exp-sheet');
 
-  const status = h('select', { 'aria-label': 'Status' }, [h('option', { value: '' }, 'Not tracked'), ...store.statuses.map((s) => h('option', { value: s.key }, s.label))]);
+  const status = h('select', { 'aria-label': 'Status' }, [h('option', { value: '' }, 'No status'), ...store.statuses.map((s) => h('option', { value: s.key }, s.label))]);
   const ownership = h('select', { 'aria-label': 'Ownership' });
   const yearsBtn = h('button.listbtn', { type: 'button' }, h('span.fval'), h('span.edit', { 'aria-hidden': 'true' }, '✎'));
   const notes = h('textarea', { rows: '3', 'aria-label': 'Notes', placeholder: 'Anything worth remembering…', maxlength: '20000' });

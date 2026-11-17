@@ -5,14 +5,15 @@ import { emptyExpansionFilter, expansionFilterCount, expansionPasses, filterExpa
 
 const x = (id, o = {}) => ({ id, title: `Exp ${id}`, status: null, ownership: null, date: null, updated_at: '2026-01-01T00:00:00Z', ...o });
 const games = [
-  { id: 1, title: 'Zelda', status: 'finished', platforms: ['Switch'], expansions: [x(1, { date: 300, status: 'finished', ownership: 'Owned' }), x(2, { date: 100, ownership: 'Nope' })] },
+  { id: 1, title: 'Zelda', status: 'finished', platforms: ['Switch'], expansions: [x(1, { date: 300, status: 'finished', ownership: 'Owned' }), x(2, { date: 100, ownership: 'Nope', notes: 'maybe one day' }), x(5, { date: 400, ownership: 'Nope' })] },
   { id: 2, title: 'Alpha', status: 'backlog', platforms: ['PC', 'PS5'], expansions: [x(3, { date: 200, status: 'backlog', updated_at: '2026-03-01T00:00:00Z' }), x(4, { hidden: true, ownership: 'Owned' })] },
 ];
 const pool = poolOf(games);
 const ids = (rows) => rows.map((r) => r.x.id);
 
-test('the pool holds every expansion, hidden ones too; the filter shows one kind at a time', () => {
-  assert.equal(pool.length, 4);
+test('the pool holds your expansions, hidden ones too; the filter shows one kind at a time', () => {
+  assert.equal(pool.length, 4, 'Exp 5 (only on IGDB, not added: Nope and nothing else) is left out');
+  assert.ok(!ids(pool).includes(5));
   assert.deepEqual(ids(filterExpansions(pool, emptyExpansionFilter())), [3, 2, 1], 'default: by game title, then release; hidden left out');
   const f = emptyExpansionFilter();
   f.hidden = true;

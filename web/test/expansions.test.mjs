@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { visible, isOwned, isReleased, isAwaited, leftToPlay, hasLeftToPlay, expansionRowLabel, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
-  countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear, isStale, expansionsCell, FRESH_DAYS } from '../static/js/expansions.js';
+  countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear, isStale, expansionsCell, FRESH_DAYS, isAdded, allExpansions, isDLC, offeredOrder } from '../static/js/expansions.js';
 import { releasePeriod, buildUpcoming } from '../static/js/upcoming.js';
 import { GROUPS } from '../static/js/yearreview.js';
 import { buildGroups, GROUPS as ATT, totalOpen, ignoredTotal } from '../static/js/attention.js';
@@ -65,12 +65,13 @@ test('Needs attention: ignoring works by expansion id, and is counted like the o
   assert.equal(ignoredTotal(g, [], ignored), 1);
 });
 
-test('Upcoming: expansions of library games; finished, dropped, ruled out and hidden ones are not listed', () => {
+test('Upcoming: your expansions of library games; finished, dropped, ruled out, hidden and not added ones are not listed', () => {
   const day = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
   const g = game({ platforms: ['PC', 'PS5'] }, [
-    x(1, { title: 'Future', date: day(2026, 8, 1) }),
-    x(2, { title: 'TBA', date: null }),
-    x(3, { title: 'Out', date: day(2026, 1, 1) }),
+    x(1, { title: 'Future', date: day(2026, 8, 1), status: 'backlog' }),
+    x(2, { title: 'TBA', date: null, status: 'up_next' }),
+    x(3, { title: 'Out', date: day(2026, 1, 1), notes: 'buy it' }),
+    x(4, { title: 'Only on IGDB', date: day(2026, 9, 1) }),
     x(5, { title: 'Dropped', date: day(2027, 1, 1), status: 'dropped' }),
     x(6, { title: 'Hidden', date: day(2027, 1, 1), hidden: true }),
     x(7, { title: 'Backlog', date: day(2027, 2, 1), status: 'backlog' }),
@@ -93,7 +94,7 @@ test('Upcoming: an expansion without a date is TBA only while nothing says it is
   assert.equal(isAwaited(x(1, { date: null, years: [2019] })), false);
   assert.equal(isAwaited(x(1, { date: null, periods: ['childhood'] })), false);
   for (const st of ['playing', 'playing_evergreen', 'evergreen', 'hold']) assert.equal(isAwaited(x(1, { date: null, status: st })), false, st);
-  const g = game({}, [x(1, { title: 'TBA', date: null }), x(2, { title: 'Old owned', date: null, ownership: 'Owned' }),
+  const g = game({}, [x(1, { title: 'TBA', date: null, status: 'backlog' }), x(5, { title: 'Not added', date: null }), x(2, { title: 'Old owned', date: null, ownership: 'Owned' }),
     x(3, { title: 'Pre-order', date: Date.UTC(2099, 0, 1) / 1000, ownership: 'Owned' }), x(4, { title: 'Played', date: null, years: [2015] })]);
   assert.deepEqual(upcomingExpansionItems([g], releasePeriod).map((i) => i.title), ['TBA', 'Pre-order'], 'a dated pre-order stays');
 });
@@ -104,7 +105,7 @@ test('Upcoming page: expansions are grouped like games, and ones released long a
   const g = game({}, [
     x(1, { title: 'Future', date: day(2026, 8, 1) }), x(2, { title: 'TBA', date: null }), x(3, { title: 'Old', date: day(2026, 1, 1) }),
     x(4, { title: 'Last week', date: day(2026, 5, 3) }), x(5, { title: 'Today', date: day(2026, 5, 10) }),
-  ]);
+  ].map((e) => ({ ...e, status: 'backlog' })));
   const res = buildUpcoming([g], new Map(), now);
   assert.deepEqual(res.recent.map((i) => i.title), ['Today', 'Last week'], 'released within 60 days: recently released, newest first');
   assert.deepEqual(res.groups.map((gr) => [gr.label, gr.items.map((i) => i.title)]), [['August 2026', ['Future']], ['Later / TBA', ['TBA']]]);
@@ -121,7 +122,7 @@ test('Stats: finished and owned, finished per year (last year played), never cou
     x(6, { ownership: 'Owned', status: 'finished', years: [2019], hidden: true }),
   ]);
   const s = expansionStats([g, game({ id: 2 }, [])]);
-  assert.deepEqual([s.total, s.owned, s.finished, s.unplaced], [5, 4, 3, 1]);
+  assert.deepEqual([s.total, s.owned, s.finished, s.unplaced], [4, 4, 3, 1], 'x5 (Nope, nothing else) is not one of yours');
   assert.deepEqual(s.perYear, [{ year: 2017, count: 1 }, { year: 2019, count: 1 }]);
   assert.equal(finishedYear(x(1, { years: [2001, 2003] })), 2003);
   assert.equal(finishedYear(x(1)), null);
@@ -156,9 +157,10 @@ test('stale: a linked game never read, or not read within 30 days, is read when 
   assert.equal(FRESH_DAYS, 30);
 });
 
-test('the table and CSV cell lists the visible expansions with their state', () => {
-  const g = game({}, [x(1, { title: 'Hearts', status: 'finished', ownership: 'Owned' }), x(2, { title: 'Wine' }), x(3, { title: 'Wrong', hidden: true }), x(4, { title: 'Pack', ownership: 'Nope' })]);
-  assert.equal(expansionsCell(g, (c) => c.toUpperCase()), 'Hearts (FINISHED, Owned); Wine (Not tracked); Pack (Not tracked, Nope)');
+test('the table and CSV cell lists your visible expansions with their state', () => {
+  const g = game({}, [x(1, { title: 'Hearts', status: 'finished', ownership: 'Owned' }), x(2, { title: 'Wine' }), x(3, { title: 'Wrong', hidden: true, status: 'backlog' }),
+    x(4, { title: 'Pack', ownership: 'Nope' }), x(5, { title: 'Noted', ownership: 'Nope', notes: 'later' })]);
+  assert.equal(expansionsCell(g, (c) => c.toUpperCase()), 'Hearts (FINISHED, Owned); Noted (No status, Nope)', 'not added (Wine, Pack) and hidden ones are left out');
   assert.equal(expansionsCell(game()), '');
 });
 
@@ -181,5 +183,35 @@ test('the row label says what the row shows', () => {
   assert.equal(expansionRowLabel(x(1, { status: 'finished', ownership: 'Owned', years: [2016], periods: ['childhood'] }), label),
     'Hearts of Stone (2015), Finished, Owned, played childhood, 2016: edit');
   assert.equal(expansionRowLabel(x(1, { year: null, hidden: true }), label, { title: 'The Witcher 3' }),
-    'Hearts of Stone, expansion of The Witcher 3, Not tracked, hidden: edit');
+    'Hearts of Stone, expansion of The Witcher 3, No status, hidden: edit');
+});
+
+test('your expansions: owned, given a status, played or noted; the other IGDB ones are not', () => {
+  assert.equal(isAdded(x(1)), false, 'only on IGDB');
+  assert.equal(isAdded(x(1, { ownership: 'Nope' })), false, 'Nope alone is not adding it');
+  assert.equal(isAdded(x(1, { ownership: 'Owned' })), true);
+  assert.equal(isAdded(x(1, { status: 'backlog' })), true);
+  assert.equal(isAdded(x(1, { years: [2020] })), true);
+  assert.equal(isAdded(x(1, { periods: ['childhood'] })), true);
+  assert.equal(isAdded(x(1, { notes: '  ' })), false, 'blank notes do not count');
+  assert.equal(isAdded(x(1, { notes: 'want it' })), true);
+  const g = game({}, [x(1), x(2, { ownership: 'Owned' }), x(3, { hidden: true, ownership: 'Owned' }), x(4, { hidden: true })]);
+  assert.deepEqual(allExpansions([g]).map((r) => r.x.id), [2]);
+  assert.deepEqual(allExpansions([g], { hidden: true }).map((r) => r.x.id), [2, 3]);
+  assert.deepEqual(allExpansions([g], { hidden: true, all: true }).map((r) => r.x.id), [1, 2, 3, 4], 'the Hidden page counts every hidden one');
+  assert.equal(expansionBadge(game({}, [x(1), x(2, { notes: 'later' })])).text, '0/1 ✓');
+});
+
+test('DLC: told apart from expansions, labelled, and IGDB’s others offered with the ones owned on Steam first', () => {
+  assert.equal(isDLC(x(1, { kind: 'dlc' })), true);
+  assert.equal(isDLC(x(1, { kind: 'expansion' })), false);
+  assert.equal(isDLC(x(1)), false, 'no kind (an older answer) is an expansion');
+  assert.equal(isAdded(x(1, { kind: 'dlc', steam_owned: true })), false, 'owned on Steam alone does not add it');
+  assert.equal(isAdded(x(1, { ttb_source: 'manual' })), true, 'a time set by hand is the owner’s data (as on the server)');
+  assert.equal(isAdded(x(1, { ttb_source: 'igdb' })), false);
+  const list = [x(1, { title: 'Hearthfire', kind: 'dlc', date: 300 }), x(2, { title: 'Pack', kind: 'dlc', date: 100 }),
+    x(3, { title: 'Dawnguard', kind: 'dlc', date: 200, steam_owned: true }), x(4, { title: 'Big one', date: 400 }), x(5, { title: 'TBA', date: null }), x(6, { title: 'Also TBA', date: null })];
+  assert.deepEqual(offeredOrder(list).map((e) => e.title), ['Dawnguard', 'Big one', 'Also TBA', 'TBA', 'Pack', 'Hearthfire']);
+  assert.equal(expansionRowLabel(x(1, { kind: 'dlc', steam_owned: true }), (c) => c, { title: 'Skyrim' }), 'Hearts of Stone (2015), DLC of Skyrim, No status, owned on Steam: edit');
+  assert.equal(expansionRowLabel(x(1, { kind: 'dlc' })), 'Hearts of Stone (2015), DLC, No status: edit');
 });

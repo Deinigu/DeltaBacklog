@@ -31,28 +31,39 @@ func expansionFake(t *testing.T, queries *[]string, body string) *Client {
 	return c
 }
 
-// Only game_type 2 is an expansion; the Steam app id comes from the new source field or the old category, and a
-// reference that is an object is read too.
-func TestExpansionsKeepsOnlyType2WithSteamIDs(t *testing.T) {
+// Expansions (game_type 2) and DLC (1) are read, each once; standalone expansions and packs are not. The Steam app id comes
+// from the new source field or the old category, and a reference that is an object is read too.
+func TestExpansionsReadsExpansionsAndDLCWithSteamIDs(t *testing.T) {
 	var queries []string
 	c := expansionFake(t, &queries, `[
 	 {"id":1942,"expansions":[
 	  {"id":100,"name":"Hearts of Stone","game_type":2,"first_release_date":1432598400,"cover":{"image_id":"hos"},
 	   "external_games":[{"uid":"1","external_game_source":5},{"uid":"378648","external_game_source":1}]},
 	  {"id":101,"name":"Blood and Wine","game_type":2,"first_release_date":1464134400,"external_games":[{"uid":"378649","category":1}]},
-	  {"id":102,"name":"Some DLC","game_type":1,"external_games":[{"uid":"9","category":1}]},
 	  {"id":103,"name":"Standalone","game_type":4},
 	  {"id":104,"name":"Object source","game_type":2,"external_games":[{"uid":"777","external_game_source":{"id":1,"name":"Steam"}}]},
 	  {"id":105,"name":"GOG only","game_type":2,"external_games":[{"uid":"55","external_game_source":5}]},
-	  {"id":106,"name":" ","game_type":2}]},
+	  {"id":106,"name":" ","game_type":2}],
+	  "dlcs":[
+	  {"id":102,"name":"Some DLC","game_type":1,"external_games":[{"uid":"9","category":1}]},
+	  {"id":100,"name":"Hearts of Stone","game_type":2},
+	  {"id":107,"name":"Costume pack","game_type":13}]},
 	 {"id":7}]`)
 	got, err := c.Expansions(context.Background(), []int64{1942, 7, 8})
 	if err != nil {
 		t.Fatal(err)
 	}
 	list := got[1942]
-	if len(list) != 4 {
+	if len(list) != 5 {
 		t.Fatalf("%+v", list)
+	}
+	for i, want := range []string{KindExpansion, KindExpansion, KindExpansion, KindExpansion, KindDLC} {
+		if list[i].Kind != want {
+			t.Errorf("%d: kind %q, want %q", i, list[i].Kind, want)
+		}
+	}
+	if d := list[4]; d.IGDBID != 102 || d.SteamAppID != 9 {
+		t.Errorf("the DLC: %+v", d)
 	}
 	h := list[0]
 	if h.IGDBID != 100 || h.Name != "Hearts of Stone" || h.Year != 2015 || h.CoverID != "hos" || h.SteamAppID != 378648 || h.Release != 1432598400 {
@@ -67,7 +78,7 @@ func TestExpansionsKeepsOnlyType2WithSteamIDs(t *testing.T) {
 	if _, ok := got[8]; ok {
 		t.Error("a game IGDB does not return is absent")
 	}
-	if len(queries) != 1 || !strings.Contains(queries[0], "expansions.external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
+	if len(queries) != 1 || !strings.Contains(queries[0], "expansions.external_games.*") || !strings.Contains(queries[0], "dlcs.external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
 		t.Errorf("query %v", queries)
 	}
 }

@@ -32,6 +32,8 @@ type Expansion struct {
 	Periods   []string `json:"periods"`
 	Notes     string   `json:"notes,omitempty"`
 	Hidden    bool     `json:"hidden,omitempty"`
+	Kind      string   `json:"kind"`                  // "expansion" or "dlc" (IGDB game_type 2 or 1)
+	SteamOwn  bool     `json:"steam_owned,omitempty"` // the Steam import found it among the owner's apps (DLC only: see migration 026)
 	UpdatedAt string   `json:"updated_at"`
 
 	TTBHastily    *int    `json:"ttb_hastily,omitempty"`
@@ -49,7 +51,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 		args = []any{only}
 		where += " AND e.game_id = ?"
 	}
-	rows, err := d.Query(`SELECT e.id, e.game_id, e.title, e.release_year, e.release_date, e.cover_file, e.cover_image_id, s.code, o.name, e.notes, e.hidden,
+	rows, err := d.Query(`SELECT e.id, e.game_id, e.title, e.release_year, e.release_date, e.cover_file, e.cover_image_id, s.code, o.name, e.notes, e.hidden, e.kind, e.steam_owned,
 			e.time_to_beat_hastily, e.time_to_beat_normally, e.time_to_beat_completely, e.time_to_beat_src, e.updated_at
 		FROM expansion e LEFT JOIN status s ON s.id = e.status_id LEFT JOIN ownership o ON o.id = e.ownership_id`+where+`
 		ORDER BY e.release_date IS NULL, e.release_date, e.title`, args...)
@@ -61,7 +63,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 	for rows.Next() {
 		var x Expansion
 		var date, cover, coverV sql.NullString
-		if err := rows.Scan(&x.ID, &x.GameID, &x.Title, &x.Year, &date, &cover, &coverV, &x.Status, &x.Ownership, &x.Notes, &x.Hidden,
+		if err := rows.Scan(&x.ID, &x.GameID, &x.Title, &x.Year, &date, &cover, &coverV, &x.Status, &x.Ownership, &x.Notes, &x.Hidden, &x.Kind, &x.SteamOwn,
 			&x.TTBHastily, &x.TTBNormally, &x.TTBCompletely, &x.TTBSource, &x.UpdatedAt); err != nil {
 			rows.Close()
 			return err

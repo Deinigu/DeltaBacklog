@@ -71,6 +71,14 @@ const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND e.notes = 
 // card, for example from NocoDB): the card is its record, so it is never listed or counted inside its base game as well.
 const IsGameSQL = `EXISTS (SELECT 1 FROM game lg WHERE lg.igdb_id = e.igdb_id)`
 
+// kindOf is the stored kind of an add-on read from IGDB: a DLC, or else an expansion.
+func kindOf(e meta.Expansion) string {
+	if e.Kind == meta.KindDLC {
+		return meta.KindDLC
+	}
+	return meta.KindExpansion
+}
+
 // Due lists the IGDB-linked games whose expansions were never read, or (unless neverOnly) not within FetchTTL.
 func Due(d *sql.DB, now time.Time, neverOnly bool) ([]Target, error) {
 	q := `SELECT g.id, g.igdb_id FROM game g LEFT JOIN expansion_fetch f ON f.game_id = g.id WHERE g.igdb_id IS NOT NULL AND (f.fetched_at IS NULL`
@@ -229,9 +237,9 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 		if id, ok := have[e.IGDBID]; ok {
 			listed[e.IGDBID] = true
 			// a changed cover drops the downloaded file name: the next run downloads the new one
-			if _, err := tx.Exec(`UPDATE expansion SET title = ?, release_date = ?, release_year = ?, steam_app_id = ?,
+			if _, err := tx.Exec(`UPDATE expansion SET title = ?, release_date = ?, release_year = ?, steam_app_id = ?, kind = ?,
 				cover_file = CASE WHEN cover_image_id IS ? THEN cover_file ELSE NULL END, cover_image_id = ? WHERE id = ?`,
-				e.Name, date, year, steam, cover, cover, id); err != nil {
+				e.Name, date, year, steam, kindOf(e), cover, cover, id); err != nil {
 				return nil, err
 			}
 			ids = append(ids, id)
@@ -244,8 +252,8 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
-		res, err := tx.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, cover_image_id, steam_app_id) VALUES (?,?,?,?,?,?,?)`,
-			gameID, e.IGDBID, e.Name, date, year, cover, steam)
+		res, err := tx.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, cover_image_id, steam_app_id, kind) VALUES (?,?,?,?,?,?,?,?)`,
+			gameID, e.IGDBID, e.Name, date, year, cover, steam, kindOf(e))
 		if err != nil {
 			return nil, err
 		}

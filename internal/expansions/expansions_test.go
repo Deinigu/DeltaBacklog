@@ -486,3 +486,58 @@ func TestExpansionThatIsALibraryGame(t *testing.T) {
 		t.Errorf("%+v %v", res, err)
 	}
 }
+
+// IGDB's DLC are stored with kind 'dlc'. The Steam import never gives a DLC an ownership (Steam lists cosmetic packs as DLC too):
+// it only marks it as owned on Steam, and says so; an owned expansion is still marked as owned.
+func TestDLCKindAndSteamImport(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{72: {
+		{IGDBID: 6069, Name: "Dragonborn", SteamAppID: 211722, Kind: meta.KindExpansion},
+		{IGDBID: 2992, Name: "Dawnguard", SteamAppID: 211720, Kind: meta.KindDLC},
+		{IGDBID: 6068, Name: "Hearthfire", SteamAppID: 211721, Kind: meta.KindDLC},
+		{IGDBID: 7000, Name: "No kind given", Kind: ""},
+	}}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 72}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	kind := func(igdb int64) (k string, steam bool, owned bool) {
+		d.QueryRow(`SELECT kind, steam_owned, ownership_id IS NOT NULL FROM expansion WHERE igdb_id = ?`, igdb).Scan(&k, &steam, &owned)
+		return
+	}
+	if k, _, _ := kind(6069); k != "expansion" {
+		t.Errorf("Dragonborn kind %q", k)
+	}
+	if k, _, _ := kind(2992); k != "dlc" {
+		t.Errorf("Dawnguard kind %q", k)
+	}
+	if k, _, _ := kind(7000); k != "expansion" {
+		t.Errorf("no kind is an expansion: %q", k)
+	}
+	res, err := ImportOwned(d, []int64{211720, 211722, 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Marked != 1 || res.DLC != 1 || res.Matched != 2 || res.Unmatched != 1 {
+		t.Errorf("%+v", res)
+	}
+	if _, steam, owned := kind(2992); !steam || owned {
+		t.Errorf("Dawnguard: steam_owned %v, ownership set %v (want true, false)", steam, owned)
+	}
+	if _, steam, owned := kind(6068); steam || owned {
+		t.Error("Hearthfire is not owned on Steam")
+	}
+	if _, _, owned := kind(6069); !owned {
+		t.Error("Dragonborn (an expansion) is marked as owned")
+	}
+	want := "Marked 1 expansion as owned; 1 DLC you own on Steam is offered first in its game's details; 1 other owned Steam item is not an expansion of a game in your library (or not on IGDB)."
+	if res.Text() != want {
+		t.Errorf("%q", res.Text())
+	}
+	// a refetch keeps the mark (only IGDB's own fields are refreshed)
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 72}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, steam, _ := kind(2992); !steam {
+		t.Error("a refetch dropped the Steam mark")
+	}
+}

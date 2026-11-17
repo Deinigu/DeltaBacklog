@@ -97,6 +97,7 @@ func ownedInPage(raw []byte) ([]int64, error) {
 // Import is what ImportOwned did.
 type Import struct {
 	Marked    int // expansions that got the ownership
+	DLC       int // owned DLC (IGDB game_type 1): marked "Owned on Steam" only, offered first in their game's details
 	Already   int // owned expansions that already had an ownership (the owner's, or a previous import's): left as they are
 	Matched   int // owned apps that are expansions of the library (already owned or not)
 	Unmatched int // other owned apps: not an expansion of a game in the library (or not on IGDB)
@@ -109,6 +110,12 @@ func (i Import) Text() string {
 	already := ""
 	if i.Already > 0 {
 		already = fmt.Sprintf(" (%d already had an ownership)", i.Already)
+	}
+	switch {
+	case i.DLC == 1:
+		already += "; 1 DLC you own on Steam is offered first in its game's details"
+	case i.DLC > 1:
+		already += fmt.Sprintf("; %d DLC you own on Steam are offered first in their games' details", i.DLC)
 	}
 	rest := "are not expansions of games in your library"
 	if i.Unmatched == 1 {
@@ -135,27 +142,28 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	}
 	defer tx.Rollback()
 	// an expansion that is also a game of the library is matched (it is not "unmatched") but not marked: its card is its record
-	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + ` FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
+	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + `, e.kind = 'dlc' FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
 	if err != nil {
 		return res, err
 	}
 	type row struct {
 		id    int64
 		empty bool
+		dlc   bool
 	}
 	var hit []row
 	matched := map[int64]bool{}
 	for rows.Next() {
 		var id, app int64
-		var empty, isGame bool
-		if err := rows.Scan(&id, &app, &empty, &isGame); err != nil {
+		var empty, isGame, dlc bool
+		if err := rows.Scan(&id, &app, &empty, &isGame, &dlc); err != nil {
 			rows.Close()
 			return res, err
 		}
 		if have[app] {
 			matched[app] = true
 			if !isGame {
-				hit = append(hit, row{id, empty})
+				hit = append(hit, row{id, empty, dlc})
 			}
 		}
 	}
@@ -165,6 +173,15 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	}
 	var owner any
 	for _, h := range hit {
+		// a DLC is only marked as owned on Steam: Steam lists cosmetic packs and soundtracks as DLC too, and they would flood the
+		// owner's list. The game's details offer it first, so adding one is a tap.
+		if h.dlc {
+			if _, err := tx.Exec(`UPDATE expansion SET steam_owned = 1 WHERE id = ?`, h.id); err != nil {
+				return res, err
+			}
+			res.DLC++
+			continue
+		}
 		if !h.empty {
 			res.Already++
 			continue
