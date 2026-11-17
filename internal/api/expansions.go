@@ -521,7 +521,7 @@ func (s *Server) expansionSyncStart(w http.ResponseWriter, r *http.Request) {
 // steamImport (POST /api/expansions/steam-import, multipart form field "file") takes Steam's userdata JSON, reads only its
 // rgOwnedApps, and in the background first reads the expansions of the games never read, then gives the ownership "Owned"
 // to the expansions whose Steam app is in the list and that have none. The file is never stored or logged. 400 not a Steam
-// file, 413 over 5 MB, 409 a run is going; otherwise the same 202 and status as the sync (the report holds the result).
+// file (or one that lists no owned apps: saved while logged out), 413 over 5 MB, 409 a run is going; otherwise the same 202 and status as the sync (the report holds the result).
 func (s *Server) steamImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, expansions.MaxSteamFile+(256<<10))
 	mr, err := r.MultipartReader()
@@ -571,6 +571,8 @@ func (s *Server) steamUploadError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, expansions.ErrTooBig) || errors.As(err, &tooBig):
 		writeErr(w, http.StatusRequestEntityTooLarge, "the file is over 5 MB: it is not a Steam userdata file", nil)
+	case errors.Is(err, expansions.ErrNoOwnedApps):
+		writeErr(w, http.StatusBadRequest, "The file lists no owned apps. Were you logged in to Steam when you saved it? Log in, open the address again and save it again.", nil)
 	case errors.Is(err, expansions.ErrNotSteamFile):
 		writeErr(w, http.StatusBadRequest, "this is not the Steam userdata file (it must have an rgOwnedApps list)", nil)
 	default:

@@ -24,12 +24,16 @@ const OwnedValue = "Owned"
 // ErrNotSteamFile means the upload is not Steam's userdata JSON with an rgOwnedApps list of integers.
 var ErrNotSteamFile = errors.New("not a Steam userdata file")
 
+// ErrNoOwnedApps means the file is Steam's, but its rgOwnedApps list is empty: what Steam answers to a browser that is not
+// logged in. Nothing would be marked, so nothing is started.
+var ErrNoOwnedApps = errors.New("the Steam file lists no owned apps")
+
 // ErrTooBig means the upload is over MaxSteamFile.
 var ErrTooBig = errors.New("file too big")
 
 // ParseOwned reads the owned app ids from Steam's userdata JSON (https://store.steampowered.com/dynamicstore/userdata/).
 // Only rgOwnedApps is read, and only as a list of positive integers; everything else in the file is ignored. The file is
-// never stored or logged. The ids are returned without duplicates. The page saved by a browser as a web page (the JSON
+// never stored or logged. The ids are returned without duplicates; an empty list is ErrNoOwnedApps. The page saved by a browser as a web page (the JSON
 // inside <pre>, HTML-escaped) is read too.
 func ParseOwned(r io.Reader) ([]int64, error) {
 	raw, err := io.ReadAll(io.LimitReader(r, MaxSteamFile+1))
@@ -52,6 +56,9 @@ func ParseOwned(r io.Reader) ([]int64, error) {
 	}
 	if apps == nil {
 		return nil, ErrNotSteamFile
+	}
+	if len(apps) == 0 {
+		return nil, ErrNoOwnedApps
 	}
 	seen := make(map[int64]bool, len(apps))
 	out := make([]int64, 0, len(apps))

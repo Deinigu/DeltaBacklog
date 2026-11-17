@@ -229,7 +229,7 @@ Every control saves at once. If you link the game to a different IGDB game, the 
 ![The Expansions page](img/expansions-phone.jpg)
 
 **Import the expansions you own on Steam (once).** Steam does not tell other programs which DLC you own, so you save one file from your own browser and give it to the app. The app never asks for your Steam password, a cookie or a key.
-1. In a browser where you are logged in to Steam, open `https://store.steampowered.com/dynamicstore/userdata/`. It shows plain text (JSON).
+1. In a browser where you are logged in to Steam, open `https://store.steampowered.com/dynamicstore/userdata/`. It shows plain text (JSON). If you are not logged in, the page lists nothing, and the app refuses that file and tells you so.
 2. Save that page as a file (Ctrl+S, or *Save page as…*). JSON, text or *Webpage* all work; it can be up to 5 MB.
 3. On the Expansions page press **Import owned expansions from Steam…**, choose the file and press **Import**.
 

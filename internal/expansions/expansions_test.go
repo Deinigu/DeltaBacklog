@@ -344,8 +344,11 @@ func TestParseOwned(t *testing.T) {
 	if _, err := ParseOwned(strings.NewReader(`<html><pre>{"rgWishlist":[1]}</pre></html>`)); !errors.Is(err, ErrNotSteamFile) {
 		t.Errorf("a web page without the list: %v", err)
 	}
-	if got, err := ParseOwned(strings.NewReader(`{"rgOwnedApps":[]}`)); err != nil || len(got) != 0 {
-		t.Errorf("an empty library is a valid file: %v %v", got, err)
+	// what Steam answers to a browser that is not logged in: a Steam file, but nothing to mark
+	for _, empty := range []string{`{"rgWishlist":[],"rgOwnedPackages":[],"rgOwnedApps":[]}`, `<pre>{&quot;rgOwnedApps&quot;:[]}</pre>`} {
+		if got, err := ParseOwned(strings.NewReader(empty)); !errors.Is(err, ErrNoOwnedApps) {
+			t.Errorf("an empty list (logged out): %v %v", got, err)
+		}
 	}
 	big := `{"x":"` + strings.Repeat("a", MaxSteamFile) + `","rgOwnedApps":[1]}`
 	if _, err := ParseOwned(strings.NewReader(big)); !errors.Is(err, ErrTooBig) {

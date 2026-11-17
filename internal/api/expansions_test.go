@@ -368,6 +368,9 @@ func TestSteamImport(t *testing.T) {
 	if res, _ := steamUpload(t, srv, "file", `{"rgWishlist":[1]}`); res.StatusCode != 400 {
 		t.Errorf("no list: %d", res.StatusCode)
 	}
+	if res, body := steamUpload(t, srv, "file", `{"rgWishlist":[],"rgOwnedApps":[]}`); res.StatusCode != 400 || !strings.Contains(string(body), "logged in") {
+		t.Errorf("saved while logged out: %d %s", res.StatusCode, body)
+	}
 	if res, _ := steamUpload(t, srv, "other", `{"rgOwnedApps":[1]}`); res.StatusCode != 400 {
 		t.Errorf("no file field: %d", res.StatusCode)
 	}
