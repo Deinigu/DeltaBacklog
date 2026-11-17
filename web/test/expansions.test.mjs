@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { visible, isOwned, leftToPlay, hasLeftToPlay, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
-  countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear } from '../static/js/expansions.js';
+  countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear, isStale, expansionsCell, FRESH_DAYS } from '../static/js/expansions.js';
 import { releasePeriod, buildUpcoming } from '../static/js/upcoming.js';
 import { GROUPS } from '../static/js/yearreview.js';
 import { buildGroups, GROUPS as ATT, totalOpen, ignoredTotal } from '../static/js/attention.js';
@@ -130,4 +130,21 @@ test('poster URL and title with year', () => {
   assert.equal(expansionCoverURL(x(1, { cover: 'x100.jpg', cover_v: 'abc' })), 'covers/x100.jpg?v=abc');
   assert.equal(withYear(x(1)), 'Hearts of Stone (2015)');
   assert.equal(withYear(x(1, { year: null })), 'Hearts of Stone');
+});
+
+test('stale: a linked game never read, or not read within 30 days, is read when its drawer opens', () => {
+  const now = Date.parse('2026-06-30T00:00:00Z');
+  assert.equal(isStale({ igdb_id: null }, now), false, 'not linked: nothing to read');
+  assert.equal(isStale({ igdb_id: 5 }, now), true, 'never read');
+  assert.equal(isStale({ igdb_id: 5, expansions_fetched: '2026-06-10T00:00:00Z' }, now), false);
+  assert.equal(isStale({ igdb_id: 5, expansions_fetched: '2026-05-31T00:00:00Z' }, now), false, 'exactly 30 days is still fresh');
+  assert.equal(isStale({ igdb_id: 5, expansions_fetched: '2026-05-30T00:00:00Z' }, now), true);
+  assert.equal(isStale({ igdb_id: 5, expansions_fetched: 'garbage' }, now), true);
+  assert.equal(FRESH_DAYS, 30);
+});
+
+test('the table and CSV cell lists the visible expansions with their state', () => {
+  const g = game({}, [x(1, { title: 'Hearts', status: 'finished', ownership: 'Owned' }), x(2, { title: 'Wine' }), x(3, { title: 'Wrong', hidden: true }), x(4, { title: 'Pack', ownership: 'Nope' })]);
+  assert.equal(expansionsCell(g, (c) => c.toUpperCase()), 'Hearts (FINISHED, Owned); Wine (Not tracked); Pack (Not tracked, Nope)');
+  assert.equal(expansionsCell(game()), '');
 });

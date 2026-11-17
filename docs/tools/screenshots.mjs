@@ -190,6 +190,20 @@ await go(p, '#/hidden'); await wait(1200);
 await shot(p, 'hidden-phone');
 await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
+// expansions: a game's section and sheet, then the page (the demo library carries made-up expansions)
+const withExp = await p.evaluate(() => fetch('api/games').then((r) => r.json()).then((g) => g.find((x) => x.expansions.filter((e) => !e.hidden).length >= 2)?.title));
+if (withExp) {
+  await go(p, `#/library?q=${encodeURIComponent(withExp)}`);
+  await p.click('.card'); await wait(700);
+  await p.$eval('.exp-drawer', (e) => e.scrollIntoView({ block: 'center' })); await wait(400);
+  await shot(p, 'expansions-drawer-phone');
+  await p.click('.exp-row'); await wait(800);
+  await shot(p, 'expansion-sheet-phone');
+  await p.keyboard.press('Escape'); await wait(300);
+}
+await go(p, '#/expansions');
+await shot(p, 'expansions-phone');
+
 await go(p, '#/stats'); // taller than a phone screen, so the first sections fit in one picture
 await p.setViewport({ width: 390, height: 1900, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); await wait(600);
 await shot(p, 'stats-phone');

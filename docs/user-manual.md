@@ -34,7 +34,7 @@ This manual is task by task. For how the program is built, see the [developer ma
 19. [Year in review](#19-year-in-review)
 20. [Rankings](#20-rankings)
 21. [Screenshots](#21-screenshots)
-    (**Views** is described in [section 6](#6-saved-views); **Hidden** in [section 17](#the-hidden-page); **Needs attention** and **Link IGDB** in [section 22](#22-link-your-games-with-igdb).)
+    (**Expansions** is described in [section 7](#expansions); **Views** in [section 6](#6-saved-views); **Hidden** in [section 17](#the-hidden-page); **Needs attention** and **Link IGDB** in [section 22](#22-link-your-games-with-igdb).)
 22. [Link your games with IGDB, and Needs attention](#22-link-your-games-with-igdb)
 
 *Good to know*
@@ -70,6 +70,7 @@ The app follows your phone's light or dark setting. On a PC, the **Theme** butto
 | Page | What it is for | Section |
 |---|---|---|
 | **Series** | how far you are through every series | [14](#14-series) |
+| **Expansions** | the expansions of your games: status, ownership, years played | [7](#expansions) |
 | **Upcoming** | new games of your series that are not out yet | [15](#15-upcoming-releases) |
 | **Similar games** | games you might like, from the ones you finished | [16](#16-similar-games) |
 | **Deals** | what the games you don't own and haven't played yet cost right now | [17](#17-deals) |
@@ -112,6 +113,7 @@ The Library shows every game as a card.
 - The cover, with the game's **status** in the bottom-left corner (and a coloured line under the cover in the same colour).
 - A **★** in the top-right corner for favourites.
 - A small emoji in the top-left corner when the game is *not* a plain "Owned" game (for example 🏴‍☠️ or 🆓, see [section 13](#13-what-the-little-icons-mean)).
+- When the game has expansions you own or track, a small **2/3 ✓** next to its platforms: how many of them you finished, out of the ones you own or track (see [Expansions](#expansions)).
 - Under the title: the **platforms** (the first two) and the **years you played it**. The newest years are shown as small pills. A dashed **+3** means three older years are not shown. 🧒 means you played it as a child and ♾️ means you have always played it. Touch or hover over the years to read them in full.
 
 **Search.** Type in the search box. It looks in the title, series, developer and notes, and it ignores accents, so "pokemon" finds *Pokémon*.
@@ -126,7 +128,7 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 - **Tap it again to exclude it.** The chip turns red and is crossed out. For example *Finished* excluded hides finished games.
 - **Tap a third time to clear it.**
 - When you include two or more values in *Platform*, *Genre*, *Theme*, *Game mode*, *Perspective*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
-- At the top are quick switches: **Favorite**, **VR** and **100% completed**.
+- At the top are quick switches: **Favorite**, **VR** and **100% completed**, and, once a game has expansions, **Expansions left to play** (games with an expansion you own that you have not finished, dropped or ruled out).
 - **Time to beat** (once some game has a time) filters by how long a game takes. Tap a quick range (**Under 5 h**, **5-15 h**, **15-40 h**, **Over 40 h**) or type your own in **From** and **Under** (hours: `7.5`, or `45m`; a game passes when it is from the first number up to, but not including, the second). **No time known** works like the other chips: tap once to see only games without a time, again to hide them, a third time to clear it. Next to the range, **Use** picks which time counts: the one shown in the details (the default), **Main story**, **Main + extras** or **Completionist**.
 - **Game mode** (single player, co-op, multiplayer...) and **Perspective** (first person, third person, isometric...) come from IGDB and appear in the filters as soon as some game has them.
 - The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
@@ -199,6 +201,46 @@ Tap **✎ Edit**. You can change the title, platforms, genres, themes, series, d
 - **Fill from IGDB…** looks the game up on IGDB, lets you pick the right match, and copies its genres, themes, developer, series and release year into the form. Your platforms, notes and ownership are not touched. Check the form, then **Save**. The game is then linked to IGDB (shown as *Linked to IGDB*, with **Unlink** if it was the wrong match). After saving a new link the app offers to update the rest of the details from the new game: see [Update the details after linking](#update-the-details-after-linking).
 
 **Change cover** and **Change poster** are explained in [section 12](#12-covers-and-posters). **Delete game** removes the game for good, after a confirmation: its years, cover and screenshots go with it (the picture files are deleted too) and it cannot be undone.
+
+### Expansions
+
+*Needs IGDB for the list.* Some games have **expansions**: big add-ons that IGDB calls expansions (The Witcher 3's *Hearts of Stone* and *Blood and Wine*). They live **inside their game**, not as cards in the Library, and they are never counted as games. Small DLC, packs, cosmetics, soundtracks and season passes are not listed, and a standalone expansion (such as *Spider-Man: Miles Morales*) stays a normal game.
+
+**In a game's details**, after the facts, there is an **Expansions (n)** section: one row per expansion with a small poster, its title and year, its status (or *Not tracked*), an ownership emoji and the years you played it. The list comes from IGDB by itself: when you open a game that is linked to IGDB and its expansions were never read, or not in the last 30 days, the app reads them in the background (the details open at once and the section fills in a moment later). Tap **↻ Refresh from IGDB** to read them again. A game that is not linked says so (link it first, see [section 22](#22-link-your-games-with-igdb)); a linked game with none says *No expansions on IGDB*.
+
+![A game's expansions](img/expansions-drawer-phone.jpg)
+
+**A new expansion has no status and no ownership** (*Not tracked*) until you set one. **Tap a row** to open its sheet:
+- **Status**: the same statuses as games. Moving it to Playing, Playing - Evergreen or Finished adds the current year to its years played, as for games; nothing else records a year.
+- **Ownership**: the same list as games, with the same emojis.
+- **Played in**: the same years editor as a game's (years, *Childhood*, *Always*).
+- **Notes**, and its **time to beat**: IGDB's time when it has one, **Edit times** to type your own, **Get from HowLongToBeat** to search by title, exactly as for games.
+- **Hide this expansion** if IGDB lists something wrong: it is not counted or listed anywhere (*Undo* in the message, or *Show again* in the drawer's **Show n hidden one**).
+- The name of the game opens the game's details.
+
+Every control saves at once. If you link the game to a different IGDB game, the expansions you never touched are replaced by the new game's; the ones you tracked (a status, ownership, notes, years or your own time) are kept.
+
+![The sheet of an expansion](img/expansion-sheet-phone.jpg)
+
+**The Expansions page** (**More** on a phone, the sidebar on a PC) lists every expansion of your library in one place. It has the Library's search box (it finds the expansion's or the game's title), **Filters** (status including *Not tracked*, ownership *Owned* / *Not owned* / *Not tracked*, the platform of the game, *Base game finished*, and *Only the hidden ones*), a sort (**Game**, **Release date**, **Title**, **Recently changed**), a count (*12 of 31*), and the filters in the address so you can bookmark them. A row opens the same sheet; the game's name opens the game. At the top:
+- **↻ Find expansions for all games** reads the expansions of every game linked to IGDB that was not read in the last 30 days, one batch of 100 games per request, with progress and a **Stop** button. When it ends it says *Found 87 expansions for 41 games.*
+- **Import owned expansions from Steam…**, below.
+
+![The Expansions page](img/expansions-phone.jpg)
+
+**Import the expansions you own on Steam (once).** Steam does not tell other programs which DLC you own, so you save one file from your own browser and give it to the app. The app never asks for your Steam password, a cookie or a key.
+1. In a browser where you are logged in to Steam, open `https://store.steampowered.com/dynamicstore/userdata/`. It shows plain text (JSON).
+2. Save that page as a file (Ctrl+S, or *Save page as…*). It can be up to 5 MB.
+3. On the Expansions page press **Import owned expansions from Steam…**, choose the file and press **Import**.
+
+The app reads only the list of apps you own from the file and does not keep the file. First it reads the expansions of the games it has never read (with the same progress), then it sets the ownership **Owned** on every expansion whose Steam page is in your list **and that has no ownership yet**. A status or an ownership you already set is never changed, so you can run it again whenever you buy more. The message says how many it marked, and how many other owned Steam items are not expansions of games in your library (or not on IGDB): Steam's list holds every game you own too, so this number is normally large.
+
+**Expansions in the other pages.**
+- **Upcoming** lists the expansions of your games that are not out yet or have no date, as *Expansion · <game>* (a filter **Type: Expansions** shows only those); they leave the page like games do. Tap a row for its sheet, the game's name for the game.
+- **Stats** has a tile and a card **Expansions**: how many you finished out of the ones you own, and the finished expansions per year (each once, in the last year you played it). They are never added to the numbers of games.
+- **Year in review** has an **Expansions** box under the games of the year: the expansions you played that year, grouped by how it ended (finished, dropped, still playing, played).
+- **Needs attention** has the group **Expansions left to play**: you finished the game, you own the expansion, and it is not finished, dropped or ruled out. **Edit** opens its sheet; **⋯** has *Mark as Playing / Finished / Dropped / Not interested*, *Open the game* and *Ignore in this list*.
+- **Export CSV** (table layout) always ends with an **Expansions** column such as *Hearts of Stone (Finished, Owned); Blood and Wine (Not tracked)*.
 
 ## 8. Putting games in your own order
 
@@ -586,13 +628,15 @@ Tap a game's name to open its details. **Ignore in this list** (in **⋯**) hide
 
 ## 23. Refresh buttons
 
-The pages that use other websites keep what they read on the server. **Opening a page, a game or the app never asks IGDB or IsThereAnyDeal**: you decide when, with a refresh button. Each refresh runs in the background with a progress count, one at a time, and keeps going if you leave the page; what it already stored stays if it is stopped.
+The pages that use other websites keep what they read on the server. **Opening a page or the app never asks IGDB or IsThereAnyDeal**: you decide when, with a refresh button. The one exception is the expansions of a game: opening a game linked to IGDB reads its expansions in the background, at most once a month for each game (see [Expansions](#expansions)). Each refresh runs in the background with a progress count, one at a time, and keeps going if you leave the page; what it already stored stays if it is stopped.
 
 | Page and button | What it reads | When to press it |
 |---|---|---|
 | **Series** → **↻ Refresh** | IGDB: the collections behind your series, the games you do not have, their small posters and the dates of new games | after linking games, or when you want to see new games of a series |
 | **Upcoming** → **↻ Refresh from IGDB** | the same run as Series, which also reads the release dates of the new games | now and then, to catch announced dates |
 | **Similar games** → **↻ Refresh from IGDB** | IGDB's similar-games lists for the games you finished or favourited | after finishing games you liked |
+| **Expansions** → **↻ Find expansions for all games** | IGDB: the expansions of every game linked to IGDB that was not read in the last 30 days, 100 games per request, with their small posters and IGDB's time to beat | after linking many games, or to see new expansions |
+| **Expansions** → **Import owned expansions from Steam…** | a file you saved from your own Steam login (nothing is sent to Steam); first reads the games never read | once, and again after you buy more DLC |
 | **Needs attention** → **Find times for all** | HowLongToBeat (no key): a time to beat for the games of the *No time to beat* group, one search at a time, saved only when the match is certain | when many games lack a time; the ones it cannot be sure of stay for you ([section 22](#needs-attention)) |
 | **Deals** → **↻ Refresh prices** | IsThereAnyDeal: the price now and the historical low of the games you don't own and haven't played yet, except the ones you hid (about one request per 50 games) | before you buy something |
 | **The price check every 6 hours** (no button) | the same prices as **↻ Refresh prices**, read by a timer on the Raspberry Pi about every 6 hours (02:00, 08:00, 14:00, 20:00), which also sends the price alerts (and the Telegram messages) | nothing to press: open **Deals** to see the result ([section 17](#17-deals)). On a PC run `deltabacklog deals-check` |

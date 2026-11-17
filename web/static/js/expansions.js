@@ -125,5 +125,13 @@ export const expansionYears = (games) => new Set(allExpansions(games).flatMap(({
 /** The URL of an expansion's small poster (the server downloaded it once), or null. v is IGDB's image id: a changed cover is a new URL. */
 export const expansionCoverURL = (x) => (x.cover ? `covers/${encodeURIComponent(x.cover)}?v=${encodeURIComponent(x.cover_v || '')}` : null);
 
+/**
+ * One text cell for the table and the CSV export: "Hearts of Stone (Finished, Owned); Blood and Wine (Not tracked)". Hidden
+ * expansions are left out. statusLabel maps a status code to its label.
+ */
+export function expansionsCell(g, statusLabel = (c) => c) {
+  return visible(g).map((x) => `${x.title} (${[x.status ? statusLabel(x.status) : 'Not tracked', x.ownership].filter(Boolean).join(', ')})`).join('; ');
+}
+
 /** "Hearts of Stone" -> "Hearts of Stone (2015)" */
 export const withYear = (x) => (x.year ? `${x.title} (${x.year})` : x.title);

@@ -39,7 +39,7 @@ export function expansionsSection(game) {
     const all = expansionsOf(game);
     const shown = all.filter((x) => !x.hidden);
     const hidden = all.length - shown.length;
-    if (!game.igdb_id) { // nothing to read: say why, once
+    if (!game.igdb_id && !all.length) { // nothing to read: say why
       box.replaceChildren(h('h3', {}, 'Expansions'), h('p.hint', {}, 'Not linked to IGDB. Link the game (Edit, then Fill from IGDB) to see its expansions.'));
       return;
     }
@@ -48,11 +48,11 @@ export function expansionsSection(game) {
       h('h3', {}, `Expansions (${shown.length})`),
       shown.length ? h('ul.exp-list', {}, shown.map(row)) : null,
       !shown.length && loading ? h('p.hint', { role: 'status' }, 'Looking for expansions on IGDB…') : null,
-      !shown.length && !loading && fetched ? h('p.hint', {}, hidden ? 'All of its expansions are hidden.' : 'No expansions on IGDB.') : null,
-      !shown.length && !loading && !fetched ? h('p.hint', {}, 'Not read from IGDB yet.') : null,
+      !shown.length && !loading && (fetched || !game.igdb_id) ? h('p.hint', {}, hidden ? 'All of its expansions are hidden.' : 'No expansions on IGDB.') : null,
+      !shown.length && !loading && !fetched && game.igdb_id ? h('p.hint', {}, 'Not read from IGDB yet.') : null,
       hidden ? h('button.exp-link', { type: 'button', 'aria-expanded': String(showHidden), onclick: () => { showHidden = !showHidden; draw(); } }, showHidden ? 'Hide the hidden ones' : `Show ${plural(hidden, 'hidden one')}`) : null,
       showHidden && hidden ? h('ul.exp-list', {}, all.filter((x) => x.hidden).map(row)) : null,
-      h('button.exp-link', { type: 'button', disabled: loading || null, onclick: () => read(false) }, loading ? 'Reading IGDB…' : '↻ Refresh from IGDB'),
+      game.igdb_id ? h('button.exp-link', { type: 'button', disabled: loading || null, onclick: () => read(false) }, loading ? 'Reading IGDB…' : '↻ Refresh from IGDB') : h('p.hint', {}, 'The game is not linked to IGDB, so these are not refreshed.'),
     ].filter(Boolean)); // replaceChildren would print a null as the text "null"
   }
 

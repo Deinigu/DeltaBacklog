@@ -114,9 +114,22 @@ func seedFakeIGDB(d *sql.DB) {
 		}
 		must(d.Exec(`INSERT INTO similar_hidden(igdb_id) VALUES (850003)`))
 	}
-	// 3. expansions of the first games: tracked and untracked, owned and not, released and upcoming
+	fmt.Println("made-up IGDB caches written (series collections and similar games)")
+}
+
+// seedExpansions gives the demo library IGDB-style expansions (tracked and untracked, owned and not, released and upcoming), so the
+// drawer, the Expansions page, Upcoming, Stats and the screenshots have data without any key. Every game is marked as read, so no
+// page asks a real IGDB for them. Made-up IGDB ids (960000 and up).
+func seedExpansions(d *sql.DB) {
+	must := func(_ sql.Result, err error) {
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	stamp := now.Format("2006-01-02T15:04:05Z")
 	must(d.Exec(`INSERT OR IGNORE INTO ownership(name) VALUES ('Owned')`))
-	must(d.Exec(`INSERT INTO expansion_fetch(game_id, fetched_at) SELECT id, ? FROM game WHERE igdb_id IS NOT NULL`, stamp))
+	must(d.Exec(`INSERT INTO expansion_fetch(game_id, fetched_at) SELECT id, ? FROM game`, stamp)) // every game counts as read, so no drawer asks a real IGDB for them
 	erows, err := d.Query(`SELECT g.id, g.title, g.release_year, s.code FROM game g JOIN status s ON s.id = g.status_id ORDER BY (s.code = 'finished') DESC, g.id LIMIT 18`)
 	if err != nil {
 		log.Fatal(err)
@@ -174,5 +187,5 @@ func seedFakeIGDB(d *sql.DB) {
 			}
 		}
 	}
-	fmt.Println("made-up IGDB caches written (series collections, similar games and expansions)")
+	fmt.Println("made-up expansions written")
 }
