@@ -64,8 +64,17 @@ export function attentionRows(games, now = Date.now()) {
 
 // ---- Upcoming ----
 
+/** Statuses that mean the owner is playing it: it is out, whatever IGDB's date says. */
+const UNDER_WAY = new Set(['playing', 'playing_evergreen', 'evergreen', 'hold']);
+
 /**
- * The expansions the Upcoming page may list: of a library game, not hidden, not finished, dropped or ruled out, dated or TBA. The
+ * Whether an expansion without a release date is still "to be announced": not when the owner owns it (as for isReleased), played it,
+ * or is playing it. IGDB lacks the date of some old expansions; those would otherwise sit under "Later / TBA" for ever.
+ */
+export const isAwaited = (x) => !isOwned(x) && !x.years?.length && !x.periods?.length && !UNDER_WAY.has(x.status);
+
+/**
+ * The expansions the Upcoming page may list: of a library game, not hidden, not finished, dropped or ruled out, dated or TBA (see isAwaited). The
  * page (buildUpcoming) then drops the ones that came out long ago, as it does for games. The item has the shape of the page's
  * other items (see upcoming.js); `date` is IGDB's day (an expansion has no coarser precision), `period` comes from releasePeriod.
  */
@@ -73,6 +82,7 @@ export function upcomingExpansionItems(games, releasePeriod) {
   const out = [];
   for (const { x, game } of allExpansions(games)) {
     if (x.status === 'dropped' || x.status === 'not_interested' || x.status === 'finished') continue;
+    if (!x.date && !isAwaited(x)) continue; // no date, but owned or played: out already
     const period = releasePeriod(x.date ?? null, 0);
     out.push({ id: `x${x.id}`, kind: 'expansion', title: x.title, date: x.date ?? null, format: period ? 0 : null, period, platforms: game.platforms || [],
       seriesName: null, gameTitle: game.title, expansion: x, game });

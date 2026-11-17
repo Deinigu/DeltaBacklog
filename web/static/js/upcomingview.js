@@ -9,7 +9,7 @@ import { missingIndex, moveHidden, oldestFetch } from './series.js';
 import { buildUpcoming, formatRelease } from './upcoming.js';
 import { createListShell } from './listshell.js';
 import { toggleIn, withSelected } from './listfilter.js';
-import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery } from './upcomingfilter.js';
+import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery, forwardText } from './upcomingfilter.js';
 import { formatDate } from './format.js';
 import { expansionCoverURL } from './expansions.js';
 import { openExpansionSheet } from './expansionsheet.js';
@@ -167,7 +167,7 @@ export function renderUpcoming(root) {
       ...groups.map((g) => h('section.up-group', {}, h('h2', {}, g.label, h('small', {}, ` ${g.items.length}`)), h('ul.up-list', {}, g.items.map((it) => row(it, false))))),
       nothing ? emptyBox('Nothing is coming up yet. Read your series from IGDB to see their new games here.', info.configured && btn) : null,
       !nothing && !shown ? emptyBox('No games match these filters.', h('button.btn', { type: 'button', onclick: reset }, 'Clear filters')) : null,
-      total ? h('p.hint', {}, `${total} ${total === 1 ? 'game' : 'games'} to look forward to.`) : null,
+      total ? h('p.hint', {}, forwardText(groups)) : null,
     ].filter(Boolean));
     const pills = [
       ...WHEN.filter((w) => filter.when.has(w.key)).map((w) => ({ name: `When: ${w.label}`, kids: [h('b', {}, 'When'), w.label], remove: () => filter.when.delete(w.key) })),

@@ -309,7 +309,7 @@ func TestExpansionSyncJob(t *testing.T) {
 	f.calls = 0
 	do(t, "POST", srv.URL+"/api/expansions/sync", `{}`)
 	st = waitExp(t, s)
-	if f.calls != 0 || st.Total != 0 {
+	if f.calls != 0 || st.Total != 0 || st.Report != nothingDue {
 		t.Errorf("fresh games are skipped: calls %d %+v", f.calls, st)
 	}
 }

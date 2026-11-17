@@ -259,6 +259,7 @@ export function renderLibrary(root, opts = {}) {
     }
     for (const { f, btn } of flagRefs) {
       const on = state.flags.has(f.key);
+      if (f.test) btn.hidden = !on && !store.games.some(f.test); // a computed flag (expansions) appears once some game has it
       btn.dataset.state = on ? 'in' : 'off';
       btn.setAttribute('aria-pressed', on);
     }

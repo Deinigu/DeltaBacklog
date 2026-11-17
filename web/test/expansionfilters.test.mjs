@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, matches, FLAGS, stateFromQuery, stateToQuery, stateFromView, filterToJSON, activeCount } from '../static/js/filters.js';
-import { emptyUpcomingFilter, upcomingFilterCount, upcomingPasses, upcomingStateFromQuery, upcomingStateToQuery } from '../static/js/upcomingfilter.js';
+import { emptyUpcomingFilter, upcomingFilterCount, upcomingPasses, upcomingStateFromQuery, upcomingStateToQuery, forwardText } from '../static/js/upcomingfilter.js';
 
 const g = (o = {}) => ({ id: 1, title: 'Witcher', _search: 'witcher', status: 'finished', platforms: [], genres: [], themes: [], years: [], periods: [], players: [], expansions: [], ...o });
 const owned = { id: 1, ownership: 'Owned', status: null };
@@ -58,4 +58,12 @@ test('the flag test can be passed to .some() (the chip is shown only while a gam
   const out = { ...owned, date: 1444694400 }; // released in 2015: .some() passes the index 0 as a second argument
   assert.equal([g(), g({ expansions: [out] })].some(test), true);
   assert.equal([g({ expansions: [{ ...out, date: Date.now() / 1000 + 86400 * 30 }] })].some(test), false, 'only a pre-order: nothing to play yet');
+});
+
+test('Upcoming: the line under the list never calls an expansion a game', () => {
+  const it = (kind) => ({ kind });
+  assert.equal(forwardText([{ items: [it('missing'), it('missing')] }]), '2 games to look forward to.');
+  assert.equal(forwardText([{ items: [it('expansion')] }]), '1 expansion to look forward to.');
+  assert.equal(forwardText([{ items: [it('missing')] }, { items: [it('expansion'), it('expansion')] }]), '1 game and 2 expansions to look forward to.');
+  assert.equal(forwardText([]), '');
 });

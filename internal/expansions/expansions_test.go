@@ -326,6 +326,21 @@ func TestParseOwned(t *testing.T) {
 			t.Errorf("saved web page: %v %v", got, err)
 		}
 	}
+	// a saved page whose head has braces of its own (an inline style or script) before the JSON
+	styled := `<html><head><style>pre{white-space:pre-wrap}</style><script>var a = {b: 1};</script></head><body><pre>` + ok + `</pre><div class="json-formatter-container"></div></body></html>`
+	if got, err := ParseOwned(strings.NewReader(styled)); err != nil || len(got) != 3 || got[0] != 10 {
+		t.Errorf("saved web page with a style: %v %v", got, err)
+	}
+	for name, page := range map[string]string{
+		"two lists":   `<pre>{"rgOwnedApps":[1]}</pre><pre>{"rgOwnedApps":[2]}</pre>`,
+		"not a list":  `<pre>{"rgOwnedApps":"1,2"}</pre>`,
+		"no colon":    `<p>"rgOwnedApps" [1,2]</p>`,
+		"broken list": `<pre>{"rgOwnedApps":[1,2</pre>`,
+	} {
+		if _, err := ParseOwned(strings.NewReader(page)); !errors.Is(err, ErrNotSteamFile) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
 	if _, err := ParseOwned(strings.NewReader(`<html><pre>{"rgWishlist":[1]}</pre></html>`)); !errors.Is(err, ErrNotSteamFile) {
 		t.Errorf("a web page without the list: %v", err)
 	}

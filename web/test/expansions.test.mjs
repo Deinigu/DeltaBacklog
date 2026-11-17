@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { visible, isOwned, isReleased, leftToPlay, hasLeftToPlay, expansionRowLabel, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
+import { visible, isOwned, isReleased, isAwaited, leftToPlay, hasLeftToPlay, expansionRowLabel, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
   countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear, isStale, expansionsCell, FRESH_DAYS } from '../static/js/expansions.js';
 import { releasePeriod, buildUpcoming } from '../static/js/upcoming.js';
 import { GROUPS } from '../static/js/yearreview.js';
@@ -83,6 +83,19 @@ test('Upcoming: expansions of library games; finished, dropped, ruled out and hi
   assert.deepEqual([f.id, f.kind, f.gameTitle, f.platforms, f.format, f.period.precision, f.seriesName], ['x1', 'expansion', 'The Witcher 3', ['PC', 'PS5'], 0, 'day', null]);
   assert.equal(items[1].period, null);
   assert.equal(items[1].format, null);
+});
+
+test('Upcoming: an expansion without a date is TBA only while nothing says it is out (owned, played, playing)', () => {
+  assert.equal(isAwaited(x(1, { date: null })), true);
+  assert.equal(isAwaited(x(1, { date: null, status: 'backlog' })), true, 'on the backlog: still waiting for it');
+  assert.equal(isAwaited(x(1, { date: null, ownership: 'Nope' })), true, 'Nope is not owning it');
+  assert.equal(isAwaited(x(1, { date: null, ownership: 'Owned' })), false);
+  assert.equal(isAwaited(x(1, { date: null, years: [2019] })), false);
+  assert.equal(isAwaited(x(1, { date: null, periods: ['childhood'] })), false);
+  for (const st of ['playing', 'playing_evergreen', 'evergreen', 'hold']) assert.equal(isAwaited(x(1, { date: null, status: st })), false, st);
+  const g = game({}, [x(1, { title: 'TBA', date: null }), x(2, { title: 'Old owned', date: null, ownership: 'Owned' }),
+    x(3, { title: 'Pre-order', date: Date.UTC(2099, 0, 1) / 1000, ownership: 'Owned' }), x(4, { title: 'Played', date: null, years: [2015] })]);
+  assert.deepEqual(upcomingExpansionItems([g], releasePeriod).map((i) => i.title), ['TBA', 'Pre-order'], 'a dated pre-order stays');
 });
 
 test('Upcoming page: expansions are grouped like games, and ones released long ago drop out', () => {

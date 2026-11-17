@@ -71,6 +71,15 @@ export const platformsOf = (res) => tally(allItems(res), (it) => it.platforms);
 // ---- the address: #/upcoming?q=zelda&when=month,next3&series=Zelda&platform=PC ----
 
 /** The page state of an address query: the filter. Anything unknown is dropped. */
+/** The line under the list: "3 games and 1 expansion to look forward to." (expansions are never called games). */
+export function forwardText(groups) {
+  const items = groups.flatMap((g) => g.items);
+  const ex = items.filter((it) => it.kind === 'expansion').length;
+  const n = items.length - ex;
+  const parts = [n ? `${n} ${n === 1 ? 'game' : 'games'}` : null, ex ? `${ex} ${ex === 1 ? 'expansion' : 'expansions'}` : null].filter(Boolean);
+  return parts.length ? `${parts.join(' and ')} to look forward to.` : '';
+}
+
 export function upcomingStateFromQuery(search) {
   const qs = params(search);
   const f = emptyUpcomingFilter();

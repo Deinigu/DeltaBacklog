@@ -10,6 +10,7 @@ import (
 	"io"
 	"regexp"
 	"strconv"
+	"unicode"
 
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 )
@@ -41,18 +42,15 @@ func ParseOwned(r io.Reader) ([]int64, error) {
 	var doc struct {
 		Apps json.RawMessage `json:"rgOwnedApps"`
 	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		// "Save page as… Webpage": the JSON object sits between the first { and the last }, with &quot; and the like
-		i, j := bytes.IndexByte(raw, '{'), bytes.LastIndexByte(raw, '}')
-		if i < 0 || j <= i || json.Unmarshal([]byte(html.UnescapeString(string(raw[i:j+1]))), &doc) != nil {
+	var apps []int64
+	if err := json.Unmarshal(raw, &doc); err == nil {
+		if len(doc.Apps) == 0 || json.Unmarshal(doc.Apps, &apps) != nil {
 			return nil, ErrNotSteamFile
 		}
+	} else if apps, err = ownedInPage(raw); err != nil {
+		return nil, err
 	}
-	if len(doc.Apps) == 0 {
-		return nil, ErrNotSteamFile
-	}
-	var apps []int64
-	if err := json.Unmarshal(doc.Apps, &apps); err != nil || apps == nil {
+	if apps == nil {
 		return nil, ErrNotSteamFile
 	}
 	seen := make(map[int64]bool, len(apps))
@@ -67,6 +65,26 @@ func ParseOwned(r io.Reader) ([]int64, error) {
 		}
 	}
 	return out, nil
+}
+
+// ownedInPage reads the list from the page saved by a browser as a web page ("Save page as… Webpage"): the JSON sits inside
+// the HTML (in <pre>, with &quot; and the like), maybe after a style or script with braces of its own. Only the array that
+// follows the "rgOwnedApps" key is decoded.
+func ownedInPage(raw []byte) ([]int64, error) {
+	text := []byte(html.UnescapeString(string(raw)))
+	i := bytes.Index(text, []byte(`"rgOwnedApps"`))
+	if i < 0 || bytes.Contains(text[i+1:], []byte(`"rgOwnedApps"`)) { // none, or two: not the file
+		return nil, ErrNotSteamFile
+	}
+	rest := bytes.TrimLeftFunc(text[i+len(`"rgOwnedApps"`):], unicode.IsSpace)
+	if len(rest) == 0 || rest[0] != ':' {
+		return nil, ErrNotSteamFile
+	}
+	var apps []int64
+	if err := json.NewDecoder(bytes.NewReader(rest[1:])).Decode(&apps); err != nil {
+		return nil, ErrNotSteamFile
+	}
+	return apps, nil
 }
 
 // Import is what ImportOwned did.

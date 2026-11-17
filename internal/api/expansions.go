@@ -460,6 +460,9 @@ func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly
 	writeJSONStatus(w, http.StatusAccepted, j.expStatus())
 }
 
+// nothingDue is the report of a "Find expansions" run with no game to read (instead of "Found 0 expansions for 0 games.").
+const nothingDue = "Nothing to read: every game linked to IGDB was read in the last 30 days."
+
 func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, error)) {
 	j := &s.expJob
 	o := s.expansionOptions()
@@ -474,6 +477,9 @@ func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, tod
 		log.Printf("expansions: sweep covers: %v", e)
 	}
 	text, failed := rep.Text(), false
+	if len(todo) == 0 {
+		text = nothingDue
+	}
 	switch {
 	case ctx.Err() != nil:
 		text = "Stopped. " + text
