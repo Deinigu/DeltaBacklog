@@ -1,6 +1,7 @@
 // "Needs attention": which games need a fix, grouped. Pure (no DOM, no network): unit-tested.
 
 import { ttbState, ttbGroupOfStatus, TTB_GROUPS } from './ttbscope.js';
+import { attentionRows } from './expansions.js';
 
 /** Groups in display order. `fix` is what the row's main button does (attentionview.js maps it to a screen). */
 export const GROUPS = [
@@ -14,6 +15,7 @@ export const GROUPS = [
   { key: 'no_year', title: 'No release year', fix: 'year', hint: '' },
   { key: 'no_ownership', title: 'No ownership', fix: 'ownership', hint: '' },
   { key: 'no_genres', title: 'No genres', fix: 'genres', hint: '' },
+  { key: 'exp_left', title: 'Expansions left to play', fix: 'expansion', hint: 'Expansions you own of games you have finished, that you have not finished, dropped or ruled out yet. Ignoring one here ignores that expansion only.' },
 ];
 
 export const groupByKey = (key) => GROUPS.find((g) => g.key === key);
@@ -65,6 +67,12 @@ export function buildGroups(games, queue = [], ignored = {}, showIgnored = false
       if (isIgnored && !showIgnored) { hidden.set(key, hidden.get(key) + 1); continue; }
       rows.get(key).push({ game: g, note, ignored: isIgnored, marked, candidate: key === 'uncertain' ? top.get(g.id) || null : null });
     }
+  }
+  // The expansions group: one row per expansion (row.expansion), ignored by the expansion's id (the server keeps those apart)
+  for (const { x, game } of attentionRows(games)) {
+    const isIgnored = (ignored.exp_left || []).includes(x.id);
+    if (isIgnored && !showIgnored) { hidden.set('exp_left', hidden.get('exp_left') + 1); continue; }
+    rows.get('exp_left').push({ game, expansion: x, note: '', ignored: isIgnored, marked: false, candidate: null });
   }
   return GROUPS.map((def) => ({ ...def, rows: rows.get(def.key), ignoredCount: hidden.get(def.key) })).filter((g) => g.rows.length > 0);
 }

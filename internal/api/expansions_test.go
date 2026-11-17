@@ -470,3 +470,31 @@ func TestRelinkReplacesUntouchedExpansionsOnly(t *testing.T) {
 		t.Errorf("%d expansions left", n)
 	}
 }
+
+// The Needs attention group exp_left lists expansions, so its ignore list holds expansion ids (and forgets deleted ones).
+func TestAttentionIgnoreExpansionGroup(t *testing.T) {
+	f := &fakeExpansions{lists: map[int64][]meta.Expansion{1942: witcherExp}}
+	_, srv, d := expServer(t, f)
+	x, _ := loadedExpansion(t, srv)
+	if res, body := do(t, "POST", srv.URL+"/api/attention/ignore", `{"group":"exp_left","game_id":`+itoa(x.ID)+`,"ignore":true}`); res.StatusCode != 200 {
+		t.Fatalf("%d %s", res.StatusCode, body)
+	}
+	if res, _ := do(t, "POST", srv.URL+"/api/attention/ignore", `{"group":"exp_nope","game_id":1,"ignore":true}`); res.StatusCode != 400 {
+		t.Errorf("unknown group: %d", res.StatusCode)
+	}
+	_, body := do(t, "GET", srv.URL+"/api/attention/ignored", "")
+	var got struct {
+		Ignored map[string][]int64 `json:"ignored"`
+	}
+	json.Unmarshal(body, &got)
+	if len(got.Ignored["exp_left"]) != 1 || got.Ignored["exp_left"][0] != x.ID {
+		t.Errorf("%s", body)
+	}
+	d.Exec(`DELETE FROM expansion WHERE id = ?`, x.ID)
+	_, body = do(t, "GET", srv.URL+"/api/attention/ignored", "")
+	got.Ignored = nil
+	json.Unmarshal(body, &got)
+	if len(got.Ignored["exp_left"]) != 0 {
+		t.Errorf("a deleted expansion is forgotten: %s", body)
+	}
+}

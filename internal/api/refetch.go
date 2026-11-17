@@ -68,25 +68,32 @@ const attentionIgnoredKey = "attention_ignored"
 
 // attentionGroups are the groups of the Needs attention page (web/static/js/attention.js GROUPS): the only keys accepted.
 var attentionGroups = map[string]bool{"unlinked": true, "uncertain": true, "no_cover": true, "poster": true, "no_ttb": true, "no_ttb_finished": true,
-	"no_platform": true, "no_year": true, "no_ownership": true, "no_genres": true}
+	"no_platform": true, "no_year": true, "no_ownership": true, "no_genres": true,
+	"exp_left": true} // exp_left lists expansions: its ids are expansion ids, not game ids
 
-// attentionIgnored answers {"ignored": {"<group>": [game ids]}}: the games hidden from each group of the page. Ids of
-// games that no longer exist are left out.
+// attentionIgnored answers {"ignored": {"<group>": [game ids]}}: the games hidden from each group of the page (the expansions,
+// for the group exp_left). Ids of games and expansions that no longer exist are left out.
 func (s *Server) attentionIgnored(w http.ResponseWriter, r *http.Request) {
 	out := s.loadIgnored()
-	exists := map[int64]bool{}
-	if rows, err := s.DB.Query("SELECT id FROM game"); err == nil {
-		for rows.Next() {
-			var id int64
-			rows.Scan(&id)
-			exists[id] = true
+	exists := map[string]map[int64]bool{"game": {}, "expansion": {}}
+	for table := range exists {
+		if rows, err := s.DB.Query("SELECT id FROM " + table); err == nil { // table is one of the two constants above
+			for rows.Next() {
+				var id int64
+				rows.Scan(&id)
+				exists[table][id] = true
+			}
+			rows.Close()
 		}
-		rows.Close()
 	}
 	for g, ids := range out {
+		table := "game"
+		if g == "exp_left" {
+			table = "expansion"
+		}
 		keep := ids[:0:0]
 		for _, id := range ids {
-			if exists[id] {
+			if exists[table][id] {
 				keep = append(keep, id)
 			}
 		}
