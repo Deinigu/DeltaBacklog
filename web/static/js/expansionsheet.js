@@ -1,12 +1,11 @@
 // The edit sheet of one expansion (a bottom sheet; a card from 900px; Back closes it): status, ownership, years played, notes,
 // time to beat, Hide and "Refresh from IGDB". Every control saves at once (like the drawer's quick actions); nothing is
 // guessed before the server answers. The rules live in expansions.js (pure).
-import { h, gradientFor, initials, lazyImg, toast, toastAction, toastError, glyphLabel, plural } from './util.js';
+import { h, gradientFor, initials, lazyImg, toast, toastAction, toastError, glyphLabel } from './util.js';
 import { store, findExpansion, patchExpansion, refreshExpansions } from './api.js';
 import { createSheet } from './filtershell.js';
 import { pickMany } from './picker.js';
 import { ownershipLabel } from './ownership.js';
-import { badgeStyle } from './colors.js';
 import { yearsOf, yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 import { ttbSection } from './ttbview.js';
 import { expansionCoverURL, withYear, expansionsOf } from './expansions.js';
@@ -117,6 +116,3 @@ export function openExpansionSheet(id) {
   openSheet = { sheet, close: () => sheet.toggle(false) };
   requestAnimationFrame(() => { sheet.toggle(true); status.focus({ preventScroll: true }); });
 }
-
-/** "2 expansions" for a count line. */
-export const expansionsText = (n) => plural(n, 'expansion');
