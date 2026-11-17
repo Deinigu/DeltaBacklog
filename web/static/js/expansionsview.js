@@ -9,7 +9,7 @@ import { badgeStyle } from './colors.js';
 import { ownershipIcon } from './ownership.js';
 import { playedBadges } from './years.js';
 import { formatRelease } from './upcoming.js';
-import { expansionCoverURL, withYear } from './expansions.js';
+import { expansionCoverURL, expansionRowLabel } from './expansions.js';
 import { SORTS, DEFAULT_SORT, NOT_TRACKED, OWNERSHIP, emptyExpansionFilter, expansionFilterCount, filterExpansions, countExpansions, poolOf, platformsOf, poolCount,
   expansionStateFromQuery, expansionStateToQuery } from './expansionlist.js';
 import { openExpansionSheet } from './expansionsheet.js';
@@ -24,20 +24,27 @@ export function runLine(st) {
 }
 
 const STEAM_URL = 'https://store.steampowered.com/dynamicstore/userdata/';
+const STEAM_MAX_BYTES = 5 << 20; // the server's limit (expansions.MaxSteamFile)
 
 /** The sheet that explains the Steam import and takes the file. Resolves the run's status, or null when closed. */
 function openSteamImport() {
   return new Promise((resolve) => {
     const fail = h('p.exp-err', { role: 'alert' });
-    const file = h('input', { type: 'file', accept: '.json,application/json,text/plain', 'aria-label': 'Steam userdata file' });
+    // a browser may save the page as .json, .txt or a web page (.html): the server reads all three
+    const file = h('input', { type: 'file', accept: '.json,.txt,.html,.htm,application/json,text/plain,text/html', 'aria-label': 'Steam userdata file' });
     const go = h('button.dl-act', { type: 'button', disabled: true, onclick: upload }, 'Import');
-    file.addEventListener('change', () => { go.disabled = !file.files?.length; fail.textContent = ''; });
+    file.addEventListener('change', () => {
+      const f = file.files?.[0];
+      const big = !!f && f.size > STEAM_MAX_BYTES; // said at once, without sending megabytes for nothing
+      go.disabled = !f || big;
+      fail.textContent = big ? 'This file is over 5 MB: it is not the Steam file. Save the page from the address above again.' : '';
+    });
     const dlg = h('dialog.dl-sheet.exp-import', { 'aria-label': 'Import owned expansions from Steam' },
       h('b.dl-sheet-title', {}, 'Import owned expansions from Steam'),
       h('p.hint', {}, 'Steam does not list the DLC you own, so this reads one file that you save from your own browser. Nothing is asked of Steam from here: the app never asks for your password, a cookie or a key.'),
       h('ol.exp-steps', {},
         h('li', {}, 'In a browser where you are logged in to Steam, open ', h('a', { href: STEAM_URL, target: '_blank', rel: 'noopener noreferrer' }, STEAM_URL), ' (it shows plain text).'),
-        h('li', {}, 'Save the page (Ctrl+S or “Save page as…”) as a file. It is JSON.'),
+        h('li', {}, 'Save the page (Ctrl+S or “Save page as…”) as a file. JSON, text or a web page all work.'),
         h('li', {}, 'Choose that file here and press Import. Only the list of owned apps is read; the file is not kept.')),
       h('p.hint', {}, 'It marks the expansions you own as Owned, only where you have not set an ownership. A status or an ownership you set is never changed. You can run it again later.'),
       h('label.frow.col', {}, h('span.flabel', {}, 'The saved file (up to 5 MB)'), file),
@@ -158,7 +165,7 @@ export function renderExpansions(root) {
     const played = playedBadges(x, 3);
     const icon = x.ownership && ownershipIcon(x.ownership);
     const date = x.date ? formatRelease(x.date, 0) : 'Release date not announced';
-    const open = h('button.up-open', { type: 'button', onclick: () => openExpansionSheet(x.id), 'aria-label': `${withYear(x)}, ${game.title}: edit` },
+    const open = h('button.up-open', { type: 'button', onclick: () => openExpansionSheet(x.id), 'aria-label': expansionRowLabel(x, (c) => store.statusByCode.get(c)?.label ?? c, game) },
       h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
       h('span.up-body', {},
         h('span.up-title', { translate: 'no' }, x.title),

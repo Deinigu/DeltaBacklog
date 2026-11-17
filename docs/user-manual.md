@@ -128,7 +128,7 @@ Tap the filter button (the three lines next to the search box). On a PC the filt
 - **Tap it again to exclude it.** The chip turns red and is crossed out. For example *Finished* excluded hides finished games.
 - **Tap a third time to clear it.**
 - When you include two or more values in *Platform*, *Genre*, *Theme*, *Game mode*, *Perspective*, *Year played* or *Played with*, a switch **Any / All** appears. *Any* shows games that have at least one of them. *All* shows only games that have every one of them (for example games that are both *RPG* and *Indie*).
-- At the top are quick switches: **Favorite**, **VR** and **100% completed**, and, once a game has expansions, **Expansions left to play** (games with an expansion you own that you have not finished, dropped or ruled out).
+- At the top are quick switches: **Favorite**, **VR** and **100% completed**, and, once a game has expansions, **Expansions left to play** (games with an expansion you own, that is out, and that you have not finished, dropped or ruled out).
 - **Time to beat** (once some game has a time) filters by how long a game takes. Tap a quick range (**Under 5 h**, **5-15 h**, **15-40 h**, **Over 40 h**) or type your own in **From** and **Under** (hours: `7.5`, or `45m`; a game passes when it is from the first number up to, but not including, the second). **No time known** works like the other chips: tap once to see only games without a time, again to hide them, a third time to clear it. Next to the range, **Use** picks which time counts: the one shown in the details (the default), **Main story**, **Main + extras** or **Completionist**.
 - **Game mode** (single player, co-op, multiplayer...) and **Perspective** (first person, third person, isometric...) come from IGDB and appear in the filters as soon as some game has them.
 - The number on each chip is how many games would match if you tapped it, taking your other filters into account. Chips that would give nothing are faded.
@@ -230,7 +230,7 @@ Every control saves at once. If you link the game to a different IGDB game, the 
 
 **Import the expansions you own on Steam (once).** Steam does not tell other programs which DLC you own, so you save one file from your own browser and give it to the app. The app never asks for your Steam password, a cookie or a key.
 1. In a browser where you are logged in to Steam, open `https://store.steampowered.com/dynamicstore/userdata/`. It shows plain text (JSON).
-2. Save that page as a file (Ctrl+S, or *Save page as…*). It can be up to 5 MB.
+2. Save that page as a file (Ctrl+S, or *Save page as…*). JSON, text or *Webpage* all work; it can be up to 5 MB.
 3. On the Expansions page press **Import owned expansions from Steam…**, choose the file and press **Import**.
 
 The app reads only the list of apps you own from the file and does not keep the file. First it reads the expansions of the games it has never read (with the same progress), then it sets the ownership **Owned** on every expansion whose Steam page is in your list **and that has no ownership yet**. A status or an ownership you already set is never changed, so you can run it again whenever you buy more. The message says how many it marked, and how many other owned Steam items are not expansions of games in your library (or not on IGDB): Steam's list holds every game you own too, so this number is normally large.
@@ -239,7 +239,7 @@ The app reads only the list of apps you own from the file and does not keep the 
 - **Upcoming** lists the expansions of your games that are not out yet or have no date, as *Expansion · <game>* (a filter **Type: Expansions** shows only those); they leave the page like games do. Tap a row for its sheet, the game's name for the game.
 - **Stats** has a tile and a card **Expansions**: how many you finished out of the ones you own, and the finished expansions per year (each once, in the last year you played it). They are never added to the numbers of games.
 - **Year in review** has an **Expansions** box under the games of the year: the expansions you played that year, grouped by how it ended (finished, dropped, still playing, played).
-- **Needs attention** has the group **Expansions left to play**: you finished the game, you own the expansion, and it is not finished, dropped or ruled out. **Edit** opens its sheet; **⋯** has *Mark as Playing / Finished / Dropped / Not interested*, *Open the game* and *Ignore in this list*.
+- **Needs attention** has the group **Expansions left to play**: you finished the game, you own the expansion, it is out (a pre-order waits for its release day), and it is not finished, dropped or ruled out. **Edit** opens its sheet; **⋯** has *Mark as Playing / Finished / Dropped / Not interested*, *Open the game* and *Ignore in this list*.
 - **Export CSV** (table layout) always ends with an **Expansions** column such as *Hearts of Stone (Finished, Owned); Blood and Wine (Not tracked)*.
 
 ## 8. Putting games in your own order

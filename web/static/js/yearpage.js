@@ -59,14 +59,23 @@ export function renderYear(root, year) {
       h('span.ythumb', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
       h('span.yinfo', {}, h('span.yname', { translate: 'no' }, withYear(x)), h('span.ysub', {}, [st?.label ?? 'Played', game.title].join(' · '))));
   };
+  // Rebuilt in place when an expansion changes (its sheet opens from this box: a new status moves the row to its group).
+  let exBox = null;
   const expansionBox = () => {
     const groups = expansionsOfYear(store.games, year, GROUPS).filter((g) => g.items.length);
-    return h('section.year-box.exp-year', {}, h('h2', {}, 'Expansions', h('span.c', {}, String(exTotal))),
+    const n = groups.reduce((sum, g) => sum + g.items.length, 0);
+    const box = h('section.year-box.exp-year', { hidden: !n || null }, h('h2', {}, 'Expansions', h('span.c', {}, String(n))),
       ...groups.map((g) => h('div', {}, h('h3', {}, g.label, h('span.c', {}, String(g.items.length))), h('div.ylist', {}, ...g.items.map(expansionRow)))));
+    if (exBox) exBox.replaceWith(box);
+    exBox = box;
+    return box;
   };
+  const onExpansionChanged = () => { if (alive && exBox?.isConnected) expansionBox(); };
+  window.addEventListener('games-changed', onExpansionChanged);
+  const stopExpansions = () => window.removeEventListener('games-changed', onExpansionChanged);
   if (!total) { // only expansions were played this year
     body.append(expansionBox());
-    return () => { alive = false; };
+    return () => { alive = false; stopExpansions(); };
   }
 
   // ---- summary ----
@@ -120,5 +129,5 @@ export function renderYear(root, year) {
   };
   window.addEventListener('games-changed', onGameChanged);
 
-  return () => { alive = false; window.removeEventListener('games-changed', onGameChanged); };
+  return () => { alive = false; stopExpansions(); window.removeEventListener('games-changed', onGameChanged); };
 }

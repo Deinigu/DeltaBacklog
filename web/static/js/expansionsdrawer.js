@@ -6,7 +6,7 @@ import { store, refreshExpansions } from './api.js';
 import { badgeStyle } from './colors.js';
 import { ownershipIcon } from './ownership.js';
 import { playedBadges } from './years.js';
-import { expansionCoverURL, withYear, expansionsOf, isStale } from './expansions.js';
+import { expansionCoverURL, expansionsOf, isStale, expansionRowLabel } from './expansions.js';
 import { openExpansionSheet } from './expansionsheet.js';
 
 const asked = new Set(); // game ids asked this session: a failed read is not retried on every drawer open
@@ -21,7 +21,7 @@ export function expansionsSection(game) {
     const url = expansionCoverURL(x);
     const played = playedBadges(x, 2);
     const icon = x.ownership && ownershipIcon(x.ownership);
-    return h('li', {}, h('button.exp-row' + (x.hidden ? '.is-hidden' : ''), { type: 'button', onclick: () => openExpansionSheet(x.id), 'aria-label': `${withYear(x)}: edit` },
+    return h('li', {}, h('button.exp-row' + (x.hidden ? '.is-hidden' : ''), { type: 'button', onclick: () => openExpansionSheet(x.id), 'aria-label': expansionRowLabel(x, (c) => store.statusByCode.get(c)?.label ?? c) },
       h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
       h('span.exp-body', {},
         h('span.exp-title', { translate: 'no' }, x.title, x.year ? h('small', {}, ` ${x.year}`) : null),

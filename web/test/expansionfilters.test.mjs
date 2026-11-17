@@ -52,3 +52,10 @@ test('Upcoming: the Expansions chip keeps only expansions, and the search also f
   assert.deepEqual([back.q, back.expansions], ['witcher', true]);
   assert.equal(upcomingStateFromQuery('kind=other').filter.expansions, false);
 });
+
+test('the flag test can be passed to .some() (the chip is shown only while a game passes it)', () => {
+  const test = FLAGS.find((f) => f.key === 'exp_left').test;
+  const out = { ...owned, date: 1444694400 }; // released in 2015: .some() passes the index 0 as a second argument
+  assert.equal([g(), g({ expansions: [out] })].some(test), true);
+  assert.equal([g({ expansions: [{ ...out, date: Date.now() / 1000 + 86400 * 30 }] })].some(test), false, 'only a pre-order: nothing to play yet');
+});

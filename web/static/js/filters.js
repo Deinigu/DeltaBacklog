@@ -24,7 +24,7 @@ export const FLAGS = [
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
   // computed from the game's expansions: the chip only shows while some game has one (see library.js)
-  { key: 'exp_left', label: 'Expansions left to play', test: hasLeftToPlay },
+  { key: 'exp_left', label: 'Expansions left to play', test: (g) => hasLeftToPlay(g) }, // wrapped: callers pass it to .some(), whose index is not a time
 ];
 
 // The old "short" flag (under 10 h) is now a time-to-beat range; saved views and links that still carry it are migrated on load.

@@ -463,6 +463,7 @@ func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly
 func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, error)) {
 	j := &s.expJob
 	o := s.expansionOptions()
+	o.AllCovers = true // the background run catches up on every missing poster (a drawer's refresh only gets its game's)
 	o.Progress = func(done, total int) { j.mu.Lock(); j.done, j.total = done, total; j.mu.Unlock() }
 	var rep expansions.Report
 	var err error

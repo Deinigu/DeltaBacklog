@@ -16,11 +16,13 @@ export const isOwned = (x) => !!x.ownership && norm(x.ownership).trim() !== 'nop
 /** Tracked: the owner gave it a status. */
 export const isTracked = (x) => !!x.status;
 export const isFinished = (x) => x.status === 'finished';
-/** Owned, and not finished, dropped or not wanted (no status counts as not started). */
-export const leftToPlay = (x) => isOwned(x) && !CLOSED.has(x.status);
+/** Out already: its release date is not in the future (no date counts as out: an owned expansion without one is an old one). */
+export const isReleased = (x, now = Date.now()) => !(x.date && x.date * 1000 > now);
+/** Owned, out, and not finished, dropped or not wanted (no status counts as not started). A pre-order is not left to play yet. */
+export const leftToPlay = (x, now = Date.now()) => isOwned(x) && !CLOSED.has(x.status) && isReleased(x, now);
 
 /** True when the game has an expansion left to play: the Library's "Expansions left to play" filter. */
-export const hasLeftToPlay = (g) => visible(g).some(leftToPlay);
+export const hasLeftToPlay = (g, now = Date.now()) => visible(g).some((x) => leftToPlay(x, now));
 
 /** The Library card's badge: finished / (owned or tracked, not hidden), e.g. "2/3 ✓". null when there is nothing to count. */
 export function expansionBadge(g) {
@@ -55,8 +57,8 @@ export function isStale(g, now = Date.now()) {
 // ---- Needs attention ----
 
 /** The group of the Needs attention page: the base game is finished, the expansion owned and not done. Rows by game, then release. */
-export function attentionRows(games) {
-  return allExpansions(games.filter((g) => g.status === 'finished')).filter(({ x }) => leftToPlay(x))
+export function attentionRows(games, now = Date.now()) {
+  return allExpansions(games.filter((g) => g.status === 'finished')).filter(({ x }) => leftToPlay(x, now))
     .sort((a, b) => byTitle(a.game, b.game) || releaseKey(a.x) - releaseKey(b.x) || byTitle(a.x, b.x));
 }
 
@@ -131,6 +133,16 @@ export const expansionCoverURL = (x) => (x.cover ? `covers/${encodeURIComponent(
  */
 export function expansionsCell(g, statusLabel = (c) => c) {
   return visible(g).map((x) => `${x.title} (${[x.status ? statusLabel(x.status) : 'Not tracked', x.ownership].filter(Boolean).join(', ')})`).join('; ');
+}
+
+/**
+ * What a screen reader hears for an expansion's row (the visible status, ownership and years included):
+ * "Hearts of Stone (2015), Finished, Owned, played 2016: edit". statusLabel maps a status code to its label; game adds "of <title>".
+ */
+export function expansionRowLabel(x, statusLabel = (c) => c, game = null) {
+  const played = [...(x.periods || []), ...(x.years || []).map(String)];
+  return [withYear(x) + (game ? `, expansion of ${game.title}` : ''), x.status ? statusLabel(x.status) : 'Not tracked', x.ownership || null,
+    played.length ? `played ${played.join(', ')}` : null, x.hidden ? 'hidden' : null].filter(Boolean).join(', ') + ': edit';
 }
 
 /** "Hearts of Stone" -> "Hearts of Stone (2015)" */

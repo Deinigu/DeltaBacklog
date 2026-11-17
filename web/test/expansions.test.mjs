@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { visible, isOwned, leftToPlay, hasLeftToPlay, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
+import { visible, isOwned, isReleased, leftToPlay, hasLeftToPlay, expansionRowLabel, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
   countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear, isStale, expansionsCell, FRESH_DAYS } from '../static/js/expansions.js';
 import { releasePeriod, buildUpcoming } from '../static/js/upcoming.js';
 import { GROUPS } from '../static/js/yearreview.js';
@@ -147,4 +147,26 @@ test('the table and CSV cell lists the visible expansions with their state', () 
   const g = game({}, [x(1, { title: 'Hearts', status: 'finished', ownership: 'Owned' }), x(2, { title: 'Wine' }), x(3, { title: 'Wrong', hidden: true }), x(4, { title: 'Pack', ownership: 'Nope' })]);
   assert.equal(expansionsCell(g, (c) => c.toUpperCase()), 'Hearts (FINISHED, Owned); Wine (Not tracked); Pack (Not tracked, Nope)');
   assert.equal(expansionsCell(game()), '');
+});
+
+test('an expansion not out yet is not left to play (a pre-order); one without a date is', () => {
+  const now = Date.UTC(2026, 10, 17);
+  const soon = x(1, { ownership: 'Owned', date: now / 1000 + 86400 * 40 });
+  const out = x(2, { ownership: 'Owned', date: now / 1000 - 86400 });
+  const tba = x(3, { ownership: 'Owned', date: null });
+  assert.equal(isReleased(soon, now), false);
+  assert.equal(leftToPlay(soon, now), false);
+  assert.equal(leftToPlay(out, now), true);
+  assert.equal(leftToPlay(tba, now), true, 'no date: an owned old one');
+  assert.equal(hasLeftToPlay(game({}, [soon]), now), false, 'the Library filter skips a game whose only one is not out');
+  assert.equal(hasLeftToPlay(game({}, [soon, out]), now), true);
+  assert.deepEqual(attentionRows([game({}, [soon, out, tba])], now).map((r) => r.x.id), [2, 3], 'Needs attention leaves the pre-order out');
+});
+
+test('the row label says what the row shows', () => {
+  const label = (c) => ({ finished: 'Finished' })[c] ?? c;
+  assert.equal(expansionRowLabel(x(1, { status: 'finished', ownership: 'Owned', years: [2016], periods: ['childhood'] }), label),
+    'Hearts of Stone (2015), Finished, Owned, played childhood, 2016: edit');
+  assert.equal(expansionRowLabel(x(1, { year: null, hidden: true }), label, { title: 'The Witcher 3' }),
+    'Hearts of Stone, expansion of The Witcher 3, Not tracked, hidden: edit');
 });

@@ -5,6 +5,7 @@ package expansions
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -40,6 +41,9 @@ type Options struct {
 	Allowed  func(rawURL string) bool
 	Progress func(done, total int)
 	Now      func() time.Time
+	// AllCovers downloads the missing posters of the whole library (the background job); otherwise only those of the games
+	// this fetch read, so a drawer's refresh never waits on other games' posters.
+	AllCovers bool
 }
 
 // Report says what a fetch did.
@@ -54,6 +58,9 @@ type Report struct {
 type Target struct{ GameID, IGDBID int64 }
 
 const stamp = "2006-01-02T15:04:05Z"
+
+// The release years an expansion may have (the CHECK of expansion.release_year).
+const minYear, maxYear = 1950, 2100
 
 // untracked is the SQL condition (on the alias e) of an expansion the owner has not touched: nothing is lost when it is
 // replaced. Times of IGDB's own do not count as the owner's.
@@ -157,7 +164,14 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 		progress(end)
 	}
 	if o.CoverDir != "" {
-		n, err := fetchCovers(ctx, d, o)
+		var only []int64 // the games read: their posters only, unless AllCovers (nil: the whole library)
+		if !o.AllCovers {
+			only = make([]int64, 0, len(targets))
+			for _, t := range targets {
+				only = append(only, t.GameID)
+			}
+		}
+		n, err := fetchCovers(ctx, d, o, only)
 		rep.Covers = n
 		if err != nil && ctx.Err() != nil {
 			return rep, ctx.Err()
@@ -191,10 +205,10 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 	listed := map[int64]bool{}
 	for _, e := range list {
 		var date, year, steam, cover any
-		if e.Release > 0 {
-			date = time.Unix(e.Release, 0).UTC().Format("2006-01-02")
-			year = e.Year
-		}
+		if t := time.Unix(e.Release, 0).UTC(); e.Release > 0 && t.Year() >= minYear && t.Year() <= maxYear {
+			date = t.Format("2006-01-02")
+			year = t.Year()
+		} // a placeholder date of IGDB's (year 1 or 2999) is no date: the column's CHECK would fail the whole batch
 		if e.SteamAppID > 0 {
 			steam = e.SteamAppID
 		}
@@ -284,9 +298,19 @@ func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64) error
 	return nil
 }
 
-// fetchCovers downloads the posters of expansions that have an IGDB cover but no file yet (at most maxCoversPerRun).
-func fetchCovers(ctx context.Context, d *sql.DB, o Options) (int, error) {
-	rows, err := d.Query(`SELECT igdb_id, cover_image_id FROM expansion WHERE cover_image_id IS NOT NULL AND cover_file IS NULL ORDER BY id LIMIT ?`, maxCoversPerRun)
+// fetchCovers downloads the posters of expansions that have an IGDB cover but no file yet (at most maxCoversPerRun): those of
+// the games `only` when it is not nil, else of the whole library.
+func fetchCovers(ctx context.Context, d *sql.DB, o Options, only []int64) (int, error) {
+	q, args := `SELECT igdb_id, cover_image_id FROM expansion WHERE cover_image_id IS NOT NULL AND cover_file IS NULL`, []any{}
+	if only != nil {
+		if len(only) == 0 {
+			return 0, nil
+		}
+		q += ` AND game_id IN (SELECT value FROM json_each(?))`
+		b, _ := json.Marshal(only)
+		args = append(args, string(b))
+	}
+	rows, err := d.Query(q+` ORDER BY id LIMIT ?`, append(args, maxCoversPerRun)...)
 	if err != nil {
 		return 0, err
 	}

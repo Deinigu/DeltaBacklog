@@ -317,6 +317,18 @@ func TestParseOwned(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
+	// the page saved by a browser as "Webpage, HTML only": the JSON inside <pre>, maybe with entities
+	for _, page := range []string{
+		`<html><head><meta name="color-scheme" content="light dark"></head><body><pre style="word-wrap: break-word;">` + ok + `</pre></body></html>`,
+		`<html><body><pre>{&quot;rgOwnedApps&quot;:[10,20,378648],&quot;strCountry&quot;:&quot;ES&quot;}</pre></body></html>`,
+	} {
+		if got, err := ParseOwned(strings.NewReader(page)); err != nil || len(got) != 3 || got[2] != 378648 {
+			t.Errorf("saved web page: %v %v", got, err)
+		}
+	}
+	if _, err := ParseOwned(strings.NewReader(`<html><pre>{"rgWishlist":[1]}</pre></html>`)); !errors.Is(err, ErrNotSteamFile) {
+		t.Errorf("a web page without the list: %v", err)
+	}
 	if got, err := ParseOwned(strings.NewReader(`{"rgOwnedApps":[]}`)); err != nil || len(got) != 0 {
 		t.Errorf("an empty library is a valid file: %v %v", got, err)
 	}
@@ -365,5 +377,44 @@ func TestImportOwned(t *testing.T) {
 	}
 	if res, err := ImportOwned(d, nil); err != nil || res.Marked != 0 {
 		t.Errorf("empty: %+v %v", res, err)
+	}
+}
+
+// A placeholder date of IGDB's (year 1, 2999) is stored as no date: the CHECK on release_year must never fail a batch.
+func TestFetchDropsImpossibleDates(t *testing.T) {
+	d := open(t)
+	y1 := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	y2999 := time.Date(2999, 12, 31, 0, 0, 0, 0, time.UTC).Unix()
+	src := &fakeSource{lists: map[int64][]meta.Expansion{
+		1942: {{IGDBID: 100, Name: "Old placeholder", Release: y1, Year: 1}, {IGDBID: 101, Name: "Far placeholder", Release: y2999, Year: 2999}},
+		2:    witcher[1:],
+	}}
+	rep, err := Fetch(context.Background(), d, src, []Target{{1, 1942}, {2, 2}}, Options{})
+	if err != nil || rep.Found != 2 { // 101 is listed under both games: counted once
+		t.Fatalf("%+v %v", rep, err)
+	}
+	if n := count(t, d, `SELECT count(*) FROM expansion WHERE igdb_id IN (100, 101) AND release_date IS NULL AND release_year IS NULL`); n != 2 {
+		t.Errorf("placeholder dates stored as none: %d", n)
+	}
+	if n := count(t, d, `SELECT count(*) FROM expansion WHERE igdb_id = 101 AND game_id = 2`); n != 0 {
+		t.Error("the same IGDB id stays with the first game")
+	}
+}
+
+// A one-game fetch (the drawer's refresh) downloads only that game's posters; the background job (AllCovers) catches up on all.
+func TestCoversOfOneGameOnly(t *testing.T) {
+	d := open(t)
+	if _, err := d.Exec(`INSERT INTO expansion(game_id, igdb_id, title, cover_image_id) VALUES (2, 500, 'Dragonborn', 'db')`); err != nil {
+		t.Fatal(err)
+	}
+	var got []int64
+	opt := Options{CoverDir: t.TempDir(), Fetch: func(url, dir string, id int64) (string, error) { got = append(got, id); return "x.jpg", nil }}
+	src := &fakeSource{lists: map[int64][]meta.Expansion{1942: witcher}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, opt); err != nil || len(got) != 1 || got[0] != 100 {
+		t.Fatalf("one game's posters only: %v %v", got, err)
+	}
+	opt.AllCovers = true
+	if _, err := Fetch(context.Background(), d, src, nil, opt); err != nil || len(got) != 2 || got[1] != 500 {
+		t.Errorf("the job gets the rest: %v %v", got, err)
 	}
 }

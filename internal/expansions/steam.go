@@ -1,10 +1,12 @@
 package expansions
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"regexp"
 	"strconv"
@@ -26,7 +28,8 @@ var ErrTooBig = errors.New("file too big")
 
 // ParseOwned reads the owned app ids from Steam's userdata JSON (https://store.steampowered.com/dynamicstore/userdata/).
 // Only rgOwnedApps is read, and only as a list of positive integers; everything else in the file is ignored. The file is
-// never stored or logged. The ids are returned without duplicates.
+// never stored or logged. The ids are returned without duplicates. The page saved by a browser as a web page (the JSON
+// inside <pre>, HTML-escaped) is read too.
 func ParseOwned(r io.Reader) ([]int64, error) {
 	raw, err := io.ReadAll(io.LimitReader(r, MaxSteamFile+1))
 	if err != nil {
@@ -38,7 +41,14 @@ func ParseOwned(r io.Reader) ([]int64, error) {
 	var doc struct {
 		Apps json.RawMessage `json:"rgOwnedApps"`
 	}
-	if err := json.Unmarshal(raw, &doc); err != nil || len(doc.Apps) == 0 {
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		// "Save page as… Webpage": the JSON object sits between the first { and the last }, with &quot; and the like
+		i, j := bytes.IndexByte(raw, '{'), bytes.LastIndexByte(raw, '}')
+		if i < 0 || j <= i || json.Unmarshal([]byte(html.UnescapeString(string(raw[i:j+1]))), &doc) != nil {
+			return nil, ErrNotSteamFile
+		}
+	}
+	if len(doc.Apps) == 0 {
 		return nil, ErrNotSteamFile
 	}
 	var apps []int64

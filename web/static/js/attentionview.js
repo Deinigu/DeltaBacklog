@@ -171,7 +171,7 @@ export function renderAttention(root) {
     const fix = FIXES[group.fix];
     const label = typeof fix.label === 'function' ? fix.label(row) : fix.label;
     const st = store.statusByCode.get(g.status);
-    const sub = exp ? [`Expansion of ${g.title}`, exp.status ? store.statusByCode.get(exp.status)?.label : 'Not started', exp.year].filter(Boolean).join(' · ') : [row.candidate && `IGDB suggests “${row.candidate.name}”${row.candidate.year ? ` (${row.candidate.year})` : ''} · ${row.candidate.score}%`,
+    const sub = exp ? [`Expansion of ${g.title}`, exp.status ? store.statusByCode.get(exp.status)?.label : 'Not tracked', exp.year].filter(Boolean).join(' · ') : [row.candidate && `IGDB suggests “${row.candidate.name}”${row.candidate.year ? ` (${row.candidate.year})` : ''} · ${row.candidate.score}%`,
       row.note || (TTB_GROUPS.includes(group.key) && sync?.manual?.includes(g.id) ? 'Needs a manual pick' : ''), st && st.label, g.platforms.join(', '), g.release_year].filter(Boolean).join(' · ');
     const main = row.ignored
       ? h('button.btn', { type: 'button', onclick: () => stopIgnoring(group, row) }, 'Stop ignoring')
