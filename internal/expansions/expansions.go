@@ -67,6 +67,10 @@ const minYear, maxYear = 1950, 2100
 const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND e.notes = '' AND (e.time_to_beat_src IS NULL OR e.time_to_beat_src = 'igdb')
 	AND NOT EXISTS (SELECT 1 FROM expansion_play p WHERE p.expansion_id = e.id)`
 
+// IsGameSQL is the SQL condition (on the alias e) of an expansion that is also a game of the library (the owner added it as its own
+// card, for example from NocoDB): the card is its record, so it is never listed or counted inside its base game as well.
+const IsGameSQL = `EXISTS (SELECT 1 FROM game lg WHERE lg.igdb_id = e.igdb_id)`
+
 // Due lists the IGDB-linked games whose expansions were never read, or (unless neverOnly) not within FetchTTL.
 func Due(d *sql.DB, now time.Time, neverOnly bool) ([]Target, error) {
 	q := `SELECT g.id, g.igdb_id FROM game g LEFT JOIN expansion_fetch f ON f.game_id = g.id WHERE g.igdb_id IS NOT NULL AND (f.fetched_at IS NULL`
@@ -182,7 +186,7 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 
 // save stores one game's expansions in the caller's transaction: new ones are added, known ones get IGDB's title, date,
 // cover and Steam id (never the owner's status, ownership, notes, years, times or hidden mark), and ones IGDB no longer
-// lists go unless the owner tracks them. It returns the row ids of the game's expansions.
+// lists (or that are a game of the library) go unless the owner tracks them. It returns the row ids of the game's expansions.
 func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int64, error) {
 	have := map[int64]int64{} // igdb id -> row id, for this game
 	rows, err := tx.Query(`SELECT igdb_id, id FROM expansion WHERE game_id = ?`, gameID)
@@ -204,6 +208,13 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 	var ids []int64
 	listed := map[int64]bool{}
 	for _, e := range list {
+		// an expansion the library has as its own game is not kept inside its base game too (an untracked row of it goes below)
+		var isGame bool
+		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM game WHERE igdb_id = ?)`, e.IGDBID).Scan(&isGame); err != nil {
+			return nil, err
+		} else if isGame {
+			continue
+		}
 		var date, year, steam, cover any
 		if t := time.Unix(e.Release, 0).UTC(); e.Release > 0 && t.Year() >= minYear && t.Year() <= maxYear {
 			date = t.Format("2006-01-02")

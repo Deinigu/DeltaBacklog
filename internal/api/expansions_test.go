@@ -498,3 +498,28 @@ func TestAttentionIgnoreExpansionGroup(t *testing.T) {
 		t.Errorf("a deleted expansion is forgotten: %s", body)
 	}
 }
+
+// An expansion that is also a game of the library (its own card) is left out of the payload and cannot be patched.
+func TestExpansionThatIsALibraryGameIsNotSent(t *testing.T) {
+	f := &fakeExpansions{lists: map[int64][]meta.Expansion{1942: witcherExp}}
+	s, srv, d := expServer(t, f)
+	w := gamesOf(t, srv)["The Witcher 3"]
+	do(t, "POST", srv.URL+"/api/games/"+itoa(w.ID)+"/expansions/refresh", `{}`)
+	w = gamesOf(t, srv)["The Witcher 3"]
+	if len(w.Expansions) != 2 {
+		t.Fatalf("%+v", w.Expansions)
+	}
+	hos := w.Expansions[0].ID
+	// the owner links the game "Skyrim" row to Hearts of Stone's IGDB id (as if it were added as its own card)
+	if _, err := d.Exec("UPDATE game SET igdb_id = 100 WHERE title = 'Skyrim'"); err != nil {
+		t.Fatal(err)
+	}
+	s.cache.invalidate() // the change went straight to the database
+	w = gamesOf(t, srv)["The Witcher 3"]
+	if len(w.Expansions) != 1 || w.Expansions[0].Title != "Blood and Wine" {
+		t.Errorf("%+v", w.Expansions)
+	}
+	if res, _ := do(t, "PATCH", srv.URL+"/api/expansions/"+itoa(hos), `{"notes":"x"}`); res.StatusCode != 404 {
+		t.Errorf("patch: %d", res.StatusCode)
+	}
+}

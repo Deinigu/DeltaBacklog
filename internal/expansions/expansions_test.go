@@ -433,3 +433,48 @@ func TestCoversOfOneGameOnly(t *testing.T) {
 		t.Errorf("the job gets the rest: %v %v", got, err)
 	}
 }
+
+// An expansion the library also has as its own game (a card, e.g. from NocoDB) is not kept inside its base game: it would be
+// counted twice. An untracked row of it goes; a tracked one stays in the database (the API leaves it out). The Steam import
+// counts it as matched but never marks it.
+func TestExpansionThatIsALibraryGame(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{1942: witcher}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	// the owner tracks Hearts of Stone, then adds both expansions as games of their own
+	d.Exec(`UPDATE expansion SET notes = 'mine' WHERE igdb_id = 100`)
+	for _, q := range []string{
+		`INSERT INTO game(id, title, title_sort, status_id, igdb_id) VALUES (10,'Hearts of Stone','hearts of stone',(SELECT id FROM status WHERE code='finished'),100)`,
+		`INSERT INTO game(id, title, title_sort, status_id, igdb_id) VALUES (11,'Blood and Wine','blood and wine',(SELECT id FROM status WHERE code='finished'),101)`,
+	} {
+		if _, err := d.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rep, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Found != 0 || rep.WithExpansion != 0 {
+		t.Errorf("library games are not found as expansions: %+v", rep)
+	}
+	if count(t, d, `SELECT count(*) FROM expansion WHERE igdb_id = 101`) != 0 || count(t, d, `SELECT count(*) FROM expansion WHERE igdb_id = 100 AND notes = 'mine'`) != 1 {
+		t.Error("the untracked row goes, the tracked one stays")
+	}
+	// a new game whose expansion is already a library game: never inserted
+	d.Exec(`DELETE FROM expansion`)
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, d, `SELECT count(*) FROM expansion`); n != 0 {
+		t.Errorf("%d rows", n)
+	}
+	// the Steam import: a tracked row of a library game is matched, not marked
+	d.Exec(`INSERT INTO expansion(game_id, igdb_id, title, steam_app_id) VALUES (1, 100, 'Hearts of Stone', 378648)`)
+	res, err := ImportOwned(d, []int64{378648, 999})
+	if err != nil || res.Marked != 0 || res.Matched != 1 || res.Unmatched != 1 {
+		t.Errorf("%+v %v", res, err)
+	}
+}

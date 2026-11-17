@@ -16,7 +16,8 @@ import (
 
 // Expansion is the compact read model of one IGDB expansion of a game, sent inside the game (GET /api/games), so the
 // Library badge and filters, Stats, Upcoming and Needs attention work in the browser without extra calls. Status and
-// ownership are null while the owner has not set them ("Not tracked"). Empty optional values are left out.
+// ownership are null while the owner has not set them ("Not tracked"). Empty optional values are left out. An expansion
+// that is also a game of the library (its own card) is not sent.
 type Expansion struct {
 	ID        int64    `json:"id"`
 	GameID    int64    `json:"game_id"`
@@ -41,11 +42,12 @@ type Expansion struct {
 
 // attachExpansions fills Expansions and ExpansionsFetched of the games (only one game's when `only` is not 0).
 func attachExpansions(d *sql.DB, games []Game, only int64) error {
-	where, playWhere := "", ""
+	// an expansion the library also has as its own game is left out: its card is its record (it would be counted twice)
+	where := " WHERE NOT " + expansions.IsGameSQL
 	var args []any
 	if only != 0 {
 		args = []any{only}
-		where, playWhere = " WHERE e.game_id = ?", " WHERE e.game_id = ?"
+		where += " AND e.game_id = ?"
 	}
 	rows, err := d.Query(`SELECT e.id, e.game_id, e.title, e.release_year, e.release_date, e.cover_file, e.cover_image_id, s.code, o.name, e.notes, e.hidden,
 			e.time_to_beat_hastily, e.time_to_beat_normally, e.time_to_beat_completely, e.time_to_beat_src, e.updated_at
@@ -77,7 +79,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	prows, err := d.Query(`SELECT p.expansion_id, p.year, p.period FROM expansion_play p JOIN expansion e ON e.id = p.expansion_id`+playWhere+` ORDER BY p.year, p.period`, args...)
+	prows, err := d.Query(`SELECT p.expansion_id, p.year, p.period FROM expansion_play p JOIN expansion e ON e.id = p.expansion_id`+where+` ORDER BY p.year, p.period`, args...)
 	if err != nil {
 		return err
 	}
@@ -175,7 +177,8 @@ func (s *Server) patchExpansion(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	var gameID int64
 	var curStatus sql.NullInt64
-	if err := tx.QueryRow("SELECT game_id, status_id FROM expansion WHERE id = ?", id).Scan(&gameID, &curStatus); errors.Is(err, sql.ErrNoRows) {
+	// an expansion that is also a game of the library is not listed (see attachExpansions): 404 like an unknown id
+	if err := tx.QueryRow("SELECT e.game_id, e.status_id FROM expansion e WHERE e.id = ? AND NOT "+expansions.IsGameSQL, id).Scan(&gameID, &curStatus); errors.Is(err, sql.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not found", nil)
 		return
 	} else if err != nil {

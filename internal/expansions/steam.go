@@ -116,7 +116,8 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 		return res, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.Query(`SELECT id, steam_app_id, ownership_id IS NULL FROM expansion WHERE steam_app_id IS NOT NULL`)
+	// an expansion that is also a game of the library is matched (it is not "unmatched") but not marked: its card is its record
+	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + ` FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
 	if err != nil {
 		return res, err
 	}
@@ -128,14 +129,16 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	matched := map[int64]bool{}
 	for rows.Next() {
 		var id, app int64
-		var empty bool
-		if err := rows.Scan(&id, &app, &empty); err != nil {
+		var empty, isGame bool
+		if err := rows.Scan(&id, &app, &empty, &isGame); err != nil {
 			rows.Close()
 			return res, err
 		}
 		if have[app] {
 			matched[app] = true
-			hit = append(hit, row{id, empty})
+			if !isGame {
+				hit = append(hit, row{id, empty})
+			}
 		}
 	}
 	rows.Close()
