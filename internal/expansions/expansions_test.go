@@ -372,10 +372,10 @@ func TestImportOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 100 and 200 are marked; 101 already had an ownership
-	if res.Marked != 2 || res.Matched != 3 || res.Unmatched != 2 {
+	if res.Marked != 2 || res.Already != 1 || res.Matched != 3 || res.Unmatched != 2 {
 		t.Errorf("%+v", res)
 	}
-	if res.Text() != "Marked 2 expansions as owned; 2 other owned Steam items are not expansions of games in your library (or not on IGDB)." {
+	if res.Text() != "Marked 2 expansions as owned (1 already had an ownership); 2 other owned Steam items are not expansions of games in your library (or not on IGDB)." {
 		t.Error(res.Text())
 	}
 	own := func(igdb int64) string {
@@ -390,8 +390,13 @@ func TestImportOwned(t *testing.T) {
 		t.Error("a status is never changed")
 	}
 	// again: nothing more to do
-	if res, err := ImportOwned(d, []int64{378648, 378649, 211720}); err != nil || res.Marked != 0 || res.Matched != 3 {
+	res, err = ImportOwned(d, []int64{378648, 378649, 211720, 999})
+	if err != nil || res.Marked != 0 || res.Already != 3 || res.Matched != 3 {
 		t.Errorf("idempotent: %+v %v", res, err)
+	}
+	// a second run says it found them, and one other item is singular
+	if res.Text() != "Marked 0 expansions as owned (3 already had an ownership); 1 other owned Steam item is not an expansion of a game in your library (or not on IGDB)." {
+		t.Error(res.Text())
 	}
 	if res, err := ImportOwned(d, nil); err != nil || res.Marked != 0 {
 		t.Errorf("empty: %+v %v", res, err)

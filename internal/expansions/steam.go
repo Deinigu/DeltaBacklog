@@ -97,14 +97,25 @@ func ownedInPage(raw []byte) ([]int64, error) {
 // Import is what ImportOwned did.
 type Import struct {
 	Marked    int // expansions that got the ownership
+	Already   int // owned expansions that already had an ownership (the owner's, or a previous import's): left as they are
 	Matched   int // owned apps that are expansions of the library (already owned or not)
 	Unmatched int // other owned apps: not an expansion of a game in the library (or not on IGDB)
 }
 
-// Text is the sentence shown after an import.
+// Text is the sentence shown after an import: "Marked 2 expansions as owned (3 already had an ownership); 40 other owned
+// Steam items are not expansions of games in your library (or not on IGDB)." The part in brackets only when some had one,
+// so a second run that marks nothing still shows it found them.
 func (i Import) Text() string {
-	return fmt.Sprintf("Marked %s as owned; %s are not expansions of games in your library (or not on IGDB).",
-		plural(i.Marked, "expansion", "expansions"), plural(i.Unmatched, "other owned Steam item", "other owned Steam items"))
+	already := ""
+	if i.Already > 0 {
+		already = fmt.Sprintf(" (%d already had an ownership)", i.Already)
+	}
+	rest := "are not expansions of games in your library"
+	if i.Unmatched == 1 {
+		rest = "is not an expansion of a game in your library"
+	}
+	return fmt.Sprintf("Marked %s as owned%s; %s %s (or not on IGDB).",
+		plural(i.Marked, "expansion", "expansions"), already, plural(i.Unmatched, "other owned Steam item", "other owned Steam items"), rest)
 }
 
 var steamAppURL = regexp.MustCompile(`store\.steampowered\.com/app/(\d+)`)
@@ -155,6 +166,7 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	var owner any
 	for _, h := range hit {
 		if !h.empty {
+			res.Already++
 			continue
 		}
 		if owner == nil {
