@@ -114,5 +114,61 @@ func seedFakeIGDB(d *sql.DB) {
 		}
 		must(d.Exec(`INSERT INTO similar_hidden(igdb_id) VALUES (850003)`))
 	}
-	fmt.Println("made-up IGDB caches written (series collections and similar games)")
+	// 3. expansions of the first games: tracked and untracked, owned and not, released and upcoming
+	must(d.Exec(`INSERT OR IGNORE INTO ownership(name) VALUES ('Owned')`))
+	must(d.Exec(`INSERT INTO expansion_fetch(game_id, fetched_at) SELECT id, ? FROM game WHERE igdb_id IS NOT NULL`, stamp))
+	erows, err := d.Query(`SELECT id, title, release_year FROM game ORDER BY id LIMIT 16`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	type base struct {
+		id    int64
+		title string
+		year  sql.NullInt64
+	}
+	var bases []base
+	for erows.Next() {
+		var b base
+		if err := erows.Scan(&b.id, &b.title, &b.year); err != nil {
+			log.Fatal(err)
+		}
+		bases = append(bases, b)
+	}
+	erows.Close()
+	suffixes := []string{"The Lost Chapter", "Frozen Shores", "Night of the Hollow", "Reckoning"}
+	statuses := []string{"", "finished", "playing", "backlog", "", "dropped"}
+	for i, b := range bases {
+		for k := 0; k <= i%3; k++ {
+			year := now.Year() - 1 - (i+k)%6
+			var date, ry any
+			switch {
+			case i == 2 && k == 0: // coming up
+				date, ry = now.AddDate(0, 2, 5).Format("2006-01-02"), now.Year()
+			case i == 5 && k == 0: // coming up later
+				date, ry = now.AddDate(1, 0, 0).Format("2006-01-02"), now.Year()+1
+			case i == 7 && k == 0: // announced, no date
+			default:
+				date, ry = fmt.Sprintf("%d-%02d-%02d", year, 1+(i*3+k)%12, 1+(i+k*7)%27), year
+			}
+			title := b.title + ": " + suffixes[(i+k)%len(suffixes)]
+			var status, own any
+			if st := statuses[(i+k*2)%len(statuses)]; st != "" {
+				status = st
+			}
+			if (i+k)%2 == 0 {
+				own = "Owned"
+			}
+			res, err := d.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, steam_app_id, status_id, ownership_id)
+				VALUES (?,?,?,?,?,?, (SELECT id FROM status WHERE code = ?), (SELECT id FROM ownership WHERE name = ?))`,
+				b.id, 960000+int64(i)*10+int64(k), title, date, ry, 1500000+int64(i)*10+int64(k), status, own)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if status == "finished" || status == "playing" {
+				xid, _ := res.LastInsertId()
+				must(d.Exec(`INSERT INTO expansion_play(expansion_id, year) VALUES (?, ?)`, xid, now.Year()-(i+k)%3))
+			}
+		}
+	}
+	fmt.Println("made-up IGDB caches written (series collections, similar games and expansions)")
 }

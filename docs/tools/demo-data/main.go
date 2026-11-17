@@ -102,7 +102,7 @@ func split(s string) []string {
 func main() {
 	dataDir := flag.String("data", "./demo-data", "data directory to create (app.db and covers/)")
 	envFile := flag.String("env", "", "a .env file with IGDB_CLIENT_ID, IGDB_CLIENT_SECRET and STEAMGRIDDB_API_KEY, to download real covers")
-	fakeIGDB := flag.Bool("fake-igdb", false, "fill the series and similar-games caches with made-up games (for the browser smoke test; no IGDB needed)")
+	fakeIGDB := flag.Bool("fake-igdb", false, "fill the series, similar-games and expansions caches with made-up games (for the browser smoke test; no IGDB needed)")
 	flag.Parse()
 	if *envFile != "" {
 		loadEnv(*envFile)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Deinigu/DeltaBacklog/internal/collections"
 	"github.com/Deinigu/DeltaBacklog/internal/deals"
+	"github.com/Deinigu/DeltaBacklog/internal/expansions"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
 )
 
@@ -43,6 +44,10 @@ type Server struct {
 	Deals deals.Source
 	// Wishlist reads the owner's Steam wishlist for Deals (nil: no STEAM_ID, no wishlist section).
 	Wishlist deals.WishlistSource
+	// Expansions replaces the IGDB client the expansions are read with (tests); nil means Meta.
+	Expansions expansions.Source
+	// ExpansionPosterFetch replaces the download of an expansion's poster (tests); nil downloads from images.igdb.com.
+	ExpansionPosterFetch func(url, dir string, igdbID int64) (string, error)
 	// Notify sends the Telegram messages (the alerts' test message); nil means Telegram is not set up.
 	Notify deals.Notifier
 
@@ -54,6 +59,7 @@ type Server struct {
 	similarJob seriesJob      // ditto for the Similar page
 	dealsJob   seriesJob      // ditto for the Deals page
 	ttbJob     ttbJob         // the "Find times for all" HowLongToBeat run of the Needs attention page
+	expJob     expJob         // the "Find expansions for all games" run (and the Steam import) of the Expansions page
 
 	cache respCache // the encoded /api/games and /api/facets responses
 }
@@ -96,6 +102,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/games/reorder", s.reorderGames)
 	mux.HandleFunc("POST /api/games", s.createGame)
 	mux.HandleFunc("DELETE /api/games/{id}", s.deleteGame)
+	mux.HandleFunc("POST /api/games/{id}/expansions/refresh", s.refreshExpansions)
+	mux.HandleFunc("PATCH /api/expansions/{id}", s.patchExpansion)
+	mux.HandleFunc("GET /api/expansions/sync", s.expansionSyncStatus)
+	mux.HandleFunc("POST /api/expansions/sync", s.expansionSyncStart)
+	mux.HandleFunc("DELETE /api/expansions/sync", s.expansionSyncCancel)
+	mux.HandleFunc("POST /api/expansions/steam-import", s.steamImport)
 	mux.HandleFunc("POST /api/games/{id}/cover", s.setCover)
 	mux.HandleFunc("POST /api/games/{id}/poster", s.setPoster)
 	mux.HandleFunc("POST /api/games/{id}/cover/upload", s.uploadCover)

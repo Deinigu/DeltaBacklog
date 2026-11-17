@@ -61,7 +61,7 @@ func TestRankingsMigrationKeepsTierLists(t *testing.T) {
 
 	var v int
 	d.QueryRow("PRAGMA user_version").Scan(&v)
-	if v != 24 {
+	if v != 25 {
 		t.Fatalf("version %d", v)
 	}
 	names := func() (out []string) {

@@ -49,6 +49,11 @@ type Game struct {
 	Modes         []string    `json:"modes"`
 	Perspectives  []string    `json:"perspectives"`
 	Links         []StoreLink `json:"links"`
+
+	// IGDB expansions of the game (see expansions.go): compact rows, hidden ones included (marked). ExpansionsFetched is when
+	// IGDB was last asked, so the drawer can tell "none on IGDB" from "not asked yet" (omitted until the first time).
+	Expansions        []Expansion `json:"expansions"`
+	ExpansionsFetched string      `json:"expansions_fetched,omitempty"`
 }
 
 // StoreLink is a store or official-site page of a game: Kind is "steam", "gog", "epic" or "official".
@@ -199,5 +204,8 @@ func loadGames(d *sql.DB, only int64) ([]Game, error) {
 			games[i].Years = []int{}
 		}
 	}
-	return games, yrows.Err()
+	if err := yrows.Err(); err != nil {
+		return nil, err
+	}
+	return games, attachExpansions(d, games, only)
 }
