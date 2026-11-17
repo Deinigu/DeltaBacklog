@@ -120,7 +120,7 @@ export function renderYear(root, year) {
   };
   body.append(h('div.ygroups', {}, ...groups.filter((g) => g.games.length).map((grp) =>
     h('section.year-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
-  if (exTotal) body.append(expansionBox());
+  body.append(expansionBox()); // hidden while empty: it appears when an expansion gets this year (a status change in a drawer opened here)
 
   // A game got a new cover: its row follows (see retargetImg).
   const onGameChanged = (e) => {
