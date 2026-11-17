@@ -147,12 +147,12 @@ func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, key string,
 	w.Write(body)
 }
 
-// invalidating wraps the router: any request that can change games (a write under /api/games) clears the
+// invalidating wraps the router: any request that can change games (a write under /api/games or /api/expansions) clears the
 // cache once it has finished, i.e. after its transaction committed.
 func (s *Server) invalidating(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && strings.HasPrefix(r.URL.Path, "/api/games") {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && (strings.HasPrefix(r.URL.Path, "/api/games") || strings.HasPrefix(r.URL.Path, "/api/expansions")) {
 			s.cache.invalidate()
 		}
 	})

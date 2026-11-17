@@ -54,8 +54,15 @@ async function resync(id) {
   try {
     const fresh = (await getJSON('api/games')).find((x) => x.id === id);
     const g = store.byId.get(id);
-    if (fresh && g) { Object.assign(g, fresh); indexGame(g); }
+    if (fresh && g) { adopt(g, fresh); indexGame(g); }
   } catch { /* offline: the next load fixes it */ }
+}
+
+/** Take the server's copy of a game, keeping the expansion objects that are already in it (a sheet may hold one of them). */
+function adopt(g, fresh) {
+  const { expansions, ...rest } = fresh;
+  Object.assign(g, rest);
+  if (expansions) applyExpansions(g, fresh);
 }
 
 const NULLABLE_TEXT = ['series', 'developer', 'ownership'];
@@ -89,7 +96,7 @@ export function patchGame(id, patch) {
   const run = async () => {
     try {
       const fresh = await send('PATCH', `api/games/${id}`, patch);
-      if (slot.count === 1) { Object.assign(g, fresh); indexGame(g); } // this is the newest edit: authoritative
+      if (slot.count === 1) { adopt(g, fresh); indexGame(g); } // this is the newest edit: authoritative
     } catch (e) {
       slot.failed = true;
       if (slot.count === 1) Object.assign(g, prev);
@@ -344,9 +351,78 @@ export async function refreshGames() {
   const fresh = await getJSON('api/games');
   for (const f of fresh) {
     const g = store.byId.get(f.id);
-    if (g) { Object.assign(g, f); indexGame(g); }
+    if (g) { adopt(g, f); indexGame(g); }
   }
   gamesChanged();
+}
+
+// ---- expansions (IGDB game_type 2, kept inside their base game: game.expansions) ----
+/** Replace the contents of an expansion in place (so the sheet and the drawer that hold the object see the change). */
+function overwrite(x, fresh) {
+  for (const k of Object.keys(x)) delete x[k];
+  Object.assign(x, fresh);
+}
+
+/** The expansion with this id and its game: {x, game}, or null. */
+export function findExpansion(id) {
+  for (const game of store.games) {
+    const x = (game.expansions || []).find((e) => e.id === id);
+    if (x) return { x, game };
+  }
+  return null;
+}
+
+const expansionChains = new Map(); // expansion id -> promise: edits of one expansion are sent one at a time, in order
+
+/**
+ * Save changes to one expansion: {status ('' = not tracked), ownership, notes, years, periods, hidden, ttb_*}. The local
+ * object takes the server's copy when it answers (nothing is guessed first, so a failure changes nothing).
+ */
+export function patchExpansion(id, patch) {
+  const run = async () => {
+    const fresh = await send('PATCH', `api/expansions/${id}`, patch);
+    const found = findExpansion(id);
+    if (found) { overwrite(found.x, fresh); gamesChanged(found.game.id); }
+    return fresh;
+  };
+  const next = (expansionChains.get(id) || Promise.resolve()).then(run, run);
+  expansionChains.set(id, next.catch(() => {}));
+  return next;
+}
+
+/** Put the server's list of a game's expansions in the game, keeping the objects that are already there. */
+function applyExpansions(game, fresh) {
+  const old = new Map((game.expansions || []).map((x) => [x.id, x]));
+  game.expansions = fresh.expansions.map((f) => { const x = old.get(f.id); if (!x) return f; overwrite(x, f); return x; });
+  game.expansions_fetched = fresh.expansions_fetched;
+}
+
+/** Read the game's expansions from IGDB now. onlyIfStale: the server skips IGDB when it read them within 30 days. */
+export async function refreshExpansions(gameId, { onlyIfStale = false } = {}) {
+  const fresh = await send('POST', `api/games/${gameId}/expansions/refresh`, onlyIfStale ? { only_if_stale: true } : {});
+  const game = store.byId.get(gameId);
+  if (game) { applyExpansions(game, fresh); gamesChanged(gameId); }
+  return fresh;
+}
+
+/** The run's state: {running, done, total, found, games, kind: 'find' | 'steam', report, failed, finished_at}. */
+export const expansionSyncStatus = () => request('GET', 'api/expansions/sync');
+/** Start reading the expansions of every linked game (not read within 30 days). A run already going answers 409 with its state in err.data. */
+export const expansionSyncStart = () => request('POST', 'api/expansions/sync', {});
+export const expansionSyncCancel = () => request('DELETE', 'api/expansions/sync');
+/** Upload Steam's userdata file (the browser sets the multipart header). Starts the same run; 400 not a Steam file, 413 too big, 409 a run is going. */
+export async function steamImport(file) {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch('api/expansions/steam-import', { method: 'POST', body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || `steam-import: ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
 }
 
 // ---- rankings ----

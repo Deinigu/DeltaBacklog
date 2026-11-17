@@ -16,6 +16,7 @@ import (
 	"github.com/Deinigu/DeltaBacklog/internal/api"
 	"github.com/Deinigu/DeltaBacklog/internal/db"
 	"github.com/Deinigu/DeltaBacklog/internal/deals"
+	"github.com/Deinigu/DeltaBacklog/internal/expansions"
 	"github.com/Deinigu/DeltaBacklog/internal/igdblink"
 	"github.com/Deinigu/DeltaBacklog/internal/meta"
 	"github.com/Deinigu/DeltaBacklog/internal/posters"
@@ -244,6 +245,11 @@ func main() {
 	if n := posters.SweepScratch(srv.CoverDir, 10*time.Minute); n > 0 { // download folders a crash left behind
 		log.Printf("posters: removed %d leftover download folder(s)", n)
 	}
+	go func() { // posters of the expansions of deleted games (the "Find expansions" run sweeps too)
+		if err := expansions.SweepCovers(d, srv.CoverDir); err != nil {
+			log.Printf("expansions: sweep covers: %v", err)
+		}
+	}()
 	srv.Warm()
 	handler := newHandler(srv, allowedHosts(os.Getenv("ALLOWED_HOSTS")))
 	hs := &http.Server{

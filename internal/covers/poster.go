@@ -164,3 +164,20 @@ func posterCrop(b image.Rectangle) image.Rectangle {
 	y := b.Min.Y + (h-ch)/2
 	return image.Rect(b.Min.X, y, b.Max.X, y+ch)
 }
+
+// ExpansionName is the file name of the small poster kept for an IGDB expansion (x<IGDB id>.jpg). Its own prefix: the
+// Series and Similar caches sweep the i<id>.jpg files they do not name.
+func ExpansionName(igdbID int64) string { return fmt.Sprintf("x%d.jpg", igdbID) }
+
+// FetchExpansionPosterStrict downloads url (already host-checked), refusing redirects, and writes x<igdbID>.jpg.
+func FetchExpansionPosterStrict(url, dir string, igdbID int64) (string, error) {
+	resp, err := strictClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", &StatusError{URL: url, Code: resp.StatusCode, Text: resp.Status}
+	}
+	return savePosterAs(io.LimitReader(resp.Body, maxDownload), dir, ExpansionName(igdbID))
+}

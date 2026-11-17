@@ -4,6 +4,7 @@
 // as a day. Everything is read in UTC so a release on the 1st stays in its month in every time zone; only "today"
 // is the viewer's own calendar date.
 import { buildSeries } from './series.js';
+import { upcomingExpansionItems } from './expansions.js';
 import { LOCALE, noSept } from './format.js'; // dates and numbers are written the same way on every page
 
 const DAY_MS = 86400000;
@@ -86,6 +87,7 @@ export function buildUpcoming(games, index, now = new Date(), { recentDays = REC
       items.push(missingItem(m, names.get(key) ?? key));
     }
   }
+  items.push(...upcomingExpansionItems(games, releasePeriod)); // the expansions of library games: "Expansion · <game>"
   const dated = [], later = [], recent = [];
   for (const it of items) {
     if (!it.period) { later.push(it); continue; }

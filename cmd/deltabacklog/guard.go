@@ -44,10 +44,13 @@ func isIP(h string) bool {
 	return err == nil
 }
 
-// isUpload is a route that takes a multipart body: POST /api/games/<id>/screenshots, and the image uploads
+// isUpload is a route that takes a multipart body: POST /api/games/<id>/screenshots, POST /api/expansions/steam-import, and the image uploads
 // POST /api/games/<id>/cover/upload and /poster/upload.
 func isUpload(r *http.Request) bool {
 	p := r.URL.Path
+	if r.Method == http.MethodPost && p == "/api/expansions/steam-import" {
+		return true
+	}
 	if r.Method != http.MethodPost || !strings.HasPrefix(p, "/api/games/") {
 		return false
 	}
