@@ -14,10 +14,10 @@ export const WHEN = [
 const WHEN_KEYS = WHEN.map((w) => w.key);
 
 export function emptyUpcomingFilter() {
-  return { q: '', when: new Set(), series: new Set(), platforms: new Set() };
+  return { q: '', when: new Set(), series: new Set(), platforms: new Set(), expansions: false };
 }
 
-export const upcomingFilterCount = (f) => f.when.size + f.series.size + f.platforms.size;
+export const upcomingFilterCount = (f) => f.when.size + f.series.size + f.platforms.size + (f.expansions ? 1 : 0);
 
 /** The WHEN keys an item belongs to, from today's calendar date (see today() in upcoming.js). A game already out has none. */
 export function whenKeys(item, now = new Date()) {
@@ -38,7 +38,8 @@ export function whenKeys(item, now = new Date()) {
 
 /** Whether an item passes the filter. */
 export function upcomingPasses(f, item, now = new Date()) {
-  if (f.q && !matchesText(f.q, item.title, item.seriesName)) return false;
+  if (f.q && !matchesText(f.q, item.title, item.seriesName, item.gameTitle)) return false;
+  if (f.expansions && item.kind !== 'expansion') return false;
   if (f.when.size && ![...whenKeys(item, now)].some((k) => f.when.has(k))) return false;
   if (f.series.size && !f.series.has(item.seriesName)) return false;
   if (f.platforms.size && !item.platforms.some((p) => f.platforms.has(p))) return false;
@@ -77,6 +78,7 @@ export function upcomingStateFromQuery(search) {
   f.when = new Set((qs.get('when') || '').split(',').filter((k) => WHEN_KEYS.includes(k)));
   f.series = setOf(qs, 'series');
   f.platforms = setOf(qs, 'platform');
+  f.expansions = qs.get('kind') === 'expansion';
   return { filter: f };
 }
 
@@ -87,5 +89,6 @@ export function upcomingStateToQuery({ filter: f }) {
   if (f.when.size) qs.set('when', WHEN_KEYS.filter((k) => f.when.has(k)).join(','));
   appendSet(qs, 'series', f.series);
   appendSet(qs, 'platform', f.platforms);
+  if (f.expansions) qs.set('kind', 'expansion');
   return qs.toString();
 }

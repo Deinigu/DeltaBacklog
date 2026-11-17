@@ -6,6 +6,7 @@ import { ttbRangeActive, ttbRangeText, ttbKindLabel } from './ttb.js';
 import { h, emptyBox, norm, debounce, icon, gradientFor, initials, toast, askNameDialog, lazyImg, plural, toastError } from './util.js';
 import { store, coverURL, createView, updateView, reorderGames } from './api.js';
 import { openDrawer } from './drawer.js';
+import { expansionBadge } from './expansions.js';
 import { createReorderList } from './reorder.js';
 import { renderTable } from './table.js';
 import { playedBadges, playedSummary } from './years.js';
@@ -148,6 +149,7 @@ export function renderLibrary(root, opts = {}) {
     const played = playedBadges(g, innerWidth < 600 ? 2 : 3); // two years fit on one line on a phone
     const hasPlayed = played.years.length || played.periods.length;
     const platforms = g.platforms.slice(0, 2);
+    const exb = expansionBadge(g); // "2/3 ✓": expansions finished / owned or tracked
     el = h('button.card', { type: 'button', onclick: () => openDrawer(g), style: st ? `--st:${st.color}` : null },
       h('div.cover', {},
         url ? lazyImg(url) : h('div.ph', { style: `background:${gradientFor(g.title)}` }, initials(g.title)),
@@ -156,7 +158,8 @@ export function renderLibrary(root, opts = {}) {
         st && h('span.st', { style: badgeStyle(st.color) }, st.label)),
       h('div.card-body', {},
         h('div.card-title', {}, g.title),
-        platforms.length ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null) : null,
+        platforms.length || exb ? h('div.tags-row', {}, ...platforms.map((p) => h('span.pf', {}, p)), g.platforms.length > 2 ? h('span.pf.more', { title: g.platforms.slice(2).join(', ') }, `+${g.platforms.length - 2}`) : null,
+          exb && h('span.pf.exp-b', { title: exb.label, role: 'img', 'aria-label': exb.label }, exb.text)) : null,
         hasPlayed ? h('div.years-row', { title: playedSummary(g), role: 'img', 'aria-label': playedSummary(g) },
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', { title: `${played.earlier} earlier year${played.earlier > 1 ? 's' : ''}` }, `+${played.earlier}`) : null,

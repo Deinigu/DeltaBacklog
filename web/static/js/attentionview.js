@@ -7,6 +7,8 @@ import { pickCandidate, openCoverPicker, openPosterPicker } from './add.js';
 import { openDrawer } from './drawer.js';
 import { relinkPrompt } from './relinkprompt.js';
 import { buildGroups, totalOpen, ignoredTotal, syncLine, groupOpen, withGroupOpen } from './attention.js';
+import { openExpansionSheet } from './expansionsheet.js';
+import { patchExpansion } from './api.js';
 import { moreButton } from './actionsheet.js';
 import { TTB_GROUPS } from './ttbscope.js';
 
@@ -21,7 +23,11 @@ const FIXES = {
   year: { label: 'Set year', run: (g) => openDrawer(g, { edit: 'Released' }) },
   ownership: { label: 'Set ownership', run: (g) => openDrawer(g, { edit: 'Ownership' }) },
   genres: { label: 'Set genres', run: (g) => openDrawer(g, { edit: 'Genres' }) },
+  expansion: { label: 'Edit', run: (g, row) => openExpansionSheet(row.expansion.id) }, // one row per expansion (row.expansion)
 };
+
+// The statuses the ⋯ sheet of an expansion row offers: it leaves the list as soon as it is one of the closed ones.
+const EXPANSION_STATUSES = ['playing', 'finished', 'dropped', 'not_interested'];
 
 // Which groups the person opened or closed, kept for the session (the page is rebuilt every time it is shown).
 const STATE_KEY = 'att-open';
@@ -137,41 +143,54 @@ export function renderAttention(root) {
     if (on) toastAction(`No time on HowLongToBeat for “${game.title}”`, 'Undo', () => setNoTime(game, false));
   }
 
-  async function setIgnored(group, game, on) {
+  // `target` is the game, or (in the expansions group) the expansion: both have an id and a title
+  async function setIgnored(group, target, on) {
     try {
-      ignored = await attentionIgnore(group, game.id, on);
+      ignored = await attentionIgnore(group, target.id, on);
     } catch { toastError('save that'); return; }
     draw();
-    if (on) toastAction(`Ignoring “${game.title}” here`, 'Undo', () => setIgnored(group, game, false));
+    if (on) toastAction(`Ignoring “${target.title}” here`, 'Undo', () => setIgnored(group, target, false));
+  }
+
+  async function setExpansionStatus(x, status) {
+    try { await patchExpansion(x.id, { status }); } catch { toastError('change the status'); return; }
+    draw();
+    toast(`“${x.title}”: ${store.statusByCode.get(status)?.label ?? status}`);
   }
 
   // A marked game stops being ignored by clearing its mark; one also on the ignore list leaves that too.
   async function stopIgnoring(group, row) {
     if (row.marked) await setNoTime(row.game, false);
-    if ((ignored[group.key] || []).includes(row.game.id)) await setIgnored(group.key, row.game, false);
+    const target = row.expansion || row.game;
+    if ((ignored[group.key] || []).includes(target.id)) await setIgnored(group.key, target, false);
   }
 
   function rowEl(group, row) {
     const g = row.game;
+    const exp = row.expansion || null; // the expansions group: the row is the expansion, g is its game
     const fix = FIXES[group.fix];
     const label = typeof fix.label === 'function' ? fix.label(row) : fix.label;
     const st = store.statusByCode.get(g.status);
-    const sub = [row.candidate && `IGDB suggests “${row.candidate.name}”${row.candidate.year ? ` (${row.candidate.year})` : ''} · ${row.candidate.score}%`,
+    const sub = exp ? [`Expansion of ${g.title}`, exp.status ? store.statusByCode.get(exp.status)?.label : 'Not started', exp.year].filter(Boolean).join(' · ') : [row.candidate && `IGDB suggests “${row.candidate.name}”${row.candidate.year ? ` (${row.candidate.year})` : ''} · ${row.candidate.score}%`,
       row.note || (TTB_GROUPS.includes(group.key) && sync?.manual?.includes(g.id) ? 'Needs a manual pick' : ''), st && st.label, g.platforms.join(', '), g.release_year].filter(Boolean).join(' · ');
     const main = row.ignored
       ? h('button.btn', { type: 'button', onclick: () => stopIgnoring(group, row) }, 'Stop ignoring')
       : h('button.btn.primary', { type: 'button', onclick: () => fix.run(g, row, ctx) }, label);
     // Secondary actions live behind "⋯" (an action sheet), so a long group is one button per row.
     const more = [];
-    if (!row.ignored) {
+    if (!row.ignored && exp) {
+      for (const key of EXPANSION_STATUSES) more.push({ label: `Mark as ${store.statusByCode.get(key)?.label ?? key}`, run: () => setExpansionStatus(exp, key) });
+      more.push({ label: 'Open the game', run: () => openDrawer(g) });
+      more.push({ label: 'Ignore in this list', run: () => setIgnored(group.key, exp, true) });
+    } else if (!row.ignored) {
       if (group.fix === 'confirm' && row.candidate) more.push({ label: 'Change…', run: () => ctx.linkByHand(g) });
       if (group.fix === 'link' || group.fix === 'confirm') more.push({ label: h('span', {}, 'Not on ', brand('IGDB')), run: () => ctx.notOnIGDB(g) });
       if (TTB_GROUPS.includes(group.key)) more.push({ label: h('span', {}, 'No time on ', brand('HowLongToBeat')), run: () => setNoTime(g, true) });
       more.push({ label: 'Ignore in this list', run: () => setIgnored(group.key, g, true) });
     }
     return h('li.att-row' + (row.ignored ? '.is-ignored' : ''), {},
-      h('button.att-name', { type: 'button', onclick: () => openDrawer(g) }, h('span.att-title', {}, g.title), sub && h('span.att-sub', {}, sub)),
-      h('div.att-actions', {}, main, more.length ? moreButton(`More actions for “${g.title}”`, () => ({ title: g.title, lines: [sub], actions: more })) : null));
+      h('button.att-name', { type: 'button', onclick: () => (exp ? openExpansionSheet(exp.id) : openDrawer(g)) }, h('span.att-title', {}, exp ? exp.title : g.title), sub && h('span.att-sub', {}, sub)),
+      h('div.att-actions', {}, main, more.length ? moreButton(`More actions for “${exp ? exp.title : g.title}”`, () => ({ title: exp ? exp.title : g.title, lines: [sub], actions: more })) : null));
   }
 
   function groupEl(group, groups) {

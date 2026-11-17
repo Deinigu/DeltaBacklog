@@ -80,7 +80,9 @@ export function createSheet({ label, title, body, foot }) {
   let release = null;
   const onKey = (e) => {
     if (!sheet.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (e.key === 'Escape' && !document.querySelector('.dialog')) toggle(false);
+    // Escape closes only the sheet on top: a picker opened from this sheet (appended later) takes it first
+    const open = document.querySelectorAll('.sheet.open');
+    if (e.key === 'Escape' && !document.querySelector('.dialog') && open[open.length - 1] === sheet) toggle(false);
   };
   function toggle(on) {
     if (on === sheet.classList.contains('open')) return;

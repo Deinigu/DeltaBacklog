@@ -117,7 +117,7 @@ func seedFakeIGDB(d *sql.DB) {
 	// 3. expansions of the first games: tracked and untracked, owned and not, released and upcoming
 	must(d.Exec(`INSERT OR IGNORE INTO ownership(name) VALUES ('Owned')`))
 	must(d.Exec(`INSERT INTO expansion_fetch(game_id, fetched_at) SELECT id, ? FROM game WHERE igdb_id IS NOT NULL`, stamp))
-	erows, err := d.Query(`SELECT id, title, release_year FROM game ORDER BY id LIMIT 16`)
+	erows, err := d.Query(`SELECT g.id, g.title, g.release_year, s.code FROM game g JOIN status s ON s.id = g.status_id ORDER BY (s.code = 'finished') DESC, g.id LIMIT 18`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -125,11 +125,12 @@ func seedFakeIGDB(d *sql.DB) {
 		id    int64
 		title string
 		year  sql.NullInt64
+		code  string
 	}
 	var bases []base
 	for erows.Next() {
 		var b base
-		if err := erows.Scan(&b.id, &b.title, &b.year); err != nil {
+		if err := erows.Scan(&b.id, &b.title, &b.year, &b.code); err != nil {
 			log.Fatal(err)
 		}
 		bases = append(bases, b)
@@ -157,6 +158,9 @@ func seedFakeIGDB(d *sql.DB) {
 			}
 			if (i+k)%2 == 0 {
 				own = "Owned"
+			}
+			if b.code == "finished" && k == 0 { // a finished game with an owned expansion not played yet: Needs attention lists it
+				status, own = nil, "Owned"
 			}
 			res, err := d.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, steam_app_id, status_id, ownership_id)
 				VALUES (?,?,?,?,?,?, (SELECT id FROM status WHERE code = ?), (SELECT id FROM ownership WHERE name = ?))`,

@@ -6,8 +6,11 @@ import { TTB_KINDS, ttbTiles, hasTimes, ttbSourceNote, parseTime, timeInputValue
 
 const SITE_DOWN = "HowLongToBeat can't be reached right now. Try again later, or type the times yourself.";
 
-/** The block for one game. It redraws itself after a save; `game` is the live object from the store. */
-export function ttbSection(game) {
+/**
+ * The block for one game (or one expansion: it has the same ttb_* fields). It redraws itself after a save; `game` is the live
+ * object from the store. opts.patch(patch) saves a change (default: the game's own PATCH), opts.year narrows the HowLongToBeat search, opts.key keeps the input ids apart from another block on the page.
+ */
+export function ttbSection(game, { patch: save = (p) => patchGame(game.id, p), year = game.release_year, key = game.id } = {}) {
   const root = h('section.ttb', { 'aria-label': 'Time to beat' });
   let mode = 'view'; // 'view' | 'edit' | 'hltb'
   let dirty = null; // set while the edit boxes are open: are there typed changes?
@@ -31,7 +34,7 @@ export function ttbSection(game) {
 
   function editMode() {
     const inputs = TTB_KINDS.map((k, i) => {
-      const input = h('input', { type: 'text', inputmode: 'text', autocomplete: 'off', value: timeInputValue(game[k.key]), id: `ttb-in-${game.id}-${i}`, placeholder: 'e.g. 7.5' });
+      const input = h('input', { type: 'text', inputmode: 'text', autocomplete: 'off', value: timeInputValue(game[k.key]), id: `ttb-in-${key}-${i}`, placeholder: 'e.g. 7.5' });
       const err = h('span.ttb-err', { role: 'alert' });
       const unit = h('em', {}, 'h');
       // the "h" suffix only fits a plain number of hours: "45m" or "7h30" already say their unit
@@ -78,7 +81,7 @@ export function ttbSection(game) {
       const mine = ++search;
       out.replaceChildren(h('p.hint', {}, 'Searching HowLongToBeat…'));
       try {
-        const data = await hltbSearch(q, q === game.title ? game.release_year || 0 : 0);
+        const data = await hltbSearch(q, q === game.title ? year || 0 : 0);
         if (mine !== search) return;
         if (!data.results.length) { out.replaceChildren(h('p.hint', {}, `Nothing found for “${q}”. Try a shorter title.`)); return; }
         out.replaceChildren(h('div.ttb-cands', {}, data.results.map((c) => candidate(c))));
@@ -103,7 +106,7 @@ export function ttbSection(game) {
   async function commit(patch, message) {
     root.setAttribute('aria-busy', 'true');
     try {
-      await patchGame(game.id, patch);
+      await save(patch);
       toast(message);
       go('view');
     } catch {

@@ -6,6 +6,7 @@ import { formatNumber, formatCalendarDate } from './format.js';
 import { openDrawer } from './drawer.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import { ttbGroupOfStatus } from './ttbscope.js';
+import { expansionStats } from './expansions.js';
 import {
   backlogSize, timeInStatus, topGenres, finishedVsDropped, formatDays, niceScale, MIN_GROUP,
   finishedTime, timeLeft, outcomesBy, shortestWins, composition, yearByYear, seriesProgress, currentSection,
@@ -170,7 +171,7 @@ function tile(value, label, sub) {
 }
 
 const SECTIONS = [['finished', 'Finished'], ['backlog', 'Backlog'], ['years', 'Years'], ['outcomes', 'Outcomes'],
-  ['short', 'Shortest'], ['series', 'Series'], ['library', 'Library'], ['waiting', 'Waiting']];
+  ['short', 'Shortest'], ['series', 'Series'], ['expansions', 'Expansions'], ['library', 'Library'], ['waiting', 'Waiting']];
 
 export function renderStats(root) {
   const games = store.games;
@@ -236,6 +237,16 @@ export function renderStats(root) {
         h('ul.lines', {}, sp.closest.map((s) => h('li', {}, h('span.hb-label', {}, s.name), h('b', {}, `${s.finished}/${s.total}`))))) : null,
       h('p.hint', {}, h('a', { href: '#/series' }, 'Open the Series page'))) : h('p.hint', {}, 'No series with two games yet.'));
 
+  // Expansions are counted apart from the games: nothing above or in the tiles includes them.
+  const ex = expansionStats(games);
+  const expansionsCard = card('expansions', 'Expansions', 'The IGDB expansions of your games. They are never counted as games.',
+    ex.total ? h('div', {},
+      h('p.big', {}, `${ex.finished} of ${ex.owned}`, h('small', {}, ' expansions finished, of the ones you own')),
+      ex.perYear.length ? h('div', {}, h('h3', {}, 'Finished per year'),
+        barList(ex.perYear.map((r) => ({ label: String(r.year), count: r.count })), { cls: 'wide-count' }),
+        h('p.hint', {}, 'Each finished expansion counts once, in the last year you played it.' + (ex.unplaced ? ` ${plural(ex.unplaced, 'finished expansion has', 'finished expansions have')} no calendar year, so ${ex.unplaced === 1 ? 'it is' : 'they are'} not in the list.` : ''))) : null,
+      h('p.hint', {}, h('a', { href: '#/expansions' }, 'Open the Expansions page'))) : h('p.hint', {}, 'No expansions yet. ', h('a', { href: '#/expansions' }, 'Find them on the Expansions page'), '.'));
+
   const backlogCard = card('backlog', 'Backlog', 'Games on the backlog or up next.',
     h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),
     h('h3', {}, 'By platform'), barList(size.byPlatform, { empty: 'The backlog is empty.' }),
@@ -254,11 +265,12 @@ export function renderStats(root) {
     h('div.stat-tiles', {},
       tile(num(games.length), 'games'),
       tile(num(finishedCount), 'finished'),
+      ex.total ? tile(`${num(ex.finished)}/${num(ex.owned)}`, 'expansions finished', 'of the ones you own') : null,
       tile(fin.all.known ? approx(fin.all) : '—', 'finished, estimated', fin.all.known ? `${fin.all.known} of ${fin.all.total} timed` : 'no times yet'),
       tile(left.known ? approx(left) : '—', 'left to play', left.known ? [`${left.known} of ${left.total} timed`, left.missing > 0 ? [' · ', h('a', { href: '#/attention?group=no_ttb' }, 'find the rest')] : null] : 'no times yet')),
     jump,
     h('div.stat-grid', {},
-      tall(finishedCard), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, tall(libraryCard),
+      tall(finishedCard), backlogCard, yearsCard, outcomesCard, shortCard, seriesCard, expansionsCard, tall(libraryCard),
       card('genres', 'Most played genres', 'Games you have played, by genre.', barList(topGenres(games))),
       card('waiting', 'Time waiting', 'Since a game was last changed, so a rough guide.', waitingTable(timeInStatus(games))))));
 

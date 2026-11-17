@@ -2,9 +2,17 @@
 import { h, gradientFor, initials, lazyImg, retargetImg, toastError, emptyBox } from './util.js';
 import { store, coverURL, listRankings, createRanking, addRankingGames } from './api.js';
 import { openDrawer } from './drawer.js';
-import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking } from './yearreview.js';
+import { groupYear, gamesOfYear, breakdown, yearCounts, neighbours, yearRankingName, findYearRanking, GROUPS } from './yearreview.js';
+import { expansionsOfYear, countExpansionsOfYear, expansionYears, expansionCoverURL, withYear } from './expansions.js';
+import { openExpansionSheet } from './expansionsheet.js';
 
 const thisYear = () => new Date().getFullYear();
+
+/** The strip of years also holds a year in which only an expansion was played (its count stays the games'). */
+function withExpansionYears(counts, years) {
+  const have = new Set(counts.map((c) => c.year));
+  return [...counts, ...[...years].filter((y) => !have.has(y)).map((year) => ({ year, count: 0 }))].sort((a, b) => b.year - a.year);
+}
 
 /** Latest year with games (or this year when nothing has been played yet): where "#/years" lands. */
 export function defaultYear() {
@@ -14,11 +22,12 @@ export function defaultYear() {
 
 export function renderYear(root, year) {
   let alive = true;
-  const counts = yearCounts(store.games);
+  const counts = withExpansionYears(yearCounts(store.games), expansionYears(store.games));
   const nb = neighbours(counts, year, thisYear());
   const groups = groupYear(store.games, year);
   const pool = gamesOfYear(store.games, year);
   const total = pool.length;
+  const exTotal = countExpansionsOfYear(store.games, year); // expansions are listed apart and never counted as games
 
   const nav = (to, label, glyph) => to
     ? h('a.btn.year-step', { href: `#/years/${to}`, 'aria-label': `${label}: ${to}` }, glyph)
@@ -29,7 +38,7 @@ export function renderYear(root, year) {
 
   const head = h('header.year-head', {},
     nav(nb.prev, 'Previous year', '‹'),
-    h('div.year-title', {}, h('h1', {}, String(year)), h('p.hint', {}, total ? `${total} game${total === 1 ? '' : 's'} played` : 'No games played')),
+    h('div.year-title', {}, h('h1', {}, String(year)), h('p.hint', {}, total ? `${total} game${total === 1 ? '' : 's'} played${exTotal ? `, ${exTotal} expansion${exTotal === 1 ? '' : 's'}` : ''}` : exTotal ? `No games played, ${exTotal} expansion${exTotal === 1 ? '' : 's'}` : 'No games played')),
     nav(nb.next, 'Next year', '›'));
 
   const body = h('div.year-body');
@@ -37,8 +46,26 @@ export function renderYear(root, year) {
   const cur = strip.querySelector('[aria-current]'); // the chip of this year is in view, not hidden behind the edge
   if (cur) strip.scrollLeft = cur.offsetLeft - (strip.clientWidth - cur.offsetWidth) / 2;
 
-  if (!total) {
+  if (!total && !exTotal) {
     body.append(emptyBox(`Nothing is recorded for ${year}. A game counts for a year when it has that year in its “Years played” (moving a game to Playing or Finished adds the current year).`));
+    return () => { alive = false; };
+  }
+
+  // ---- expansions played this year, with how it ended (listed apart from the games) ----
+  const expansionRow = ({ x, game }) => {
+    const st = x.status && store.statusByCode.get(x.status);
+    const url = expansionCoverURL(x);
+    return h('button.yrow', { type: 'button', onclick: () => openExpansionSheet(x.id), style: st ? `--st:${st.color}` : null },
+      h('span.ythumb', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
+      h('span.yinfo', {}, h('span.yname', { translate: 'no' }, withYear(x)), h('span.ysub', {}, [st?.label ?? 'Played', game.title].join(' · '))));
+  };
+  const expansionBox = () => {
+    const groups = expansionsOfYear(store.games, year, GROUPS).filter((g) => g.items.length);
+    return h('section.year-box.exp-year', {}, h('h2', {}, 'Expansions', h('span.c', {}, String(exTotal))),
+      ...groups.map((g) => h('div', {}, h('h3', {}, g.label, h('span.c', {}, String(g.items.length))), h('div.ylist', {}, ...g.items.map(expansionRow)))));
+  };
+  if (!total) { // only expansions were played this year
+    body.append(expansionBox());
     return () => { alive = false; };
   }
 
@@ -84,6 +111,7 @@ export function renderYear(root, year) {
   };
   body.append(h('div.ygroups', {}, ...groups.filter((g) => g.games.length).map((grp) =>
     h('section.year-box', {}, h('h2', {}, grp.label, h('span.c', {}, String(grp.games.length))), h('div.ylist', {}, ...grp.games.map(gameRow))))));
+  if (exTotal) body.append(expansionBox());
 
   // A game got a new cover: its row follows (see retargetImg).
   const onGameChanged = (e) => {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { visible, isOwned, leftToPlay, hasLeftToPlay, expansionBadge, attentionRows, upcomingExpansionItems, expansionStats, expansionsOfYear,
   countExpansionsOfYear, expansionYears, expansionCoverURL, withYear, finishedYear } from '../static/js/expansions.js';
-import { releasePeriod, isReleased, today } from '../static/js/upcoming.js';
+import { releasePeriod, buildUpcoming } from '../static/js/upcoming.js';
 import { GROUPS } from '../static/js/yearreview.js';
 import { buildGroups, GROUPS as ATT, totalOpen, ignoredTotal } from '../static/js/attention.js';
 
@@ -65,24 +65,37 @@ test('Needs attention: ignoring works by expansion id, and is counted like the o
   assert.equal(ignoredTotal(g, [], ignored), 1);
 });
 
-test('Upcoming: not-yet-released or TBA expansions of library games; released, finished, dropped and hidden ones drop out', () => {
-  const t = today(new Date(2026, 4, 10));
+test('Upcoming: expansions of library games; finished, dropped, ruled out and hidden ones are not listed', () => {
   const day = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
   const g = game({ platforms: ['PC', 'PS5'] }, [
     x(1, { title: 'Future', date: day(2026, 8, 1) }),
     x(2, { title: 'TBA', date: null }),
     x(3, { title: 'Out', date: day(2026, 1, 1) }),
-    x(4, { title: 'Today', date: day(2026, 5, 10) }),
     x(5, { title: 'Dropped', date: day(2027, 1, 1), status: 'dropped' }),
     x(6, { title: 'Hidden', date: day(2027, 1, 1), hidden: true }),
     x(7, { title: 'Backlog', date: day(2027, 2, 1), status: 'backlog' }),
+    x(8, { title: 'Done', date: day(2027, 2, 1), status: 'finished' }),
+    x(9, { title: 'Unwanted', date: null, status: 'not_interested' }),
   ]);
-  const items = upcomingExpansionItems([g], releasePeriod, isReleased, t);
-  assert.deepEqual(items.map((i) => i.title), ['Future', 'TBA', 'Backlog']);
+  const items = upcomingExpansionItems([g], releasePeriod);
+  assert.deepEqual(items.map((i) => i.title), ['Future', 'TBA', 'Out', 'Backlog']);
   const f = items[0];
-  assert.deepEqual([f.id, f.kind, f.gameTitle, f.platforms, f.format, f.period.precision], ['x1', 'expansion', 'The Witcher 3', ['PC', 'PS5'], 0, 'day']);
+  assert.deepEqual([f.id, f.kind, f.gameTitle, f.platforms, f.format, f.period.precision, f.seriesName], ['x1', 'expansion', 'The Witcher 3', ['PC', 'PS5'], 0, 'day', null]);
   assert.equal(items[1].period, null);
   assert.equal(items[1].format, null);
+});
+
+test('Upcoming page: expansions are grouped like games, and ones released long ago drop out', () => {
+  const now = new Date(2026, 4, 10);
+  const day = (y, m, d) => Date.UTC(y, m - 1, d) / 1000;
+  const g = game({}, [
+    x(1, { title: 'Future', date: day(2026, 8, 1) }), x(2, { title: 'TBA', date: null }), x(3, { title: 'Old', date: day(2026, 1, 1) }),
+    x(4, { title: 'Last week', date: day(2026, 5, 3) }), x(5, { title: 'Today', date: day(2026, 5, 10) }),
+  ]);
+  const res = buildUpcoming([g], new Map(), now);
+  assert.deepEqual(res.recent.map((i) => i.title), ['Today', 'Last week'], 'released within 60 days: recently released, newest first');
+  assert.deepEqual(res.groups.map((gr) => [gr.label, gr.items.map((i) => i.title)]), [['August 2026', ['Future']], ['Later / TBA', ['TBA']]]);
+  assert.equal(res.total, 2);
 });
 
 test('Stats: finished and owned, finished per year (last year played), never counted as games', () => {

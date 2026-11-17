@@ -42,6 +42,16 @@ export function allExpansions(games, { hidden = false } = {}) {
   return out;
 }
 
+/** How long a game's expansions stay fresh on the server: they are not read again within this many days. */
+export const FRESH_DAYS = 30;
+
+/** A linked game whose expansions were never read from IGDB, or not within FRESH_DAYS: the drawer reads them in the background. */
+export function isStale(g, now = Date.now()) {
+  if (!g.igdb_id) return false;
+  const t = Date.parse(g.expansions_fetched || '');
+  return !(t > 0) || now - t > FRESH_DAYS * 86400000;
+}
+
 // ---- Needs attention ----
 
 /** The group of the Needs attention page: the base game is finished, the expansion owned and not done. Rows by game, then release. */
@@ -53,15 +63,15 @@ export function attentionRows(games) {
 // ---- Upcoming ----
 
 /**
- * The expansions that appear on the Upcoming page: of a library game, not hidden, not dropped or unwanted, with a release date
- * today or later or none (TBA). The item has the shape of the page's other items (see upcoming.js); `date` is IGDB's day.
+ * The expansions the Upcoming page may list: of a library game, not hidden, not finished, dropped or ruled out, dated or TBA. The
+ * page (buildUpcoming) then drops the ones that came out long ago, as it does for games. The item has the shape of the page's
+ * other items (see upcoming.js); `date` is IGDB's day (an expansion has no coarser precision), `period` comes from releasePeriod.
  */
-export function upcomingExpansionItems(games, releasePeriod, isReleased, today) {
+export function upcomingExpansionItems(games, releasePeriod) {
   const out = [];
   for (const { x, game } of allExpansions(games)) {
     if (x.status === 'dropped' || x.status === 'not_interested' || x.status === 'finished') continue;
     const period = releasePeriod(x.date ?? null, 0);
-    if (period && isReleased(period, today)) continue;
     out.push({ id: `x${x.id}`, kind: 'expansion', title: x.title, date: x.date ?? null, format: period ? 0 : null, period, platforms: game.platforms || [],
       seriesName: null, gameTitle: game.title, expansion: x, game });
   }
