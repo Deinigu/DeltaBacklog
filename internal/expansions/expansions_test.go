@@ -22,6 +22,7 @@ type fakeSource struct {
 	ttb   map[int64]meta.TimeToBeat
 	err   error
 	calls [][]int64
+	ttbCalls []int64 // every id asked for its time to beat
 }
 
 func (f *fakeSource) Expansions(ctx context.Context, ids []int64) (map[int64][]meta.Expansion, error) {
@@ -40,6 +41,9 @@ func (f *fakeSource) Expansions(ctx context.Context, ids []int64) (map[int64][]m
 
 func (f *fakeSource) TimeToBeat(ctx context.Context, ids []int64) (map[int64]meta.TimeToBeat, error) {
 	out := map[int64]meta.TimeToBeat{}
+	f.mu.Lock()
+	f.ttbCalls = append(f.ttbCalls, ids...)
+	f.mu.Unlock()
 	for _, id := range ids {
 		if t, ok := f.ttb[id]; ok {
 			out[id] = t
@@ -555,7 +559,7 @@ func TestSteamImportAddedDLCAndRefund(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.DLC != 3 || rep.Text() != "Found 0 expansions and 3 DLC for 1 game." {
+	if rep.DLC != 3 || rep.Text() != "Found 3 DLC for 1 game." {
 		t.Errorf("%+v %q", rep, rep.Text())
 	}
 	d.Exec(`UPDATE expansion SET status_id = (SELECT id FROM status WHERE code = 'backlog') WHERE igdb_id = 2992`)
@@ -619,5 +623,42 @@ func TestBackgroundCoversSkipUntouchedDLC(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != 10 {
 		t.Errorf("one-game read posters %v (want the untouched pack)", got)
+	}
+}
+
+func TestBackgroundTimesSkipUntouchedDLC(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{1942: {
+		{IGDBID: 10, Name: "Pack", Kind: meta.KindDLC},
+		{IGDBID: 11, Name: "Owned pack", Kind: meta.KindDLC},
+		{IGDBID: 12, Name: "Added pack", Kind: meta.KindDLC},
+		{IGDBID: 13, Name: "Expansion", Kind: meta.KindExpansion},
+	}}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(src.ttbCalls) != 4 {
+		t.Errorf("a one-game read asks for all: %v", src.ttbCalls)
+	}
+	d.Exec(`UPDATE expansion SET steam_owned = 1 WHERE igdb_id = 11`)
+	d.Exec(`UPDATE expansion SET notes = 'want' WHERE igdb_id = 12`)
+	d.Exec(`DELETE FROM expansion_fetch`)
+	src.ttbCalls = nil
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{AllCovers: true}); err != nil {
+		t.Fatal(err)
+	}
+	asked := map[int64]bool{}
+	for _, id := range src.ttbCalls {
+		asked[id] = true
+	}
+	if asked[10] || !asked[11] || !asked[12] || !asked[13] {
+		t.Errorf("background times asked for %v (want all but the untouched pack 10)", src.ttbCalls)
+	}
+	src.ttbCalls = nil
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(src.ttbCalls) != 4 {
+		t.Errorf("a one-game read asks for all: %v", src.ttbCalls)
 	}
 }

@@ -113,14 +113,19 @@ func TestLiveExpansions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := map[string]int64{}
 	for _, e := range got[1942] {
-		names[e.Name] = e.SteamAppID
 		t.Logf("%s (%d) steam %s", e.Name, e.Year, strconv.FormatInt(e.SteamAppID, 10))
 	}
+	// IGDB may prefix the game's name ("The Witcher 3: Wild Hunt - Blood and Wine"), so match by substring.
 	for _, want := range []string{"Hearts of Stone", "Blood and Wine"} {
-		if names[want] == 0 {
-			t.Errorf("%s: no expansion or no Steam app id in %v", want, names)
+		found := false
+		for _, e := range got[1942] {
+			if strings.Contains(e.Name, want) && e.SteamAppID != 0 {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no expansion or no Steam app id in %+v", want, got[1942])
 		}
 	}
 	// IGDB types Skyrim's and Breath of the Wild's big add-ons as DLC (game_type 1): reading dlcs is what finds them. Fan mods

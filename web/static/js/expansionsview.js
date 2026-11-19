@@ -208,7 +208,7 @@ export function renderExpansions(root) {
     results.replaceChildren(...[
       offers ? h('p.hint.exp-offers', {}, `${plural(offers, 'DLC', 'DLC')} you own on Steam ${offers === 1 ? 'is' : 'are'} not added yet. `,
         h('button.exp-link', { type: 'button', onclick: showOffers }, 'Show them')) : null,
-      filter.steam && !filter.hidden && rows.length ? h('p.hint', {}, 'The Steam import found these among your apps. Open one and set a status or an ownership to add it; Steam counts cosmetic packs and soundtracks as DLC too, so hide the ones you do not want.') : null,
+      filter.steam && !filter.hidden && rows.length ? h('p.hint', {}, 'The Steam import found these among your apps. Open one and press Add as Owned (or set a status) to add it; Steam counts cosmetic packs and soundtracks as DLC too, so hide the ones you do not want.') : null,
       rows.length ? h('ul.up-list', {}, rows.map(row)) : null,
       nothing ? emptyBox('No expansions yet. Open a game and add one from its expansions (set a status, or say you own it), or read them for every game at once and import the ones you own on Steam.', h('button.btn', { type: 'button', onclick: () => start(expansionSyncStart, 'start the search') }, '↻ Find expansions for all games')) : null,
       !nothing && !rows.length ? emptyBox(filter.hidden ? 'You have not hidden any expansion.' : filter.steam && !of ? 'No DLC you own on Steam is waiting to be added. The Steam import finds them.' : 'No expansions match these filters.', h('button.btn', { type: 'button', onclick: () => { Object.assign(filter, emptyExpansionFilter()); ui.input.value = ''; draw(); } }, 'Clear filters')) : null,

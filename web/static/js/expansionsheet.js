@@ -8,7 +8,7 @@ import { pickMany } from './picker.js';
 import { ownershipLabel } from './ownership.js';
 import { yearsOf, yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 import { ttbSection } from './ttbview.js';
-import { expansionCoverURL, withYear, expansionsOf, isDLC } from './expansions.js';
+import { expansionCoverURL, withYear, expansionsOf, isDLC, isAdded } from './expansions.js';
 import { openDrawer } from './drawer.js';
 
 /** Ownership values in use across games and expansions, most used first (plus the two everyone needs). */
@@ -66,6 +66,7 @@ export function openExpansionSheet(id) {
     val.classList.toggle('none', !years.length);
     yearsBtn.setAttribute('aria-label', `Played in: ${val.textContent}. Edit`);
     if (document.activeElement !== notes) { notes.value = x.notes || ''; fit(); }
+    addOwned.hidden = isAdded(x) || !x.steam_owned || !!x.ownership || !!x.hidden;
     hideBtn.textContent = x.hidden ? 'Show again' : `Hide this ${isDLC(x) ? 'DLC' : 'expansion'}`;
     hint.textContent = x.hidden ? 'Hidden: it is not counted anywhere and not listed.' : '';
   }
@@ -92,8 +93,9 @@ export function openExpansionSheet(id) {
     h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
     h('div', {}, h('b.exp-name', {}, withYear(x)),
       h('button.exp-game', { type: 'button', onclick: () => { sheet.toggle(false); openDrawer(game); } }, `${noun} of ${game.title}`)));
+  const addOwned = h('button.btn.primary.exp-add', { type: 'button', onclick: () => save({ ownership: 'Owned' }, 'add it') }, 'Add as Owned');
   const field = (label, control) => h('label.frow', {}, h('span.flabel', {}, label), control);
-  body.append(head,
+  body.append(head, addOwned,
     field('Status', status),
     field('Ownership', ownership),
     h('div.frow', {}, h('span.flabel', {}, 'Played in'), yearsBtn),

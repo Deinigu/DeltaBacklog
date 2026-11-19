@@ -1268,6 +1268,8 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .exp-name { overflow-wrap: anywhere; }
 .exp-game { min-height: 44px; max-width: 100%; padding: 0 12px; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .exp-head .exp-game { padding: 0; border: 0; background: none; }
+.exp-sheet .exp-add { width: 100%; min-height: 44px; }
+.exp-sheet .exp-add[hidden] { display: none; }
 .exp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .exp-sheet .ttb { margin: 4px 0; }
 .exp-sheet select, .exp-sheet textarea { width: 100%; }

@@ -172,7 +172,7 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 		if err := tx.Commit(); err != nil {
 			return rep, err
 		}
-		if err := fillTimes(ctx, d, src, stored); err != nil && ctx.Err() != nil {
+		if err := fillTimes(ctx, d, src, stored, o.AllCovers); err != nil && ctx.Err() != nil {
 			return rep, ctx.Err()
 		}
 		progress(end)
@@ -287,13 +287,18 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 }
 
 // fillTimes reads IGDB's time to beat for those of the expansions (row ids) that have none, never over a time the owner
-// set or took from HowLongToBeat. A failed read is not fatal: the times come with the next refresh.
-func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64) error {
+// set or took from HowLongToBeat. A failed read is not fatal: the times come with the next refresh. The background job
+// (background true) skips the untouched DLC nobody looks at, like fetchCovers; a one-game read fills every row.
+func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64, background bool) error {
+	q := `SELECT e.igdb_id FROM expansion e WHERE e.id = ? AND e.time_to_beat_hastily IS NULL AND e.time_to_beat_normally IS NULL
+			AND e.time_to_beat_completely IS NULL AND e.time_to_beat_src IS NULL`
+	if background {
+		q += ` AND NOT (e.kind = 'dlc' AND e.steam_owned = 0 AND ` + untracked + `)`
+	}
 	var igdbIDs []int64
 	for _, id := range rowIDs {
 		var ig int64
-		err := d.QueryRow(`SELECT igdb_id FROM expansion WHERE id = ? AND time_to_beat_hastily IS NULL AND time_to_beat_normally IS NULL
-			AND time_to_beat_completely IS NULL AND time_to_beat_src IS NULL`, id).Scan(&ig)
+		err := d.QueryRow(q, id).Scan(&ig)
 		if err == nil {
 			igdbIDs = append(igdbIDs, ig)
 		}
@@ -435,7 +440,11 @@ func DropUntracked(tx *sql.Tx, gameID int64) error {
 func (r Report) Text() string {
 	found := plural(r.Found-r.DLC, "expansion", "expansions")
 	if r.DLC > 0 {
-		found += fmt.Sprintf(" and %d DLC", r.DLC)
+		if r.Found-r.DLC == 0 {
+			found = fmt.Sprintf("%d DLC", r.DLC)
+		} else {
+			found += fmt.Sprintf(" and %d DLC", r.DLC)
+		}
 	}
 	return fmt.Sprintf("Found %s for %s.", found, plural(r.WithExpansion, "game", "games"))
 }
