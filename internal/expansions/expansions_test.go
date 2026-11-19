@@ -17,11 +17,11 @@ import (
 )
 
 type fakeSource struct {
-	mu    sync.Mutex
-	lists map[int64][]meta.Expansion
-	ttb   map[int64]meta.TimeToBeat
-	err   error
-	calls [][]int64
+	mu       sync.Mutex
+	lists    map[int64][]meta.Expansion
+	ttb      map[int64]meta.TimeToBeat
+	err      error
+	calls    [][]int64
 	ttbCalls []int64 // every id asked for its time to beat
 }
 
