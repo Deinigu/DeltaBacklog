@@ -541,3 +541,83 @@ func TestDLCKindAndSteamImport(t *testing.T) {
 		t.Error("a refetch dropped the Steam mark")
 	}
 }
+
+// A DLC the owner added is marked Owned by the Steam import like an expansion, one with an ownership is left as it is ("already"),
+// and only untouched DLC are counted as offers. The Steam mark follows the uploaded list: a refunded DLC loses it.
+func TestSteamImportAddedDLCAndRefund(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{72: {
+		{IGDBID: 2992, Name: "Dawnguard", SteamAppID: 211720, Kind: meta.KindDLC},
+		{IGDBID: 6068, Name: "Hearthfire", SteamAppID: 211721, Kind: meta.KindDLC},
+		{IGDBID: 8000, Name: "Costume", SteamAppID: 211730, Kind: meta.KindDLC},
+	}}}
+	rep, err := Fetch(context.Background(), d, src, []Target{{1, 72}}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.DLC != 3 || rep.Text() != "Found 0 expansions and 3 DLC for 1 game." {
+		t.Errorf("%+v %q", rep, rep.Text())
+	}
+	d.Exec(`UPDATE expansion SET status_id = (SELECT id FROM status WHERE code = 'backlog') WHERE igdb_id = 2992`)
+	if _, err := d.Exec(`INSERT INTO ownership(name) SELECT 'Nope' WHERE NOT EXISTS (SELECT 1 FROM ownership WHERE name = 'Nope')`); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE expansion SET ownership_id = (SELECT id FROM ownership WHERE name = 'Nope') WHERE igdb_id = 6068`)
+	res, err := ImportOwned(d, []int64{211720, 211721, 211730})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Marked != 1 || res.Already != 1 || res.DLC != 1 || res.Matched != 3 {
+		t.Errorf("%+v", res)
+	}
+	var own sql.NullString
+	var steam bool
+	d.QueryRow(`SELECT o.name, e.steam_owned FROM expansion e LEFT JOIN ownership o ON o.id = e.ownership_id WHERE e.igdb_id = 2992`).Scan(&own, &steam)
+	if own.String != OwnedValue || !steam {
+		t.Errorf("Dawnguard (added): ownership %v, steam %v", own, steam)
+	}
+	d.QueryRow(`SELECT o.name FROM expansion e LEFT JOIN ownership o ON o.id = e.ownership_id WHERE e.igdb_id = 6068`).Scan(&own)
+	if own.String != "Nope" {
+		t.Errorf("Hearthfire: the owner's Nope was changed to %v", own)
+	}
+	// Costume refunded: a new upload without it clears its mark
+	if _, err := ImportOwned(d, []int64{211720}); err != nil {
+		t.Fatal(err)
+	}
+	d.QueryRow(`SELECT steam_owned FROM expansion WHERE igdb_id = 8000`).Scan(&steam)
+	if steam {
+		t.Error("a DLC no longer in the owned list keeps its Steam mark")
+	}
+}
+
+// The background run (AllCovers) skips the posters of DLC nobody added (unless owned on Steam); a one-game read gets them all.
+func TestBackgroundCoversSkipUntouchedDLC(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{1942: {
+		{IGDBID: 10, Name: "Pack", CoverID: "a", Kind: meta.KindDLC},
+		{IGDBID: 11, Name: "Owned pack", CoverID: "b", Kind: meta.KindDLC},
+		{IGDBID: 12, Name: "Added pack", CoverID: "c", Kind: meta.KindDLC},
+		{IGDBID: 13, Name: "Expansion", CoverID: "d", Kind: meta.KindExpansion},
+	}}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE expansion SET steam_owned = 1 WHERE igdb_id = 11`)
+	d.Exec(`UPDATE expansion SET notes = 'want' WHERE igdb_id = 12`)
+	var got []int64
+	opt := Options{CoverDir: t.TempDir(), AllCovers: true, Fetch: func(url, dir string, id int64) (string, error) { got = append(got, id); return "x.jpg", nil }}
+	if _, err := Fetch(context.Background(), d, src, nil, opt); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0] != 12 {
+		t.Errorf("background posters %v (want the added one first, no untouched pack)", got)
+	}
+	got = nil
+	opt.AllCovers = false
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, opt); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != 10 {
+		t.Errorf("one-game read posters %v (want the untouched pack)", got)
+	}
+}

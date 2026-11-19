@@ -11,7 +11,7 @@ import { createListShell } from './listshell.js';
 import { toggleIn, withSelected } from './listfilter.js';
 import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery, forwardText } from './upcomingfilter.js';
 import { formatDate } from './format.js';
-import { expansionCoverURL } from './expansions.js';
+import { expansionCoverURL, isDLC } from './expansions.js';
 import { openExpansionSheet } from './expansionsheet.js';
 import { openDrawer } from './drawer.js';
 
@@ -113,15 +113,15 @@ export function renderUpcoming(root) {
   }
 
   // ---- the page ----
-  // An expansion of a library game: "Expansion · <game>"; tapping the row opens its sheet, the game's name opens the game.
+  // An expansion of a library game: "Expansion · <game>" ("DLC · <game>"); tapping the row opens its sheet, the game's name opens the game.
   function expansionRow(item, released) {
     const date = item.period ? formatRelease(item.date, item.format) : 'Release date not announced';
     const meta = [released ? `Released ${date}` : date, item.platforms.length ? item.platforms.join(', ') : null].filter(Boolean).join(' · ');
     const body = h('span.up-body', {},
       h('span.up-title', { translate: 'no' }, item.title),
       h('span.up-date', {}, meta),
-      h('span.up-from', {}, h('span.up-tag', {}, 'Expansion'), h('small', {}, ` · ${item.gameTitle}`)));
-    return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openExpansionSheet(item.expansion.id), 'aria-label': `${item.title}, expansion of ${item.gameTitle}: edit` }, poster(item), body),
+      h('span.up-from', {}, h('span.up-tag', {}, isDLC(item.expansion) ? 'DLC' : 'Expansion'), h('small', {}, ` · ${item.gameTitle}`)));
+    return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openExpansionSheet(item.expansion.id), 'aria-label': `${item.title}, ${isDLC(item.expansion) ? 'DLC' : 'expansion'} of ${item.gameTitle}: edit` }, poster(item), body),
       h('span.si-actions', {}, h('button.exp-game', { type: 'button', 'aria-label': `Open ${item.gameTitle}`, onclick: () => openDrawer(item.game) }, item.gameTitle)));
   }
 

@@ -1,4 +1,4 @@
-// Expansions (IGDB game_type 2) of the library's games: the rules every page shares. Pure (no DOM): unit-tested.
+// Expansions and DLC (IGDB game_type 2 and 1) of the library's games: the rules every page shares. Pure (no DOM): unit-tested.
 // An expansion lives inside its base game (game.expansions); it has the same statuses and ownership list as a game, but
 // both are empty ("No status") until the owner sets them, and it is never counted as a game.
 import { norm } from './util.js';

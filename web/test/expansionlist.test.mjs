@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyExpansionFilter, expansionFilterCount, expansionPasses, filterExpansions, countExpansions, poolOf, platformsOf, statusKey, ownershipKey,
-  expansionStateFromQuery, expansionStateToQuery, DEFAULT_SORT, NOT_TRACKED, poolCount, runToLoad } from '../static/js/expansionlist.js';
+  expansionStateFromQuery, expansionStateToQuery, DEFAULT_SORT, NOT_TRACKED, poolCount, runToLoad, steamOfferCount, isSteamOffer } from '../static/js/expansionlist.js';
 
 const x = (id, o = {}) => ({ id, title: `Exp ${id}`, status: null, ownership: null, date: null, updated_at: '2026-01-01T00:00:00Z', ...o });
 const games = [
@@ -49,7 +49,7 @@ test('sorts: game, release date (newest first, TBA first), title, recently chang
   assert.deepEqual(ids(filterExpansions(pool, f, 'title')), [1, 2, 3]);
   assert.deepEqual(ids(filterExpansions(pool, f, 'changed')), [3, 1, 2]);
   assert.deepEqual(ids(filterExpansions(pool, f, 'nonsense')), [3, 2, 1], 'an unknown sort is the default');
-  const tba = [{ x: x(9), game: games[0] }, { x: x(8, { date: 50 }), game: games[0] }];
+  const tba = [{ x: x(9, { status: 'backlog' }), game: games[0] }, { x: x(8, { date: 50, status: 'backlog' }), game: games[0] }];
   assert.deepEqual(ids(filterExpansions(tba, f, 'release')), [9, 8], 'TBA does not turn the comparison into NaN');
 });
 
@@ -99,4 +99,31 @@ test('a run that ended while the page was closed is loaded once', () => {
   assert.equal(runToLoad({ running: true, finished_at: '2026-11-17T10:00:00Z' }, null), null, 'still going: the poll loads it');
   assert.equal(runToLoad({ running: false }, null), null, 'no run since the server started');
   assert.equal(runToLoad(null, null), null);
+});
+
+test('hidden view: every hidden expansion, added or not (the Hidden page counts them all); Steam view: owned on Steam, not added', () => {
+  const gs = [{ id: 9, title: 'Skyrim', status: 'finished', platforms: ['PC'], expansions: [
+    x(10, { hidden: true }), // a wrong IGDB entry, hidden, never added
+    x(11, { kind: 'dlc', steam_owned: true }), // owned on Steam, not added: an offer
+    x(12, { kind: 'dlc', steam_owned: true, status: 'backlog' }), // added: one of yours
+    x(13, { kind: 'dlc' }), // only on IGDB
+    x(14, { kind: 'dlc', steam_owned: true, hidden: true }), // a hidden offer: only in the hidden view
+  ] }];
+  const p = poolOf(gs);
+  assert.deepEqual(ids(p).sort(), [10, 11, 12, 14]);
+  assert.deepEqual(ids(filterExpansions(p, emptyExpansionFilter())), [12]);
+  const hid = emptyExpansionFilter(); hid.hidden = true;
+  assert.deepEqual(ids(filterExpansions(p, hid)).sort(), [10, 14]);
+  const st = emptyExpansionFilter(); st.steam = true;
+  assert.deepEqual(ids(filterExpansions(p, st)), [11]);
+  assert.equal(poolCount(p, st), 1);
+  assert.equal(poolCount(p, emptyExpansionFilter()), 1);
+  assert.equal(steamOfferCount(p), 1);
+  assert.equal(countExpansions(p, emptyExpansionFilter(), 'steam', true), 1);
+  assert.equal(isSteamOffer(x(1, { steam_owned: true, ownership: 'Owned' })), false, 'owned: added');
+  assert.equal(isSteamOffer(x(1, { steam_owned: true, ownership: 'Nope' })), false, "Nope is the owner's choice (the Steam import leaves it too)");
+  assert.equal(expansionFilterCount(st), 1);
+  assert.equal(expansionStateToQuery({ filter: st, sort: DEFAULT_SORT }), 'steam=1');
+  assert.equal(expansionStateFromQuery('?steam=1').filter.steam, true);
+  assert.equal(expansionStateFromQuery('?steam=2').filter.steam, false);
 });

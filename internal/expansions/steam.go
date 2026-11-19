@@ -96,9 +96,9 @@ func ownedInPage(raw []byte) ([]int64, error) {
 
 // Import is what ImportOwned did.
 type Import struct {
-	Marked    int // expansions that got the ownership
-	DLC       int // owned DLC (IGDB game_type 1): marked "Owned on Steam" only, offered first in their game's details
-	Already   int // owned expansions that already had an ownership (the owner's, or a previous import's): left as they are
+	Marked    int // expansions (and DLC the owner added) that got the ownership
+	DLC       int // owned DLC (IGDB game_type 1) the owner has not added: marked "Owned on Steam" only, offered first in their game's details
+	Already   int // owned expansions and added DLC that already had an ownership (the owner's, or a previous import's): left as they are
 	Matched   int // owned apps that are expansions of the library (already owned or not)
 	Unmatched int // other owned apps: not an expansion of a game in the library (or not on IGDB)
 }
@@ -128,7 +128,9 @@ func (i Import) Text() string {
 var steamAppURL = regexp.MustCompile(`store\.steampowered\.com/app/(\d+)`)
 
 // ImportOwned gives the ownership "Owned" to every expansion whose Steam app id is among the owned apps and that has no
-// ownership yet. A status or an ownership the owner set is never changed, so it can be run again. Apps that are the
+// ownership yet. A DLC gets it only when the owner added it (a status, notes, years or a time of their own: Steam lists cosmetic
+// packs and soundtracks as DLC too); any other owned DLC is only marked steam_owned, and the mark follows the uploaded list (a DLC
+// no longer in it loses it). A status or an ownership the owner set is never changed, so it can be run again. Apps that are the
 // Steam page of a library game are not counted as unmatched.
 func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	var res Import
@@ -142,7 +144,8 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	}
 	defer tx.Rollback()
 	// an expansion that is also a game of the library is matched (it is not "unmatched") but not marked: its card is its record
-	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + `, e.kind = 'dlc' FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
+	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + `, e.kind = 'dlc' AND (` + untracked + `), e.steam_owned
+		FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
 	if err != nil {
 		return res, err
 	}
@@ -152,13 +155,17 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 		dlc   bool
 	}
 	var hit []row
+	var unmark []int64 // marked owned on Steam before, not in this list (a refund)
 	matched := map[int64]bool{}
 	for rows.Next() {
 		var id, app int64
-		var empty, isGame, dlc bool
-		if err := rows.Scan(&id, &app, &empty, &isGame, &dlc); err != nil {
+		var empty, isGame, dlc, marked bool // dlc: a DLC the owner has not added
+		if err := rows.Scan(&id, &app, &empty, &isGame, &dlc, &marked); err != nil {
 			rows.Close()
 			return res, err
+		}
+		if marked && !have[app] {
+			unmark = append(unmark, id)
 		}
 		if have[app] {
 			matched[app] = true
@@ -171,14 +178,19 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	if err := rows.Err(); err != nil {
 		return res, err
 	}
+	for _, id := range unmark {
+		if _, err := tx.Exec(`UPDATE expansion SET steam_owned = 0 WHERE id = ?`, id); err != nil {
+			return res, err
+		}
+	}
 	var owner any
 	for _, h := range hit {
-		// a DLC is only marked as owned on Steam: Steam lists cosmetic packs and soundtracks as DLC too, and they would flood the
-		// owner's list. The game's details offer it first, so adding one is a tap.
+		// every owned DLC is marked as owned on Steam (the drawer offers it first). One the owner has not added gets nothing more:
+		// Steam lists cosmetic packs and soundtracks as DLC too, and they would flood the owner's list.
+		if _, err := tx.Exec(`UPDATE expansion SET steam_owned = 1 WHERE id = ? AND kind = 'dlc'`, h.id); err != nil {
+			return res, err
+		}
 		if h.dlc {
-			if _, err := tx.Exec(`UPDATE expansion SET steam_owned = 1 WHERE id = ?`, h.id); err != nil {
-				return res, err
-			}
 			res.DLC++
 			continue
 		}

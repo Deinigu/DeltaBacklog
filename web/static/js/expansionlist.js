@@ -1,6 +1,7 @@
-// The Expansions page's search, filters and sort. Pure (no DOM): unit-tested. The rows are every expansion of the library
-// ({x, game}, see allExpansions in expansions.js); this module decides which are shown and in what order.
-import { allExpansions, isOwned, releaseKey } from './expansions.js';
+// The Expansions page's search, filters and sort. Pure (no DOM): unit-tested. The rows are the owner's expansions and DLC
+// ({x, game}, see allExpansions and isAdded in expansions.js), plus the hidden ones and the DLC owned on Steam not added yet (each
+// only in its own view); this module decides which are shown and in what order.
+import { allExpansions, isAdded, isOwned, releaseKey } from './expansions.js';
 import { matchesText, override, params, qOf, setOf, appendSet, byName, tally } from './listfilter.js';
 
 /** The status chip for an expansion the owner has not given a status. */
@@ -24,17 +25,27 @@ export const DEFAULT_SORT = 'game';
 const SORT_KEYS = SORTS.map((s) => s.key);
 
 export function emptyExpansionFilter() {
-  return { q: '', status: new Set(), ownership: new Set(), platforms: new Set(), baseFinished: false, hidden: false };
+  return { q: '', status: new Set(), ownership: new Set(), platforms: new Set(), baseFinished: false, hidden: false, steam: false };
 }
 
-export const expansionFilterCount = (f) => f.status.size + f.ownership.size + f.platforms.size + (f.baseFinished ? 1 : 0) + (f.hidden ? 1 : 0);
+export const expansionFilterCount = (f) => f.status.size + f.ownership.size + f.platforms.size + (f.baseFinished ? 1 : 0) + (f.hidden ? 1 : 0) + (f.steam ? 1 : 0);
+
+/** A DLC the Steam import found among the owner's apps that the owner has not added nor given an ownership ("Nope" is a choice too,
+ * as the import's rule in steam.go): offered, not counted. */
+export const isSteamOffer = (x) => !!x.steam_owned && !x.ownership && !isAdded(x);
+
+/**
+ * The view a row belongs to: the hidden ones (every hidden one, added or not: the Hidden page counts them all), the Steam offers
+ * (`steam`), or else the owner's own expansions.
+ */
+export const inView = (f, x) => (f.hidden ? !!x.hidden : !x.hidden && (f.steam ? isSteamOffer(x) : isAdded(x)));
 
 export const statusKey = (x) => x.status || NOT_TRACKED;
 export const ownershipKey = (x) => (!x.ownership ? 'unset' : isOwned(x) ? 'owned' : 'not_owned');
 
 /** Whether a row passes the filter. Hidden expansions are shown only when the filter asks for them (and then only those). */
 export function expansionPasses(f, { x, game }) {
-  if (f.hidden !== !!x.hidden) return false;
+  if (!inView(f, x)) return false;
   if (f.q && !matchesText(f.q, x.title, game.title)) return false;
   if (f.status.size && !f.status.has(statusKey(x))) return false;
   if (f.ownership.size && !f.ownership.has(ownershipKey(x))) return false;
@@ -43,8 +54,11 @@ export function expansionPasses(f, { x, game }) {
   return true;
 }
 
-/** The rows of every expansion the page could show (hidden ones too: the filter decides). */
-export const poolOf = (games) => allExpansions(games, { hidden: true });
+/** The rows the page could show: the owner's, the hidden ones and the Steam offers (the view decides, see inView). */
+export const poolOf = (games) => allExpansions(games, { hidden: true, all: true }).filter(({ x }) => x.hidden || isAdded(x) || isSteamOffer(x));
+
+/** How many Steam offers wait to be added (not hidden): the page links to them. */
+export const steamOfferCount = (pool) => pool.filter(({ x }) => !x.hidden && isSteamOffer(x)).length;
 
 const COMPARE = {
   game: (a, b) => byName(a.game.title, b.game.title) || releaseKey(a.x) - releaseKey(b.x) || byName(a.x.title, b.x.title),
@@ -68,7 +82,7 @@ export function countExpansions(pool, f, key, value) {
 /** The platforms of the base games of the pool, most expansions first. */
 export const platformsOf = (pool) => tally(pool, ({ game }) => game.platforms || []);
 
-// ---- the address: #/expansions?q=witcher&status=finished&status=none&own=owned&platform=PC&base=finished&sort=release ----
+// ---- the address: #/expansions?q=witcher&status=finished&status=none&own=owned&platform=PC&base=finished&steam=1&sort=release ----
 
 export function expansionStateFromQuery(search) {
   const qs = params(search);
@@ -79,6 +93,7 @@ export function expansionStateFromQuery(search) {
   f.platforms = setOf(qs, 'platform');
   f.baseFinished = qs.get('base') === 'finished';
   f.hidden = qs.get('hidden') === '1';
+  f.steam = qs.get('steam') === '1';
   const sort = qs.get('sort');
   return { filter: f, sort: SORT_KEYS.includes(sort) ? sort : DEFAULT_SORT };
 }
@@ -91,6 +106,7 @@ export function expansionStateToQuery({ filter: f, sort }) {
   appendSet(qs, 'platform', f.platforms);
   if (f.baseFinished) qs.set('base', 'finished');
   if (f.hidden) qs.set('hidden', '1');
+  if (f.steam) qs.set('steam', '1');
   if (sort && sort !== DEFAULT_SORT) qs.set('sort', sort);
   return qs.toString();
 }
@@ -101,6 +117,6 @@ export function expansionStateToQuery({ filter: f, sort }) {
  */
 export const runToLoad = (st, seen) => (st && !st.running && st.finished_at && st.finished_at !== seen ? st.finished_at : null);
 
-/** "N of M" text helper input: the pool size without the hidden ones (what the page counts as "all"). */
-export const poolCount = (pool, f) => pool.filter((r) => !!r.x.hidden === f.hidden).length;
+/** "N of M" text helper input: the rows of the current view (see inView) before the other filters. */
+export const poolCount = (pool, f) => pool.filter((r) => inView(f, r.x)).length;
 
