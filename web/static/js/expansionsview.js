@@ -104,9 +104,9 @@ export function renderExpansions(root) {
   ui.chips('Game', { open: false, options: () => [{ value: 'finished', text: 'Base game finished' }],
     has: () => filter.baseFinished, toggle: () => { filter.baseFinished = !filter.baseFinished; }, selected: () => (filter.baseFinished ? 1 : 0), count: () => countExpansions(pool, filter, 'baseFinished', true) });
   ui.chips('Steam', { open: false, options: () => [{ value: 'steam', text: 'Owned on Steam, not added yet' }],
-    has: () => filter.steam, toggle: () => { filter.steam = !filter.steam; }, selected: () => (filter.steam ? 1 : 0), count: () => countExpansions(pool, filter, 'steam', true) });
+    has: () => filter.steam, toggle: () => { filter.steam = !filter.steam; if (filter.steam) filter.hidden = false; }, selected: () => (filter.steam ? 1 : 0), count: () => countExpansions(pool, filter, 'steam', true) });
   ui.chips('Hidden', { open: false, options: () => [{ value: 'hidden', text: 'Only the hidden ones' }],
-    has: () => filter.hidden, toggle: () => { filter.hidden = !filter.hidden; }, selected: () => (filter.hidden ? 1 : 0), count: () => countExpansions(pool, filter, 'hidden', true) });
+    has: () => filter.hidden, toggle: () => { filter.hidden = !filter.hidden; if (filter.hidden) filter.steam = false; }, selected: () => (filter.hidden ? 1 : 0), count: () => countExpansions(pool, filter, 'hidden', true) });
   page.replaceChildren(h('h1', {}, 'Expansions'),
     h('p.hint', {}, 'Your expansions and DLC: the ones you own or added. They live inside their game: tap one to set its status, ownership, years played and notes. They are not counted as games. To add another, open its game: IGDB’s other expansions and DLC are listed there, folded.'),
     tools, ...ui.nodes(results));

@@ -124,6 +124,9 @@ test('hidden view: every hidden expansion, added or not (the Hidden page counts 
   assert.equal(isSteamOffer(x(1, { steam_owned: true, ownership: 'Nope' })), false, "Nope is the owner's choice (the Steam import leaves it too)");
   assert.equal(expansionFilterCount(st), 1);
   assert.equal(expansionStateToQuery({ filter: st, sort: DEFAULT_SORT }), 'steam=1');
+  const both = expansionStateFromQuery('steam=1&hidden=1').filter;
+  assert.equal(both.hidden, true);
+  assert.equal(both.steam, false, 'the Steam and Hidden views are exclusive: hidden wins');
   assert.equal(expansionStateFromQuery('?steam=1').filter.steam, true);
   assert.equal(expansionStateFromQuery('?steam=2').filter.steam, false);
 });

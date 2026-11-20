@@ -93,7 +93,10 @@ export function openExpansionSheet(id) {
     h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
     h('div', {}, h('b.exp-name', {}, withYear(x)),
       h('button.exp-game', { type: 'button', onclick: () => { sheet.toggle(false); openDrawer(game); } }, `${noun} of ${game.title}`)));
-  const addOwned = h('button.btn.primary.exp-add', { type: 'button', onclick: () => save({ ownership: 'Owned' }, 'add it') }, 'Add as Owned');
+  const addOwned = h('button.btn.primary.exp-add', { type: 'button', onclick: async () => {
+    await save({ ownership: 'Owned' }, 'add it');
+    if (addOwned.hidden) { ownership.focus({ preventScroll: true }); toast(`Added “${x.title}”`); } // the button is gone: keep the focus (and the screen reader) here
+  } }, 'Add as Owned');
   const field = (label, control) => h('label.frow', {}, h('span.flabel', {}, label), control);
   body.append(head, addOwned,
     field('Status', status),

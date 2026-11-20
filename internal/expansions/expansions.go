@@ -65,7 +65,7 @@ const minYear, maxYear = 1950, 2100
 
 // untracked is the SQL condition (on the alias e) of an expansion the owner has not touched: nothing is lost when it is
 // replaced. Times of IGDB's own do not count as the owner's.
-const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND e.notes = '' AND (e.time_to_beat_src IS NULL OR e.time_to_beat_src = 'igdb')
+const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND trim(e.notes, ' ' || char(9, 10, 13)) = '' AND (e.time_to_beat_src IS NULL OR e.time_to_beat_src = 'igdb')
 	AND NOT EXISTS (SELECT 1 FROM expansion_play p WHERE p.expansion_id = e.id)`
 
 // IsGameSQL is the SQL condition (on the alias e) of an expansion that is also a game of the library (the owner added it as its own

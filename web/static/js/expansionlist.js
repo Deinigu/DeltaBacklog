@@ -93,7 +93,7 @@ export function expansionStateFromQuery(search) {
   f.platforms = setOf(qs, 'platform');
   f.baseFinished = qs.get('base') === 'finished';
   f.hidden = qs.get('hidden') === '1';
-  f.steam = qs.get('steam') === '1';
+  f.steam = qs.get('steam') === '1' && !f.hidden; // the two views are exclusive
   const sort = qs.get('sort');
   return { filter: f, sort: SORT_KEYS.includes(sort) ? sort : DEFAULT_SORT };
 }
