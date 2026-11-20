@@ -11,7 +11,6 @@ import { seriesPosition } from './series.js';
 import { ttbSection } from './ttbview.js';
 import { screenshotsSection } from './shotsview.js';
 import { similarSection } from './similardrawer.js';
-import { expansionsSection } from './expansionsdrawer.js';
 import { dealsSection } from './dealsdrawer.js';
 import { relinkPrompt, closeRelinkPrompt } from './relinkprompt.js';
 import { unique, field, text, ensureDatalist, listRow, yearsRow, ownershipSelect, notesField, toggleRow } from './form.js';
@@ -129,7 +128,6 @@ export function openDrawer(game, opts = {}) {
       fact('Ownership', game.ownership && ownershipLabel(game.ownership)),
       fact('VR', game.vr ? 'Yes' : null),
       fact('100% completed', game.completed ? 'Yes' : null)),
-    expansionsSection(game),
     ttb,
     similarSection(game),
     dealsSection(game),

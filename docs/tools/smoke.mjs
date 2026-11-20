@@ -23,7 +23,7 @@ const ROOT = join(HERE, '..', '..');
 const CLICKS = Number(process.env.SMOKE_CLICKS || 30);
 
 const ALL_PAGES = [
-  '#/library', '#/library?layout=table', '#/views', '#/view/2', '#/series', '#/expansions', '#/expansions?status=none&own=owned', '#/expansions?steam=1', '#/expansions?hidden=1', '#/upcoming', '#/upcoming?kind=expansion', '#/similar',
+  '#/library', '#/library?layout=table', '#/views', '#/view/2', '#/series', '#/upcoming', '#/similar',
   '#/deals', '#/deals?view=wishlist', '#/hidden', '#/stats', '#/years', '#/rankings', '#/screenshots',
   '#/attention', '#/link',
 ];
@@ -32,7 +32,7 @@ const only = (process.env.SMOKE_PAGES || '').split(',').map((s) => s.trim()).fil
 const PAGES = only.length ? ALL_PAGES.filter((p) => only.some((w) => p.includes(w))) : ALL_PAGES;
 const WIDTHS = [{ width: 390, height: 844, isMobile: true, hasTouch: true }, { width: 1280, height: 900 }];
 // Controls that change data in ways that end the page, or call services outside the demo, are not clicked. (Add on a made-up IGDB game asks IGDB for it.)
-const SKIP = /add .* to your library|delete|remove|refresh|send|sync|find times|find expansions|fetch|export|download|import|upload|re-?link|unlink|test message|check now/i;
+const SKIP = /add .* to your library|delete|remove|refresh|send|sync|find times|fetch|export|download|import|upload|re-?link|unlink|test message|check now/i;
 
 const freePort = () => new Promise((res, rej) => { const s = createServer(); s.on('error', rej); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => res(port)); }); });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

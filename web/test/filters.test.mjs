@@ -133,3 +133,11 @@ test('a stored sort level on a field that no longer exists is dropped (the remov
   const s = stateFromView({ filter: {}, sort: [{ field: 'playtime', dir: 'desc' }, { field: 'title', dir: 'asc' }, { field: 'toString', dir: 'asc' }], group_by: '' });
   assert.deepEqual(s.sorts, [{ field: 'title', dir: 'asc' }]);
 });
+
+test('a saved view with a flag that no longer exists still loads, ignoring it', () => {
+  const s = stateFromView({ filter: { flags: ['exp_left', 'favorite'], in: { status: ['backlog'] } }, sort: [{ field: 'title', dir: 'asc' }] });
+  assert.deepEqual([...s.flags], ['favorite']);
+  assert.ok(s.in.status.has('backlog'));
+  assert.ok(!filterToJSON(s).flags.includes('exp_left'));
+  assert.equal(matches(stateFromView({ filter: { flags: ['exp_left'] } }), games[0]), true);
+});

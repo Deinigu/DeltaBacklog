@@ -456,11 +456,6 @@ func applyFieldEdits(tx *sql.Tx, id int64, in *gamePatch) error {
 					return err
 				}
 			}
-			// The expansions of the old IGDB game: the ones the owner never touched are replaced (read again for the new
-			// link), the tracked ones stay.
-			if err := dropUntrackedExpansions(tx, id); err != nil {
-				return err
-			}
 		}
 		if _, err := tx.Exec("UPDATE game SET igdb_id = ? WHERE id = ?", next, id); err != nil {
 			return err

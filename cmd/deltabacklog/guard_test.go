@@ -290,28 +290,3 @@ func TestMultipartOnlyForScreenshotUpload(t *testing.T) {
 		t.Errorf("%d requests reached the handler, want 3", *hits)
 	}
 }
-
-// The Steam userdata import takes multipart/form-data too (and only POST on that exact path), behind the same
-// cross-origin check.
-func TestMultipartForSteamImport(t *testing.T) {
-	h, hits := guarded("")
-	ct := "multipart/form-data; boundary=x"
-	same := map[string]string{"Sec-Fetch-Site": "same-origin"}
-	if got := do(h, "POST", "/api/expansions/steam-import", "127.0.0.1:8081", ct, same); got != 204 {
-		t.Errorf("import: %d", got)
-	}
-	if got := do(h, "POST", "/api/expansions/steam-import", "127.0.0.1:8081", ct, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "http://evil.example"}); got != 403 {
-		t.Errorf("cross-site import: %d", got)
-	}
-	for _, p := range []string{"/api/expansions/sync", "/api/expansions/steam-importx", "/api/expansions/1", "/api/expansions/steam-import/x"} {
-		if got := do(h, "POST", p, "127.0.0.1:8081", ct, same); got != 415 {
-			t.Errorf("multipart to %s: %d, want 415", p, got)
-		}
-	}
-	if got := do(h, "PATCH", "/api/expansions/steam-import", "127.0.0.1:8081", ct, same); got != 415 {
-		t.Errorf("PATCH multipart: %d", got)
-	}
-	if *hits != 1 {
-		t.Errorf("%d requests reached the handler, want 1", *hits)
-	}
-}

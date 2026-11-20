@@ -59,7 +59,7 @@ func TestSimilarFacetsMigration(t *testing.T) {
 	if err := d.QueryRow(`SELECT title, platforms, genres FROM similar_game WHERE igdb_id = 200`).Scan(&title, &platforms, &genres); err != nil {
 		t.Fatal(err)
 	}
-	if version != 26 || games != 1 || links != 1 || hidden != 1 || title != "Alpha" || platforms.Valid || genres.Valid {
+	if version != 27 || games != 1 || links != 1 || hidden != 1 || title != "Alpha" || platforms.Valid || genres.Valid {
 		t.Errorf("version %d games %d links %d hidden %d title %q platforms %v genres %v", version, games, links, hidden, title, platforms, genres)
 	}
 	if _, err := d.Exec(`UPDATE similar_game SET platforms = 'PC, PS5', genres = 'Adventure' WHERE igdb_id = 200`); err != nil {

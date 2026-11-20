@@ -9,16 +9,12 @@ import { missingIndex, moveHidden, oldestFetch } from './series.js';
 import { buildUpcoming, formatRelease } from './upcoming.js';
 import { createListShell } from './listshell.js';
 import { toggleIn, withSelected } from './listfilter.js';
-import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery, forwardText } from './upcomingfilter.js';
+import { WHEN, emptyUpcomingFilter, upcomingFilterCount, filterUpcoming, countUpcoming, seriesOf, platformsOf, upcomingStateFromQuery, upcomingStateToQuery } from './upcomingfilter.js';
 import { formatDate } from './format.js';
-import { expansionCoverURL, isDLC } from './expansions.js';
-import { openExpansionSheet } from './expansionsheet.js';
-import { openDrawer } from './drawer.js';
 
 function poster(item) {
-  const exp = item.kind === 'expansion'; // an expansion of a game you own is drawn like an owned game, not like a missing one
-  const url = exp ? expansionCoverURL(item.expansion) : missingPosterURL(item.missing.cover, item.missing.v);
-  return h(exp ? 'span.pst' : 'span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
+  const url = missingPosterURL(item.missing.cover, item.missing.v);
+  return h('span.pst.pst-missing', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(item.title)}` }, initials(item.title)));
 }
 
 export function renderUpcoming(root) {
@@ -44,14 +40,12 @@ export function renderUpcoming(root) {
   });
   ui.chips('When', { open: true, options: () => WHEN.map((w) => ({ value: w.key, text: w.label })),
     has: (v) => filter.when.has(v), toggle: (v) => toggleIn(filter.when, v), selected: () => filter.when.size, count: (v) => countUpcoming(res, filter, 'when', v) });
-  ui.chips('Type', { open: true, options: () => [{ value: 'expansion', text: 'Expansions' }],
-    has: () => filter.expansions, toggle: () => { filter.expansions = !filter.expansions; }, selected: () => (filter.expansions ? 1 : 0), count: () => countUpcoming(res, filter, 'expansions', true) });
   ui.chips('Series', { open: false, lazy: true, options: () => withSelected(seriesOf(res).map((x) => x.value), filter.series).map((v) => ({ value: v, text: v })),
     has: (v) => filter.series.has(v), toggle: (v) => toggleIn(filter.series, v), selected: () => filter.series.size, count: (v) => countUpcoming(res, filter, 'series', v) });
   ui.chips('Platform', { open: false, lazy: true, options: () => withSelected(platformsOf(res).map((x) => x.value), filter.platforms).map((v) => ({ value: v, text: v })),
     has: (v) => filter.platforms.has(v), toggle: (v) => toggleIn(filter.platforms, v), selected: () => filter.platforms.size, count: (v) => countUpcoming(res, filter, 'platforms', v) });
   page.replaceChildren(h('h1', {}, 'Upcoming'),
-    h('p.hint', {}, 'New games of your series that are not out yet or just came out, and that you do not have, with release dates from IGDB. The expansions of your games are listed here too.'),
+    h('p.hint', {}, 'New games of your series that are not out yet or just came out, and that you do not have, with release dates from IGDB.'),
     tools, ...ui.nodes(results));
 
   async function load() {
@@ -113,20 +107,7 @@ export function renderUpcoming(root) {
   }
 
   // ---- the page ----
-  // An expansion of a library game: "Expansion · <game>" ("DLC · <game>"); tapping the row opens its sheet, the game's name opens the game.
-  function expansionRow(item, released) {
-    const date = item.period ? formatRelease(item.date, item.format) : 'Release date not announced';
-    const meta = [released ? `Released ${date}` : date, item.platforms.length ? item.platforms.join(', ') : null].filter(Boolean).join(' · ');
-    const body = h('span.up-body', {},
-      h('span.up-title', { translate: 'no' }, item.title),
-      h('span.up-date', {}, meta),
-      h('span.up-from', {}, h('span.up-tag', {}, isDLC(item.expansion) ? 'DLC' : 'Expansion'), h('small', {}, ` · ${item.gameTitle}`)));
-    return h('li.up-row', {}, h('button.up-open', { type: 'button', onclick: () => openExpansionSheet(item.expansion.id), 'aria-label': `${item.title}, ${isDLC(item.expansion) ? 'DLC' : 'expansion'} of ${item.gameTitle}: edit` }, poster(item), body),
-      h('span.si-actions', {}, h('button.exp-game', { type: 'button', 'aria-label': `Open ${item.gameTitle}`, onclick: () => openDrawer(item.game) }, item.gameTitle)));
-  }
-
   function row(item, released) {
-    if (item.kind === 'expansion') return expansionRow(item, released);
     const date = item.period ? formatRelease(item.date, item.format) : 'Release date not announced';
     const meta = [released ? `Released ${date}` : date, item.platforms.length ? item.platforms.join(', ') : null].filter(Boolean).join(' · ');
     const from = h('span.up-tag', {}, 'Not in your library');
@@ -167,11 +148,10 @@ export function renderUpcoming(root) {
       ...groups.map((g) => h('section.up-group', {}, h('h2', {}, g.label, h('small', {}, ` ${g.items.length}`)), h('ul.up-list', {}, g.items.map((it) => row(it, false))))),
       nothing ? emptyBox('Nothing is coming up yet. Read your series from IGDB to see their new games here.', info.configured && btn) : null,
       !nothing && !shown ? emptyBox('No games match these filters.', h('button.btn', { type: 'button', onclick: reset }, 'Clear filters')) : null,
-      total ? h('p.hint', {}, forwardText(groups)) : null,
+      total ? h('p.hint', {}, `${total} ${total === 1 ? 'game' : 'games'} to look forward to.`) : null,
     ].filter(Boolean));
     const pills = [
       ...WHEN.filter((w) => filter.when.has(w.key)).map((w) => ({ name: `When: ${w.label}`, kids: [h('b', {}, 'When'), w.label], remove: () => filter.when.delete(w.key) })),
-      ...(filter.expansions ? [{ name: 'Expansions only', kids: [h('b', {}, 'Type'), 'Expansions'], remove: () => { filter.expansions = false; } }] : []),
       ...[...filter.series].sort().map((s) => ({ name: `Series: ${s}`, kids: [h('b', {}, 'Series'), s], remove: () => filter.series.delete(s) })),
       ...[...filter.platforms].sort().map((p) => ({ name: `Platform: ${p}`, kids: [h('b', {}, 'Platform'), p], remove: () => filter.platforms.delete(p) })),
     ];
