@@ -49,7 +49,8 @@ type Options struct {
 // Report says what a fetch did.
 type Report struct {
 	Games         int // games IGDB was asked about
-	Found         int // expansions IGDB lists for them
+	Found         int // expansions and DLC IGDB lists for them
+	DLC           int // of which DLC (IGDB game_type 1)
 	WithExpansion int // games with at least one
 	Covers        int
 }
@@ -64,12 +65,20 @@ const minYear, maxYear = 1950, 2100
 
 // untracked is the SQL condition (on the alias e) of an expansion the owner has not touched: nothing is lost when it is
 // replaced. Times of IGDB's own do not count as the owner's.
-const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND e.notes = '' AND (e.time_to_beat_src IS NULL OR e.time_to_beat_src = 'igdb')
+const untracked = `e.status_id IS NULL AND e.ownership_id IS NULL AND trim(e.notes, ' ' || char(9, 10, 13)) = '' AND (e.time_to_beat_src IS NULL OR e.time_to_beat_src = 'igdb')
 	AND NOT EXISTS (SELECT 1 FROM expansion_play p WHERE p.expansion_id = e.id)`
 
 // IsGameSQL is the SQL condition (on the alias e) of an expansion that is also a game of the library (the owner added it as its own
 // card, for example from NocoDB): the card is its record, so it is never listed or counted inside its base game as well.
 const IsGameSQL = `EXISTS (SELECT 1 FROM game lg WHERE lg.igdb_id = e.igdb_id)`
+
+// kindOf is the stored kind of an add-on read from IGDB: a DLC, or else an expansion.
+func kindOf(e meta.Expansion) string {
+	if e.Kind == meta.KindDLC {
+		return meta.KindDLC
+	}
+	return meta.KindExpansion
+}
 
 // Due lists the IGDB-linked games whose expansions were never read, or (unless neverOnly) not within FetchTTL.
 func Due(d *sql.DB, now time.Time, neverOnly bool) ([]Target, error) {
@@ -147,7 +156,7 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 		var stored []int64 // the row ids of the expansions of this batch
 		for _, t := range batch {
 			list := got[t.IGDBID]
-			rowIDs, err := save(tx, t.GameID, list, o.Now())
+			rowIDs, dlc, err := save(tx, t.GameID, list, o.Now())
 			if err != nil {
 				tx.Rollback()
 				return rep, err
@@ -155,6 +164,7 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 			stored = append(stored, rowIDs...)
 			rep.Games++
 			rep.Found += len(rowIDs)
+			rep.DLC += dlc
 			if len(rowIDs) > 0 {
 				rep.WithExpansion++
 			}
@@ -162,7 +172,7 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 		if err := tx.Commit(); err != nil {
 			return rep, err
 		}
-		if err := fillTimes(ctx, d, src, stored); err != nil && ctx.Err() != nil {
+		if err := fillTimes(ctx, d, src, stored, o.AllCovers); err != nil && ctx.Err() != nil {
 			return rep, ctx.Err()
 		}
 		progress(end)
@@ -184,34 +194,57 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 	return rep, nil
 }
 
+// CatchUp ends a background run: it reads IGDB's time to beat of the rows `ids` (the DLC the Steam import has just marked, which
+// the run skipped while they were untouched) and downloads the missing posters of the whole library, with the same skip rule
+// and cap as a run (the owner's first, no untouched DLC unless it is owned on Steam). It returns how many posters it saved.
+func CatchUp(ctx context.Context, d *sql.DB, src Source, o Options, ids []int64) (int, error) {
+	if o.Allowed == nil {
+		o.Allowed = igdbImageHost
+	}
+	if o.Fetch == nil {
+		o.Fetch = covers.FetchExpansionPosterStrict
+	}
+	if len(ids) > 0 && src != nil {
+		if err := fillTimes(ctx, d, src, ids, false); err != nil && ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+	}
+	if o.CoverDir == "" {
+		return 0, nil
+	}
+	return fetchCovers(ctx, d, o, nil)
+}
+
 // save stores one game's expansions in the caller's transaction: new ones are added, known ones get IGDB's title, date,
 // cover and Steam id (never the owner's status, ownership, notes, years, times or hidden mark), and ones IGDB no longer
-// lists (or that are a game of the library) go unless the owner tracks them. It returns the row ids of the game's expansions.
-func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int64, error) {
+// lists (or that are a game of the library) go unless the owner tracks them. It returns the row ids of the game's expansions
+// and how many of them are DLC.
+func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int64, int, error) {
 	have := map[int64]int64{} // igdb id -> row id, for this game
 	rows, err := tx.Query(`SELECT igdb_id, id FROM expansion WHERE game_id = ?`, gameID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for rows.Next() {
 		var ig, id int64
 		if err := rows.Scan(&ig, &id); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, 0, err
 		}
 		have[ig] = id
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var ids []int64
+	dlc := 0
 	listed := map[int64]bool{}
 	for _, e := range list {
 		// an expansion the library has as its own game is not kept inside its base game too (an untracked row of it goes below)
 		var isGame bool
 		if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM game WHERE igdb_id = ?)`, e.IGDBID).Scan(&isGame); err != nil {
-			return nil, err
+			return nil, 0, err
 		} else if isGame {
 			continue
 		}
@@ -229,12 +262,15 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 		if id, ok := have[e.IGDBID]; ok {
 			listed[e.IGDBID] = true
 			// a changed cover drops the downloaded file name: the next run downloads the new one
-			if _, err := tx.Exec(`UPDATE expansion SET title = ?, release_date = ?, release_year = ?, steam_app_id = ?,
+			if _, err := tx.Exec(`UPDATE expansion SET title = ?, release_date = ?, release_year = ?, steam_app_id = ?, kind = ?,
 				cover_file = CASE WHEN cover_image_id IS ? THEN cover_file ELSE NULL END, cover_image_id = ? WHERE id = ?`,
-				e.Name, date, year, steam, cover, cover, id); err != nil {
-				return nil, err
+				e.Name, date, year, steam, kindOf(e), cover, cover, id); err != nil {
+				return nil, 0, err
 			}
 			ids = append(ids, id)
+			if kindOf(e) == meta.KindDLC {
+				dlc++
+			}
 			continue
 		}
 		// an expansion IGDB lists under two games stays with the first
@@ -242,40 +278,48 @@ func save(tx *sql.Tx, gameID int64, list []meta.Expansion, now time.Time) ([]int
 		if err := tx.QueryRow(`SELECT id FROM expansion WHERE igdb_id = ?`, e.IGDBID).Scan(&other); err == nil {
 			continue
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
+			return nil, 0, err
 		}
-		res, err := tx.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, cover_image_id, steam_app_id) VALUES (?,?,?,?,?,?,?)`,
-			gameID, e.IGDBID, e.Name, date, year, cover, steam)
+		res, err := tx.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, cover_image_id, steam_app_id, kind) VALUES (?,?,?,?,?,?,?,?)`,
+			gameID, e.IGDBID, e.Name, date, year, cover, steam, kindOf(e))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		id, _ := res.LastInsertId()
 		listed[e.IGDBID] = true
 		ids = append(ids, id)
+		if kindOf(e) == meta.KindDLC {
+			dlc++
+		}
 	}
 	for ig, id := range have {
 		if listed[ig] {
 			continue
 		}
 		if _, err := tx.Exec(`DELETE FROM expansion AS e WHERE e.id = ? AND `+untracked, id); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 	if _, err := tx.Exec(`INSERT INTO expansion_fetch(game_id, fetched_at) VALUES (?, ?) ON CONFLICT(game_id) DO UPDATE SET fetched_at = excluded.fetched_at`,
 		gameID, now.UTC().Format(stamp)); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return ids, nil
+	return ids, dlc, nil
 }
 
 // fillTimes reads IGDB's time to beat for those of the expansions (row ids) that have none, never over a time the owner
-// set or took from HowLongToBeat. A failed read is not fatal: the times come with the next refresh.
-func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64) error {
+// set or took from HowLongToBeat. A failed read is not fatal: the times come with the next refresh. The background job
+// (background true) skips the untouched DLC nobody looks at, like fetchCovers; a one-game read fills every row.
+func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64, background bool) error {
+	q := `SELECT e.igdb_id FROM expansion e WHERE e.id = ? AND e.time_to_beat_hastily IS NULL AND e.time_to_beat_normally IS NULL
+			AND e.time_to_beat_completely IS NULL AND e.time_to_beat_src IS NULL`
+	if background {
+		q += ` AND NOT (e.kind = 'dlc' AND e.steam_owned = 0 AND ` + untracked + `)`
+	}
 	var igdbIDs []int64
 	for _, id := range rowIDs {
 		var ig int64
-		err := d.QueryRow(`SELECT igdb_id FROM expansion WHERE id = ? AND time_to_beat_hastily IS NULL AND time_to_beat_normally IS NULL
-			AND time_to_beat_completely IS NULL AND time_to_beat_src IS NULL`, id).Scan(&ig)
+		err := d.QueryRow(q, id).Scan(&ig)
 		if err == nil {
 			igdbIDs = append(igdbIDs, ig)
 		}
@@ -310,18 +354,25 @@ func fillTimes(ctx context.Context, d *sql.DB, src Source, rowIDs []int64) error
 }
 
 // fetchCovers downloads the posters of expansions that have an IGDB cover but no file yet (at most maxCoversPerRun): those of
-// the games `only` when it is not nil, else of the whole library.
+// the games `only` when it is not nil, else of the whole library (the owner's first, and no DLC the owner has not added unless
+// it is owned on Steam).
 func fetchCovers(ctx context.Context, d *sql.DB, o Options, only []int64) (int, error) {
-	q, args := `SELECT igdb_id, cover_image_id FROM expansion WHERE cover_image_id IS NOT NULL AND cover_file IS NULL`, []any{}
+	q, args := `SELECT e.igdb_id, e.cover_image_id FROM expansion e WHERE e.cover_image_id IS NOT NULL AND e.cover_file IS NULL`, []any{}
+	order := ` ORDER BY e.id`
 	if only != nil {
 		if len(only) == 0 {
 			return 0, nil
 		}
-		q += ` AND game_id IN (SELECT value FROM json_each(?))`
+		q += ` AND e.game_id IN (SELECT value FROM json_each(?))`
 		b, _ := json.Marshal(only)
 		args = append(args, string(b))
+	} else {
+		// the whole library: not the DLC nobody added (IGDB lists hundreds of cosmetic and song packs for some games; their
+		// posters come with a read of their game, in its details), and the owner's own ones first
+		q += ` AND NOT (e.kind = 'dlc' AND e.steam_owned = 0 AND ` + untracked + `)`
+		order = ` ORDER BY (` + untracked + `), e.id`
 	}
-	rows, err := d.Query(q+` ORDER BY id LIMIT ?`, append(args, maxCoversPerRun)...)
+	rows, err := d.Query(q+order+` LIMIT ?`, append(args, maxCoversPerRun)...)
 	if err != nil {
 		return 0, err
 	}
@@ -406,9 +457,17 @@ func DropUntracked(tx *sql.Tx, gameID int64) error {
 	return err
 }
 
-// Text is the sentence a finished run shows: "Found 12 expansions for 7 games."
+// Text is the sentence a finished run shows: "Found 12 expansions for 7 games.", or with DLC "Found 5 expansions and 25 DLC for 7 games."
 func (r Report) Text() string {
-	return fmt.Sprintf("Found %s for %s.", plural(r.Found, "expansion", "expansions"), plural(r.WithExpansion, "game", "games"))
+	found := plural(r.Found-r.DLC, "expansion", "expansions")
+	if r.DLC > 0 {
+		if r.Found-r.DLC == 0 {
+			found = fmt.Sprintf("%d DLC", r.DLC)
+		} else {
+			found += fmt.Sprintf(" and %d DLC", r.DLC)
+		}
+	}
+	return fmt.Sprintf("Found %s for %s.", found, plural(r.WithExpansion, "game", "games"))
 }
 
 func plural(n int, one, many string) string {

@@ -187,5 +187,14 @@ func seedExpansions(d *sql.DB) {
 			}
 		}
 	}
+	// IGDB's DLC (game_type 1) of a few games: none added, some owned on Steam (the drawer offers those first)
+	dlcs := []string{"Hearthstone Hamlet", "Vampire Hunters", "Costume Pack"}
+	for i, b := range bases {
+		if i >= 6 {
+			break
+		}
+		must(d.Exec(`INSERT INTO expansion(game_id, igdb_id, title, release_date, release_year, steam_app_id, kind, steam_owned) VALUES (?,?,?,?,?,?, 'dlc', ?)`,
+			b.id, 969000+int64(i), b.title+": "+dlcs[i%len(dlcs)], fmt.Sprintf("%d-06-01", now.Year()-2), now.Year()-2, 1590000+int64(i), (i+1)%2))
+	}
 	fmt.Println("made-up expansions written")
 }

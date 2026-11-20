@@ -356,7 +356,7 @@ export async function refreshGames() {
   gamesChanged();
 }
 
-// ---- expansions (IGDB game_type 2, kept inside their base game: game.expansions) ----
+// ---- expansions (IGDB game_type 2 and 1: expansions and DLC, kept inside their base game: game.expansions) ----
 /** Replace the contents of an expansion in place (so the sheet and the drawer that hold the object see the change). */
 function overwrite(x, fresh) {
   for (const k of Object.keys(x)) delete x[k];
@@ -375,7 +375,7 @@ export function findExpansion(id) {
 const expansionChains = new Map(); // expansion id -> promise: edits of one expansion are sent one at a time, in order
 
 /**
- * Save changes to one expansion: {status ('' = not tracked), ownership, notes, years, periods, hidden, ttb_*}. The local
+ * Save changes to one expansion: {status ('' = no status), ownership, notes, years, periods, hidden, ttb_*}. The local
  * object takes the server's copy when it answers (nothing is guessed first, so a failure changes nothing).
  */
 export function patchExpansion(id, patch) {

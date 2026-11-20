@@ -8,7 +8,7 @@ import { pickMany } from './picker.js';
 import { ownershipLabel } from './ownership.js';
 import { yearsOf, yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
 import { ttbSection } from './ttbview.js';
-import { expansionCoverURL, withYear, expansionsOf } from './expansions.js';
+import { expansionCoverURL, withYear, expansionsOf, isDLC, isAdded } from './expansions.js';
 import { openDrawer } from './drawer.js';
 
 /** Ownership values in use across games and expansions, most used first (plus the two everyone needs). */
@@ -31,9 +31,10 @@ export function openExpansionSheet(id) {
   if (!found) return;
   closeExpansionSheet();
   const { x, game } = found;
+  const noun = isDLC(x) ? 'DLC' : 'Expansion';
   const body = h('div.exp-sheet');
 
-  const status = h('select', { 'aria-label': 'Status' }, [h('option', { value: '' }, 'Not tracked'), ...store.statuses.map((s) => h('option', { value: s.key }, s.label))]);
+  const status = h('select', { 'aria-label': 'Status' }, [h('option', { value: '' }, 'No status'), ...store.statuses.map((s) => h('option', { value: s.key }, s.label))]);
   const ownership = h('select', { 'aria-label': 'Ownership' });
   const yearsBtn = h('button.listbtn', { type: 'button' }, h('span.fval'), h('span.edit', { 'aria-hidden': 'true' }, '✎'));
   const notes = h('textarea', { rows: '3', 'aria-label': 'Notes', placeholder: 'Anything worth remembering…', maxlength: '20000' });
@@ -65,7 +66,8 @@ export function openExpansionSheet(id) {
     val.classList.toggle('none', !years.length);
     yearsBtn.setAttribute('aria-label', `Played in: ${val.textContent}. Edit`);
     if (document.activeElement !== notes) { notes.value = x.notes || ''; fit(); }
-    hideBtn.textContent = x.hidden ? 'Show again' : 'Hide this expansion';
+    addOwned.hidden = isAdded(x) || !!x.ownership || !!x.hidden;
+    hideBtn.textContent = x.hidden ? 'Show again' : `Hide this ${isDLC(x) ? 'DLC' : 'expansion'}`;
     hint.textContent = x.hidden ? 'Hidden: it is not counted anywhere and not listed.' : '';
   }
 
@@ -90,9 +92,13 @@ export function openExpansionSheet(id) {
   const head = h('div.exp-head', {},
     h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(x.title)}` }, initials(x.title))),
     h('div', {}, h('b.exp-name', {}, withYear(x)),
-      h('button.exp-game', { type: 'button', onclick: () => { sheet.toggle(false); openDrawer(game); } }, `Expansion of ${game.title}`)));
+      h('button.exp-game', { type: 'button', onclick: () => { sheet.toggle(false); openDrawer(game); } }, `${noun} of ${game.title}`)));
+  const addOwned = h('button.btn.primary.exp-add', { type: 'button', onclick: async () => {
+    await save({ ownership: 'Owned' }, 'add it');
+    if (addOwned.hidden) { ownership.focus({ preventScroll: true }); toast(`Added “${x.title}”`); } // the button is gone: keep the focus (and the screen reader) here
+  } }, 'Add as Owned');
   const field = (label, control) => h('label.frow', {}, h('span.flabel', {}, label), control);
-  body.append(head,
+  body.append(head, addOwned,
     field('Status', status),
     field('Ownership', ownership),
     h('div.frow', {}, h('span.flabel', {}, 'Played in'), yearsBtn),
@@ -100,7 +106,7 @@ export function openExpansionSheet(id) {
     ttbSection(x, { patch: (p) => patchExpansion(x.id, p), year: x.year, key: `x${x.id}` }),
     h('div.exp-actions', {}, hideBtn, refresh), hint);
 
-  const sheet = createSheet({ label: `Expansion: ${x.title}`, title: 'Expansion', body: [body], foot: (close) => [h('button.btn.primary', { type: 'button', onclick: close }, 'Done')] });
+  const sheet = createSheet({ label: `${noun}: ${x.title}`, title: noun, body: [body], foot: (close) => [h('button.btn.primary', { type: 'button', onclick: close }, 'Done')] });
   sheet.el[0].classList.add('exp-scrim'); // above the game drawer (see styles.css)
   sheet.sheet.classList.add('exp-sh');
   document.body.append(...sheet.el);

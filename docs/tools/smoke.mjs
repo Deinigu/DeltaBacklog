@@ -23,7 +23,7 @@ const ROOT = join(HERE, '..', '..');
 const CLICKS = Number(process.env.SMOKE_CLICKS || 30);
 
 const ALL_PAGES = [
-  '#/library', '#/library?layout=table', '#/views', '#/view/2', '#/series', '#/expansions', '#/expansions?status=none&own=owned', '#/upcoming', '#/upcoming?kind=expansion', '#/similar',
+  '#/library', '#/library?layout=table', '#/views', '#/view/2', '#/series', '#/expansions', '#/expansions?status=none&own=owned', '#/expansions?steam=1', '#/expansions?hidden=1', '#/upcoming', '#/upcoming?kind=expansion', '#/similar',
   '#/deals', '#/deals?view=wishlist', '#/hidden', '#/stats', '#/years', '#/rankings', '#/screenshots',
   '#/attention', '#/link',
 ];

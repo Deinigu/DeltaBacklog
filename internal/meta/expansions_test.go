@@ -31,28 +31,41 @@ func expansionFake(t *testing.T, queries *[]string, body string) *Client {
 	return c
 }
 
-// Only game_type 2 is an expansion; the Steam app id comes from the new source field or the old category, and a
-// reference that is an object is read too.
-func TestExpansionsKeepsOnlyType2WithSteamIDs(t *testing.T) {
+// Expansions (game_type 2) and DLC (1) are read, each once; standalone expansions, bundles (3), mods (5) and packs are not. The Steam app id comes
+// from the new source field or the old category, and a reference that is an object is read too.
+func TestExpansionsReadsExpansionsAndDLCWithSteamIDs(t *testing.T) {
 	var queries []string
 	c := expansionFake(t, &queries, `[
 	 {"id":1942,"expansions":[
 	  {"id":100,"name":"Hearts of Stone","game_type":2,"first_release_date":1432598400,"cover":{"image_id":"hos"},
 	   "external_games":[{"uid":"1","external_game_source":5},{"uid":"378648","external_game_source":1}]},
 	  {"id":101,"name":"Blood and Wine","game_type":2,"first_release_date":1464134400,"external_games":[{"uid":"378649","category":1}]},
-	  {"id":102,"name":"Some DLC","game_type":1,"external_games":[{"uid":"9","category":1}]},
 	  {"id":103,"name":"Standalone","game_type":4},
 	  {"id":104,"name":"Object source","game_type":2,"external_games":[{"uid":"777","external_game_source":{"id":1,"name":"Steam"}}]},
 	  {"id":105,"name":"GOG only","game_type":2,"external_games":[{"uid":"55","external_game_source":5}]},
-	  {"id":106,"name":" ","game_type":2}]},
+	  {"id":106,"name":" ","game_type":2},
+	  {"id":108,"name":"Islands Expansion","game_type":5}],
+	  "dlcs":[
+	  {"id":102,"name":"Some DLC","game_type":1,"external_games":[{"uid":"9","category":1}]},
+	  {"id":100,"name":"Hearts of Stone","game_type":2},
+	  {"id":107,"name":"Costume pack","game_type":13},
+	  {"id":109,"name":"Expansion Pass","game_type":3}]},
 	 {"id":7}]`)
 	got, err := c.Expansions(context.Background(), []int64{1942, 7, 8})
 	if err != nil {
 		t.Fatal(err)
 	}
 	list := got[1942]
-	if len(list) != 4 {
+	if len(list) != 5 {
 		t.Fatalf("%+v", list)
+	}
+	for i, want := range []string{KindExpansion, KindExpansion, KindExpansion, KindExpansion, KindDLC} {
+		if list[i].Kind != want {
+			t.Errorf("%d: kind %q, want %q", i, list[i].Kind, want)
+		}
+	}
+	if d := list[4]; d.IGDBID != 102 || d.SteamAppID != 9 {
+		t.Errorf("the DLC: %+v", d)
 	}
 	h := list[0]
 	if h.IGDBID != 100 || h.Name != "Hearts of Stone" || h.Year != 2015 || h.CoverID != "hos" || h.SteamAppID != 378648 || h.Release != 1432598400 {
@@ -67,7 +80,7 @@ func TestExpansionsKeepsOnlyType2WithSteamIDs(t *testing.T) {
 	if _, ok := got[8]; ok {
 		t.Error("a game IGDB does not return is absent")
 	}
-	if len(queries) != 1 || !strings.Contains(queries[0], "expansions.external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
+	if len(queries) != 1 || !strings.Contains(queries[0], "dlcs.external_games.uid") || !strings.Contains(queries[0], "expansions.external_games.external_game_source") || strings.Contains(queries[0], "external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
 		t.Errorf("query %v", queries)
 	}
 }
@@ -100,14 +113,46 @@ func TestLiveExpansions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := map[string]int64{}
 	for _, e := range got[1942] {
-		names[e.Name] = e.SteamAppID
 		t.Logf("%s (%d) steam %s", e.Name, e.Year, strconv.FormatInt(e.SteamAppID, 10))
 	}
+	// IGDB may prefix the game's name ("The Witcher 3: Wild Hunt - Blood and Wine"), so match by substring.
 	for _, want := range []string{"Hearts of Stone", "Blood and Wine"} {
-		if names[want] == 0 {
-			t.Errorf("%s: no expansion or no Steam app id in %v", want, names)
+		found := false
+		for _, e := range got[1942] {
+			if strings.Contains(e.Name, want) && e.SteamAppID != 0 {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no expansion or no Steam app id in %+v", want, got[1942])
+		}
+	}
+	// IGDB types Skyrim's and Breath of the Wild's big add-ons as DLC (game_type 1): reading dlcs is what finds them. Fan mods
+	// (game_type 5, such as BotW's "Islands Expansion") and bundles (3, the Expansion Pass) are never read.
+	more, err := c.Expansions(context.Background(), []int64{472, 7346})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for game, wants := range map[int64][]string{472: {"Dawnguard", "Hearthfire", "Dragonborn"}, 7346: {"The Master Trials", "The Champions' Ballad"}} {
+		var titles []string
+		for _, e := range more[game] {
+			titles = append(titles, e.Name)
+			t.Logf("%d: %s (%s, IGDB %d)", game, e.Name, e.Kind, e.IGDBID)
+			if strings.Contains(e.Name, "Islands Expansion") || strings.Contains(e.Name, "Expansion Pass") {
+				t.Errorf("%d: %q is a mod or a bundle and must not be read", game, e.Name)
+			}
+		}
+		for _, want := range wants {
+			found := false
+			for _, n := range titles {
+				if strings.Contains(n, want) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%d: %q missing from %v", game, want, titles)
+			}
 		}
 	}
 }

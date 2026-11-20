@@ -1,7 +1,7 @@
 // The Expansions page (#/expansions): every IGDB expansion of the library, with search, filters and sorts (listshell.js over
 // the pure filters of expansionlist.js), the "Find expansions for all games" run and the one-time Steam import.
 // Nothing here asks IGDB on its own: the data is read when a drawer opens, or when the owner presses the button.
-import { h, emptyBox, gradientFor, initials, lazyImg, toast, toastError } from './util.js';
+import { h, plural, emptyBox, gradientFor, initials, lazyImg, toast, toastError } from './util.js';
 import { store, refreshGames, expansionSyncStatus, expansionSyncStart, expansionSyncCancel, steamImport } from './api.js';
 import { createListShell } from './listshell.js';
 import { toggleIn, withSelected } from './listfilter.js';
@@ -9,9 +9,9 @@ import { badgeStyle } from './colors.js';
 import { ownershipIcon } from './ownership.js';
 import { playedBadges } from './years.js';
 import { formatRelease } from './upcoming.js';
-import { expansionCoverURL, expansionRowLabel } from './expansions.js';
+import { expansionCoverURL, expansionRowLabel, isAdded, isDLC, isOwned } from './expansions.js';
 import { SORTS, DEFAULT_SORT, NOT_TRACKED, OWNERSHIP, emptyExpansionFilter, expansionFilterCount, filterExpansions, countExpansions, poolOf, platformsOf, poolCount,
-  expansionStateFromQuery, expansionStateToQuery, runToLoad } from './expansionlist.js';
+  expansionStateFromQuery, expansionStateToQuery, runToLoad, steamOfferCount } from './expansionlist.js';
 import { openExpansionSheet } from './expansionsheet.js';
 import { openDrawer } from './drawer.js';
 import { openLayer } from './layers.js';
@@ -50,7 +50,7 @@ function openSteamImport() {
         h('li', {}, 'In a browser where you are logged in to Steam, open ', h('a', { href: STEAM_URL, target: '_blank', rel: 'noopener noreferrer' }, STEAM_URL), ' (it shows plain text).'),
         h('li', {}, 'Save the page (Ctrl+S or “Save page as…”) as a file. JSON, text or a web page all work.'),
         h('li', {}, 'Choose that file here and press Import. Only the list of owned apps is read; the file is not kept.')),
-      h('p.hint', {}, 'It marks the expansions you own as Owned, only where you have not set an ownership. A status or an ownership you set is never changed. You can run it again later.'),
+      h('p.hint', {}, 'It marks the expansions you own as Owned, only where you have not set an ownership. DLC you own are not added (Steam counts cosmetic packs and soundtracks as DLC): they are shown first, marked Owned on Steam, in their game’s details, so adding the ones you want is a tap. A status or an ownership you set is never changed. You can run it again later.'),
       h('label.frow.col', {}, h('span.flabel', {}, 'The saved file (up to 5 MB)'), file),
       fail,
       h('div.dl-acts', {}, go, h('button.dl-act.dl-close', { type: 'button', onclick: () => dlg.close() }, 'Cancel')));
@@ -94,7 +94,7 @@ export function renderExpansions(root) {
     onReset: () => Object.assign(filter, emptyExpansionFilter()),
     sorts: SORTS, getSort: () => sort, setSort: (k) => { sort = k; }, defaultSort: DEFAULT_SORT,
   });
-  const statusName = (k) => (k === NOT_TRACKED ? 'Not tracked' : store.statusByCode.get(k)?.label || k);
+  const statusName = (k) => (k === NOT_TRACKED ? 'No status' : store.statusByCode.get(k)?.label || k);
   ui.chips('Status', { open: true, options: () => withSelected([NOT_TRACKED, ...store.statuses.map((s) => s.key)], filter.status).map((v) => ({ value: v, text: statusName(v) })),
     has: (v) => filter.status.has(v), toggle: (v) => toggleIn(filter.status, v), selected: () => filter.status.size, count: (v) => countExpansions(pool, filter, 'status', v) });
   ui.chips('Ownership', { open: true, options: () => OWNERSHIP.map((o) => ({ value: o.key, text: o.label })),
@@ -103,10 +103,12 @@ export function renderExpansions(root) {
     has: (v) => filter.platforms.has(v), toggle: (v) => toggleIn(filter.platforms, v), selected: () => filter.platforms.size, count: (v) => countExpansions(pool, filter, 'platforms', v) });
   ui.chips('Game', { open: false, options: () => [{ value: 'finished', text: 'Base game finished' }],
     has: () => filter.baseFinished, toggle: () => { filter.baseFinished = !filter.baseFinished; }, selected: () => (filter.baseFinished ? 1 : 0), count: () => countExpansions(pool, filter, 'baseFinished', true) });
+  ui.chips('Steam', { open: false, options: () => [{ value: 'steam', text: 'Owned on Steam, not added yet' }],
+    has: () => filter.steam, toggle: () => { filter.steam = !filter.steam; if (filter.steam) filter.hidden = false; }, selected: () => (filter.steam ? 1 : 0), count: () => countExpansions(pool, filter, 'steam', true) });
   ui.chips('Hidden', { open: false, options: () => [{ value: 'hidden', text: 'Only the hidden ones' }],
-    has: () => filter.hidden, toggle: () => { filter.hidden = !filter.hidden; }, selected: () => (filter.hidden ? 1 : 0), count: () => countExpansions(pool, filter, 'hidden', true) });
+    has: () => filter.hidden, toggle: () => { filter.hidden = !filter.hidden; if (filter.hidden) filter.steam = false; }, selected: () => (filter.hidden ? 1 : 0), count: () => countExpansions(pool, filter, 'hidden', true) });
   page.replaceChildren(h('h1', {}, 'Expansions'),
-    h('p.hint', {}, 'The expansions IGDB lists for your games. They live inside their game: tap one to set its status, ownership, years played and notes. They are not counted as games.'),
+    h('p.hint', {}, 'Your expansions and DLC: the ones you own or added. They live inside their game: tap one to set its status, ownership, years played and notes. They are not counted as games. To add another, open its game: IGDB’s other expansions and DLC are listed there, folded.'),
     tools, ...ui.nodes(results));
 
   // ---- the runs ----
@@ -185,7 +187,10 @@ export function renderExpansions(root) {
         h('span.up-title', { translate: 'no' }, x.title),
         h('span.up-date', {}, date),
         h('span.exp-meta', {},
-          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : h('span.exp-st.none', {}, 'Not tracked'),
+          // a row not added (a Steam offer, a hidden IGDB entry) has no status by definition: no "No status" pill (as in the drawer)
+          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : isAdded(x) ? h('span.exp-st.none', {}, 'No status') : null,
+          isDLC(x) ? h('span.exp-kind', {}, 'DLC') : null,
+          x.steam_owned && !isOwned(x) ? h('span.exp-kind.steam', {}, 'Owned on Steam') : null,
           icon ? h('span.exp-own', { title: x.ownership, role: 'img', 'aria-label': x.ownership }, icon) : null,
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', {}, `+${played.earlier}`) : null,
@@ -197,17 +202,23 @@ export function renderExpansions(root) {
   function draw() {
     const rows = filterExpansions(pool, filter, sort);
     const of = poolCount(pool, filter);
-    const nothing = !pool.length;
+    const nothing = !of && !filter.hidden && !filter.steam;
+    const offers = filter.hidden || filter.steam ? 0 : steamOfferCount(pool);
+    const showOffers = () => { Object.assign(filter, emptyExpansionFilter(), { steam: true }); ui.input.value = ''; draw(); };
     results.replaceChildren(...[
+      offers ? h('p.hint.exp-offers', {}, `${plural(offers, 'DLC', 'DLC')} you own on Steam ${offers === 1 ? 'is' : 'are'} not added yet. `,
+        h('button.exp-link', { type: 'button', onclick: showOffers }, 'Show them')) : null,
+      filter.steam && !filter.hidden && rows.length ? h('p.hint', {}, 'The Steam import found these among your apps. Open one and press Add as Owned (or set a status) to add it; Steam counts cosmetic packs and soundtracks as DLC too, so hide the ones you do not want.') : null,
       rows.length ? h('ul.up-list', {}, rows.map(row)) : null,
-      nothing ? emptyBox('No expansions yet. Open a game linked to IGDB to read its expansions, or read them for every game at once.', h('button.btn', { type: 'button', onclick: () => start(expansionSyncStart, 'start the search') }, '↻ Find expansions for all games')) : null,
-      !nothing && !rows.length ? emptyBox(filter.hidden ? 'You have not hidden any expansion.' : 'No expansions match these filters.', h('button.btn', { type: 'button', onclick: () => { Object.assign(filter, emptyExpansionFilter()); ui.input.value = ''; draw(); } }, 'Clear filters')) : null,
+      nothing ? emptyBox('No expansions yet. Open a game and add one from its expansions (set a status, or say you own it), or read them for every game at once and import the ones you own on Steam.', h('button.btn', { type: 'button', onclick: () => start(expansionSyncStart, 'start the search') }, '↻ Find expansions for all games')) : null,
+      !nothing && !rows.length ? emptyBox(filter.hidden ? 'You have not hidden any expansion.' : filter.steam && !of ? 'No DLC you own on Steam is waiting to be added. The Steam import finds them.' : 'No expansions match these filters.', h('button.btn', { type: 'button', onclick: () => { Object.assign(filter, emptyExpansionFilter()); ui.input.value = ''; draw(); } }, 'Clear filters')) : null,
     ].filter(Boolean));
     const pills = [
       ...[...filter.status].sort().map((s) => ({ name: `Status: ${statusName(s)}`, kids: [h('b', {}, 'Status'), statusName(s)], remove: () => filter.status.delete(s) })),
       ...OWNERSHIP.filter((o) => filter.ownership.has(o.key)).map((o) => ({ name: `Ownership: ${o.label}`, kids: [h('b', {}, 'Ownership'), o.label], remove: () => filter.ownership.delete(o.key) })),
       ...[...filter.platforms].sort().map((p) => ({ name: `Platform: ${p}`, kids: [h('b', {}, 'Platform'), p], remove: () => filter.platforms.delete(p) })),
       ...(filter.baseFinished ? [{ name: 'Base game finished', kids: [h('b', {}, 'Game'), 'finished'], remove: () => { filter.baseFinished = false; } }] : []),
+      ...(filter.steam ? [{ name: 'Owned on Steam, not added yet', kids: [h('b', {}, 'Showing'), 'on Steam'], remove: () => { filter.steam = false; } }] : []),
       ...(filter.hidden ? [{ name: 'Hidden ones', kids: [h('b', {}, 'Showing'), 'hidden ones'], remove: () => { filter.hidden = false; } }] : []),
     ];
     ui.paint({ filters: expansionFilterCount(filter), shown: rows.length, of, pills });

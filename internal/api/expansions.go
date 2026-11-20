@@ -16,7 +16,7 @@ import (
 
 // Expansion is the compact read model of one IGDB expansion of a game, sent inside the game (GET /api/games), so the
 // Library badge and filters, Stats, Upcoming and Needs attention work in the browser without extra calls. Status and
-// ownership are null while the owner has not set them ("Not tracked"). Empty optional values are left out. An expansion
+// ownership are null while the owner has not set them ("No status"). Empty optional values are left out. An expansion
 // that is also a game of the library (its own card) is not sent.
 type Expansion struct {
 	ID        int64    `json:"id"`
@@ -32,6 +32,8 @@ type Expansion struct {
 	Periods   []string `json:"periods"`
 	Notes     string   `json:"notes,omitempty"`
 	Hidden    bool     `json:"hidden,omitempty"`
+	Kind      string   `json:"kind"`                  // "expansion" or "dlc" (IGDB game_type 2 or 1)
+	SteamOwn  bool     `json:"steam_owned,omitempty"` // the Steam import found it among the owner's apps (DLC only: see migration 026)
 	UpdatedAt string   `json:"updated_at"`
 
 	TTBHastily    *int    `json:"ttb_hastily,omitempty"`
@@ -49,7 +51,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 		args = []any{only}
 		where += " AND e.game_id = ?"
 	}
-	rows, err := d.Query(`SELECT e.id, e.game_id, e.title, e.release_year, e.release_date, e.cover_file, e.cover_image_id, s.code, o.name, e.notes, e.hidden,
+	rows, err := d.Query(`SELECT e.id, e.game_id, e.title, e.release_year, e.release_date, e.cover_file, e.cover_image_id, s.code, o.name, e.notes, e.hidden, e.kind, e.steam_owned,
 			e.time_to_beat_hastily, e.time_to_beat_normally, e.time_to_beat_completely, e.time_to_beat_src, e.updated_at
 		FROM expansion e LEFT JOIN status s ON s.id = e.status_id LEFT JOIN ownership o ON o.id = e.ownership_id`+where+`
 		ORDER BY e.release_date IS NULL, e.release_date, e.title`, args...)
@@ -61,7 +63,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 	for rows.Next() {
 		var x Expansion
 		var date, cover, coverV sql.NullString
-		if err := rows.Scan(&x.ID, &x.GameID, &x.Title, &x.Year, &date, &cover, &coverV, &x.Status, &x.Ownership, &x.Notes, &x.Hidden,
+		if err := rows.Scan(&x.ID, &x.GameID, &x.Title, &x.Year, &date, &cover, &coverV, &x.Status, &x.Ownership, &x.Notes, &x.Hidden, &x.Kind, &x.SteamOwn,
 			&x.TTBHastily, &x.TTBNormally, &x.TTBCompletely, &x.TTBSource, &x.UpdatedAt); err != nil {
 			rows.Close()
 			return err
@@ -137,7 +139,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 // ---------------- PATCH /api/expansions/{id} ----------------
 
 // expansionPatch is the writable subset of an expansion; the same conventions as gamePatch (absent = unchanged). Status
-// and ownership clear with "" (back to "Not tracked" / no ownership).
+// and ownership clear with "" (back to "No status" / no ownership).
 type expansionPatch struct {
 	Status        *string    `json:"status"`
 	Ownership     *string    `json:"ownership"`
@@ -427,7 +429,7 @@ func (s *Server) expansionSyncCancel(w http.ResponseWriter, r *http.Request) {
 // startExpansionJob begins the background run (one at a time) over the games that are due; `after` (may be nil) runs when the
 // reading ended without being stopped, and returns the sentence to add to the report. It answers 202 with the status, or
 // the current status when a run is already going.
-func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly bool, after func() (string, error)) {
+func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly bool, after func() (string, []int64, error)) {
 	j := &s.expJob
 	src := s.expansionSource()
 	configured := src != nil && (s.Expansions != nil || s.igdbConfigured())
@@ -466,7 +468,7 @@ func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly
 // nothingDue is the report of a "Find expansions" run with no game to read (instead of "Found 0 expansions for 0 games.").
 const nothingDue = "Nothing to read: every game linked to IGDB was read in the last 30 days."
 
-func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, error)) {
+func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, []int64, error)) {
 	j := &s.expJob
 	o := s.expansionOptions()
 	o.AllCovers = true // the background run catches up on every missing poster (a drawer's refresh only gets its game's)
@@ -490,17 +492,25 @@ func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, tod
 		log.Printf("expansions sync: %v", err)
 		text, failed = "IGDB could not be reached. Stopped. "+text, true
 	}
+	var marked []int64 // DLC the import has just marked owned on Steam: their times and posters are read below
 	if after != nil {
 		if ctx.Err() != nil || err != nil {
 			text += " Nothing was marked as owned."
-		} else if more, aerr := after(); aerr != nil {
+		} else if more, ids, aerr := after(); aerr != nil {
 			log.Printf("expansions import: %v", aerr)
 			text, failed = "The import failed.", true
 		} else {
-			text = more
+			text, marked = more, ids
 			if rep.Games > 0 {
 				text = rep.Text() + " " + more
 			}
+		}
+	}
+	// at the end of every run that was not stopped or failed: the posters (and the times of the newly marked DLC) the run skipped,
+	// and the posters of DLC the owner added since (the one-game reads only fetch their own game's)
+	if ctx.Err() == nil && err == nil && !failed {
+		if _, e := expansions.CatchUp(ctx, s.DB, src, o, marked); e != nil && ctx.Err() == nil {
+			log.Printf("expansions: catch up: %v", e)
 		}
 	}
 	s.cache.invalidate()
@@ -555,9 +565,9 @@ func (s *Server) steamImport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "no file was sent", nil)
 		return
 	}
-	s.startExpansionJob(w, "steam", true, func() (string, error) {
+	s.startExpansionJob(w, "steam", true, func() (string, []int64, error) {
 		res, err := expansions.ImportOwned(s.DB, owned)
-		return res.Text(), err
+		return res.Text(), res.NewlyMarked, err
 	})
 }
 

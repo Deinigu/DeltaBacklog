@@ -105,7 +105,8 @@ func (c *Client) do(req *http.Request, out any) error {
 		return err
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	const maxBody = 4 << 20
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBody))
 	if err != nil {
 		return err
 	}
@@ -115,6 +116,9 @@ func (c *Client) do(req *http.Request, out any) error {
 			he.RetryAfter = time.Duration(n) * time.Second
 		}
 		return he
+	}
+	if len(body) == maxBody {
+		return fmt.Errorf("%s: answer too large", req.URL.Host)
 	}
 	return json.Unmarshal(body, out)
 }

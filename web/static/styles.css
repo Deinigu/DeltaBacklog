@@ -1256,6 +1256,8 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .exp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .exp-st { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
 .exp-st.none { background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-weight: 600; }
+.exp-kind { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px dashed var(--border); }
+.exp-kind.steam { border-style: solid; color: var(--text); }
 .exp-own { font-size: 14px; line-height: 1; }
 .exp-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 .exp-link[disabled] { color: var(--muted); cursor: default; }
@@ -1266,6 +1268,8 @@ button.up-open { cursor: pointer; border-radius: 8px; }
 .exp-name { overflow-wrap: anywhere; }
 .exp-game { min-height: 44px; max-width: 100%; padding: 0 12px; border: 1px solid var(--border); border-radius: 22px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .exp-head .exp-game { padding: 0; border: 0; background: none; }
+.exp-sheet .exp-add { width: 100%; min-height: 44px; }
+.exp-sheet .exp-add[hidden] { display: none; }
 .exp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .exp-sheet .ttb { margin: 4px 0; }
 .exp-sheet select, .exp-sheet textarea { width: 100%; }

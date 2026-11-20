@@ -1,12 +1,13 @@
-// The "Expansions (n)" section of the game drawer: each IGDB expansion of the game as a row (small poster, title, year, status,
-// ownership, years played); tapping one opens its edit sheet. Opening the drawer never waits for IGDB: a linked game whose
+// The "Expansions (n)" section of the game drawer: your expansions of the game (see isAdded) as rows (small poster, title, year,
+// status, ownership, years played), then IGDB's other ones folded under "Other expansions and DLC on IGDB"; tapping a row opens its
+// edit sheet, and giving one a status or an ownership adds it. Opening the drawer never waits for IGDB: a linked game whose
 // expansions were never read, or not within 30 days, is read in the background and the section updates when it lands.
 import { h, gradientFor, initials, lazyImg, plural, toast } from './util.js';
 import { store, refreshExpansions } from './api.js';
 import { badgeStyle } from './colors.js';
 import { ownershipIcon } from './ownership.js';
 import { playedBadges } from './years.js';
-import { expansionCoverURL, expansionsOf, isStale, expansionRowLabel } from './expansions.js';
+import { expansionCoverURL, expansionsOf, isStale, expansionRowLabel, isAdded, isDLC, isOwned, offeredOrder } from './expansions.js';
 import { openExpansionSheet } from './expansionsheet.js';
 
 const asked = new Set(); // "<game id>:<IGDB id>" asked this session: a failed read is not retried on every drawer open (a relink is a new key)
@@ -14,9 +15,11 @@ const asked = new Set(); // "<game id>:<IGDB id>" asked this session: a failed r
 export function expansionsSection(game) {
   const box = h('section.exp-drawer', { 'aria-label': 'Expansions' });
   let showHidden = false;
+  let moreOpen = false; // the folded list of IGDB's other expansions stays as the owner left it across redraws
   let loading = false;
 
-  function row(x) {
+  // offered: a row of IGDB's other expansions (not added), whose "No status" pill would only repeat what the list says
+  function row(x, offered = false) {
     const st = x.status && store.statusByCode.get(x.status);
     const url = expansionCoverURL(x);
     const played = playedBadges(x, 2);
@@ -26,7 +29,9 @@ export function expansionsSection(game) {
       h('span.exp-body', {},
         h('span.exp-title', { translate: 'no' }, x.title, x.year ? h('small', {}, ` ${x.year}`) : null),
         h('span.exp-meta', {},
-          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : h('span.exp-st.none', {}, 'Not tracked'),
+          st ? h('span.exp-st', { style: badgeStyle(st.color) }, st.label) : offered ? null : h('span.exp-st.none', {}, 'No status'),
+          isDLC(x) ? h('span.exp-kind', {}, 'DLC') : null,
+          x.steam_owned && !isOwned(x) ? h('span.exp-kind.steam', {}, 'Owned on Steam') : null,
           icon ? h('span.exp-own', { title: x.ownership, role: 'img', 'aria-label': x.ownership }, icon) : null,
           ...played.periods.map((p) => h('span.yr.period', { title: p.label }, p.icon)),
           played.earlier ? h('span.yr.earlier', {}, `+${played.earlier}`) : null,
@@ -44,14 +49,21 @@ export function expansionsSection(game) {
       return;
     }
     const fetched = !!game.expansions_fetched;
+    const mine = shown.filter(isAdded);
+    const others = offeredOrder(shown.filter((x) => !isAdded(x)));
+    const onSteam = others.filter((x) => x.steam_owned).length;
     box.replaceChildren(...[
-      h('h3', {}, `Expansions (${shown.length})`),
-      shown.length ? h('ul.exp-list', {}, shown.map(row)) : null,
+      h('h3', {}, `Expansions (${mine.length})`),
+      mine.length ? h('ul.exp-list', {}, mine.map((x) => row(x))) : null,
+      !mine.length && others.length ? h('p.hint', {}, 'None added yet. To add one, open it below and press Add as Owned or set a status.') : null,
+      others.length ? h('details.more-details.exp-more', { open: moreOpen || null, ontoggle: (e) => { moreOpen = e.target.open; } },
+        h('summary', {}, `Other expansions and DLC on IGDB (${others.length}${onSteam ? `, ${onSteam} owned on Steam` : ''})`),
+        h('ul.exp-list', {}, others.map((x) => row(x, true)))) : null,
       !shown.length && loading ? h('p.hint', { role: 'status' }, 'Looking for expansions on IGDB…') : null,
       !shown.length && !loading && (fetched || !game.igdb_id) ? h('p.hint', {}, hidden ? 'All of its expansions are hidden.' : 'No expansions on IGDB.') : null,
       !shown.length && !loading && !fetched && game.igdb_id ? h('p.hint', {}, 'Not read from IGDB yet.') : null,
       hidden ? h('button.exp-link', { type: 'button', 'aria-expanded': String(showHidden), onclick: () => { showHidden = !showHidden; draw(); } }, showHidden ? 'Hide the hidden ones' : `Show ${plural(hidden, 'hidden one')}`) : null,
-      showHidden && hidden ? h('ul.exp-list', {}, all.filter((x) => x.hidden).map(row)) : null,
+      showHidden && hidden ? h('ul.exp-list', {}, all.filter((x) => x.hidden).map((x) => row(x))) : null,
       game.igdb_id ? h('button.exp-link', { type: 'button', disabled: loading || null, onclick: () => read(false, true) }, loading ? 'Reading IGDB…' : '↻ Refresh from IGDB') : h('p.hint', {}, 'The game is not linked to IGDB, so these are not refreshed.'),
     ].filter(Boolean)); // replaceChildren would print a null as the text "null"
   }

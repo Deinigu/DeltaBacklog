@@ -191,10 +191,16 @@ await shot(p, 'hidden-phone');
 await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
 // expansions: a game's section and sheet, then the page (the demo library carries made-up expansions)
-const withExp = await p.evaluate(() => fetch('api/games').then((r) => r.json()).then((g) => g.find((x) => x.expansions.filter((e) => !e.hidden).length >= 2)?.title));
+// a game with added rows and DLC not added yet (so the drawer shows its "Other expansions and DLC on IGDB" fold); one with a DLC owned on Steam first
+const withExp = await p.evaluate(() => fetch('api/games').then((r) => r.json()).then((g) => {
+  const added = (e) => (e.ownership && e.ownership !== 'Nope') || e.status || e.years?.length || e.periods?.length || (e.notes && e.notes.trim()) || e.ttb_source === 'manual' || e.ttb_source === 'hltb';
+  const ok = (x) => x.expansions.some((e) => !e.hidden && added(e)) && x.expansions.some((e) => !e.hidden && e.kind === 'dlc' && !added(e));
+  return (g.find((x) => ok(x) && x.expansions.some((e) => e.steam_owned && !added(e))) || g.find(ok))?.title;
+}));
 if (withExp) {
   await go(p, `#/library?q=${encodeURIComponent(withExp)}`);
   await p.click('.card'); await wait(700);
+  await p.$eval('details.exp-more', (e) => { e.open = true; }).catch(() => {}); await wait(200);
   await p.$eval('.exp-drawer', (e) => e.scrollIntoView({ block: 'center' })); await wait(400);
   await shot(p, 'expansions-drawer-phone');
   await p.click('.exp-row'); await wait(800);
