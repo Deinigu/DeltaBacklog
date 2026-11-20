@@ -80,7 +80,7 @@ func TestExpansionsReadsExpansionsAndDLCWithSteamIDs(t *testing.T) {
 	if _, ok := got[8]; ok {
 		t.Error("a game IGDB does not return is absent")
 	}
-	if len(queries) != 1 || !strings.Contains(queries[0], "expansions.external_games.*") || !strings.Contains(queries[0], "dlcs.external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
+	if len(queries) != 1 || !strings.Contains(queries[0], "dlcs.external_games.uid") || !strings.Contains(queries[0], "expansions.external_games.external_game_source") || strings.Contains(queries[0], "external_games.*") || !strings.Contains(queries[0], "where id = (1942,7,8)") {
 		t.Errorf("query %v", queries)
 	}
 }

@@ -66,7 +66,7 @@ export function openExpansionSheet(id) {
     val.classList.toggle('none', !years.length);
     yearsBtn.setAttribute('aria-label', `Played in: ${val.textContent}. Edit`);
     if (document.activeElement !== notes) { notes.value = x.notes || ''; fit(); }
-    addOwned.hidden = isAdded(x) || !x.steam_owned || !!x.ownership || !!x.hidden;
+    addOwned.hidden = isAdded(x) || !!x.ownership || !!x.hidden;
     hideBtn.textContent = x.hidden ? 'Show again' : `Hide this ${isDLC(x) ? 'DLC' : 'expansion'}`;
     hint.textContent = x.hidden ? 'Hidden: it is not counted anywhere and not listed.' : '';
   }

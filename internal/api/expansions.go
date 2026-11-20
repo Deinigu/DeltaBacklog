@@ -16,7 +16,7 @@ import (
 
 // Expansion is the compact read model of one IGDB expansion of a game, sent inside the game (GET /api/games), so the
 // Library badge and filters, Stats, Upcoming and Needs attention work in the browser without extra calls. Status and
-// ownership are null while the owner has not set them ("Not tracked"). Empty optional values are left out. An expansion
+// ownership are null while the owner has not set them ("No status"). Empty optional values are left out. An expansion
 // that is also a game of the library (its own card) is not sent.
 type Expansion struct {
 	ID        int64    `json:"id"`
@@ -139,7 +139,7 @@ func attachExpansions(d *sql.DB, games []Game, only int64) error {
 // ---------------- PATCH /api/expansions/{id} ----------------
 
 // expansionPatch is the writable subset of an expansion; the same conventions as gamePatch (absent = unchanged). Status
-// and ownership clear with "" (back to "Not tracked" / no ownership).
+// and ownership clear with "" (back to "No status" / no ownership).
 type expansionPatch struct {
 	Status        *string    `json:"status"`
 	Ownership     *string    `json:"ownership"`

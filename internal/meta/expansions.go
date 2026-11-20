@@ -107,7 +107,8 @@ func (c *Client) Expansions(ctx context.Context, igdbIDs []int64) (map[int64][]E
 		return nil, fmt.Errorf("at most %d games per request", ExpansionBatch)
 	}
 	var games []igdbExpansionParent
-	const sub = "name,game_type,first_release_date,cover.image_id,external_games.*"
+	// only what steamAppID reads: external_games.* would make an answer for 100 games with hundreds of DLC each exceed the read cap
+	const sub = "name,game_type,first_release_date,cover.image_id,external_games.uid,external_games.category,external_games.external_game_source"
 	fields := "expansions." + strings.ReplaceAll(sub, ",", ",expansions.") + ",dlcs." + strings.ReplaceAll(sub, ",", ",dlcs.")
 	q := fmt.Sprintf("fields %s; where id = (%s); limit %d;", fields, idList(igdbIDs), len(igdbIDs))
 	if err := c.igdbPost(ctx, "/games", q, &games); err != nil {

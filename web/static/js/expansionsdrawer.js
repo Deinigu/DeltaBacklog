@@ -55,7 +55,7 @@ export function expansionsSection(game) {
     box.replaceChildren(...[
       h('h3', {}, `Expansions (${mine.length})`),
       mine.length ? h('ul.exp-list', {}, mine.map((x) => row(x))) : null,
-      !mine.length && others.length ? h('p.hint', {}, 'None added yet. To add one, open it below and set a status or say you own it.') : null,
+      !mine.length && others.length ? h('p.hint', {}, 'None added yet. To add one, open it below and press Add as Owned or set a status.') : null,
       others.length ? h('details.more-details.exp-more', { open: moreOpen || null, ontoggle: (e) => { moreOpen = e.target.open; } },
         h('summary', {}, `Other expansions and DLC on IGDB (${others.length}${onSteam ? `, ${onSteam} owned on Steam` : ''})`),
         h('ul.exp-list', {}, others.map((x) => row(x, true)))) : null,
