@@ -662,3 +662,29 @@ func TestBackgroundTimesSkipUntouchedDLC(t *testing.T) {
 		t.Errorf("a one-game read asks for all: %v", src.ttbCalls)
 	}
 }
+
+// An owned DLC the owner hid keeps its Steam mark but is not counted as an offer, and never gets an ownership.
+func TestSteamImportHiddenDLCNotCounted(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{72: {
+		{IGDBID: 2992, Name: "Dawnguard", SteamAppID: 211720, Kind: meta.KindDLC},
+		{IGDBID: 8000, Name: "Costume", SteamAppID: 211730, Kind: meta.KindDLC},
+	}}}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 72}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE expansion SET hidden = 1 WHERE igdb_id = 8000`)
+	res, err := ImportOwned(d, []int64{211720, 211730})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.DLC != 1 || res.Marked != 0 || res.Matched != 2 {
+		t.Errorf("%+v", res)
+	}
+	var steam bool
+	var own sql.NullInt64
+	d.QueryRow(`SELECT steam_owned, ownership_id FROM expansion WHERE igdb_id = 8000`).Scan(&steam, &own)
+	if !steam || own.Valid {
+		t.Errorf("hidden DLC: steam_owned %v, ownership %v (want marked, no ownership)", steam, own)
+	}
+}

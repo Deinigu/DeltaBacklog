@@ -239,13 +239,13 @@ export function renderStats(root) {
 
   // Expansions are counted apart from the games: nothing above or in the tiles includes them.
   const ex = expansionStats(games);
-  const expansionsCard = card('expansions', 'Expansions', 'The IGDB expansions of your games. They are never counted as games.',
+  const expansionsCard = card('expansions', 'Expansions', 'Your expansions and DLC (the ones you own or added). They are never counted as games.',
     ex.total ? h('div', {},
       h('p.big', {}, `${ex.finished} of ${ex.owned}`, h('small', {}, ' expansions finished, of the ones you own')),
       ex.perYear.length ? h('div', {}, h('h3', {}, 'Finished per year'),
         barList(ex.perYear.map((r) => ({ label: String(r.year), count: r.count })), { cls: 'wide-count' }),
         h('p.hint', {}, 'Each finished expansion counts once, in the last year you played it.' + (ex.unplaced ? ` ${plural(ex.unplaced, 'finished expansion has', 'finished expansions have')} no calendar year, so ${ex.unplaced === 1 ? 'it is' : 'they are'} not in the list.` : ''))) : null,
-      h('p.hint', {}, h('a', { href: '#/expansions' }, 'Open the Expansions page'))) : h('p.hint', {}, 'No expansions yet. ', h('a', { href: '#/expansions' }, 'Find them on the Expansions page'), '.'));
+      h('p.hint', {}, h('a', { href: '#/expansions' }, 'Open the Expansions page'))) : h('p.hint', {}, 'No expansions yet. ', h('a', { href: '#/expansions' }, 'Open the Expansions page'), '.'));
 
   const backlogCard = card('backlog', 'Backlog', 'Games on the backlog or up next.',
     h('p.big', {}, size.total, h('small', {}, ` waiting (${size.byStatus.map((s) => `${s.count} ${statusLabel(s.key).toLowerCase()}`).join(', ')})`)),

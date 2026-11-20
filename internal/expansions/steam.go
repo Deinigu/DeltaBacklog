@@ -144,7 +144,7 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	}
 	defer tx.Rollback()
 	// an expansion that is also a game of the library is matched (it is not "unmatched") but not marked: its card is its record
-	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + `, e.kind = 'dlc' AND (` + untracked + `), e.steam_owned
+	rows, err := tx.Query(`SELECT e.id, e.steam_app_id, e.ownership_id IS NULL, ` + IsGameSQL + `, e.kind = 'dlc' AND (` + untracked + `), e.steam_owned, e.hidden
 		FROM expansion e WHERE e.steam_app_id IS NOT NULL`)
 	if err != nil {
 		return res, err
@@ -153,14 +153,15 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 		id    int64
 		empty bool
 		dlc   bool
+		hide  bool // hidden: an owned DLC the owner hid is marked but not offered, so it is not counted
 	}
 	var hit []row
 	var unmark []int64 // marked owned on Steam before, not in this list (a refund)
 	matched := map[int64]bool{}
 	for rows.Next() {
 		var id, app int64
-		var empty, isGame, dlc, marked bool // dlc: a DLC the owner has not added
-		if err := rows.Scan(&id, &app, &empty, &isGame, &dlc, &marked); err != nil {
+		var empty, isGame, dlc, marked, hide bool // dlc: a DLC the owner has not added
+		if err := rows.Scan(&id, &app, &empty, &isGame, &dlc, &marked, &hide); err != nil {
 			rows.Close()
 			return res, err
 		}
@@ -170,7 +171,7 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 		if have[app] {
 			matched[app] = true
 			if !isGame {
-				hit = append(hit, row{id, empty, dlc})
+				hit = append(hit, row{id, empty, dlc, hide})
 			}
 		}
 	}
@@ -191,7 +192,9 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 			return res, err
 		}
 		if h.dlc {
-			res.DLC++
+			if !h.hide {
+				res.DLC++
+			}
 			continue
 		}
 		if !h.empty {
