@@ -712,3 +712,48 @@ func TestSteamImportWhitespaceNotesAreUntouched(t *testing.T) {
 		t.Error("a DLC with blank notes got an ownership")
 	}
 }
+
+// DLC the Steam import marks after a background run (which skipped their poster and time while untouched) get both from the
+// catch-up that ends the job; the catch-up also downloads the missing poster of an added row when nothing was fetched.
+func TestCatchUpAfterImportAndWithNothingFetched(t *testing.T) {
+	d := open(t)
+	src := &fakeSource{lists: map[int64][]meta.Expansion{1942: {
+		{IGDBID: 10, Name: "Pack", CoverID: "a", Kind: meta.KindDLC, SteamAppID: 5010},
+		{IGDBID: 11, Name: "Other pack", CoverID: "b", Kind: meta.KindDLC, SteamAppID: 5011},
+	}}, ttb: map[int64]meta.TimeToBeat{10: {Normally: 600}}}
+	var posters []int64
+	opt := Options{CoverDir: t.TempDir(), AllCovers: true, Fetch: func(url, dir string, id int64) (string, error) { posters = append(posters, id); return "x.jpg", nil }}
+	if _, err := Fetch(context.Background(), d, src, []Target{{1, 1942}}, opt); err != nil {
+		t.Fatal(err)
+	}
+	if len(posters) != 0 || len(src.ttbCalls) != 0 {
+		t.Fatalf("the background run skips untouched DLC: posters %v, times %v", posters, src.ttbCalls)
+	}
+	res, err := ImportOwned(d, []int64{5010})
+	if err != nil || len(res.NewlyMarked) != 1 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if n, err := CatchUp(context.Background(), d, src, opt, res.NewlyMarked); err != nil || n != 1 {
+		t.Fatalf("catch up: %d %v", n, err)
+	}
+	if len(posters) != 1 || posters[0] != 10 {
+		t.Errorf("posters %v (want the newly marked DLC only)", posters)
+	}
+	if len(src.ttbCalls) != 1 || src.ttbCalls[0] != 10 {
+		t.Errorf("times asked for %v (want the newly marked DLC only)", src.ttbCalls)
+	}
+	var n sql.NullInt64
+	d.QueryRow(`SELECT time_to_beat_normally FROM expansion WHERE igdb_id = 10`).Scan(&n)
+	if n.Int64 != 600 {
+		t.Errorf("time to beat %v", n)
+	}
+	if res, _ := ImportOwned(d, []int64{5010}); len(res.NewlyMarked) != 0 {
+		t.Errorf("a second import marks nothing new: %v", res.NewlyMarked)
+	}
+	// nothing fetched: the owner adds the other pack, and the catch-up alone downloads its poster
+	d.Exec(`UPDATE expansion SET notes = 'want' WHERE igdb_id = 11`)
+	posters = nil
+	if n, err := CatchUp(context.Background(), d, src, opt, nil); err != nil || n != 1 || len(posters) != 1 || posters[0] != 11 {
+		t.Errorf("catch up with nothing fetched: %d %v %v", n, err, posters)
+	}
+}

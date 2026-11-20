@@ -194,6 +194,27 @@ func Fetch(ctx context.Context, d *sql.DB, src Source, targets []Target, o Optio
 	return rep, nil
 }
 
+// CatchUp ends a background run: it reads IGDB's time to beat of the rows `ids` (the DLC the Steam import has just marked, which
+// the run skipped while they were untouched) and downloads the missing posters of the whole library, with the same skip rule
+// and cap as a run (the owner's first, no untouched DLC unless it is owned on Steam). It returns how many posters it saved.
+func CatchUp(ctx context.Context, d *sql.DB, src Source, o Options, ids []int64) (int, error) {
+	if o.Allowed == nil {
+		o.Allowed = igdbImageHost
+	}
+	if o.Fetch == nil {
+		o.Fetch = covers.FetchExpansionPosterStrict
+	}
+	if len(ids) > 0 && src != nil {
+		if err := fillTimes(ctx, d, src, ids, false); err != nil && ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+	}
+	if o.CoverDir == "" {
+		return 0, nil
+	}
+	return fetchCovers(ctx, d, o, nil)
+}
+
 // save stores one game's expansions in the caller's transaction: new ones are added, known ones get IGDB's title, date,
 // cover and Steam id (never the owner's status, ownership, notes, years, times or hidden mark), and ones IGDB no longer
 // lists (or that are a game of the library) go unless the owner tracks them. It returns the row ids of the game's expansions

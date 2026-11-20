@@ -101,6 +101,9 @@ type Import struct {
 	Already   int // owned expansions and added DLC that already had an ownership (the owner's, or a previous import's): left as they are
 	Matched   int // owned apps that are expansions of the library (already owned or not)
 	Unmatched int // other owned apps: not an expansion of a game in the library (or not on IGDB)
+	// NewlyMarked are the row ids of the DLC whose Steam mark went from 0 to 1 in this import: the job then reads their times
+	// and posters, which the background run skipped while they were untouched.
+	NewlyMarked []int64 `json:"-"`
 }
 
 // Text is the sentence shown after an import: "Marked 2 expansions as owned (3 already had an ownership); 40 other owned
@@ -188,8 +191,12 @@ func ImportOwned(d *sql.DB, owned []int64) (Import, error) {
 	for _, h := range hit {
 		// every owned DLC is marked as owned on Steam (the drawer offers it first). One the owner has not added gets nothing more:
 		// Steam lists cosmetic packs and soundtracks as DLC too, and they would flood the owner's list.
-		if _, err := tx.Exec(`UPDATE expansion SET steam_owned = 1 WHERE id = ? AND kind = 'dlc'`, h.id); err != nil {
+		r, err := tx.Exec(`UPDATE expansion SET steam_owned = 1 WHERE id = ? AND kind = 'dlc' AND steam_owned = 0`, h.id)
+		if err != nil {
 			return res, err
+		}
+		if n, _ := r.RowsAffected(); n > 0 {
+			res.NewlyMarked = append(res.NewlyMarked, h.id)
 		}
 		if h.dlc {
 			if !h.hide {

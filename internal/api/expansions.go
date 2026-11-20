@@ -429,7 +429,7 @@ func (s *Server) expansionSyncCancel(w http.ResponseWriter, r *http.Request) {
 // startExpansionJob begins the background run (one at a time) over the games that are due; `after` (may be nil) runs when the
 // reading ended without being stopped, and returns the sentence to add to the report. It answers 202 with the status, or
 // the current status when a run is already going.
-func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly bool, after func() (string, error)) {
+func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly bool, after func() (string, []int64, error)) {
 	j := &s.expJob
 	src := s.expansionSource()
 	configured := src != nil && (s.Expansions != nil || s.igdbConfigured())
@@ -468,7 +468,7 @@ func (s *Server) startExpansionJob(w http.ResponseWriter, kind string, neverOnly
 // nothingDue is the report of a "Find expansions" run with no game to read (instead of "Found 0 expansions for 0 games.").
 const nothingDue = "Nothing to read: every game linked to IGDB was read in the last 30 days."
 
-func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, error)) {
+func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, todo []expansions.Target, after func() (string, []int64, error)) {
 	j := &s.expJob
 	o := s.expansionOptions()
 	o.AllCovers = true // the background run catches up on every missing poster (a drawer's refresh only gets its game's)
@@ -492,17 +492,25 @@ func (s *Server) runExpansionJob(ctx context.Context, src expansions.Source, tod
 		log.Printf("expansions sync: %v", err)
 		text, failed = "IGDB could not be reached. Stopped. "+text, true
 	}
+	var marked []int64 // DLC the import has just marked owned on Steam: their times and posters are read below
 	if after != nil {
 		if ctx.Err() != nil || err != nil {
 			text += " Nothing was marked as owned."
-		} else if more, aerr := after(); aerr != nil {
+		} else if more, ids, aerr := after(); aerr != nil {
 			log.Printf("expansions import: %v", aerr)
 			text, failed = "The import failed.", true
 		} else {
-			text = more
+			text, marked = more, ids
 			if rep.Games > 0 {
 				text = rep.Text() + " " + more
 			}
+		}
+	}
+	// at the end of every run that was not stopped or failed: the posters (and the times of the newly marked DLC) the run skipped,
+	// and the posters of DLC the owner added since (the one-game reads only fetch their own game's)
+	if ctx.Err() == nil && err == nil && !failed {
+		if _, e := expansions.CatchUp(ctx, s.DB, src, o, marked); e != nil && ctx.Err() == nil {
+			log.Printf("expansions: catch up: %v", e)
 		}
 	}
 	s.cache.invalidate()
@@ -557,9 +565,9 @@ func (s *Server) steamImport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "no file was sent", nil)
 		return
 	}
-	s.startExpansionJob(w, "steam", true, func() (string, error) {
+	s.startExpansionJob(w, "steam", true, func() (string, []int64, error) {
 		res, err := expansions.ImportOwned(s.DB, owned)
-		return res.Text(), err
+		return res.Text(), res.NewlyMarked, err
 	})
 }
 
