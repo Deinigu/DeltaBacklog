@@ -10,7 +10,6 @@ import { ownershipIcon } from './ownership.js';
 import { formatTime, ttbMinutes } from './ttb.js';
 import { nextCell, isEditKey } from './tablegrid.js';
 import { yearOptions, normalizeYearToken, libraryYears } from './editpatch.js';
-import { expansionsCell } from './expansions.js';
 
 const ROW_H = 48; // keep in step with .tr and .thead in styles.css
 const OVERSCAN = 6;
@@ -42,10 +41,9 @@ export const COLUMNS = [
   { key: 'vr', label: 'VR', w: 64, kind: 'bool', text: (g) => (g.vr ? 'yes' : ''), patch: (v) => ({ vr: v }) },
   { key: 'completed', label: '100%', w: 74, kind: 'bool', sort: 'completed', text: (g) => (g.completed ? 'yes' : ''), patch: (v) => ({ completed: v }) },
   { key: 'notes', label: 'Notes', w: 280, kind: 'longtext', text: (g) => g.notes, patch: (v) => ({ notes: v }) },
-  { key: 'expansions', label: 'Expansions', w: 260, kind: 'readonly', text: (g) => expansionsCell(g, (c) => store.statusByCode.get(c)?.label ?? c) }, // exported with the CSV even while hidden
   { key: 'added_at', label: 'Added', w: 110, kind: 'readonly', sort: 'added', text: (g) => (g.added_at || '').slice(0, 10), show: (g) => formatCalendarDate(g.added_at) },
 ];
-const DEFAULT_HIDDEN = new Set(['expansions', 'themes', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
+const DEFAULT_HIDDEN = new Set(['themes', 'developer', 'ownership', 'players', 'vr', 'completed', 'notes', 'added_at', 'release_year']);
 
 // ---- per-device preferences (widths, visible columns) ----
 const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
@@ -420,8 +418,7 @@ export function renderTable(ctx) {
   }
 
   wrap.exportCSV = () => {
-    const cols = visible();
-    const csv = toCSV(ctx.list, cols.some((c) => c.key === 'expansions') ? cols : [...cols, COLUMNS.find((c) => c.key === 'expansions')]); // the export always carries the expansions
+    const csv = toCSV(ctx.list, visible());
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const a = h('a', { href: url, download: `deltabacklog-${new Date().toISOString().slice(0, 10)}.csv` });
     document.body.append(a);

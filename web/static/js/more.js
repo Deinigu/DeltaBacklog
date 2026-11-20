@@ -5,7 +5,6 @@ import { openLayer } from './layers.js';
 /** Pages in the sheet, in order. `path` is the route (`data-path`), `icon` a util.js icon name; a page may carry a `badge` count (main.js adds one to Deals for new price alerts). */
 export const MORE_PAGES = [
   { path: 'series', label: 'Series', icon: 'series' },
-  { path: 'expansions', label: 'Expansions', icon: 'expansions' },
   { path: 'upcoming', label: 'Upcoming', icon: 'upcoming' },
   { path: 'similar', label: 'Similar games', icon: 'similar' },
   { path: 'deals', label: 'Deals', icon: 'deals' },

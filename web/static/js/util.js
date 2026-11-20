@@ -77,7 +77,6 @@ const SVG = {
   upcoming: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/>',
   stats: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   series: '<rect x="3" y="4" width="18" height="4" rx="1.5"/><rect x="3" y="10" width="13" height="4" rx="1.5"/><rect x="3" y="16" width="8" height="4" rx="1.5"/>',
-  expansions: '<rect x="3" y="8" width="11" height="13" rx="1.5"/><path d="M7 8V5.5A1.5 1.5 0 0 1 8.5 4H19a2 2 0 0 1 2 2v9.5a1.5 1.5 0 0 1-1.5 1.5H14M8.5 14.5h0M8.5 11h0"/><path d="M8.5 12.5v4M6.5 14.5h4"/>',
   add: '<path d="M12 5v14M5 12h14"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };

@@ -96,7 +96,6 @@ The [developer manual](docs/developer-manual.md) has the architecture, data mode
 
 **Look beyond your library** (optional, each with its own free key and a refresh button that you press; nothing is read when a page opens)
 - **Series**: a poster tile per series with progress, and each series as a shelf in release order, including the games of the series you do not have yet (**Add** or **Hide** them).
-- **Expansions**: the IGDB expansions of your games, tracked inside each game (status, ownership, years played, notes, time to beat) and on their own page, with a one-time import of the ones you own on Steam.
 - **Upcoming**: the new games of your series that are not out yet, by release month.
 - **Similar games**: suggestions from IGDB's lists for the games you finished or loved.
 - **Deals**: the price now and the historical low of the games you don't own and haven't played yet (borrowed, family share, no ownership), from [IsThereAnyDeal](https://isthereanydeal.com), with an alert when a game reaches its historical low or its lowest price in 2 years (in the app, and on your phone through a Telegram bot if you set one up). Your public Steam wishlist can be listed there too (set `STEAM_ID`), kept apart from your library.
@@ -187,7 +186,7 @@ Settings are environment variables. A `.env` file in the working directory is lo
 | `SCREENSHOTS_DECODE_BUDGET_MB` | `48` | Most memory the server may use to decode one screenshot for its thumbnail; bigger pictures are stored untouched with a thumbnail made by the browser. |
 | `ALLOWED_HOSTS` | empty | Extra `Host` names the app answers to, comma separated. IP addresses, `localhost`, `deltabacklog.local` and the machine hostname (and `<hostname>.local`) are always allowed; any other `Host` gets 421 (DNS-rebinding protection). Needed when you reach the app by a router, Tailscale or reverse-proxy name. |
 | `PUBLIC_NAME` | empty | Read by `deploy/install.sh` on the Pi, not by the app. `off` turns the friendly address off: `deltabacklog-name.service` is disabled and stopped (no `deltabacklog.local`, no port 80 rules), for an app reached only through a reverse proxy; then also set `LISTEN_ADDR=127.0.0.1:8081`, which `install.sh` keeps. See the [developer manual](docs/developer-manual.md#11-build-and-deploy). |
-| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming, Expansions and Similar games pages). |
+| `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | empty | A Twitch application, to look games up on IGDB (add, *Fill from IGDB*, `sync-igdb`, and the Series, Upcoming and Similar games pages). |
 | `STEAMGRIDDB_API_KEY` | empty | Enables SteamGridDB covers and posters. |
 | `ITAD_API_KEY` | empty | An IsThereAnyDeal API key, for the Deals page (prices of the games you do not own and have not played). |
 | `STEAM_ID` | empty | Optional: your 17-digit SteamID64. Adds a **Wishlist** section to Deals with the games on your public Steam wishlist (kept apart from your library). No Steam key is needed. |

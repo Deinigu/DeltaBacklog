@@ -2,8 +2,7 @@
 // Hidden lists stay where they are; this is the overview. It reads the database only (GET api/hidden): no IGDB or
 // IsThereAnyDeal call when it opens. The search and the source filter are the shared toolbar (listshell.js).
 import { h, emptyBox, gradientFor, initials, lazyImg, toastAction, toastError } from './util.js';
-import { store, hiddenList, dealsHide, dealsUnhide, similarHide, similarUnhide, seriesHide, seriesUnhide, coverURL, posterURL, missingPosterURL } from './api.js';
-import { allExpansions } from './expansions.js';
+import { hiddenList, dealsHide, dealsUnhide, similarHide, similarUnhide, seriesHide, seriesUnhide, coverURL, posterURL, missingPosterURL } from './api.js';
 import { groupHidden, hiddenCount, withoutItem, HIDDEN_GROUPS } from './hidden.js';
 import { createListShell } from './listshell.js';
 import { toggleIn } from './listfilter.js';
@@ -15,13 +14,6 @@ const HIDE = { deals: ({ id }) => dealsHide(id), similar: ({ igdb_id }) => simil
 function poster(it) {
   const url = it.kind === 'deals' ? (posterURL({ poster: it.poster, poster_v: it.poster_v }) || coverURL({ cover: it.cover, cover_v: it.v })) : missingPosterURL(it.cover, it.v);
   return h('span.pst', {}, url ? lazyImg(url) : h('span.ph', { style: `background:${gradientFor(it.title)}` }, initials(it.title)));
-}
-
-/** Hidden expansions live inside their games: a line that opens them on the Expansions page (null when there are none). */
-function hiddenExpansionsLine() {
-  const n = allExpansions(store.games, { hidden: true, all: true }).filter(({ x }) => x.hidden).length;
-  if (!n) return null;
-  return h('p.hint', {}, `Hidden expansions (${n}) are listed with their games: `, h('a', { href: '#/expansions?hidden=1' }, 'see them on the Expansions page'), '.');
 }
 
 export function renderHidden(root) {
@@ -46,7 +38,6 @@ export function renderHidden(root) {
     has: (v) => filter.sources.has(v), toggle: (v) => toggleIn(filter.sources, v), selected: () => filter.sources.size, count: (v) => countSource(groups, filter, v) });
   page.replaceChildren(h('h1', {}, 'Hidden'),
     h('p.hint', {}, 'Everything you hid, in one place. Show again puts a game back on the page it came from.'),
-    hiddenExpansionsLine(),
     ...ui.nodes(results));
 
   async function load() {

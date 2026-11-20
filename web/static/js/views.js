@@ -56,7 +56,7 @@ export function renderViews(root) {
     const parts = [];
     for (const [k, vals] of Object.entries(f.in || {})) parts.push(`${k}: ${vals.map(nice(k)).join(f.all?.includes(k) ? ' + ' : ' / ')}`);
     for (const [k, vals] of Object.entries(f.ex || {})) parts.push(`not ${k}: ${vals.map(nice(k)).join(', ')}`);
-    for (const fl of f.flags || []) if (fl !== 'short') parts.push(fl === 'exp_left' ? 'expansions left to play' : fl);
+    for (const fl of f.flags || []) if (fl !== 'short') parts.push(fl);
     if (f.ttb || (f.flags || []).includes('short')) parts.push(ttbSummary(v));
     if (f.q) parts.push(`“${f.q}”`);
     return parts.join(' · ') || 'All games';

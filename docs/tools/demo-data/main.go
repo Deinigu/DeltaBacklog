@@ -323,7 +323,6 @@ func main() {
 		WHERE appid IN (SELECT appid FROM wish_price WHERE cur_price > 500 AND cur_shop <> 'GOG' AND max(cur_price * 7 / 10, coalesce(low_price, 0)) * 100 < cur_price * 85 ORDER BY appid LIMIT 1)`)
 	must(err)
 	must(tx.Commit())
-	seedExpansions(d)
 	if *fakeIGDB {
 		seedFakeIGDB(d)
 	}

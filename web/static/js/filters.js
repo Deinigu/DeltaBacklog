@@ -5,7 +5,6 @@
 // values and NONE of the excluded ones.
 import { parseSort, formatSort, GROUP_FIELDS, SORT_FIELDS } from './sort.js';
 import { norm } from './util.js';
-import { hasLeftToPlay } from './expansions.js';
 import { SHORT_MINUTES, emptyTtbFilter, ttbRangeActive, ttbFilterActive, matchesTtb, TTB_KINDS } from './ttb.js';
 
 export const GROUPS = [
@@ -23,8 +22,6 @@ export const FLAGS = [
   { key: 'favorite', label: '★ Favorite' },
   { key: 'vr', label: 'VR' },
   { key: 'completed', label: '100% completed' },
-  // computed from the game's expansions: the chip only shows while some game has one (see library.js)
-  { key: 'exp_left', label: 'Expansions left to play', test: (g) => hasLeftToPlay(g) }, // wrapped: callers pass it to .some(), whose index is not a time
 ];
 
 // The old "short" flag (under 10 h) is now a time-to-beat range; saved views and links that still carry it are migrated on load.
@@ -44,8 +41,6 @@ function ttbFrom(f) {
   return t;
 }
 
-const FLAG_TESTS = Object.fromEntries(FLAGS.filter((f) => f.test).map((f) => [f.key, f.test]));
-
 export function emptyState() {
   return {
     q: '',
@@ -63,7 +58,7 @@ export function emptyState() {
 /** True when the game passes every active filter. `skip` ignores one group (for facet counts). */
 export function matches(state, g, skip) {
   if (state.q && !state.q.split(/\s+/).every((t) => g._search.includes(t))) return false;
-  for (const f of state.flags) if (!(FLAG_TESTS[f] ? FLAG_TESTS[f](g) : g[f])) return false;
+  for (const f of state.flags) if (!g[f]) return false;
   if (!matchesTtb(state.ttb, g)) return false;
   for (const grp of GROUPS) {
     if (grp.key === skip) continue;

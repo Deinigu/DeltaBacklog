@@ -74,7 +74,7 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 		d.QueryRow(q).Scan(&n)
 		return
 	}
-	if v := count(`PRAGMA user_version`); v != 26 {
+	if v := count(`PRAGMA user_version`); v != 27 {
 		t.Fatalf("version %d", v)
 	}
 	if n := count(`SELECT count(*) FROM game`); n != 3 {
@@ -107,7 +107,7 @@ func TestRemoveWishlistSteamMigration(t *testing.T) {
 	if n := count(`SELECT count(*) FROM setting WHERE key = 'deals_country'`); n != 1 {
 		t.Error("deals_country lost")
 	}
-	if n := count(`SELECT count(*) FROM sqlite_master WHERE name LIKE '%steam%' AND name <> 'idx_expansion_steam'`); n != 0 {
+	if n := count(`SELECT count(*) FROM sqlite_master WHERE name LIKE '%steam%'`); n != 0 {
 		t.Errorf("%d steam objects left", n)
 	}
 	if n := count(`SELECT count(*) FROM pragma_table_info('game') WHERE name IN ('playtime_min', 'steam_last_played')`); n != 0 {
